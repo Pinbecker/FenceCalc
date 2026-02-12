@@ -1,0 +1,20 @@
+{
+  "name": "@fence-estimator/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fence-estimator/contracts": "0.1.0",
+    "@fence-estimator/rules-engine": "0.1.0",
+    "@fastify/cors": "^10.0.2",
+    "fastify": "^5.2.1",
+    "zod": "^3.24.2"
+  }
+}
