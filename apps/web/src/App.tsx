@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { Arrow, Layer, Line, Stage, Text, Circle, Group, Rect, RegularPolygon } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
   type OptimizationSummary,
   ROLL_FORM_HEIGHT_KEYS,
@@ -67,6 +68,13 @@ interface HistoryState {
   future: LayoutSegment[][];
 }
 
+type DraggablePanel = "controls" | "itemCounts" | "postKey" | "optimization" | "tutorial";
+
+interface PanelOffset {
+  x: number;
+  y: number;
+}
+
 type HistoryAction =
   | { type: "APPLY"; updater: (segments: LayoutSegment[]) => LayoutSegment[] }
   | { type: "UNDO" }
@@ -111,6 +119,7 @@ const RECESS_POINTER_SNAP_PX = 20;
 const RECESS_CORNER_SNAP_MM = 250;
 const RECESS_WIDTH_OPTIONS_MM = [500, 1000, 1500, 2000, 2500, 3000];
 const RECESS_DEPTH_OPTIONS_MM = [500, 1000, 1500, 2000];
+const RECESS_INPUT_STEP_M = 0.05;
 const INITIAL_VISIBLE_WIDTH_MM = 150000;
 const SCALE_BAR_TARGET_RATIO = 0.18;
 const SCALE_BAR_MAX_RATIO = 0.4;
@@ -192,6 +201,22 @@ function getSegmentColor(spec: FenceSpec): string {
 
 function formatLengthMm(lengthMm: number): string {
   return `${(lengthMm / 1000).toFixed(2)}m`;
+}
+
+function formatMetersInputFromMm(mm: number): string {
+  return (mm / 1000).toFixed(2);
+}
+
+function parseMetersInputToMm(value: string): number | null {
+  const parsedMeters = Number(value);
+  if (!Number.isFinite(parsedMeters)) {
+    return null;
+  }
+  const parsedMm = Math.round((parsedMeters * 1000) / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  if (parsedMm < DRAW_INCREMENT_MM) {
+    return null;
+  }
+  return parsedMm;
 }
 
 function formatPointMeters(point: PointMm): string {
@@ -636,6 +661,11 @@ function chooseGridStep(scale: number): number {
   return step ?? GRID_STEPS_MM[GRID_STEPS_MM.length - 1]!;
 }
 
+function recessMidpointSnapWindowMm(segmentLengthMm: number): number {
+  const proportional = segmentLengthMm * 0.08;
+  return Math.max(250, Math.min(900, proportional));
+}
+
 function screenToWorld(pointer: { x: number; y: number }, view: Viewport): PointMm {
   return {
     x: (pointer.x - view.x) / view.scale,
@@ -696,9 +726,8 @@ function useWindowSize(): Size {
 
 export function App() {
   const { width, height } = useWindowSize();
-  const isStackedLayout = width <= 1024;
-  const canvasWidth = isStackedLayout ? width : Math.max(320, width - 360);
-  const canvasHeight = isStackedLayout ? Math.max(260, height - 320) : height;
+  const canvasWidth = width;
+  const canvasHeight = height;
   const stageRef = useRef<Konva.Stage | null>(null);
   const [view, setView] = useState<Viewport>({ x: 120, y: 120, scale: 0.1 });
   const [history, dispatchHistory] = useReducer(historyReducer, {
@@ -713,6 +742,8 @@ export function App() {
   const [pointerWorld, setPointerWorld] = useState<PointMm | null>(null);
   const [recessWidthMm, setRecessWidthMm] = useState<number>(1500);
   const [recessDepthMm, setRecessDepthMm] = useState<number>(1000);
+  const [recessWidthInputM, setRecessWidthInputM] = useState<string>(() => formatMetersInputFromMm(1500));
+  const [recessDepthInputM, setRecessDepthInputM] = useState<string>(() => formatMetersInputFromMm(1000));
   const [recessSide, setRecessSide] = useState<RecessSide>("LEFT");
   const [disableSnap, setDisableSnap] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -726,14 +757,21 @@ export function App() {
     summary: OptimizationSummary;
   } | null>(null);
   const [collapsedSections, setCollapsedSections] = useState({
-    postKey: false,
-    postHeights: false,
-    layoutCounts: false,
-    twinBarStock: false,
-    twinBarFence: false,
-    rollForm: false,
     optimizationTransfers: false
   });
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanel, PanelOffset>>({
+    controls: { x: 0, y: 0 },
+    itemCounts: { x: 0, y: 0 },
+    postKey: { x: 0, y: 0 },
+    optimization: { x: 0, y: 0 },
+    tutorial: { x: 0, y: 0 }
+  });
+  const [activePanelDrag, setActivePanelDrag] = useState<{
+    panel: DraggablePanel;
+    startPointer: { x: number; y: number };
+    startOffset: PanelOffset;
+  } | null>(null);
   const initialScaleApplied = useRef(false);
   const skipNextSegmentSelection = useRef(false);
   const canUndo = history.past.length > 0;
@@ -754,6 +792,37 @@ export function App() {
     setDrawStart(null);
     setSelectedSegmentId(null);
   }, []);
+
+  useEffect(() => {
+    if (!activePanelDrag) {
+      return;
+    }
+    const drag = activePanelDrag;
+
+    function onMouseMove(event: MouseEvent): void {
+      const deltaX = event.clientX - drag.startPointer.x;
+      const deltaY = event.clientY - drag.startPointer.y;
+      setPanelOffsets((previous) => ({
+        ...previous,
+        [drag.panel]: {
+          x: drag.startOffset.x + deltaX,
+          y: drag.startOffset.y + deltaY
+        }
+      }));
+    }
+
+    function onMouseUp(): void {
+      setActivePanelDrag(null);
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [activePanelDrag]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -1143,7 +1212,12 @@ export function App() {
       return null;
     }
 
-    return buildRecessPreview(best.segment, best.offsetMm, recessWidthMm, recessDepthMm, recessSide);
+    const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+    const midpointMm = segmentLengthMm / 2;
+    const snapWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+    const centeredOffsetMm = Math.abs(best.offsetMm - midpointMm) <= snapWindowMm ? midpointMm : best.offsetMm;
+
+    return buildRecessPreview(best.segment, centeredOffsetMm, recessWidthMm, recessDepthMm, recessSide);
   }, [interactionMode, pointerWorld, recessDepthMm, recessPointerSnapMm, recessSide, recessWidthMm, segments]);
 
   const ghostLengthMm = useMemo(() => {
@@ -1188,6 +1262,47 @@ export function App() {
       ...previous,
       [section]: !previous[section]
     }));
+  }
+
+  function onRecessWidthInputChange(value: string): void {
+    setRecessWidthInputM(value);
+    const parsed = parseMetersInputToMm(value);
+    if (parsed !== null) {
+      setRecessWidthMm(parsed);
+    }
+  }
+
+  function onRecessDepthInputChange(value: string): void {
+    setRecessDepthInputM(value);
+    const parsed = parseMetersInputToMm(value);
+    if (parsed !== null) {
+      setRecessDepthMm(parsed);
+    }
+  }
+
+  function normalizeRecessInputs(): void {
+    setRecessWidthInputM(formatMetersInputFromMm(recessWidthMm));
+    setRecessDepthInputM(formatMetersInputFromMm(recessDepthMm));
+  }
+
+  function startPanelDrag(panel: DraggablePanel, event: ReactMouseEvent<HTMLDivElement>): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    setActivePanelDrag({
+      panel,
+      startPointer: { x: event.clientX, y: event.clientY },
+      startOffset: panelOffsets[panel]
+    });
+  }
+
+  function panelDragStyle(panel: DraggablePanel): { transform: string; zIndex: number } {
+    const offset = panelOffsets[panel];
+    return {
+      transform: `translate(${offset.x}px, ${offset.y}px)`,
+      zIndex: activePanelDrag?.panel === panel ? 50 : 32
+    };
   }
 
   function moveSegments(segmentIds: string[], delta: PointMm): void {
@@ -1406,10 +1521,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="left-panel">
-        <h1>Fence Estimator</h1>
-        <p className="subtitle">2D layout editor with deterministic live counts</p>
-
-        <section className="panel-block">
+        <section className="panel-block panel-fence-palette">
           <h2>Fence Palette</h2>
           <label>
             System
@@ -1490,7 +1602,7 @@ export function App() {
           </div>
         </section>
 
-        <section className="panel-block">
+        <section className="panel-block panel-interaction">
           <h2>Interaction</h2>
           <label>
             Mode
@@ -1510,23 +1622,37 @@ export function App() {
             <>
               <label>
                 Recess Width
-                <select value={recessWidthMm} onChange={(event) => setRecessWidthMm(Number(event.target.value))}>
+                <input
+                  type="number"
+                  min={RECESS_INPUT_STEP_M}
+                  step={RECESS_INPUT_STEP_M}
+                  list="recess-width-presets"
+                  value={recessWidthInputM}
+                  onChange={(event) => onRecessWidthInputChange(event.target.value)}
+                  onBlur={normalizeRecessInputs}
+                />
+                <datalist id="recess-width-presets">
                   {RECESS_WIDTH_OPTIONS_MM.map((value) => (
-                    <option key={value} value={value}>
-                      {formatLengthMm(value)}
-                    </option>
+                    <option key={value} value={formatMetersInputFromMm(value)} />
                   ))}
-                </select>
+                </datalist>
               </label>
               <label>
                 Recess Depth
-                <select value={recessDepthMm} onChange={(event) => setRecessDepthMm(Number(event.target.value))}>
+                <input
+                  type="number"
+                  min={RECESS_INPUT_STEP_M}
+                  step={RECESS_INPUT_STEP_M}
+                  list="recess-depth-presets"
+                  value={recessDepthInputM}
+                  onChange={(event) => onRecessDepthInputChange(event.target.value)}
+                  onBlur={normalizeRecessInputs}
+                />
+                <datalist id="recess-depth-presets">
                   {RECESS_DEPTH_OPTIONS_MM.map((value) => (
-                    <option key={value} value={value}>
-                      {formatLengthMm(value)}
-                    </option>
+                    <option key={value} value={formatMetersInputFromMm(value)} />
                   ))}
-                </select>
+                </datalist>
               </label>
               <label>
                 Recess Side
@@ -1536,10 +1662,13 @@ export function App() {
                 </select>
               </label>
               {recessPreview ? (
-                <p className="muted-line">
-                  Left run {formatLengthMm(recessPreview.startOffsetMm)} | Right run{" "}
-                  {formatLengthMm(recessPreview.segmentLengthMm - recessPreview.endOffsetMm)}
-                </p>
+                <>
+                  <p className="muted-line">
+                    Left run {formatLengthMm(recessPreview.startOffsetMm)} | Right run{" "}
+                    {formatLengthMm(recessPreview.segmentLengthMm - recessPreview.endOffsetMm)}
+                  </p>
+                  <p className="muted-line">Tip: center snaps automatically when you hover near midpoint.</p>
+                </>
               ) : (
                 <p className="muted-line">Hover near a fence line and click to place recess.</p>
               )}
@@ -1547,139 +1676,123 @@ export function App() {
           ) : null}
         </section>
 
-        <section className="panel-block">
-          <h2>Item Counts</h2>
+        <section className="panel-block panel-item-counts" style={panelDragStyle("itemCounts")}>
+          <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("itemCounts", event)}>
+            <h2>Item Counts</h2>
+          </div>
           <div className="count-group">
-            <button type="button" className="section-toggle" onClick={() => toggleSection("layoutCounts")}>
-              {collapsedSections.layoutCounts ? "Show" : "Hide"} Layout
-            </button>
-            {!collapsedSections.layoutCounts ? (
+            <h3>Layout</h3>
+            <dl className="dense-list">
+              <div>
+                <dt>Segments</dt>
+                <dd>{segments.length}</dd>
+              </div>
+              <div>
+                <dt>Posts Total</dt>
+                <dd>{estimate.posts.total}</dd>
+              </div>
+              <div>
+                <dt>Corner Posts</dt>
+                <dd>{estimate.posts.cornerPosts}</dd>
+              </div>
+              <div>
+                <dt>Intermediate Posts</dt>
+                <dd>{estimate.posts.intermediate}</dd>
+              </div>
+              <div>
+                <dt>External Corners</dt>
+                <dd>{estimate.corners.external}</dd>
+              </div>
+              <div>
+                <dt>Internal Corners</dt>
+                <dd>{estimate.corners.internal}</dd>
+              </div>
+              <div>
+                <dt>Unclassified Corners</dt>
+                <dd>{estimate.corners.unclassified}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="count-group">
+            <h3>Post Heights</h3>
+            {postHeightRows.length === 0 ? (
+              <p className="muted-line">No posts placed yet.</p>
+            ) : (
               <dl className="dense-list">
+                {postHeightRows.map((row) => (
+                  <div key={row.heightMm}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)} E/I/C/J/X (T)</dt>
+                    <dd>
+                      {row.end}/{row.intermediate}/{row.corner}/{row.junction}/{row.inlineJoin} ({row.total})
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+
+          <div className="count-group">
+            <h3>Twin Bar Stock Panels</h3>
+            {twinBarStockRows.length === 0 ? (
+              <p className="muted-line">No twin bar panels in layout.</p>
+            ) : (
+              <dl className="dense-list">
+                {twinBarStockRows.map((row) => (
+                  <div key={row.stockHeightMm}>
+                    <dt>{formatHeightLabelFromMm(row.stockHeightMm)} panel</dt>
+                    <dd>{row.count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+
+          <div className="count-group">
+            <h3>Twin Bar Fence Heights</h3>
+            {twinBarFenceRows.length === 0 ? (
+              <p className="muted-line">No twin bar fence runs yet.</p>
+            ) : (
+              <dl className="dense-list">
+                {twinBarFenceRows.map((row) => (
+                  <div key={row.height}>
+                    <dt>{row.height} (Std / SR)</dt>
+                    <dd>
+                      {row.standard} / {row.superRebound}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+
+          <div className="count-group">
+            <h3>Roll Form Rolls</h3>
+            {rollFormRows.length === 0 ? (
+              <p className="muted-line">No roll form runs in layout.</p>
+            ) : (
+              <dl className="dense-list">
+                {rollFormRows.map((row) => (
+                  <div key={row.height}>
+                    <dt>{row.height} (2100 / 900)</dt>
+                    <dd>
+                      {row.roll2100} / {row.roll900}
+                    </dd>
+                  </div>
+                ))}
                 <div>
-                  <dt>Segments</dt>
-                  <dd>{segments.length}</dd>
-                </div>
-                <div>
-                  <dt>Posts Total</dt>
-                  <dd>{estimate.posts.total}</dd>
-                </div>
-                <div>
-                  <dt>Corner Posts</dt>
-                  <dd>{estimate.posts.cornerPosts}</dd>
-                </div>
-                <div>
-                  <dt>Intermediate Posts</dt>
-                  <dd>{estimate.posts.intermediate}</dd>
-                </div>
-                <div>
-                  <dt>External Corners</dt>
-                  <dd>{estimate.corners.external}</dd>
-                </div>
-                <div>
-                  <dt>Internal Corners</dt>
-                  <dd>{estimate.corners.internal}</dd>
-                </div>
-                <div>
-                  <dt>Unclassified Corners</dt>
-                  <dd>{estimate.corners.unclassified}</dd>
+                  <dt>Total Rolls</dt>
+                  <dd>{estimate.materials.totalRolls}</dd>
                 </div>
               </dl>
-            ) : null}
-          </div>
-
-          <div className="count-group">
-            <button type="button" className="section-toggle" onClick={() => toggleSection("postHeights")}>
-              {collapsedSections.postHeights ? "Show" : "Hide"} Post Heights
-            </button>
-            {!collapsedSections.postHeights ? (
-              postHeightRows.length === 0 ? (
-                <p className="muted-line">No posts placed yet.</p>
-              ) : (
-                <dl className="dense-list">
-                  {postHeightRows.map((row) => (
-                    <div key={row.heightMm}>
-                      <dt>{formatHeightLabelFromMm(row.heightMm)} E/I/C/J/X (T)</dt>
-                      <dd>
-                        {row.end}/{row.intermediate}/{row.corner}/{row.junction}/{row.inlineJoin} ({row.total})
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )
-            ) : null}
-          </div>
-
-          <div className="count-group">
-            <button type="button" className="section-toggle" onClick={() => toggleSection("twinBarStock")}>
-              {collapsedSections.twinBarStock ? "Show" : "Hide"} Twin Bar Stock Panels
-            </button>
-            {!collapsedSections.twinBarStock ? (
-              twinBarStockRows.length === 0 ? (
-                <p className="muted-line">No twin bar panels in layout.</p>
-              ) : (
-                <dl className="dense-list">
-                  {twinBarStockRows.map((row) => (
-                    <div key={row.stockHeightMm}>
-                      <dt>{formatHeightLabelFromMm(row.stockHeightMm)} panel</dt>
-                      <dd>{row.count}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )
-            ) : null}
-          </div>
-
-          <div className="count-group">
-            <button type="button" className="section-toggle" onClick={() => toggleSection("twinBarFence")}>
-              {collapsedSections.twinBarFence ? "Show" : "Hide"} Twin Bar Fence Heights
-            </button>
-            {!collapsedSections.twinBarFence ? (
-              twinBarFenceRows.length === 0 ? (
-                <p className="muted-line">No twin bar fence runs yet.</p>
-              ) : (
-                <dl className="dense-list">
-                  {twinBarFenceRows.map((row) => (
-                    <div key={row.height}>
-                      <dt>{row.height} (Std / SR)</dt>
-                      <dd>
-                        {row.standard} / {row.superRebound}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )
-            ) : null}
-          </div>
-
-          <div className="count-group">
-            <button type="button" className="section-toggle" onClick={() => toggleSection("rollForm")}>
-              {collapsedSections.rollForm ? "Show" : "Hide"} Roll Form Rolls
-            </button>
-            {!collapsedSections.rollForm ? (
-              rollFormRows.length === 0 ? (
-                <p className="muted-line">No roll form runs in layout.</p>
-              ) : (
-                <dl className="dense-list">
-                  {rollFormRows.map((row) => (
-                    <div key={row.height}>
-                      <dt>{row.height} (2100 / 900)</dt>
-                      <dd>
-                        {row.roll2100} / {row.roll900}
-                      </dd>
-                    </div>
-                  ))}
-                  <div>
-                    <dt>Total Rolls</dt>
-                    <dd>{estimate.materials.totalRolls}</dd>
-                  </div>
-                </dl>
-              )
-            ) : null}
+            )}
           </div>
         </section>
 
-        <section className="panel-block">
-          <h2>Optimization</h2>
+        <section className="panel-block panel-optimization" style={panelDragStyle("optimization")}>
+          <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("optimization", event)}>
+            <h2>Optimization</h2>
+          </div>
           <p className="muted-line">Run this after layout drawing is finished. Results are cleared when geometry changes.</p>
           <p className="muted-line">
             5.5m example: {formatLengthMm(TWIN_BAR_PANEL_WIDTH_MM)} panels {"=>"} 2 full panels (
@@ -1781,119 +1894,124 @@ export function App() {
           )}
         </section>
 
-        <section className="panel-block">
-          <h2>Post Key</h2>
-          <button type="button" className="section-toggle" onClick={() => toggleSection("postKey")}>
-            {collapsedSections.postKey ? "Show" : "Hide"} Post Symbols
-          </button>
-          {!collapsedSections.postKey ? (
-            <div className="post-key">
-              <div className="post-key-row">
-                <span className="post-icon post-end" />
-                <span>End Post</span>
-                <strong>{postTypeCounts.END}</strong>
-              </div>
-              <div className="post-key-row">
-                <span className="post-icon post-intermediate" />
-                <span>Intermediate Post</span>
-                <strong>{postTypeCounts.INTERMEDIATE}</strong>
-              </div>
-              <div className="post-key-row">
-                <span className="post-icon post-corner" />
-                <span>Corner Post</span>
-                <strong>{postTypeCounts.CORNER}</strong>
-              </div>
-              <div className="post-key-row">
-                <span className="post-icon post-junction" />
-                <span>Junction Post</span>
-                <strong>{postTypeCounts.JUNCTION}</strong>
-              </div>
-              <div className="post-key-row">
-                <span className="post-icon post-inline-join" />
-                <span>Inline Join Post</span>
-                <strong>{postTypeCounts.INLINE_JOIN}</strong>
-              </div>
+        <section className="panel-block panel-post-key" style={panelDragStyle("postKey")}>
+          <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("postKey", event)}>
+            <h2>Post Key</h2>
+          </div>
+          <div className="post-key">
+            <div className="post-key-row">
+              <span className="post-icon post-end" />
+              <span>End Post</span>
+              <strong>{postTypeCounts.END}</strong>
             </div>
-          ) : null}
+            <div className="post-key-row">
+              <span className="post-icon post-intermediate" />
+              <span>Intermediate Post</span>
+              <strong>{postTypeCounts.INTERMEDIATE}</strong>
+            </div>
+            <div className="post-key-row">
+              <span className="post-icon post-corner" />
+              <span>Corner Post</span>
+              <strong>{postTypeCounts.CORNER}</strong>
+            </div>
+            <div className="post-key-row">
+              <span className="post-icon post-junction" />
+              <span>Junction Post</span>
+              <strong>{postTypeCounts.JUNCTION}</strong>
+            </div>
+            <div className="post-key-row">
+              <span className="post-icon post-inline-join" />
+              <span>Inline Join Post</span>
+              <strong>{postTypeCounts.INLINE_JOIN}</strong>
+            </div>
+          </div>
         </section>
 
-        <section className="panel-block">
-          <h2>Controls</h2>
-          <ul>
-            <li>Mode Draw: left click start/commit fence line</li>
-            <li>Mode Select: click line to select and edit</li>
-            <li>Mode Recess: hover line and click to insert recess</li>
-            <li>Right click: cancel active chain</li>
-            <li>Hold Shift: disable 5 degree snapping</li>
-            <li>Auto-snap to nearby existing post nodes</li>
-            <li>Horizontal/vertical guide snap to end and corner nodes</li>
-            <li>Mouse wheel: pointer-centered zoom</li>
-            <li>Middle drag or Space + drag: pan</li>
-            <li>Select mode required for run move/edit</li>
-            <li>Run move is only allowed for isolated single runs</li>
-            <li>Run Offcut Optimization after drawing to generate transfers</li>
-            <li>Ctrl/Cmd+Z undo | Ctrl/Cmd+Y redo</li>
-            <li>Delete/Backspace: remove selected segment</li>
-          </ul>
-          {selectedSegmentId ? (
-            <p className="snapshot-status">
-              {selectedRunMovable
-                ? `Selected run is movable (${selectedRunSegmentIds.length} segment${selectedRunSegmentIds.length === 1 ? "" : "s"})`
-                : "Selected run is connected to other runs and cannot be moved as a block"}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="ghost"
-            onClick={undoSegments}
-            disabled={!canUndo}
-          >
-            Undo
+        {!isTutorialOpen ? (
+          <button type="button" className="tutorial-launch" onClick={() => setIsTutorialOpen(true)}>
+            Tutorial
           </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={redoSegments}
-            disabled={!canRedo}
-          >
-            Redo
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!selectedSegmentId) {
-                return;
-              }
-              applySegments((previous) => previous.filter((segment) => segment.id !== selectedSegmentId));
-              setSelectedSegmentId(null);
-            }}
-            disabled={interactionMode !== "SELECT" || !selectedSegmentId}
-          >
-            Delete Selected Segment
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              dispatchHistory({ type: "SET", segments: [] });
-              setDrawStart(null);
-              setSelectedSegmentId(null);
-            }}
-          >
-            Clear Layout
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              void createSnapshot();
-            }}
-            disabled={segments.length === 0}
-          >
-            Save Snapshot To API
-          </button>
+        ) : null}
+
+        {isTutorialOpen ? (
+          <section className="panel-block panel-tutorial" style={panelDragStyle("tutorial")}>
+            <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("tutorial", event)}>
+              <h2>Tutorial</h2>
+              <button
+                type="button"
+                className="panel-close"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => setIsTutorialOpen(false)}
+              >
+                x
+              </button>
+            </div>
+            <ul>
+              <li>Mode Draw: left click start/commit fence line.</li>
+              <li>Mode Select: click line to select and edit.</li>
+              <li>Mode Recess: hover line and click to insert recess.</li>
+              <li>Right click cancels active draw chain.</li>
+              <li>Hold Shift to disable angle snapping.</li>
+              <li>Horizontal/vertical guide lines help match terminations.</li>
+              <li>Middle drag or Space + drag to pan.</li>
+              <li>Run Offcut Optimization after drawing to generate transfers.</li>
+            </ul>
+          </section>
+        ) : null}
+
+        <section className="panel-block panel-controls" style={panelDragStyle("controls")}>
+          <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("controls", event)}>
+            <h2>Controls</h2>
+          </div>
+          <div className="controls-toolbar" aria-label="Controls toolbar">
+            <button type="button" className="icon-btn" onClick={undoSegments} disabled={!canUndo} title="Undo">
+              U
+            </button>
+            <button type="button" className="icon-btn" onClick={redoSegments} disabled={!canRedo} title="Redo">
+              R
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                if (!selectedSegmentId) {
+                  return;
+                }
+                applySegments((previous) => previous.filter((segment) => segment.id !== selectedSegmentId));
+                setSelectedSegmentId(null);
+              }}
+              disabled={interactionMode !== "SELECT" || !selectedSegmentId}
+              title="Delete Selected Segment"
+            >
+              D
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                dispatchHistory({ type: "SET", segments: [] });
+                setDrawStart(null);
+                setSelectedSegmentId(null);
+              }}
+              title="Clear Layout"
+            >
+              C
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                void createSnapshot();
+              }}
+              disabled={segments.length === 0}
+              title="Save Snapshot To API"
+            >
+              S
+            </button>
+          </div>
           {snapshotStatus ? <p className="snapshot-status">{snapshotStatus}</p> : null}
         </section>
+
       </aside>
 
       <main className="canvas-wrap">
@@ -2336,4 +2454,5 @@ export function App() {
     </div>
   );
 }
+
 

@@ -33,19 +33,23 @@ body {
 }
 
 .app-shell {
-  display: flex;
+  position: relative;
   width: 100%;
   height: 100%;
 }
 
 .left-panel {
-  width: 360px;
-  min-width: 360px;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.left-panel > .panel-block {
+  position: absolute;
+  pointer-events: auto;
+  max-height: calc(100% - 32px);
   overflow: auto;
-  padding: 20px 18px;
-  background: linear-gradient(165deg, var(--bg-panel) 0%, var(--bg-panel-alt) 100%);
-  border-right: 1px solid var(--border);
 }
 
 h1 {
@@ -61,42 +65,225 @@ h1 {
 }
 
 .panel-block {
-  margin-bottom: 16px;
-  padding: 12px;
+  margin-bottom: 10px;
+  padding: 7px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(9, 16, 23, 0.65);
+  border-radius: 9px;
+  background: rgba(9, 16, 23, 0.84);
+  box-shadow: 0 8px 22px rgba(2, 8, 15, 0.5);
+  backdrop-filter: blur(3px);
 }
 
 .panel-block h2 {
-  margin: 0 0 10px;
-  font-size: 1rem;
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+}
+
+.panel-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
+.panel-close {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(98, 126, 151, 0.6);
+  background: rgba(18, 34, 47, 0.85);
+  color: #c9d8e9;
+  font-size: 0.64rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.panel-fence-palette {
+  left: 16px;
+  top: 108px;
+  width: 228px;
+}
+
+.panel-interaction {
+  left: 16px;
+  top: 16px;
+  width: 228px;
+}
+
+.panel-controls {
+  left: calc(50% - 90px);
+  top: 46px;
+  width: auto;
+  min-width: 0;
+}
+
+.panel-item-counts {
+  right: 16px;
+  top: 20px;
+  width: 236px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+
+.panel-post-key {
+  right: 262px;
+  top: 48px;
+  width: 152px;
+  max-height: 40vh;
+}
+
+.panel-optimization {
+  left: 16px;
+  right: auto;
+  top: auto;
+  bottom: 96px;
+  width: 228px;
+  max-height: 32vh;
+  overflow: auto;
+}
+
+.panel-tutorial {
+  right: 16px;
+  bottom: 16px;
+  width: 236px;
+  max-height: 30vh;
+}
+
+.tutorial-launch {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: auto;
+  min-width: 92px;
+  height: 28px;
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(88, 120, 146, 0.72);
+  background: rgba(13, 26, 37, 0.92);
+  color: #e7f1fd;
+  font-size: 0.72rem;
+  pointer-events: auto;
+}
+
+.floating-toggle-bar {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.mini-toggle {
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+  margin: 0;
+  border: 1px solid rgba(73, 106, 132, 0.8);
+  border-radius: 6px;
+  background: rgba(12, 25, 35, 0.88);
+  color: #d7e5f3;
+  font-size: 0.58rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mini-toggle.active {
+  border-color: #ffd166;
+  color: #ffd166;
+}
+
+.controls-toggle {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.tutorial-toggle {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  pointer-events: auto;
+}
+
+.controls-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  margin: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(82, 113, 138, 0.72);
+  background: rgba(16, 30, 41, 0.9);
+  color: #eff6ff;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  padding: 0;
+  line-height: 1;
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
 }
 
 label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 8px;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 select {
-  height: 34px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-main);
   background: #0f1a24;
+  font-size: 0.82rem;
+}
+
+input[type="number"] {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  background: #0f1a24;
+  font-size: 0.82rem;
 }
 
 .palette-legend {
-  margin-top: 10px;
+  margin-top: 8px;
   display: grid;
-  gap: 6px;
+  gap: 5px;
   color: var(--text-muted);
-  font-size: 0.84rem;
+  font-size: 0.76rem;
 }
 
 .palette-legend > div {
@@ -121,8 +308,8 @@ select {
   display: grid;
   grid-template-columns: 16px 1fr auto;
   align-items: center;
-  gap: 8px;
-  font-size: 0.88rem;
+  gap: 6px;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 
@@ -167,19 +354,19 @@ select {
 }
 
 .count-group {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .section-toggle {
   width: 100%;
-  height: 30px;
-  margin: 0 0 6px;
+  height: 26px;
+  margin: 0 0 4px;
   text-align: left;
   border: 1px solid rgba(55, 83, 107, 0.8);
   border-radius: 6px;
   background: rgba(15, 28, 39, 0.9);
   color: #bfd0e4;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -204,7 +391,7 @@ select {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding: 3px 0;
+  padding: 2px 0;
   border-bottom: 1px dashed rgba(62, 92, 117, 0.25);
 }
 
@@ -219,8 +406,8 @@ select {
 }
 
 .muted-line {
-  margin: 0 0 8px;
-  font-size: 0.84rem;
+  margin: 0 0 6px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -235,13 +422,13 @@ select {
   height: auto;
   display: grid;
   justify-items: start;
-  gap: 8px;
-  padding: 10px;
+  gap: 5px;
+  padding: 8px;
   border-radius: 8px;
   border: 1px solid rgba(66, 99, 122, 0.55);
   background: rgba(12, 21, 30, 0.8);
   color: var(--text-main);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-align: left;
 }
 
@@ -265,7 +452,7 @@ select {
 
 .transfer-item-sub {
   color: #9ab0c6;
-  font-size: 0.77rem;
+  font-size: 0.69rem;
 }
 
 .transfer-status {
@@ -300,16 +487,16 @@ ul {
   padding: 0 0 0 18px;
   color: var(--text-muted);
   display: grid;
-  gap: 6px;
-  font-size: 0.9rem;
+  gap: 4px;
+  font-size: 0.77rem;
 }
 
 button {
   width: 100%;
-  height: 36px;
-  margin-bottom: 8px;
+  height: 30px;
+  margin-bottom: 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   color: #fff;
@@ -328,30 +515,31 @@ button:disabled {
 .canvas-wrap {
   position: relative;
   flex: 1;
+  width: 100%;
   height: 100%;
 }
 
 .statusbar {
   position: absolute;
   left: 12px;
-  right: 12px;
+  right: 254px;
   bottom: 12px;
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
   color: var(--text-muted);
   background: rgba(12, 19, 27, 0.86);
-  font-size: 0.84rem;
+  font-size: 0.76rem;
 }
 
 .scale-bar {
   position: absolute;
   left: 14px;
-  bottom: 62px;
-  padding: 6px 8px 8px;
+  bottom: 54px;
+  padding: 5px 7px 7px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: rgba(12, 19, 27, 0.9);
@@ -383,26 +571,57 @@ button:disabled {
   margin-top: 4px;
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: 0.69rem;
   color: #d9e5f1;
 }
 
 .snapshot-status {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #ffd166;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
 }
 
 @media (max-width: 1024px) {
-  .app-shell {
-    flex-direction: column;
+  .left-panel {
+    position: static;
+    inset: auto;
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    pointer-events: auto;
+    overflow: auto;
+    max-height: 45vh;
   }
 
-  .left-panel {
+  .left-panel > .panel-block {
+    position: static;
+    transform: none;
     width: 100%;
-    min-width: 0;
-    height: 320px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    max-height: none;
+  }
+
+  .floating-toggle-bar {
+    position: static;
+    margin-bottom: 8px;
+  }
+
+  .tutorial-toggle {
+    position: static;
+    margin-bottom: 8px;
+  }
+
+  .tutorial-launch {
+    position: static;
+    margin-bottom: 8px;
+  }
+
+  .controls-toggle {
+    position: static;
+    transform: none;
+    margin-bottom: 8px;
+  }
+
+  .statusbar {
+    right: 12px;
   }
 }
