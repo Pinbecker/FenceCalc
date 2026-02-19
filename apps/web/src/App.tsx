@@ -15,7 +15,7 @@ import {
   type TwinBarVariant
 } from "@fence-estimator/contracts";
 import { areOpposite, snapPointToAngle, distanceMm } from "@fence-estimator/geometry";
-import { TWIN_BAR_PANEL_WIDTH_MM, buildOptimizationSummary, estimateLayout, getSpecConfig } from "@fence-estimator/rules-engine";
+import { buildOptimizationSummary, estimateLayout, getSpecConfig } from "@fence-estimator/rules-engine";
 
 interface Viewport {
   x: number;
@@ -28,7 +28,7 @@ interface Size {
   height: number;
 }
 
-type PostKind = "END" | "INTERMEDIATE" | "CORNER" | "JUNCTION" | "INLINE_JOIN";
+type PostKind = "END" | "INTERMEDIATE" | "CORNER" | "JUNCTION" | "INLINE_JOIN" | "GATE";
 
 interface VisualPost {
   key: string;
@@ -47,6 +47,7 @@ interface SegmentConnectivity {
   segmentComponent: Map<string, string>;
   segmentIdsByComponent: Map<string, string[]>;
   movableComponentIds: Set<string>;
+  closedComponentIds: Set<string>;
   nodeDegreeByKey: Map<string, number>;
 }
 
@@ -68,7 +69,7 @@ interface HistoryState {
   future: LayoutSegment[][];
 }
 
-type DraggablePanel = "controls" | "itemCounts" | "postKey" | "optimization" | "tutorial";
+type DraggablePanel = "controls" | "itemCounts" | "postKey" | "tutorial";
 
 interface PanelOffset {
   x: number;
@@ -81,8 +82,9 @@ type HistoryAction =
   | { type: "REDO" }
   | { type: "SET"; segments: LayoutSegment[] };
 
-type InteractionMode = "DRAW" | "SELECT" | "RECESS";
+type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
 type RecessSide = "LEFT" | "RIGHT";
+type GateType = "SINGLE_LEAF" | "DOUBLE_LEAF" | "CUSTOM";
 
 interface RecessInsertionPreview {
   segment: LayoutSegment;
@@ -97,6 +99,65 @@ interface RecessInsertionPreview {
   recessEntryPoint: PointMm;
   recessExitPoint: PointMm;
   targetPoint: PointMm;
+  alignmentGuide?: {
+    anchorPoint: PointMm;
+    targetPoint: PointMm;
+  };
+}
+
+interface LineSnapPreview {
+  segment: LayoutSegment;
+  point: PointMm;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  distanceMm: number;
+}
+
+interface GateInsertionPreview {
+  segment: LayoutSegment;
+  segmentLengthMm: number;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  widthMm: number;
+  entryPoint: PointMm;
+  exitPoint: PointMm;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  targetPoint: PointMm;
+}
+
+interface GatePlacement {
+  id: string;
+  segmentId: string;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  gateType: GateType;
+}
+
+interface ResolvedGatePlacement extends GateVisual {
+  id: string;
+  segmentId: string;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  gateType: GateType;
+  spec: FenceSpec;
+}
+
+interface GateVisual {
+  key: string;
+  startPoint: PointMm;
+  endPoint: PointMm;
+  centerPoint: PointMm;
+  widthMm: number;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  leafCount: 1 | 2;
+}
+
+interface RecessAlignmentAnchor {
+  sourceSegmentId: string;
+  point: PointMm;
+  tangent: { x: number; y: number };
 }
 
 const MIN_SEGMENT_MM = 50;
@@ -111,14 +172,23 @@ const SEGMENT_STROKE_PX = 3.5;
 const SEGMENT_SELECTED_STROKE_PX = 5;
 const GHOST_STROKE_PX = 2.8;
 const LABEL_FONT_SIZE_PX = 12;
+const SEGMENT_LABEL_OFFSET_PX = 18;
+const GATE_LABEL_OFFSET_PX = 18;
 const HANDLE_RADIUS_PX = 7;
 const POST_SYMBOL_RADIUS_PX = 5;
 const NODE_SNAP_DISTANCE_PX = 14;
 const AXIS_GUIDE_SNAP_PX = 16;
+const DRAW_LINE_SNAP_PX = 18;
 const RECESS_POINTER_SNAP_PX = 20;
+const GATE_POINTER_SNAP_PX = 20;
 const RECESS_CORNER_SNAP_MM = 250;
 const RECESS_WIDTH_OPTIONS_MM = [500, 1000, 1500, 2000, 2500, 3000];
 const RECESS_DEPTH_OPTIONS_MM = [500, 1000, 1500, 2000];
+const SINGLE_GATE_WIDTH_MM = 1200;
+const DOUBLE_GATE_WIDTH_MM = 3000;
+const GATE_WIDTH_OPTIONS_MM = [1000, 1200, 1500, 1800, 2400, 3000, 3600, 4000];
+const GATE_OPEN_ANGLE_DEGREES = 33;
+const GATE_DOUBLE_LEAF_THRESHOLD_MM = 1800;
 const RECESS_INPUT_STEP_M = 0.05;
 const INITIAL_VISIBLE_WIDTH_MM = 150000;
 const SCALE_BAR_TARGET_RATIO = 0.18;
@@ -127,30 +197,30 @@ const SCALE_BAR_CANDIDATES_MM = [
   1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000
 ];
 const TWIN_BAR_STANDARD_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#5d9bff",
-  "1.8m": "#4f83ff",
-  "2m": "#4474ea",
-  "2.4m": "#3a65cd",
-  "3m": "#3157b4",
-  "4m": "#294a9c",
-  "4.5m": "#213d84",
-  "5m": "#1a316b",
-  "6m": "#132753"
+  "1.2m": "#4cc9f0",
+  "1.8m": "#3a86ff",
+  "2m": "#4361ee",
+  "2.4m": "#8338ec",
+  "3m": "#ff006e",
+  "4m": "#fb5607",
+  "4.5m": "#ffbe0b",
+  "5m": "#2ec4b6",
+  "6m": "#8ac926"
 };
 const TWIN_BAR_SUPER_REBOUND_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#ffb56b",
-  "1.8m": "#ffa257",
-  "2m": "#ff9247",
-  "2.4m": "#ff8438",
-  "3m": "#ff772d",
-  "4m": "#ef6b28",
-  "4.5m": "#de5f23",
-  "5m": "#cd541f",
-  "6m": "#bc4a1b"
+  "1.2m": "#06d6a0",
+  "1.8m": "#1b9aaa",
+  "2m": "#ef476f",
+  "2.4m": "#f78c6b",
+  "3m": "#ffd166",
+  "4m": "#9b5de5",
+  "4.5m": "#00bbf9",
+  "5m": "#80ed99",
+  "6m": "#ff9770"
 };
 const ROLL_FORM_COLORS: Record<(typeof ROLL_FORM_HEIGHT_KEYS)[number], string> = {
-  "2m": "#1f9d8b",
-  "3m": "#2fbf71"
+  "2m": "#00a884",
+  "3m": "#ffd166"
 };
 const TWIN_BAR_HEIGHT_OPTIONS: FenceHeightKey[] = [...TWIN_BAR_HEIGHT_KEYS];
 const ROLL_FORM_HEIGHT_OPTIONS: FenceHeightKey[] = [...ROLL_FORM_HEIGHT_KEYS];
@@ -238,12 +308,131 @@ function formatSegmentWindow(startOffsetMm: number, endOffsetMm: number): string
   return `[${formatLengthMm(startOffsetMm)}-${formatLengthMm(endOffsetMm)}]`;
 }
 
+function formatTransferChoiceLabel(candidateSourceCount: number): string {
+  if (candidateSourceCount > 1) {
+    return `${candidateSourceCount} sources considered, largest offcut selected`;
+  }
+  if (candidateSourceCount === 1) {
+    return "only eligible source";
+  }
+  return "forced selection";
+}
+
+function formatVariantShortLabel(variant: TwinBarVariant): string {
+  return variant === "SUPER_REBOUND" ? "SR" : "Std";
+}
+
 function sameSpec(left: FenceSpec, right: FenceSpec): boolean {
   return (
     left.system === right.system &&
     left.height === right.height &&
     (left.twinBarVariant ?? "STANDARD") === (right.twinBarVariant ?? "STANDARD")
   );
+}
+
+function normalizeVector(vector: { x: number; y: number }): { x: number; y: number } | null {
+  const length = Math.hypot(vector.x, vector.y);
+  if (length <= 1e-6) {
+    return null;
+  }
+  return {
+    x: vector.x / length,
+    y: vector.y / length
+  };
+}
+
+function dot(left: { x: number; y: number }, right: { x: number; y: number }): number {
+  return left.x * right.x + left.y * right.y;
+}
+
+function rotateVector(vector: { x: number; y: number }, degrees: number): { x: number; y: number } {
+  const radians = (degrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos
+  };
+}
+
+function resolveGateLeafCount(widthMm: number): 1 | 2 {
+  return widthMm > GATE_DOUBLE_LEAF_THRESHOLD_MM ? 2 : 1;
+}
+
+function resolveGatePreviewLeafCount(gateType: GateType, widthMm: number): 1 | 2 {
+  if (gateType === "DOUBLE_LEAF") {
+    return 2;
+  }
+  if (gateType === "SINGLE_LEAF") {
+    return 1;
+  }
+  return resolveGateLeafCount(widthMm);
+}
+
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
+  return Math.max(startA, startB) < Math.min(endA, endB);
+}
+
+function clampGatePlacementToSegment(
+  placement: GatePlacement,
+  segmentLengthMm: number,
+): { startOffsetMm: number; endOffsetMm: number } | null {
+  if (segmentLengthMm < MIN_SEGMENT_MM * 2 + DRAW_INCREMENT_MM) {
+    return null;
+  }
+
+  const maxWidthMm = Math.max(DRAW_INCREMENT_MM, segmentLengthMm - MIN_SEGMENT_MM * 2);
+  const requestedWidthMm = placement.endOffsetMm - placement.startOffsetMm;
+  const widthMm = Math.max(DRAW_INCREMENT_MM, Math.min(maxWidthMm, requestedWidthMm));
+
+  let startOffsetMm = Math.max(
+    MIN_SEGMENT_MM,
+    Math.min(segmentLengthMm - MIN_SEGMENT_MM - widthMm, placement.startOffsetMm),
+  );
+  let endOffsetMm = Math.min(segmentLengthMm - MIN_SEGMENT_MM, startOffsetMm + widthMm);
+
+  startOffsetMm = Math.round(startOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  endOffsetMm = Math.round(endOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+
+  if (endOffsetMm - startOffsetMm < DRAW_INCREMENT_MM) {
+    return null;
+  }
+  if (startOffsetMm < MIN_SEGMENT_MM || segmentLengthMm - endOffsetMm < MIN_SEGMENT_MM) {
+    return null;
+  }
+
+  return {
+    startOffsetMm,
+    endOffsetMm
+  };
+}
+
+function sameGatePlacement(left: GatePlacement, right: GatePlacement): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.startOffsetMm === right.startOffsetMm &&
+    left.endOffsetMm === right.endOffsetMm &&
+    left.gateType === right.gateType
+  );
+}
+
+function sameGatePlacementList(left: GatePlacement[], right: GatePlacement[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftGate = left[index];
+    const rightGate = right[index];
+    if (!leftGate || !rightGate || !sameGatePlacement(leftGate, rightGate)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function samePointApprox(left: PointMm, right: PointMm, epsilon = 0.001): boolean {
+  return Math.abs(left.x - right.x) <= epsilon && Math.abs(left.y - right.y) <= epsilon;
 }
 
 function sameSegment(left: LayoutSegment, right: LayoutSegment): boolean {
@@ -457,6 +646,7 @@ function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivit
   const segmentComponent = new Map<string, string>();
   const segmentIdsByComponent = new Map<string, string[]>();
   const movableComponentIds = new Set<string>();
+  const closedComponentIds = new Set<string>();
   const nodeDegreeByKey = new Map<string, number>();
   const segmentById = new Map<string, LayoutSegment>();
   const segmentIdsByNode = new Map<string, string[]>();
@@ -525,11 +715,17 @@ function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivit
     }
 
     segmentIdsByComponent.set(componentId, componentSegmentIds);
+    const isClosed =
+      componentSegmentIds.length >= 3 &&
+      [...componentNodeKeys].every((nodeKey) => (nodeDegreeByKey.get(nodeKey) ?? 0) === 2);
+    if (isClosed) {
+      closedComponentIds.add(componentId);
+    }
     const onlyOneSegment = componentSegmentIds.length === 1;
     const firstSegment = onlyOneSegment ? segmentById.get(componentSegmentIds[0] ?? "") : undefined;
     const firstNodeDegree = firstSegment ? nodeDegreeByKey.get(pointCoordinateKey(firstSegment.start)) ?? 0 : 0;
     const secondNodeDegree = firstSegment ? nodeDegreeByKey.get(pointCoordinateKey(firstSegment.end)) ?? 0 : 0;
-    const isMovable = onlyOneSegment && firstNodeDegree === 1 && secondNodeDegree === 1;
+    const isMovable = isClosed || (onlyOneSegment && firstNodeDegree === 1 && secondNodeDegree === 1);
     if (isMovable) {
       movableComponentIds.add(componentId);
     }
@@ -539,8 +735,323 @@ function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivit
     segmentComponent,
     segmentIdsByComponent,
     movableComponentIds,
+    closedComponentIds,
     nodeDegreeByKey
   };
+}
+
+function resolveGatePlacements(
+  segmentsById: Map<string, LayoutSegment>,
+  gatePlacements: GatePlacement[],
+): ResolvedGatePlacement[] {
+  const sorted = [...gatePlacements].sort((left, right) => left.id.localeCompare(right.id));
+  const resolved: ResolvedGatePlacement[] = [];
+
+  for (const placement of sorted) {
+    const segment = segmentsById.get(placement.segmentId);
+    if (!segment) {
+      continue;
+    }
+    const segmentLengthMm = distanceMm(segment.start, segment.end);
+    const clamped = clampGatePlacementToSegment(placement, segmentLengthMm);
+    if (!clamped) {
+      continue;
+    }
+    const entryPoint = interpolateAlongSegment(segment, clamped.startOffsetMm);
+    const exitPoint = interpolateAlongSegment(segment, clamped.endOffsetMm);
+    const tangent = normalizeVector({
+      x: exitPoint.x - entryPoint.x,
+      y: exitPoint.y - entryPoint.y
+    });
+    if (!tangent) {
+      continue;
+    }
+    const widthMm = clamped.endOffsetMm - clamped.startOffsetMm;
+    resolved.push({
+      id: placement.id,
+      segmentId: placement.segmentId,
+      startOffsetMm: clamped.startOffsetMm,
+      endOffsetMm: clamped.endOffsetMm,
+      gateType: placement.gateType,
+      key: placement.id,
+      startPoint: entryPoint,
+      endPoint: exitPoint,
+      centerPoint: {
+        x: (entryPoint.x + exitPoint.x) / 2,
+        y: (entryPoint.y + exitPoint.y) / 2
+      },
+      widthMm,
+      tangent,
+      normal: { x: -tangent.y, y: tangent.x },
+      leafCount: resolveGatePreviewLeafCount(placement.gateType, widthMm),
+      spec: segment.spec
+    });
+  }
+
+  return resolved;
+}
+
+function buildSegmentRuns(segment: LayoutSegment, gateSpans: ResolvedGatePlacement[]): Array<{ start: PointMm; end: PointMm }> {
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  if (segmentLengthMm <= 0) {
+    return [];
+  }
+  if (gateSpans.length === 0) {
+    return [{ start: segment.start, end: segment.end }];
+  }
+
+  const sortedGates = [...gateSpans].sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+  const runs: Array<{ start: PointMm; end: PointMm }> = [];
+  let cursorMm = 0;
+
+  for (const gate of sortedGates) {
+    const runEndMm = Math.max(cursorMm, gate.startOffsetMm);
+    if (runEndMm - cursorMm >= MIN_SEGMENT_MM) {
+      runs.push({
+        start: interpolateAlongSegment(segment, cursorMm),
+        end: interpolateAlongSegment(segment, runEndMm)
+      });
+    }
+    cursorMm = Math.max(cursorMm, gate.endOffsetMm);
+  }
+
+  if (segmentLengthMm - cursorMm >= MIN_SEGMENT_MM) {
+    runs.push({
+      start: interpolateAlongSegment(segment, cursorMm),
+      end: interpolateAlongSegment(segment, segmentLengthMm)
+    });
+  }
+
+  return runs;
+}
+
+function buildEstimateSegments(segments: LayoutSegment[], gatesBySegmentId: Map<string, ResolvedGatePlacement[]>): LayoutSegment[] {
+  const derived: LayoutSegment[] = [];
+
+  for (const segment of segments) {
+    const gateSpans = gatesBySegmentId.get(segment.id) ?? [];
+    const runs = buildSegmentRuns(segment, gateSpans);
+    if (runs.length === 0) {
+      continue;
+    }
+    runs.forEach((run, index) => {
+      derived.push({
+        id: `${segment.id}::run-${index}`,
+        start: quantize(run.start),
+        end: quantize(run.end),
+        spec: segment.spec
+      });
+    });
+  }
+
+  return derived;
+}
+
+function renderGateSymbol(
+  gate: GateVisual,
+  scale: number,
+  style: {
+    frameStroke: string;
+    leafStroke: string;
+    swingStroke: string;
+    markerFill: string;
+    labelColor: string;
+    opacity?: number;
+  },
+  label: string | null,
+  keyOverride?: string,
+) {
+  const postTickHalfMm = Math.max(120, Math.min(260, gate.widthMm * 0.16));
+  const openAngle = GATE_OPEN_ANGLE_DEGREES;
+  const strokeWidth = 2.6 / scale;
+  const sweepStrokeWidth = 1.7 / scale;
+  const markerRadius = 3.2 / scale;
+  const labelOffsetMm = Math.max(220, Math.min(420, gate.widthMm * 0.18)) + GATE_LABEL_OFFSET_PX / scale;
+  const labelY = gate.centerPoint.y + gate.normal.y * labelOffsetMm;
+  const labelX = gate.centerPoint.x + gate.normal.x * labelOffsetMm;
+
+  const startPostTop = {
+    x: gate.startPoint.x + gate.normal.x * postTickHalfMm,
+    y: gate.startPoint.y + gate.normal.y * postTickHalfMm
+  };
+  const startPostBottom = {
+    x: gate.startPoint.x - gate.normal.x * postTickHalfMm,
+    y: gate.startPoint.y - gate.normal.y * postTickHalfMm
+  };
+  const endPostTop = {
+    x: gate.endPoint.x + gate.normal.x * postTickHalfMm,
+    y: gate.endPoint.y + gate.normal.y * postTickHalfMm
+  };
+  const endPostBottom = {
+    x: gate.endPoint.x - gate.normal.x * postTickHalfMm,
+    y: gate.endPoint.y - gate.normal.y * postTickHalfMm
+  };
+
+  const key = keyOverride ?? gate.key;
+
+  if (gate.leafCount === 1) {
+    const openDirection = rotateVector(gate.tangent, openAngle);
+    const controlDirection = normalizeVector({
+      x: gate.tangent.x + openDirection.x,
+      y: gate.tangent.y + openDirection.y
+    }) ?? openDirection;
+    const openTip = {
+      x: gate.startPoint.x + openDirection.x * gate.widthMm,
+      y: gate.startPoint.y + openDirection.y * gate.widthMm
+    };
+    const sweepControl = {
+      x: gate.startPoint.x + controlDirection.x * gate.widthMm * 1.1,
+      y: gate.startPoint.y + controlDirection.y * gate.widthMm * 1.1
+    };
+
+    return (
+      <Group key={key} listening={false} opacity={style.opacity ?? 1}>
+        <Line
+          points={[gate.startPoint.x, gate.startPoint.y, gate.endPoint.x, gate.endPoint.y]}
+          stroke={style.frameStroke}
+          strokeWidth={strokeWidth}
+          dash={[9 / scale, 6 / scale]}
+          lineCap="round"
+        />
+        <Line
+          points={[startPostTop.x, startPostTop.y, startPostBottom.x, startPostBottom.y]}
+          stroke={style.frameStroke}
+          strokeWidth={strokeWidth}
+          lineCap="round"
+        />
+        <Line
+          points={[endPostTop.x, endPostTop.y, endPostBottom.x, endPostBottom.y]}
+          stroke={style.frameStroke}
+          strokeWidth={strokeWidth}
+          lineCap="round"
+        />
+        <Line
+          points={[gate.startPoint.x, gate.startPoint.y, openTip.x, openTip.y]}
+          stroke={style.leafStroke}
+          strokeWidth={strokeWidth}
+          lineCap="round"
+        />
+        <Line
+          points={[gate.endPoint.x, gate.endPoint.y, sweepControl.x, sweepControl.y, openTip.x, openTip.y]}
+          stroke={style.swingStroke}
+          strokeWidth={sweepStrokeWidth}
+          dash={[8 / scale, 5 / scale]}
+          bezier
+          lineCap="round"
+        />
+        <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
+        {label ? (
+          <Text
+            x={labelX}
+            y={labelY}
+            text={label}
+            fontSize={LABEL_FONT_SIZE_PX / scale}
+            fill={style.labelColor}
+            offsetX={(label.length * 3.6) / scale}
+            offsetY={10 / scale}
+          />
+        ) : null}
+      </Group>
+    );
+  }
+
+  const leafLengthMm = gate.widthMm / 2;
+  const rightClosedDirection = {
+    x: -gate.tangent.x,
+    y: -gate.tangent.y
+  };
+  const leftOpenDirection = rotateVector(gate.tangent, openAngle);
+  const rightOpenDirection = rotateVector(rightClosedDirection, -openAngle);
+  const leftControlDirection = normalizeVector({
+    x: gate.tangent.x + leftOpenDirection.x,
+    y: gate.tangent.y + leftOpenDirection.y
+  }) ?? leftOpenDirection;
+  const rightControlDirection = normalizeVector({
+    x: rightClosedDirection.x + rightOpenDirection.x,
+    y: rightClosedDirection.y + rightOpenDirection.y
+  }) ?? rightOpenDirection;
+
+  const leftOpenTip = {
+    x: gate.startPoint.x + leftOpenDirection.x * leafLengthMm,
+    y: gate.startPoint.y + leftOpenDirection.y * leafLengthMm
+  };
+  const rightOpenTip = {
+    x: gate.endPoint.x + rightOpenDirection.x * leafLengthMm,
+    y: gate.endPoint.y + rightOpenDirection.y * leafLengthMm
+  };
+  const leftSweepControl = {
+    x: gate.startPoint.x + leftControlDirection.x * leafLengthMm * 1.1,
+    y: gate.startPoint.y + leftControlDirection.y * leafLengthMm * 1.1
+  };
+  const rightSweepControl = {
+    x: gate.endPoint.x + rightControlDirection.x * leafLengthMm * 1.1,
+    y: gate.endPoint.y + rightControlDirection.y * leafLengthMm * 1.1
+  };
+
+  return (
+    <Group key={key} listening={false} opacity={style.opacity ?? 1}>
+      <Line
+        points={[gate.startPoint.x, gate.startPoint.y, gate.endPoint.x, gate.endPoint.y]}
+        stroke={style.frameStroke}
+        strokeWidth={strokeWidth}
+        dash={[9 / scale, 6 / scale]}
+        lineCap="round"
+      />
+      <Line
+        points={[startPostTop.x, startPostTop.y, startPostBottom.x, startPostBottom.y]}
+        stroke={style.frameStroke}
+        strokeWidth={strokeWidth}
+        lineCap="round"
+      />
+      <Line
+        points={[endPostTop.x, endPostTop.y, endPostBottom.x, endPostBottom.y]}
+        stroke={style.frameStroke}
+        strokeWidth={strokeWidth}
+        lineCap="round"
+      />
+      <Line
+        points={[gate.startPoint.x, gate.startPoint.y, leftOpenTip.x, leftOpenTip.y]}
+        stroke={style.leafStroke}
+        strokeWidth={strokeWidth}
+        lineCap="round"
+      />
+      <Line
+        points={[gate.endPoint.x, gate.endPoint.y, rightOpenTip.x, rightOpenTip.y]}
+        stroke={style.leafStroke}
+        strokeWidth={strokeWidth}
+        lineCap="round"
+      />
+      <Line
+        points={[gate.centerPoint.x, gate.centerPoint.y, leftSweepControl.x, leftSweepControl.y, leftOpenTip.x, leftOpenTip.y]}
+        stroke={style.swingStroke}
+        strokeWidth={sweepStrokeWidth}
+        dash={[8 / scale, 5 / scale]}
+        bezier
+        lineCap="round"
+      />
+      <Line
+        points={[gate.centerPoint.x, gate.centerPoint.y, rightSweepControl.x, rightSweepControl.y, rightOpenTip.x, rightOpenTip.y]}
+        stroke={style.swingStroke}
+        strokeWidth={sweepStrokeWidth}
+        dash={[8 / scale, 5 / scale]}
+        bezier
+        lineCap="round"
+      />
+      <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
+      <Circle x={gate.endPoint.x} y={gate.endPoint.y} radius={markerRadius} fill={style.markerFill} />
+      {label ? (
+        <Text
+          x={labelX}
+          y={labelY}
+          text={label}
+          fontSize={LABEL_FONT_SIZE_PX / scale}
+          fill={style.labelColor}
+          offsetX={(label.length * 3.6) / scale}
+          offsetY={10 / scale}
+        />
+      ) : null}
+    </Group>
+  );
 }
 
 function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): PointMm {
@@ -577,6 +1088,97 @@ function projectPointOntoSegment(point: PointMm, segment: LayoutSegment): { proj
     projected,
     offsetMm: distanceMm(segment.start, projected),
     distanceMm: distanceMm(point, projected)
+  };
+}
+
+function findNearestSegmentSnap(point: PointMm, segments: LayoutSegment[], maxDistanceMm: number): LineSnapPreview | null {
+  let best: LineSnapPreview | null = null;
+
+  for (const segment of segments) {
+    const segmentLengthMm = distanceMm(segment.start, segment.end);
+    if (segmentLengthMm <= 0) {
+      continue;
+    }
+    const projection = projectPointOntoSegment(point, segment);
+    if (projection.distanceMm > maxDistanceMm) {
+      continue;
+    }
+    const snappedOffsetMm = Math.max(
+      0,
+      Math.min(segmentLengthMm, Math.round(projection.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM),
+    );
+    const snappedPoint = interpolateAlongSegment(segment, snappedOffsetMm);
+    const snappedDistanceMm = distanceMm(point, snappedPoint);
+    if (snappedDistanceMm > maxDistanceMm) {
+      continue;
+    }
+    if (!best || snappedDistanceMm < best.distanceMm) {
+      best = {
+        segment,
+        point: snappedPoint,
+        startOffsetMm: snappedOffsetMm,
+        endOffsetMm: Math.max(0, segmentLengthMm - snappedOffsetMm),
+        distanceMm: snappedDistanceMm
+      };
+    }
+  }
+
+  return best;
+}
+
+function resolveGateWidthMm(gateType: GateType, customGateWidthMm: number): number {
+  if (gateType === "SINGLE_LEAF") {
+    return SINGLE_GATE_WIDTH_MM;
+  }
+  if (gateType === "DOUBLE_LEAF") {
+    return DOUBLE_GATE_WIDTH_MM;
+  }
+  return customGateWidthMm;
+}
+
+function buildGatePreview(segment: LayoutSegment, centerOffsetMm: number, requestedWidthMm: number): GateInsertionPreview | null {
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  if (segmentLengthMm < MIN_SEGMENT_MM * 2 + DRAW_INCREMENT_MM) {
+    return null;
+  }
+
+  const maxWidthMm = Math.max(DRAW_INCREMENT_MM, segmentLengthMm - MIN_SEGMENT_MM * 2);
+  const widthMm = Math.max(DRAW_INCREMENT_MM, Math.min(requestedWidthMm, maxWidthMm));
+  let startOffsetMm = centerOffsetMm - widthMm / 2;
+  let endOffsetMm = centerOffsetMm + widthMm / 2;
+  startOffsetMm = Math.max(MIN_SEGMENT_MM, Math.min(segmentLengthMm - MIN_SEGMENT_MM - widthMm, startOffsetMm));
+  endOffsetMm = Math.min(segmentLengthMm - MIN_SEGMENT_MM, startOffsetMm + widthMm);
+
+  startOffsetMm = Math.round(startOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  endOffsetMm = Math.round(endOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  if (endOffsetMm - startOffsetMm < DRAW_INCREMENT_MM) {
+    return null;
+  }
+  if (startOffsetMm < MIN_SEGMENT_MM || segmentLengthMm - endOffsetMm < MIN_SEGMENT_MM) {
+    return null;
+  }
+
+  const entryPoint = interpolateAlongSegment(segment, startOffsetMm);
+  const exitPoint = interpolateAlongSegment(segment, endOffsetMm);
+  const tangent = normalizeVector({
+    x: exitPoint.x - entryPoint.x,
+    y: exitPoint.y - entryPoint.y
+  });
+  if (!tangent) {
+    return null;
+  }
+
+  return {
+    segment,
+    segmentLengthMm,
+    startOffsetMm,
+    endOffsetMm,
+    widthMm: endOffsetMm - startOffsetMm,
+    entryPoint,
+    exitPoint,
+    tangent,
+    normal: { x: -tangent.y, y: tangent.x },
+    targetPoint: interpolateAlongSegment(segment, centerOffsetMm)
   };
 }
 
@@ -663,7 +1265,158 @@ function chooseGridStep(scale: number): number {
 
 function recessMidpointSnapWindowMm(segmentLengthMm: number): number {
   const proportional = segmentLengthMm * 0.08;
-  return Math.max(250, Math.min(900, proportional));
+  return Math.max(300, Math.min(1200, proportional));
+}
+
+function recessFractionSnapWindowMm(segmentLengthMm: number): number {
+  const proportional = segmentLengthMm * 0.06;
+  return Math.max(260, Math.min(1000, proportional));
+}
+
+function recessAnchorSnapWindowMm(segmentLengthMm: number): number {
+  const proportional = segmentLengthMm * 0.05;
+  return Math.max(220, Math.min(900, proportional));
+}
+
+function recessSnapTargetsMm(segmentLengthMm: number): number[] {
+  const fractions = [0.25, 1 / 3, 0.5, 2 / 3, 0.75];
+  const snapped = new Set<number>();
+  for (const fraction of fractions) {
+    const offsetMm = Math.round((segmentLengthMm * fraction) / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+    if (offsetMm <= 0 || offsetMm >= segmentLengthMm) {
+      continue;
+    }
+    snapped.add(offsetMm);
+  }
+  return [...snapped];
+}
+
+function snapOffsetToAnchorAlongSegment(
+  segment: LayoutSegment,
+  currentOffsetMm: number,
+  anchorPoints: PointMm[],
+  windowMm: number,
+): { offsetMm: number; anchorPoint: PointMm | null } {
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const tangent = normalizeVector({
+    x: segment.end.x - segment.start.x,
+    y: segment.end.y - segment.start.y
+  });
+  if (!tangent || segmentLengthMm <= 0) {
+    return { offsetMm: currentOffsetMm, anchorPoint: null };
+  }
+
+  const currentPoint = interpolateAlongSegment(segment, currentOffsetMm);
+  const currentAlong = currentPoint.x * tangent.x + currentPoint.y * tangent.y;
+  let bestOffsetMm = currentOffsetMm;
+  let bestAnchorPoint: PointMm | null = null;
+  let bestDistanceMm = Number.POSITIVE_INFINITY;
+
+  for (const anchor of anchorPoints) {
+    const anchorAlong = anchor.x * tangent.x + anchor.y * tangent.y;
+    const deltaAlong = anchorAlong - currentAlong;
+    const distanceAlong = Math.abs(deltaAlong);
+    if (distanceAlong > windowMm) {
+      continue;
+    }
+    const candidateOffsetMm = currentOffsetMm + deltaAlong;
+    if (candidateOffsetMm <= 0 || candidateOffsetMm >= segmentLengthMm) {
+      continue;
+    }
+    if (distanceAlong < bestDistanceMm) {
+      bestDistanceMm = distanceAlong;
+      bestOffsetMm = candidateOffsetMm;
+      bestAnchorPoint = anchor;
+    }
+  }
+
+  return {
+    offsetMm: bestOffsetMm,
+    anchorPoint: bestAnchorPoint
+  };
+}
+
+function vectorFromNodeTowardsOtherEnd(segment: LayoutSegment, node: PointMm): { x: number; y: number } | null {
+  if (samePointApprox(segment.start, node, 0.1)) {
+    return {
+      x: segment.end.x - segment.start.x,
+      y: segment.end.y - segment.start.y
+    };
+  }
+  if (samePointApprox(segment.end, node, 0.1)) {
+    return {
+      x: segment.start.x - segment.end.x,
+      y: segment.start.y - segment.end.y
+    };
+  }
+  return null;
+}
+
+function buildRecessAlignmentAnchors(segments: LayoutSegment[]): RecessAlignmentAnchor[] {
+  const segmentsByNode = new Map<string, LayoutSegment[]>();
+
+  function addNodeSegment(node: PointMm, segment: LayoutSegment): void {
+    const key = pointCoordinateKey(node);
+    const existing = segmentsByNode.get(key);
+    if (existing) {
+      existing.push(segment);
+      return;
+    }
+    segmentsByNode.set(key, [segment]);
+  }
+
+  for (const segment of segments) {
+    addNodeSegment(segment.start, segment);
+    addNodeSegment(segment.end, segment);
+  }
+
+  const anchors: RecessAlignmentAnchor[] = [];
+  for (const segment of segments) {
+    const startIncidents = segmentsByNode.get(pointCoordinateKey(segment.start)) ?? [];
+    const endIncidents = segmentsByNode.get(pointCoordinateKey(segment.end)) ?? [];
+    if (startIncidents.length !== 2 || endIncidents.length !== 2) {
+      continue;
+    }
+
+    const startOther = startIncidents.find((candidate) => candidate.id !== segment.id);
+    const endOther = endIncidents.find((candidate) => candidate.id !== segment.id);
+    if (!startOther || !endOther) {
+      continue;
+    }
+
+    const startMain = normalizeVector(vectorFromNodeTowardsOtherEnd(segment, segment.start) ?? { x: 0, y: 0 });
+    const endMain = normalizeVector(vectorFromNodeTowardsOtherEnd(segment, segment.end) ?? { x: 0, y: 0 });
+    const startLeg = normalizeVector(vectorFromNodeTowardsOtherEnd(startOther, segment.start) ?? { x: 0, y: 0 });
+    const endLeg = normalizeVector(vectorFromNodeTowardsOtherEnd(endOther, segment.end) ?? { x: 0, y: 0 });
+    if (!startMain || !endMain || !startLeg || !endLeg) {
+      continue;
+    }
+
+    const startPerpendicular = Math.abs(dot(startMain, startLeg)) <= 0.35;
+    const endPerpendicular = Math.abs(dot(endMain, endLeg)) <= 0.35;
+    if (!startPerpendicular || !endPerpendicular) {
+      continue;
+    }
+
+    const segmentTangent = normalizeVector({
+      x: segment.end.x - segment.start.x,
+      y: segment.end.y - segment.start.y
+    });
+    if (!segmentTangent) {
+      continue;
+    }
+
+    anchors.push({
+      sourceSegmentId: segment.id,
+      point: {
+        x: (segment.start.x + segment.end.x) / 2,
+        y: (segment.start.y + segment.end.y) / 2
+      },
+      tangent: segmentTangent
+    });
+  }
+
+  return anchors;
 }
 
 function screenToWorld(pointer: { x: number; y: number }, view: Viewport): PointMm {
@@ -739,32 +1492,39 @@ export function App() {
   const [activeSpec, setActiveSpec] = useState<FenceSpec>(defaultFenceSpec());
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("DRAW");
   const [drawStart, setDrawStart] = useState<PointMm | null>(null);
+  const [rectangleStart, setRectangleStart] = useState<PointMm | null>(null);
   const [pointerWorld, setPointerWorld] = useState<PointMm | null>(null);
   const [recessWidthMm, setRecessWidthMm] = useState<number>(1500);
   const [recessDepthMm, setRecessDepthMm] = useState<number>(1000);
   const [recessWidthInputM, setRecessWidthInputM] = useState<string>(() => formatMetersInputFromMm(1500));
   const [recessDepthInputM, setRecessDepthInputM] = useState<string>(() => formatMetersInputFromMm(1000));
   const [recessSide, setRecessSide] = useState<RecessSide>("LEFT");
+  const [gateType, setGateType] = useState<GateType>("SINGLE_LEAF");
+  const [customGateWidthMm, setCustomGateWidthMm] = useState<number>(SINGLE_GATE_WIDTH_MM);
+  const [customGateWidthInputM, setCustomGateWidthInputM] = useState<string>(() => formatMetersInputFromMm(SINGLE_GATE_WIDTH_MM));
+  const [gatePlacements, setGatePlacements] = useState<GatePlacement[]>([]);
   const [disableSnap, setDisableSnap] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panAnchor, setPanAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [activeSegmentDrag, setActiveSegmentDrag] = useState<{ segmentId: string; lastPointer: PointMm } | null>(null);
+  const [activeGateDrag, setActiveGateDrag] = useState<{ gateId: string; lastPointer: PointMm } | null>(null);
   const [snapshotStatus, setSnapshotStatus] = useState<string>("");
+  const [isLengthEditorOpen, setIsLengthEditorOpen] = useState(false);
+  const [selectedLengthInputM, setSelectedLengthInputM] = useState<string>("");
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
   const [optimizationRun, setOptimizationRun] = useState<{
     layoutKey: string;
     summary: OptimizationSummary;
   } | null>(null);
-  const [collapsedSections, setCollapsedSections] = useState({
-    optimizationTransfers: false
-  });
+  const [isOptimizationInspectorOpen, setIsOptimizationInspectorOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanel, PanelOffset>>({
     controls: { x: 0, y: 0 },
     itemCounts: { x: 0, y: 0 },
     postKey: { x: 0, y: 0 },
-    optimization: { x: 0, y: 0 },
     tutorial: { x: 0, y: 0 }
   });
   const [activePanelDrag, setActivePanelDrag] = useState<{
@@ -772,8 +1532,8 @@ export function App() {
     startPointer: { x: number; y: number };
     startOffset: PanelOffset;
   } | null>(null);
+  const previousSegmentsByIdRef = useRef<Map<string, LayoutSegment>>(new Map());
   const initialScaleApplied = useRef(false);
-  const skipNextSegmentSelection = useRef(false);
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
 
@@ -847,8 +1607,14 @@ export function App() {
       if (!isModifierPressed && event.code === "KeyS") {
         setInteractionMode("SELECT");
       }
+      if (!isModifierPressed && event.code === "KeyX") {
+        setInteractionMode("RECTANGLE");
+      }
       if (!isModifierPressed && event.code === "KeyR") {
         setInteractionMode("RECESS");
+      }
+      if (!isModifierPressed && event.code === "KeyG") {
+        setInteractionMode("GATE");
       }
       if (event.code === "Space") {
         setIsSpacePressed(true);
@@ -856,12 +1622,20 @@ export function App() {
       if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
         setDisableSnap(true);
       }
-      if ((event.code === "Delete" || event.code === "Backspace") && selectedSegmentId) {
-        applySegments((previous) => previous.filter((segment) => segment.id !== selectedSegmentId));
-        setSelectedSegmentId(null);
+      if (event.code === "Delete" || event.code === "Backspace") {
+        if (selectedGateId) {
+          setGatePlacements((previous) => previous.filter((gate) => gate.id !== selectedGateId));
+          setSelectedGateId(null);
+          return;
+        }
+        if (selectedSegmentId) {
+          applySegments((previous) => previous.filter((segment) => segment.id !== selectedSegmentId));
+          setSelectedSegmentId(null);
+        }
       }
       if (event.code === "Escape") {
         setDrawStart(null);
+        setRectangleStart(null);
       }
     }
 
@@ -880,14 +1654,21 @@ export function App() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [applySegments, redoSegments, selectedSegmentId, undoSegments]);
+  }, [applySegments, redoSegments, selectedGateId, selectedSegmentId, undoSegments]);
 
   useEffect(() => {
     if (interactionMode !== "SELECT") {
       setSelectedSegmentId(null);
+      setSelectedGateId(null);
+      setIsLengthEditorOpen(false);
+      setActiveSegmentDrag(null);
+      setActiveGateDrag(null);
     }
     if (interactionMode !== "DRAW") {
       setDrawStart(null);
+    }
+    if (interactionMode !== "RECTANGLE") {
+      setRectangleStart(null);
     }
   }, [interactionMode]);
 
@@ -904,18 +1685,172 @@ export function App() {
     initialScaleApplied.current = true;
   }, [canvasHeight, canvasWidth]);
 
-  const estimate = useMemo(() => estimateLayout({ segments }), [segments]);
+  const segmentsById = useMemo(() => {
+    const map = new Map<string, LayoutSegment>();
+    for (const segment of segments) {
+      map.set(segment.id, segment);
+    }
+    return map;
+  }, [segments]);
+  const resolvedGatePlacements = useMemo(
+    () => resolveGatePlacements(segmentsById, gatePlacements),
+    [gatePlacements, segmentsById],
+  );
+  const resolvedGateById = useMemo(() => {
+    const map = new Map<string, ResolvedGatePlacement>();
+    for (const gate of resolvedGatePlacements) {
+      map.set(gate.id, gate);
+    }
+    return map;
+  }, [resolvedGatePlacements]);
+  const gatesBySegmentId = useMemo(() => {
+    const map = new Map<string, ResolvedGatePlacement[]>();
+    for (const gate of resolvedGatePlacements) {
+      const bucket = map.get(gate.segmentId);
+      if (bucket) {
+        bucket.push(gate);
+      } else {
+        map.set(gate.segmentId, [gate]);
+      }
+    }
+    for (const bucket of map.values()) {
+      bucket.sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+    }
+    return map;
+  }, [resolvedGatePlacements]);
+  const gateNodeHeightByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const gate of resolvedGatePlacements) {
+      const heightMm = getSpecConfig(gate.spec).assembledHeightMm;
+      const startKey = pointCoordinateKey(quantize(gate.startPoint));
+      const endKey = pointCoordinateKey(quantize(gate.endPoint));
+      map.set(startKey, Math.max(heightMm, map.get(startKey) ?? 0));
+      map.set(endKey, Math.max(heightMm, map.get(endKey) ?? 0));
+    }
+    return map;
+  }, [resolvedGatePlacements]);
+  const estimateSegments = useMemo(
+    () => buildEstimateSegments(segments, gatesBySegmentId),
+    [gatesBySegmentId, segments],
+  );
+  const estimateSegmentsById = useMemo(() => {
+    const map = new Map<string, LayoutSegment>();
+    for (const segment of estimateSegments) {
+      map.set(segment.id, segment);
+    }
+    return map;
+  }, [estimateSegments]);
+  const baseEstimate = useMemo(() => estimateLayout({ segments }), [segments]);
+  const estimateFromOpenings = useMemo(() => estimateLayout({ segments: estimateSegments }), [estimateSegments]);
+  const estimate = useMemo(() => {
+    const byHeightAndType = new Map<string, { end: number; intermediate: number; corner: number; junction: number; inlineJoin: number; total: number }>();
+    const allHeightKeys = new Set([
+      ...Object.keys(baseEstimate.posts.byHeightAndType),
+      ...Object.keys(estimateFromOpenings.posts.byHeightAndType)
+    ]);
+
+    for (const heightKey of allHeightKeys) {
+      const baseBucket = baseEstimate.posts.byHeightAndType[heightKey];
+      const openingsBucket = estimateFromOpenings.posts.byHeightAndType[heightKey];
+      const merged = {
+        end: baseBucket?.end ?? 0,
+        intermediate: openingsBucket?.intermediate ?? 0,
+        corner: baseBucket?.corner ?? 0,
+        junction: baseBucket?.junction ?? 0,
+        inlineJoin: baseBucket?.inlineJoin ?? 0,
+        total: 0
+      };
+      merged.total = merged.end + merged.intermediate + merged.corner + merged.junction + merged.inlineJoin;
+      byHeightAndType.set(heightKey, merged);
+    }
+
+    const byHeightMm: Record<string, number> = {};
+    for (const [heightKey, bucket] of byHeightAndType) {
+      byHeightMm[heightKey] = bucket.total;
+    }
+
+    return {
+      ...estimateFromOpenings,
+      posts: {
+        terminal: baseEstimate.posts.terminal,
+        intermediate: estimateFromOpenings.posts.intermediate,
+        total: baseEstimate.posts.terminal + estimateFromOpenings.posts.intermediate,
+        cornerPosts: baseEstimate.posts.cornerPosts,
+        byHeightAndType: Object.fromEntries(byHeightAndType),
+        byHeightMm
+      },
+      corners: baseEstimate.corners
+    };
+  }, [baseEstimate, estimateFromOpenings]);
+  useEffect(() => {
+    const previousSegmentsById = previousSegmentsByIdRef.current;
+    setGatePlacements((previous) => {
+      const next: GatePlacement[] = [];
+
+      for (const placement of previous) {
+        const nextSegment = segmentsById.get(placement.segmentId);
+        if (!nextSegment) {
+          continue;
+        }
+
+        let adjustedPlacement = placement;
+        const previousSegment = previousSegmentsById.get(placement.segmentId);
+        if (previousSegment) {
+          const startMoved = !samePointApprox(previousSegment.start, nextSegment.start);
+          const endMoved = !samePointApprox(previousSegment.end, nextSegment.end);
+
+          if (startMoved && !endMoved) {
+            const previousLengthMm = distanceMm(previousSegment.start, previousSegment.end);
+            const nextLengthMm = distanceMm(nextSegment.start, nextSegment.end);
+            const lengthDeltaMm = nextLengthMm - previousLengthMm;
+            if (Math.abs(lengthDeltaMm) > 0.001) {
+              adjustedPlacement = {
+                ...adjustedPlacement,
+                startOffsetMm: adjustedPlacement.startOffsetMm + lengthDeltaMm,
+                endOffsetMm: adjustedPlacement.endOffsetMm + lengthDeltaMm
+              };
+            }
+          }
+        }
+
+        const segmentLengthMm = distanceMm(nextSegment.start, nextSegment.end);
+        const clamped = clampGatePlacementToSegment(adjustedPlacement, segmentLengthMm);
+        if (!clamped) {
+          continue;
+        }
+
+        next.push({
+          ...adjustedPlacement,
+          startOffsetMm: clamped.startOffsetMm,
+          endOffsetMm: clamped.endOffsetMm
+        });
+      }
+
+      next.sort((left, right) => left.id.localeCompare(right.id));
+      return sameGatePlacementList(previous, next) ? previous : next;
+    });
+    previousSegmentsByIdRef.current = new Map(segmentsById);
+  }, [segmentsById]);
   const layoutKey = useMemo(
     () =>
       JSON.stringify(
-        segments.map((segment) => ({
-          id: segment.id,
-          start: segment.start,
-          end: segment.end,
-          spec: segment.spec
-        })),
+        {
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            start: segment.start,
+            end: segment.end,
+            spec: segment.spec
+          })),
+          gates: resolvedGatePlacements.map((gate) => ({
+            id: gate.id,
+            segmentId: gate.segmentId,
+            startOffsetMm: gate.startOffsetMm,
+            endOffsetMm: gate.endOffsetMm,
+            leafCount: gate.leafCount
+          }))
+        },
       ),
-    [segments],
+    [resolvedGatePlacements, segments],
   );
   const visualPosts = useMemo(() => {
     const postsByCoordinate = new Map<string, VisualPost>();
@@ -932,7 +1867,7 @@ export function App() {
       incidentNodes.set(key, { point, vectors: [vector], maxHeightMm: heightMm });
     }
 
-    for (const segment of segments) {
+    for (const segment of estimateSegments) {
       const config = getSpecConfig(segment.spec);
       const segmentLength = distanceMm(segment.start, segment.end);
       const bays = Math.max(1, Math.ceil(segmentLength / config.bayWidthMm));
@@ -967,6 +1902,9 @@ export function App() {
     }
 
     for (const [coordinateKey, node] of incidentNodes) {
+      if (gateNodeHeightByKey.has(coordinateKey)) {
+        continue;
+      }
       postsByCoordinate.set(coordinateKey, {
         key: `post-${coordinateKey}`,
         point: node.point,
@@ -975,8 +1913,24 @@ export function App() {
       });
     }
 
+    for (const [coordinateKey, heightMm] of gateNodeHeightByKey) {
+      const [xRaw, yRaw] = coordinateKey.split(":");
+      const x = Number(xRaw);
+      const y = Number(yRaw);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        continue;
+      }
+      postsByCoordinate.set(coordinateKey, {
+        key: `post-gate-${coordinateKey}`,
+        point: { x, y },
+        kind: "GATE",
+        heightMm
+      });
+    }
+
     return [...postsByCoordinate.values()];
-  }, [segments]);
+  }, [estimateSegments, gateNodeHeightByKey]);
+  const recessAlignmentAnchors = useMemo(() => buildRecessAlignmentAnchors(segments), [segments]);
   const drawAnchorNodes = useMemo(
     () =>
       visualPosts
@@ -996,7 +1950,8 @@ export function App() {
           INTERMEDIATE: 0,
           CORNER: 0,
           JUNCTION: 0,
-          INLINE_JOIN: 0
+          INLINE_JOIN: 0,
+          GATE: 0
         },
       ),
     [visualPosts],
@@ -1012,31 +1967,65 @@ export function App() {
     [estimate.posts.byHeightAndType],
   );
   const connectivity = useMemo(() => buildSegmentConnectivity(segments), [segments]);
+  const placedGateVisuals = useMemo(() => resolvedGatePlacements, [resolvedGatePlacements]);
   const selectedComponentId = useMemo(() => {
     if (!selectedSegmentId) {
       return null;
     }
     return connectivity.segmentComponent.get(selectedSegmentId) ?? null;
   }, [connectivity.segmentComponent, selectedSegmentId]);
-  const selectedRunSegmentIds = useMemo(() => {
-    if (!selectedComponentId) {
-      return [];
-    }
-    return connectivity.segmentIdsByComponent.get(selectedComponentId) ?? [];
-  }, [connectivity.segmentIdsByComponent, selectedComponentId]);
-  const selectedRunMovable = useMemo(() => {
+  const selectedComponentClosed = useMemo(() => {
     if (!selectedComponentId) {
       return false;
     }
-    return connectivity.movableComponentIds.has(selectedComponentId);
-  }, [connectivity.movableComponentIds, selectedComponentId]);
+    return connectivity.closedComponentIds.has(selectedComponentId);
+  }, [connectivity.closedComponentIds, selectedComponentId]);
   const activeHeightOptions = activeSpec.system === "TWIN_BAR" ? TWIN_BAR_HEIGHT_OPTIONS : ROLL_FORM_HEIGHT_OPTIONS;
-  const twinBarStockRows = useMemo(
+  const postRowsByType = useMemo(() => {
+    const rowsForType = (typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin") =>
+      postHeightRows
+        .filter((row) => row[typeKey] > 0)
+        .map((row) => ({ heightMm: row.heightMm, count: row[typeKey] }));
+    return {
+      end: rowsForType("end"),
+      intermediate: rowsForType("intermediate"),
+      corner: rowsForType("corner"),
+      junction: rowsForType("junction"),
+      inlineJoin: rowsForType("inlineJoin")
+    };
+  }, [postHeightRows]);
+  const gateCounts = useMemo(() => {
+    let single = 0;
+    let double = 0;
+    let custom = 0;
+
+    for (const gate of resolvedGatePlacements) {
+      if (gate.gateType === "CUSTOM") {
+        custom += 1;
+      }
+      if (gate.leafCount === 2) {
+        double += 1;
+      } else {
+        single += 1;
+      }
+    }
+
+    return {
+      total: resolvedGatePlacements.length,
+      single,
+      double,
+      custom
+    };
+  }, [resolvedGatePlacements]);
+  const gateCountsByHeight = useMemo(
     () =>
-      Object.entries(estimate.materials.twinBarPanelsByStockHeightMm)
-        .map(([stockHeightMm, count]) => ({ stockHeightMm: Number(stockHeightMm), count }))
-        .sort((left, right) => left.stockHeightMm - right.stockHeightMm),
-    [estimate.materials.twinBarPanelsByStockHeightMm],
+      [...resolvedGatePlacements.reduce<Map<string, number>>((map, gate) => {
+        map.set(gate.spec.height, (map.get(gate.spec.height) ?? 0) + 1);
+        return map;
+      }, new Map())]
+        .map(([height, count]) => ({ height, count }))
+        .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height)),
+    [resolvedGatePlacements],
   );
   const twinBarFenceRows = useMemo(
     () =>
@@ -1044,13 +2033,6 @@ export function App() {
         .map(([height, counts]) => ({ height, ...counts }))
         .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height)),
     [estimate.materials.twinBarPanelsByFenceHeight],
-  );
-  const rollFormRows = useMemo(
-    () =>
-      Object.entries(estimate.materials.rollsByFenceHeight)
-        .map(([height, counts]) => ({ height, ...counts }))
-        .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height)),
-    [estimate.materials.rollsByFenceHeight],
   );
   const optimizationSummary = optimizationRun?.summary ?? null;
   const optimizationRows = useMemo(
@@ -1066,35 +2048,41 @@ export function App() {
     [optimizationSummary],
   );
   const optimizationStats = useMemo(() => {
-    const total = optimizationDemands.length;
     const reused = optimizationDemands.filter((decision) => decision.status === "REUSED_OFFCUT").length;
-    const uncovered = total - reused;
-    const multiOption = optimizationDemands.filter((decision) => decision.candidateSourceCount > 1).length;
-    const reusableCandidatesMissed = optimizationDemands.filter(
-      (decision) => decision.candidateSourceCount > 0 && decision.status !== "REUSED_OFFCUT",
-    ).length;
     return {
-      total,
-      reused,
-      uncovered,
-      multiOption,
-      reusableCandidatesMissed
+      reused
     };
   }, [optimizationDemands]);
-  const segmentsById = useMemo(() => {
-    const map = new Map<string, LayoutSegment>();
-    for (const segment of segments) {
-      map.set(segment.id, segment);
+  const selectedSegment = useMemo(() => {
+    if (!selectedSegmentId) {
+      return null;
     }
-    return map;
-  }, [segments]);
+    return segmentsById.get(selectedSegmentId) ?? null;
+  }, [segmentsById, selectedSegmentId]);
   const segmentOrdinalById = useMemo(() => {
     const map = new Map<string, number>();
-    segments.forEach((segment, index) => {
+    estimateSegments.forEach((segment, index) => {
       map.set(segment.id, index + 1);
     });
     return map;
-  }, [segments]);
+  }, [estimateSegments]);
+  useEffect(() => {
+    if (!selectedSegment) {
+      setIsLengthEditorOpen(false);
+      setSelectedLengthInputM("");
+      return;
+    }
+    setSelectedLengthInputM((distanceMm(selectedSegment.start, selectedSegment.end) / 1000).toFixed(2));
+  }, [selectedSegment]);
+  useEffect(() => {
+    if (!selectedGateId) {
+      return;
+    }
+    if (!resolvedGateById.has(selectedGateId)) {
+      setSelectedGateId(null);
+      setActiveGateDrag(null);
+    }
+  }, [resolvedGateById, selectedGateId]);
   const transferById = useMemo(() => {
     const map = new Map<string, TwinBarOffcutTransfer>();
     optimizationTransfers.forEach((transfer) => {
@@ -1113,8 +2101,8 @@ export function App() {
     if (!selectedTransfer) {
       return null;
     }
-    const sourceSegment = segmentsById.get(selectedTransfer.source.segmentId);
-    const destinationSegment = segmentsById.get(selectedTransfer.destination.segmentId);
+    const sourceSegment = estimateSegmentsById.get(selectedTransfer.source.segmentId);
+    const destinationSegment = estimateSegmentsById.get(selectedTransfer.destination.segmentId);
     if (!sourceSegment || !destinationSegment) {
       return null;
     }
@@ -1137,24 +2125,40 @@ export function App() {
         y: (destinationStart.y + destinationEnd.y) / 2
       }
     };
-  }, [segmentsById, selectedTransfer]);
-  const nodeSnapDistanceMm = NODE_SNAP_DISTANCE_PX / view.scale;
-  const axisGuideSnapDistanceMm = AXIS_GUIDE_SNAP_PX / view.scale;
+  }, [estimateSegmentsById, selectedTransfer]);
+  const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / view.scale);
+  const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / view.scale);
+  const drawLineSnapDistanceMm = Math.min(900, DRAW_LINE_SNAP_PX / view.scale);
 
   const resolveDrawPoint = useCallback(
     (worldPoint: PointMm): { point: PointMm; guide: AxisGuide | null } => {
       const angleCandidate =
         disableSnap || !drawStart ? quantize(worldPoint) : snapPointToAngle(drawStart, worldPoint, 5);
       const nearestNode = findNearestNode(angleCandidate, drawAnchorNodes, nodeSnapDistanceMm);
-      const basePoint = quantize(nearestNode ?? angleCandidate);
+      const nearestLine = findNearestSegmentSnap(angleCandidate, segments, drawLineSnapDistanceMm);
+      const nodeDistanceMm = nearestNode ? distanceMm(angleCandidate, nearestNode) : Number.POSITIVE_INFINITY;
+      let basePoint = quantize(angleCandidate);
+      if (nearestLine && nearestLine.distanceMm < nodeDistanceMm) {
+        basePoint = nearestLine.point;
+      } else if (nearestNode) {
+        basePoint = quantize(nearestNode);
+      }
 
       if (!drawStart) {
         return { point: basePoint, guide: null };
       }
 
-      return snapToAxisGuide(drawStart, basePoint, drawAnchorNodes, axisGuideSnapDistanceMm);
+      const guided = snapToAxisGuide(drawStart, basePoint, drawAnchorNodes, axisGuideSnapDistanceMm);
+      const guidedLineSnap = findNearestSegmentSnap(guided.point, segments, drawLineSnapDistanceMm);
+      if (guidedLineSnap) {
+        return {
+          point: guidedLineSnap.point,
+          guide: guided.guide
+        };
+      }
+      return guided;
     },
-    [axisGuideSnapDistanceMm, disableSnap, drawAnchorNodes, drawStart, nodeSnapDistanceMm],
+    [axisGuideSnapDistanceMm, disableSnap, drawAnchorNodes, drawLineSnapDistanceMm, drawStart, nodeSnapDistanceMm, segments],
   );
 
   useEffect(() => {
@@ -1188,6 +2192,11 @@ export function App() {
   const ghostEnd = ghostSnap?.point ?? null;
   const axisGuide = ghostSnap?.guide ?? null;
   const recessPointerSnapMm = RECESS_POINTER_SNAP_PX / view.scale;
+  const gatePointerSnapMm = GATE_POINTER_SNAP_PX / view.scale;
+  const requestedGateWidthMm = useMemo(
+    () => resolveGateWidthMm(gateType, customGateWidthMm),
+    [customGateWidthMm, gateType],
+  );
   const recessPreview = useMemo(() => {
     if (interactionMode !== "RECESS" || !pointerWorld) {
       return null;
@@ -1213,12 +2222,134 @@ export function App() {
     }
 
     const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+    const baseOffsetMm = best.offsetMm;
+    let snappedOffsetMm = baseOffsetMm;
+    let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+
+    const midpointMm = segmentLengthMm / 2;
+    const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+    const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+    if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+      snappedOffsetMm = midpointMm;
+      bestSnapDistanceMm = midpointDistanceMm;
+    }
+
+    const fractionWindowMm = recessFractionSnapWindowMm(segmentLengthMm);
+    for (const targetOffsetMm of recessSnapTargetsMm(segmentLengthMm)) {
+      const distanceToTargetMm = Math.abs(baseOffsetMm - targetOffsetMm);
+      if (distanceToTargetMm <= fractionWindowMm && distanceToTargetMm < bestSnapDistanceMm) {
+        snappedOffsetMm = targetOffsetMm;
+        bestSnapDistanceMm = distanceToTargetMm;
+      }
+    }
+
+    const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+    const segmentTangent = normalizeVector({
+      x: best.segment.end.x - best.segment.start.x,
+      y: best.segment.end.y - best.segment.start.y
+    });
+    const alignmentAnchors = !segmentTangent
+      ? []
+      : recessAlignmentAnchors
+          .filter(
+            (anchor) =>
+              anchor.sourceSegmentId !== best.segment.id && Math.abs(dot(segmentTangent, anchor.tangent)) >= 0.9,
+          )
+          .map((anchor) => anchor.point);
+    const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
+    const anchorSnappedOffsetMm = anchorSnapResult.offsetMm;
+    const anchorSnapDistanceMm = Math.abs(anchorSnappedOffsetMm - baseOffsetMm);
+    let selectedAnchorPoint: PointMm | null = null;
+    if (anchorSnapDistanceMm <= anchorWindowMm && anchorSnapDistanceMm < bestSnapDistanceMm) {
+      snappedOffsetMm = anchorSnappedOffsetMm;
+      selectedAnchorPoint = anchorSnapResult.anchorPoint;
+    }
+
+    snappedOffsetMm = Math.max(0, Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM));
+
+    const preview = buildRecessPreview(best.segment, snappedOffsetMm, recessWidthMm, recessDepthMm, recessSide);
+    if (!preview || !selectedAnchorPoint) {
+      return preview;
+    }
+
+    return {
+      ...preview,
+      alignmentGuide: {
+        anchorPoint: selectedAnchorPoint,
+        targetPoint: preview.targetPoint
+      }
+    };
+  }, [
+    interactionMode,
+    pointerWorld,
+    recessAlignmentAnchors,
+    recessDepthMm,
+    recessPointerSnapMm,
+    recessSide,
+    recessWidthMm,
+    segments
+  ]);
+  const gatePreview = useMemo(() => {
+    if (interactionMode !== "GATE" || !pointerWorld) {
+      return null;
+    }
+
+    let best: { segment: LayoutSegment; offsetMm: number; distanceMm: number } | null = null;
+    for (const segment of segments) {
+      const projection = projectPointOntoSegment(pointerWorld, segment);
+      if (projection.distanceMm > gatePointerSnapMm) {
+        continue;
+      }
+      if (!best || projection.distanceMm < best.distanceMm) {
+        best = {
+          segment,
+          offsetMm: projection.offsetMm,
+          distanceMm: projection.distanceMm
+        };
+      }
+    }
+
+    if (!best) {
+      return null;
+    }
+
+    const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
     const midpointMm = segmentLengthMm / 2;
     const snapWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
     const centeredOffsetMm = Math.abs(best.offsetMm - midpointMm) <= snapWindowMm ? midpointMm : best.offsetMm;
 
-    return buildRecessPreview(best.segment, centeredOffsetMm, recessWidthMm, recessDepthMm, recessSide);
-  }, [interactionMode, pointerWorld, recessDepthMm, recessPointerSnapMm, recessSide, recessWidthMm, segments]);
+    return buildGatePreview(best.segment, centeredOffsetMm, requestedGateWidthMm);
+  }, [gatePointerSnapMm, interactionMode, pointerWorld, requestedGateWidthMm, segments]);
+  const gatePreviewVisual = useMemo(() => {
+    if (!gatePreview) {
+      return null;
+    }
+    return {
+      key: `preview-${gatePreview.segment.id}`,
+      startPoint: gatePreview.entryPoint,
+      endPoint: gatePreview.exitPoint,
+      centerPoint: {
+        x: (gatePreview.entryPoint.x + gatePreview.exitPoint.x) / 2,
+        y: (gatePreview.entryPoint.y + gatePreview.exitPoint.y) / 2
+      },
+      widthMm: gatePreview.widthMm,
+      tangent: gatePreview.tangent,
+      normal: gatePreview.normal,
+      leafCount: resolveGatePreviewLeafCount(gateType, gatePreview.widthMm)
+    } satisfies GateVisual;
+  }, [gatePreview, gateType]);
+  const drawHoverSnap = useMemo(() => {
+    if (interactionMode !== "DRAW" || !pointerWorld) {
+      return null;
+    }
+    return findNearestSegmentSnap(pointerWorld, segments, drawLineSnapDistanceMm);
+  }, [drawLineSnapDistanceMm, interactionMode, pointerWorld, segments]);
+  const rectanglePreviewEnd = useMemo(() => {
+    if (interactionMode !== "RECTANGLE" || !rectangleStart || !pointerWorld) {
+      return null;
+    }
+    return resolveDrawPoint(pointerWorld).point;
+  }, [interactionMode, pointerWorld, rectangleStart, resolveDrawPoint]);
 
   const ghostLengthMm = useMemo(() => {
     if (!drawStart || !ghostEnd) {
@@ -1257,13 +2388,6 @@ export function App() {
     );
   }
 
-  function toggleSection(section: keyof typeof collapsedSections): void {
-    setCollapsedSections((previous) => ({
-      ...previous,
-      [section]: !previous[section]
-    }));
-  }
-
   function onRecessWidthInputChange(value: string): void {
     setRecessWidthInputM(value);
     const parsed = parseMetersInputToMm(value);
@@ -1283,6 +2407,18 @@ export function App() {
   function normalizeRecessInputs(): void {
     setRecessWidthInputM(formatMetersInputFromMm(recessWidthMm));
     setRecessDepthInputM(formatMetersInputFromMm(recessDepthMm));
+  }
+
+  function onCustomGateWidthInputChange(value: string): void {
+    setCustomGateWidthInputM(value);
+    const parsed = parseMetersInputToMm(value);
+    if (parsed !== null) {
+      setCustomGateWidthMm(parsed);
+    }
+  }
+
+  function normalizeGateInputs(): void {
+    setCustomGateWidthInputM(formatMetersInputFromMm(customGateWidthMm));
   }
 
   function startPanelDrag(panel: DraggablePanel, event: ReactMouseEvent<HTMLDivElement>): void {
@@ -1305,23 +2441,343 @@ export function App() {
     };
   }
 
-  function moveSegments(segmentIds: string[], delta: PointMm): void {
-    if (segmentIds.length === 0) {
+  function openLengthEditor(segmentId: string): void {
+    if (interactionMode !== "SELECT") {
       return;
     }
-    const segmentIdSet = new Set(segmentIds);
-    applySegments((previous) =>
-      previous.map((segment) => {
-        if (!segmentIdSet.has(segment.id)) {
+    const segment = segmentsById.get(segmentId);
+    if (!segment) {
+      return;
+    }
+    setSelectedSegmentId(segmentId);
+    setSelectedLengthInputM((distanceMm(segment.start, segment.end) / 1000).toFixed(2));
+    setIsLengthEditorOpen(true);
+  }
+
+  function resizeSegmentLength(segmentId: string, requestedLengthMm: number): void {
+    const componentId = connectivity.segmentComponent.get(segmentId);
+    if (!componentId) {
+      return;
+    }
+    const componentSegmentIds = connectivity.segmentIdsByComponent.get(componentId) ?? [segmentId];
+    const componentSegmentIdSet = new Set(componentSegmentIds);
+    const isClosedComponent = connectivity.closedComponentIds.has(componentId);
+
+    applySegments((previous) => {
+      const segmentById = new Map(previous.map((segment) => [segment.id, segment]));
+      const target = segmentById.get(segmentId);
+      if (!target) {
+        return previous;
+      }
+
+      const currentLengthMm = distanceMm(target.start, target.end);
+      const nextLengthMm = Math.max(MIN_SEGMENT_MM, requestedLengthMm);
+      if (Math.abs(currentLengthMm - nextLengthMm) < DRAW_INCREMENT_MM / 2) {
+        return previous;
+      }
+
+      const dx = target.end.x - target.start.x;
+      const dy = target.end.y - target.start.y;
+      const currentLength = Math.hypot(dx, dy);
+      if (currentLength < 1) {
+        return previous;
+      }
+      const unitX = dx / currentLength;
+      const unitY = dy / currentLength;
+
+      if (isClosedComponent) {
+        const pointByKey = new Map<string, PointMm>();
+        for (const componentSegmentId of componentSegmentIds) {
+          const componentSegment = segmentById.get(componentSegmentId);
+          if (!componentSegment) {
+            continue;
+          }
+          pointByKey.set(pointCoordinateKey(componentSegment.start), componentSegment.start);
+          pointByKey.set(pointCoordinateKey(componentSegment.end), componentSegment.end);
+        }
+
+        const anchorProjection = target.start.x * unitX + target.start.y * unitY;
+        const scale = nextLengthMm / currentLengthMm;
+        const transformedPointByKey = new Map<string, PointMm>();
+        for (const [key, point] of pointByKey) {
+          const projection = point.x * unitX + point.y * unitY;
+          const relative = projection - anchorProjection;
+          const scaledRelative = relative * scale;
+          const deltaAlong = scaledRelative - relative;
+          transformedPointByKey.set(
+            key,
+            quantize({
+              x: point.x + unitX * deltaAlong,
+              y: point.y + unitY * deltaAlong
+            }),
+          );
+        }
+
+        return previous.map((segment) => {
+          if (!componentSegmentIdSet.has(segment.id)) {
+            return segment;
+          }
+          return {
+            ...segment,
+            start: transformedPointByKey.get(pointCoordinateKey(segment.start)) ?? segment.start,
+            end: transformedPointByKey.get(pointCoordinateKey(segment.end)) ?? segment.end
+          };
+        });
+      }
+
+      const movedNodeKeys = new Set<string>();
+      const startKey = pointCoordinateKey(target.start);
+      const endKey = pointCoordinateKey(target.end);
+      const adjacency = new Map<string, Set<string>>();
+      for (const componentSegmentId of componentSegmentIds) {
+        if (componentSegmentId === segmentId) {
+          continue;
+        }
+        const componentSegment = segmentById.get(componentSegmentId);
+        if (!componentSegment) {
+          continue;
+        }
+        const fromKey = pointCoordinateKey(componentSegment.start);
+        const toKey = pointCoordinateKey(componentSegment.end);
+        if (!adjacency.has(fromKey)) {
+          adjacency.set(fromKey, new Set());
+        }
+        if (!adjacency.has(toKey)) {
+          adjacency.set(toKey, new Set());
+        }
+        adjacency.get(fromKey)?.add(toKey);
+        adjacency.get(toKey)?.add(fromKey);
+      }
+
+      const queue: string[] = [endKey];
+      movedNodeKeys.add(endKey);
+      while (queue.length > 0) {
+        const currentNodeKey = queue.shift();
+        if (!currentNodeKey) {
+          continue;
+        }
+        for (const neighborNodeKey of adjacency.get(currentNodeKey) ?? []) {
+          if (neighborNodeKey === startKey || movedNodeKeys.has(neighborNodeKey)) {
+            continue;
+          }
+          movedNodeKeys.add(neighborNodeKey);
+          queue.push(neighborNodeKey);
+        }
+      }
+
+      const nextEnd = quantize({
+        x: target.start.x + unitX * nextLengthMm,
+        y: target.start.y + unitY * nextLengthMm
+      });
+      const delta = {
+        x: nextEnd.x - target.end.x,
+        y: nextEnd.y - target.end.y
+      };
+
+      return previous.map((segment) => {
+        if (!componentSegmentIdSet.has(segment.id)) {
           return segment;
         }
+        const startNodeKey = pointCoordinateKey(segment.start);
+        const endNodeKey = pointCoordinateKey(segment.end);
         return {
           ...segment,
-          start: quantize({ x: segment.start.x + delta.x, y: segment.start.y + delta.y }),
-          end: quantize({ x: segment.end.x + delta.x, y: segment.end.y + delta.y })
+          start: movedNodeKeys.has(startNodeKey)
+            ? quantize({ x: segment.start.x + delta.x, y: segment.start.y + delta.y })
+            : segment.start,
+          end: movedNodeKeys.has(endNodeKey)
+            ? quantize({ x: segment.end.x + delta.x, y: segment.end.y + delta.y })
+            : segment.end
         };
-      }),
-    );
+      });
+    });
+  }
+
+  function applySelectedLengthEdit(): void {
+    if (!selectedSegmentId) {
+      return;
+    }
+    const parsedLengthMm = parseMetersInputToMm(selectedLengthInputM);
+    if (parsedLengthMm === null) {
+      return;
+    }
+    resizeSegmentLength(selectedSegmentId, parsedLengthMm);
+    setIsLengthEditorOpen(false);
+  }
+
+  function offsetSegmentPerpendicular(segmentId: string, dragDelta: PointMm): void {
+    applySegments((previous) => {
+      const target = previous.find((segment) => segment.id === segmentId);
+      if (!target) {
+        return previous;
+      }
+
+      const tangent = normalizeVector({
+        x: target.end.x - target.start.x,
+        y: target.end.y - target.start.y
+      });
+      if (!tangent) {
+        return previous;
+      }
+      const normal = {
+        x: -tangent.y,
+        y: tangent.x
+      };
+      const offsetMm = dot(dragDelta, normal);
+      if (Math.abs(offsetMm) < 0.01) {
+        return previous;
+      }
+      const projectedDelta = {
+        x: normal.x * offsetMm,
+        y: normal.y * offsetMm
+      };
+      const movedStartPoint = target.start;
+      const movedEndPoint = target.end;
+
+      let changed = false;
+      const next = previous.map((segment) => {
+        const moveStart =
+          samePointApprox(segment.start, movedStartPoint, 0.1) || samePointApprox(segment.start, movedEndPoint, 0.1);
+        const moveEnd = samePointApprox(segment.end, movedStartPoint, 0.1) || samePointApprox(segment.end, movedEndPoint, 0.1);
+        if (!moveStart && !moveEnd) {
+          return segment;
+        }
+        changed = true;
+        return {
+          ...segment,
+          start: moveStart
+            ? {
+                x: segment.start.x + projectedDelta.x,
+                y: segment.start.y + projectedDelta.y
+              }
+            : segment.start,
+          end: moveEnd
+            ? {
+                x: segment.end.x + projectedDelta.x,
+                y: segment.end.y + projectedDelta.y
+              }
+            : segment.end
+        };
+      });
+
+      return changed ? next : previous;
+    });
+  }
+
+  function startSelectedSegmentDrag(segmentId: string): void {
+    if (interactionMode !== "SELECT") {
+      return;
+    }
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+    const pointerWorldPoint = screenToWorld(pointer, view);
+    setActiveSegmentDrag({
+      segmentId,
+      lastPointer: pointerWorldPoint
+    });
+    setActiveGateDrag(null);
+  }
+
+  function moveGateAlongSegment(gateId: string, deltaAlongMm: number): void {
+    if (Math.abs(deltaAlongMm) < 0.01) {
+      return;
+    }
+
+    setGatePlacements((previous) => {
+      const gateIndex = previous.findIndex((placement) => placement.id === gateId);
+      if (gateIndex < 0) {
+        return previous;
+      }
+      const target = previous[gateIndex];
+      if (!target) {
+        return previous;
+      }
+      const segment = segmentsById.get(target.segmentId);
+      if (!segment) {
+        return previous;
+      }
+
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      const widthMm = target.endOffsetMm - target.startOffsetMm;
+      if (widthMm < DRAW_INCREMENT_MM) {
+        return previous;
+      }
+
+      let minStartMm = MIN_SEGMENT_MM;
+      let maxStartMm = Math.max(MIN_SEGMENT_MM, segmentLengthMm - MIN_SEGMENT_MM - widthMm);
+      const peers = previous
+        .filter((placement) => placement.segmentId === target.segmentId && placement.id !== gateId)
+        .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+
+      for (const peer of peers) {
+        if (peer.endOffsetMm <= target.startOffsetMm) {
+          minStartMm = Math.max(minStartMm, peer.endOffsetMm);
+          continue;
+        }
+        if (peer.startOffsetMm >= target.endOffsetMm) {
+          maxStartMm = Math.min(maxStartMm, peer.startOffsetMm - widthMm);
+          break;
+        }
+      }
+
+      const unclampedStartMm = target.startOffsetMm + deltaAlongMm;
+      let nextStartMm = Math.round(unclampedStartMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+      nextStartMm = Math.max(minStartMm, Math.min(maxStartMm, nextStartMm));
+      const nextEndMm = nextStartMm + widthMm;
+
+      const normalized = clampGatePlacementToSegment(
+        {
+          ...target,
+          startOffsetMm: nextStartMm,
+          endOffsetMm: nextEndMm
+        },
+        segmentLengthMm,
+      );
+      if (!normalized) {
+        return previous;
+      }
+      if (
+        Math.abs(normalized.startOffsetMm - target.startOffsetMm) < 0.001 &&
+        Math.abs(normalized.endOffsetMm - target.endOffsetMm) < 0.001
+      ) {
+        return previous;
+      }
+
+      const next = [...previous];
+      next[gateIndex] = {
+        ...target,
+        startOffsetMm: normalized.startOffsetMm,
+        endOffsetMm: normalized.endOffsetMm
+      };
+      next.sort((left, right) => left.id.localeCompare(right.id));
+      return next;
+    });
+  }
+
+  function startSelectedGateDrag(gateId: string): void {
+    if (interactionMode !== "SELECT") {
+      return;
+    }
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+    const pointerWorldPoint = screenToWorld(pointer, view);
+    setActiveGateDrag({
+      gateId,
+      lastPointer: pointerWorldPoint
+    });
+    setActiveSegmentDrag(null);
   }
 
   function startOrCommitDrawing(worldPoint: PointMm): void {
@@ -1330,6 +2786,7 @@ export function App() {
     if (!drawStart) {
       setDrawStart(snappedPoint);
       setSelectedSegmentId(null);
+      setSelectedGateId(null);
       return;
     }
 
@@ -1346,6 +2803,61 @@ export function App() {
 
     applySegments((previous) => [...previous, segment]);
     setDrawStart(snappedPoint);
+    setSelectedGateId(null);
+  }
+
+  function startOrCommitRectangle(worldPoint: PointMm): void {
+    const snappedPoint = resolveDrawPoint(worldPoint).point;
+
+    if (!rectangleStart) {
+      setRectangleStart(snappedPoint);
+      setSelectedSegmentId(null);
+      setSelectedGateId(null);
+      return;
+    }
+
+    const widthMm = Math.abs(snappedPoint.x - rectangleStart.x);
+    const heightMm = Math.abs(snappedPoint.y - rectangleStart.y);
+    if (widthMm < MIN_SEGMENT_MM || heightMm < MIN_SEGMENT_MM) {
+      return;
+    }
+
+    const cornerA = quantize(rectangleStart);
+    const cornerB = quantize({ x: snappedPoint.x, y: rectangleStart.y });
+    const cornerC = quantize(snappedPoint);
+    const cornerD = quantize({ x: rectangleStart.x, y: snappedPoint.y });
+
+    const rectangleSegments: LayoutSegment[] = [
+      {
+        id: crypto.randomUUID(),
+        start: cornerA,
+        end: cornerB,
+        spec: activeSpec
+      },
+      {
+        id: crypto.randomUUID(),
+        start: cornerB,
+        end: cornerC,
+        spec: activeSpec
+      },
+      {
+        id: crypto.randomUUID(),
+        start: cornerC,
+        end: cornerD,
+        spec: activeSpec
+      },
+      {
+        id: crypto.randomUUID(),
+        start: cornerD,
+        end: cornerA,
+        spec: activeSpec
+      }
+    ];
+
+    applySegments((previous) => [...previous, ...rectangleSegments]);
+    setRectangleStart(null);
+    setSelectedSegmentId(null);
+    setSelectedGateId(null);
   }
 
   function insertRecess(preview: RecessInsertionPreview): void {
@@ -1353,6 +2865,18 @@ export function App() {
     if (replacement.length === 0) {
       return;
     }
+
+    const originalStart = quantize(preview.segment.start);
+    const entryPoint = quantize(preview.entryPoint);
+    const exitPoint = quantize(preview.exitPoint);
+    const originalEnd = quantize(preview.segment.end);
+    const leftReplacementSegment = replacement.find(
+      (segment) => samePointApprox(segment.start, originalStart, 0.1) && samePointApprox(segment.end, entryPoint, 0.1),
+    );
+    const rightReplacementSegment = replacement.find(
+      (segment) => samePointApprox(segment.start, exitPoint, 0.1) && samePointApprox(segment.end, originalEnd, 0.1),
+    );
+
     applySegments((previous) => {
       const next: LayoutSegment[] = [];
       for (const segment of previous) {
@@ -1362,6 +2886,87 @@ export function App() {
         }
         next.push(...replacement);
       }
+      return next;
+    });
+    setGatePlacements((previous) => {
+      const next: GatePlacement[] = [];
+      for (const placement of previous) {
+        if (placement.segmentId !== preview.segment.id) {
+          next.push(placement);
+          continue;
+        }
+
+        const resolved = resolvedGateById.get(placement.id);
+        const sourceStartOffsetMm = resolved?.startOffsetMm ?? placement.startOffsetMm;
+        const sourceEndOffsetMm = resolved?.endOffsetMm ?? placement.endOffsetMm;
+
+        if (sourceEndOffsetMm <= preview.startOffsetMm && leftReplacementSegment) {
+          const leftLengthMm = distanceMm(leftReplacementSegment.start, leftReplacementSegment.end);
+          const normalized = clampGatePlacementToSegment(
+            {
+              ...placement,
+              segmentId: leftReplacementSegment.id,
+              startOffsetMm: sourceStartOffsetMm,
+              endOffsetMm: sourceEndOffsetMm
+            },
+            leftLengthMm,
+          );
+          if (normalized) {
+            next.push({
+              ...placement,
+              segmentId: leftReplacementSegment.id,
+              startOffsetMm: normalized.startOffsetMm,
+              endOffsetMm: normalized.endOffsetMm
+            });
+          }
+          continue;
+        }
+
+        if (sourceStartOffsetMm >= preview.endOffsetMm && rightReplacementSegment) {
+          const rightLengthMm = distanceMm(rightReplacementSegment.start, rightReplacementSegment.end);
+          const normalized = clampGatePlacementToSegment(
+            {
+              ...placement,
+              segmentId: rightReplacementSegment.id,
+              startOffsetMm: sourceStartOffsetMm - preview.endOffsetMm,
+              endOffsetMm: sourceEndOffsetMm - preview.endOffsetMm
+            },
+            rightLengthMm,
+          );
+          if (normalized) {
+            next.push({
+              ...placement,
+              segmentId: rightReplacementSegment.id,
+              startOffsetMm: normalized.startOffsetMm,
+              endOffsetMm: normalized.endOffsetMm
+            });
+          }
+        }
+      }
+      next.sort((left, right) => left.id.localeCompare(right.id));
+      return next;
+    });
+    setSelectedSegmentId(null);
+    setSelectedGateId(null);
+    setDrawStart(null);
+  }
+
+  function insertGate(preview: GateInsertionPreview): void {
+    setGatePlacements((previous) => {
+      const nextGate: GatePlacement = {
+        id: crypto.randomUUID(),
+        segmentId: preview.segment.id,
+        startOffsetMm: preview.startOffsetMm,
+        endOffsetMm: preview.endOffsetMm,
+        gateType
+      };
+      const next = previous.filter(
+        (placement) =>
+          placement.segmentId !== nextGate.segmentId ||
+          !rangesOverlap(placement.startOffsetMm, placement.endOffsetMm, nextGate.startOffsetMm, nextGate.endOffsetMm),
+      );
+      next.push(nextGate);
+      next.sort((left, right) => left.id.localeCompare(right.id));
       return next;
     });
     setSelectedSegmentId(null);
@@ -1399,6 +3004,7 @@ export function App() {
     if (interactionMode === "SELECT") {
       if (event.target === stage) {
         setSelectedSegmentId(null);
+        setSelectedGateId(null);
       }
       return;
     }
@@ -1410,13 +3016,16 @@ export function App() {
       return;
     }
 
-    skipNextSegmentSelection.current = false;
-    if (!drawStart && event.target !== stage) {
-      const anchor = findNearestNode(quantize(world), drawAnchorNodes, nodeSnapDistanceMm);
-      if (!anchor) {
-        return;
+    if (interactionMode === "GATE") {
+      if (gatePreview) {
+        insertGate(gatePreview);
       }
-      skipNextSegmentSelection.current = true;
+      return;
+    }
+
+    if (interactionMode === "RECTANGLE") {
+      startOrCommitRectangle(world);
+      return;
     }
 
     startOrCommitDrawing(world);
@@ -1432,6 +3041,52 @@ export function App() {
     if (!pointer) {
       return;
     }
+    const world = screenToWorld(pointer, view);
+
+    if (activeGateDrag) {
+      const gate = resolvedGateById.get(activeGateDrag.gateId);
+      if (!gate) {
+        setActiveGateDrag(null);
+        setPointerWorld(world);
+        return;
+      }
+      const pointerDelta = {
+        x: world.x - activeGateDrag.lastPointer.x,
+        y: world.y - activeGateDrag.lastPointer.y
+      };
+      const deltaAlongMm = dot(pointerDelta, gate.tangent);
+      moveGateAlongSegment(gate.id, deltaAlongMm);
+      setActiveGateDrag((previous) =>
+        previous
+          ? {
+              ...previous,
+              lastPointer: world
+            }
+          : previous,
+      );
+      setPointerWorld(world);
+      return;
+    }
+
+    if (activeSegmentDrag) {
+      const delta = {
+        x: world.x - activeSegmentDrag.lastPointer.x,
+        y: world.y - activeSegmentDrag.lastPointer.y
+      };
+      if (Math.abs(delta.x) >= 0.01 || Math.abs(delta.y) >= 0.01) {
+        offsetSegmentPerpendicular(activeSegmentDrag.segmentId, delta);
+      }
+      setActiveSegmentDrag((previous) =>
+        previous
+          ? {
+              ...previous,
+              lastPointer: world
+            }
+          : previous,
+      );
+      setPointerWorld(world);
+      return;
+    }
 
     if (isPanning && panAnchor) {
       setView((previous) => ({
@@ -1442,10 +3097,12 @@ export function App() {
       return;
     }
 
-    setPointerWorld(screenToWorld(pointer, view));
+    setPointerWorld(world);
   }
 
   function onStageMouseUp(): void {
+    setActiveSegmentDrag(null);
+    setActiveGateDrag(null);
     setIsPanning(false);
     setPanAnchor(null);
   }
@@ -1482,6 +3139,7 @@ export function App() {
   function onContextMenu(event: KonvaEventObject<PointerEvent>): void {
     event.evt.preventDefault();
     setDrawStart(null);
+    setRectangleStart(null);
   }
 
   async function createSnapshot(): Promise<void> {
@@ -1510,7 +3168,7 @@ export function App() {
   }
 
   function runOptimization(): void {
-    const summary = buildOptimizationSummary({ segments });
+    const summary = buildOptimizationSummary({ segments: estimateSegments });
     setOptimizationRun({
       layoutKey,
       summary
@@ -1518,245 +3176,379 @@ export function App() {
     setSelectedTransferId(summary.twinBar.transfers[0]?.id ?? null);
   }
 
+  function openOptimizationInspector(): void {
+    if (!optimizationSummary) {
+      runOptimization();
+    }
+    setIsOptimizationInspectorOpen(true);
+  }
+
   return (
     <div className="app-shell">
       <aside className="left-panel">
-        <section className="panel-block panel-fence-palette">
-          <h2>Fence Palette</h2>
-          <label>
-            System
-            <select
-              value={activeSpec.system}
-              onChange={(event) => {
-                const nextSystem = event.target.value as FenceSpec["system"];
-                setActiveSpec((previous) => {
-                  if (nextSystem === "TWIN_BAR") {
-                    const nextHeight = TWIN_BAR_HEIGHT_OPTIONS.includes(previous.height)
+        <div className="left-panel-stack">
+          <section className="panel-block panel-interaction">
+            <h2>Interaction</h2>
+            <div className="mode-toggle-row mode-toggle-row-5" role="tablist" aria-label="Interaction mode">
+              <button
+                type="button"
+                className={`mode-toggle-btn${interactionMode === "DRAW" ? " active" : ""}`}
+                onClick={() => setInteractionMode("DRAW")}
+              >
+                Draw
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-btn${interactionMode === "SELECT" ? " active" : ""}`}
+                onClick={() => setInteractionMode("SELECT")}
+              >
+                Select
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-btn${interactionMode === "RECTANGLE" ? " active" : ""}`}
+                onClick={() => setInteractionMode("RECTANGLE")}
+              >
+                Rect
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-btn${interactionMode === "RECESS" ? " active" : ""}`}
+                onClick={() => setInteractionMode("RECESS")}
+              >
+                Recess
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-btn${interactionMode === "GATE" ? " active" : ""}`}
+                onClick={() => setInteractionMode("GATE")}
+              >
+                Gate
+              </button>
+            </div>
+            {interactionMode === "DRAW" ? (
+              <p className="muted-line">Click to start a run and keep clicking to chain segments. Hold Shift to disable angle snapping.</p>
+            ) : null}
+            {interactionMode === "RECTANGLE" ? (
+              <p className="muted-line">Click first corner, then opposite corner to place a rectangle perimeter.</p>
+            ) : null}
+            {interactionMode === "RECESS" ? (
+              <>
+                <label>
+                  Recess Width
+                  <input
+                    type="number"
+                    min={RECESS_INPUT_STEP_M}
+                    step={RECESS_INPUT_STEP_M}
+                    list="recess-width-presets"
+                    value={recessWidthInputM}
+                    onChange={(event) => onRecessWidthInputChange(event.target.value)}
+                    onBlur={normalizeRecessInputs}
+                  />
+                  <datalist id="recess-width-presets">
+                    {RECESS_WIDTH_OPTIONS_MM.map((value) => (
+                      <option key={value} value={formatMetersInputFromMm(value)} />
+                    ))}
+                  </datalist>
+                </label>
+                <label>
+                  Recess Depth
+                  <input
+                    type="number"
+                    min={RECESS_INPUT_STEP_M}
+                    step={RECESS_INPUT_STEP_M}
+                    list="recess-depth-presets"
+                    value={recessDepthInputM}
+                    onChange={(event) => onRecessDepthInputChange(event.target.value)}
+                    onBlur={normalizeRecessInputs}
+                  />
+                  <datalist id="recess-depth-presets">
+                    {RECESS_DEPTH_OPTIONS_MM.map((value) => (
+                      <option key={value} value={formatMetersInputFromMm(value)} />
+                    ))}
+                  </datalist>
+                </label>
+                <label>
+                  Recess Side
+                  <select value={recessSide} onChange={(event) => setRecessSide(event.target.value as RecessSide)}>
+                    <option value="LEFT">Left Of Run</option>
+                    <option value="RIGHT">Right Of Run</option>
+                  </select>
+                </label>
+                {recessPreview ? (
+                  <>
+                    <p className="muted-line">
+                      Left run {formatLengthMm(recessPreview.startOffsetMm)} | Right run{" "}
+                      {formatLengthMm(recessPreview.segmentLengthMm - recessPreview.endOffsetMm)}
+                    </p>
+                    <p className="muted-line">Tip: center snaps automatically when you hover near midpoint.</p>
+                  </>
+                ) : (
+                  <p className="muted-line">Hover near a fence line and click to place recess.</p>
+                )}
+              </>
+            ) : null}
+            {interactionMode === "GATE" ? (
+              <>
+                <div className="mode-toggle-row mode-toggle-row-3">
+                  <button
+                    type="button"
+                    className={`mode-toggle-btn${gateType === "SINGLE_LEAF" ? " active" : ""}`}
+                    onClick={() => setGateType("SINGLE_LEAF")}
+                  >
+                    Single 1.2m
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-toggle-btn${gateType === "DOUBLE_LEAF" ? " active" : ""}`}
+                    onClick={() => setGateType("DOUBLE_LEAF")}
+                  >
+                    Double 3.0m
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-toggle-btn${gateType === "CUSTOM" ? " active" : ""}`}
+                    onClick={() => setGateType("CUSTOM")}
+                  >
+                    Custom
+                  </button>
+                </div>
+                {gateType === "CUSTOM" ? (
+                  <label>
+                    Custom Gate Width
+                    <input
+                      type="number"
+                      min={RECESS_INPUT_STEP_M}
+                      step={RECESS_INPUT_STEP_M}
+                      list="gate-width-presets"
+                      value={customGateWidthInputM}
+                      onChange={(event) => onCustomGateWidthInputChange(event.target.value)}
+                      onBlur={normalizeGateInputs}
+                    />
+                    <datalist id="gate-width-presets">
+                      {GATE_WIDTH_OPTIONS_MM.map((value) => (
+                        <option key={value} value={formatMetersInputFromMm(value)} />
+                      ))}
+                    </datalist>
+                  </label>
+                ) : null}
+                {gatePreview ? (
+                  <p className="muted-line">
+                    Gate {formatLengthMm(gatePreview.widthMm)} | left run {formatLengthMm(gatePreview.startOffsetMm)} | right run{" "}
+                    {formatLengthMm(gatePreview.segmentLengthMm - gatePreview.endOffsetMm)}
+                  </p>
+                ) : (
+                  <p className="muted-line">Hover near a fence line and click to insert gate object.</p>
+                )}
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel-block panel-fence-palette">
+            <h2>Fence Palette</h2>
+            <label>
+              System
+              <select
+                value={activeSpec.system}
+                onChange={(event) => {
+                  const nextSystem = event.target.value as FenceSpec["system"];
+                  setActiveSpec((previous) => {
+                    if (nextSystem === "TWIN_BAR") {
+                      const nextHeight = TWIN_BAR_HEIGHT_OPTIONS.includes(previous.height)
+                        ? previous.height
+                        : TWIN_BAR_HEIGHT_OPTIONS[2];
+                      return {
+                        system: nextSystem,
+                        height: nextHeight ?? "2m",
+                        twinBarVariant: previous.twinBarVariant ?? "STANDARD"
+                      };
+                    }
+                    const nextHeight = ROLL_FORM_HEIGHT_OPTIONS.includes(previous.height)
                       ? previous.height
-                      : TWIN_BAR_HEIGHT_OPTIONS[2];
+                      : ROLL_FORM_HEIGHT_OPTIONS[0];
                     return {
                       system: nextSystem,
-                      height: nextHeight ?? "2m",
-                      twinBarVariant: previous.twinBarVariant ?? "STANDARD"
+                      height: nextHeight ?? "2m"
                     };
-                  }
-                  const nextHeight = ROLL_FORM_HEIGHT_OPTIONS.includes(previous.height)
-                    ? previous.height
-                    : ROLL_FORM_HEIGHT_OPTIONS[0];
-                  return {
-                    system: nextSystem,
-                    height: nextHeight ?? "2m"
-                  };
-                });
-              }}
-            >
-              <option value="TWIN_BAR">Twin Bar</option>
-              <option value="ROLL_FORM">Roll Form Welded Mesh</option>
-            </select>
-          </label>
-          <label>
-            Height
-            <select
-              value={activeSpec.height}
-              onChange={(event) => {
-                const nextHeight = event.target.value as FenceHeightKey;
-                setActiveSpec((previous) => ({ ...previous, height: nextHeight }));
-              }}
-            >
-              {activeHeightOptions.map((heightOption) => (
-                <option key={heightOption} value={heightOption}>
-                  {heightOption}
-                </option>
-              ))}
-            </select>
-          </label>
-          {activeSpec.system === "TWIN_BAR" ? (
-            <label>
-              Variant
-              <select
-                value={activeSpec.twinBarVariant ?? "STANDARD"}
-                onChange={(event) => {
-                  const next = event.target.value as TwinBarVariant;
-                  setActiveSpec((previous) => ({ ...previous, twinBarVariant: next }));
+                  });
                 }}
               >
-                <option value="STANDARD">Standard</option>
-                <option value="SUPER_REBOUND">Super Rebound</option>
+                <option value="TWIN_BAR">Twin Bar</option>
+                <option value="ROLL_FORM">Roll Form Welded Mesh</option>
               </select>
             </label>
-          ) : null}
-          <div className="palette-legend">
-            {(activeSpec.system === "TWIN_BAR" ? TWIN_BAR_HEIGHT_OPTIONS : ROLL_FORM_HEIGHT_OPTIONS).map(
-              (heightOption) => (
-                <div key={heightOption}>
-                  <span
-                    className="swatch"
-                    style={{ background: getSegmentColor({ ...activeSpec, height: heightOption }) }}
-                  />
-                  {activeSpec.system === "TWIN_BAR"
-                    ? `${heightOption} ${activeSpec.twinBarVariant === "SUPER_REBOUND" ? "Super Rebound" : "Standard"}`
-                    : `Roll Form ${heightOption}`}
-                </div>
-              ),
-            )}
-          </div>
-        </section>
-
-        <section className="panel-block panel-interaction">
-          <h2>Interaction</h2>
-          <label>
-            Mode
-            <select
-              value={interactionMode}
-              onChange={(event) => {
-                const nextMode = event.target.value as InteractionMode;
-                setInteractionMode(nextMode);
-              }}
-            >
-              <option value="DRAW">Draw</option>
-              <option value="SELECT">Select</option>
-              <option value="RECESS">Insert Recess</option>
-            </select>
-          </label>
-          {interactionMode === "RECESS" ? (
-            <>
+            <label>
+              Height
+              <select
+                value={activeSpec.height}
+                onChange={(event) => {
+                  const nextHeight = event.target.value as FenceHeightKey;
+                  setActiveSpec((previous) => ({ ...previous, height: nextHeight }));
+                }}
+              >
+                {activeHeightOptions.map((heightOption) => (
+                  <option key={heightOption} value={heightOption}>
+                    {heightOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {activeSpec.system === "TWIN_BAR" ? (
               <label>
-                Recess Width
-                <input
-                  type="number"
-                  min={RECESS_INPUT_STEP_M}
-                  step={RECESS_INPUT_STEP_M}
-                  list="recess-width-presets"
-                  value={recessWidthInputM}
-                  onChange={(event) => onRecessWidthInputChange(event.target.value)}
-                  onBlur={normalizeRecessInputs}
-                />
-                <datalist id="recess-width-presets">
-                  {RECESS_WIDTH_OPTIONS_MM.map((value) => (
-                    <option key={value} value={formatMetersInputFromMm(value)} />
-                  ))}
-                </datalist>
-              </label>
-              <label>
-                Recess Depth
-                <input
-                  type="number"
-                  min={RECESS_INPUT_STEP_M}
-                  step={RECESS_INPUT_STEP_M}
-                  list="recess-depth-presets"
-                  value={recessDepthInputM}
-                  onChange={(event) => onRecessDepthInputChange(event.target.value)}
-                  onBlur={normalizeRecessInputs}
-                />
-                <datalist id="recess-depth-presets">
-                  {RECESS_DEPTH_OPTIONS_MM.map((value) => (
-                    <option key={value} value={formatMetersInputFromMm(value)} />
-                  ))}
-                </datalist>
-              </label>
-              <label>
-                Recess Side
-                <select value={recessSide} onChange={(event) => setRecessSide(event.target.value as RecessSide)}>
-                  <option value="LEFT">Left Of Run</option>
-                  <option value="RIGHT">Right Of Run</option>
+                Variant
+                <select
+                  value={activeSpec.twinBarVariant ?? "STANDARD"}
+                  onChange={(event) => {
+                    const next = event.target.value as TwinBarVariant;
+                    setActiveSpec((previous) => ({ ...previous, twinBarVariant: next }));
+                  }}
+                >
+                  <option value="STANDARD">Standard</option>
+                  <option value="SUPER_REBOUND">Super Rebound</option>
                 </select>
               </label>
-              {recessPreview ? (
-                <>
-                  <p className="muted-line">
-                    Left run {formatLengthMm(recessPreview.startOffsetMm)} | Right run{" "}
-                    {formatLengthMm(recessPreview.segmentLengthMm - recessPreview.endOffsetMm)}
-                  </p>
-                  <p className="muted-line">Tip: center snaps automatically when you hover near midpoint.</p>
-                </>
-              ) : (
-                <p className="muted-line">Hover near a fence line and click to place recess.</p>
+            ) : null}
+            <div className="palette-legend">
+              {(activeSpec.system === "TWIN_BAR" ? TWIN_BAR_HEIGHT_OPTIONS : ROLL_FORM_HEIGHT_OPTIONS).map(
+                (heightOption) => (
+                  <div key={heightOption}>
+                    <span
+                      className="swatch"
+                      style={{ background: getSegmentColor({ ...activeSpec, height: heightOption }) }}
+                    />
+                    {activeSpec.system === "TWIN_BAR"
+                      ? `${heightOption} ${activeSpec.twinBarVariant === "SUPER_REBOUND" ? "Super Rebound" : "Standard"}`
+                      : `Roll Form ${heightOption}`}
+                  </div>
+                ),
               )}
-            </>
-          ) : null}
-        </section>
+            </div>
+          </section>
+        </div>
 
         <section className="panel-block panel-item-counts" style={panelDragStyle("itemCounts")}>
           <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("itemCounts", event)}>
             <h2>Item Counts</h2>
           </div>
           <div className="count-group">
-            <h3>Layout</h3>
-            <dl className="dense-list">
-              <div>
-                <dt>Segments</dt>
-                <dd>{segments.length}</dd>
-              </div>
-              <div>
-                <dt>Posts Total</dt>
-                <dd>{estimate.posts.total}</dd>
-              </div>
-              <div>
-                <dt>Corner Posts</dt>
-                <dd>{estimate.posts.cornerPosts}</dd>
-              </div>
-              <div>
-                <dt>Intermediate Posts</dt>
-                <dd>{estimate.posts.intermediate}</dd>
-              </div>
-              <div>
-                <dt>External Corners</dt>
-                <dd>{estimate.corners.external}</dd>
-              </div>
-              <div>
-                <dt>Internal Corners</dt>
-                <dd>{estimate.corners.internal}</dd>
-              </div>
-              <div>
-                <dt>Unclassified Corners</dt>
-                <dd>{estimate.corners.unclassified}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="count-group">
-            <h3>Post Heights</h3>
-            {postHeightRows.length === 0 ? (
-              <p className="muted-line">No posts placed yet.</p>
+            <h3>End Posts</h3>
+            {postRowsByType.end.length === 0 ? (
+              <p className="muted-line">No end posts.</p>
             ) : (
               <dl className="dense-list">
-                {postHeightRows.map((row) => (
-                  <div key={row.heightMm}>
-                    <dt>{formatHeightLabelFromMm(row.heightMm)} E/I/C/J/X (T)</dt>
-                    <dd>
-                      {row.end}/{row.intermediate}/{row.corner}/{row.junction}/{row.inlineJoin} ({row.total})
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
-
-          <div className="count-group">
-            <h3>Twin Bar Stock Panels</h3>
-            {twinBarStockRows.length === 0 ? (
-              <p className="muted-line">No twin bar panels in layout.</p>
-            ) : (
-              <dl className="dense-list">
-                {twinBarStockRows.map((row) => (
-                  <div key={row.stockHeightMm}>
-                    <dt>{formatHeightLabelFromMm(row.stockHeightMm)} panel</dt>
+                {postRowsByType.end.map((row) => (
+                  <div key={`end-${row.heightMm}`}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)}</dt>
                     <dd>{row.count}</dd>
                   </div>
                 ))}
               </dl>
             )}
           </div>
-
           <div className="count-group">
-            <h3>Twin Bar Fence Heights</h3>
+            <h3>Intermediate Posts</h3>
+            {postRowsByType.intermediate.length === 0 ? (
+              <p className="muted-line">No intermediate posts.</p>
+            ) : (
+              <dl className="dense-list">
+                {postRowsByType.intermediate.map((row) => (
+                  <div key={`intermediate-${row.heightMm}`}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)}</dt>
+                    <dd>{row.count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <div className="count-group">
+            <h3>Corner Posts</h3>
+            {postRowsByType.corner.length === 0 ? (
+              <p className="muted-line">No corner posts.</p>
+            ) : (
+              <dl className="dense-list">
+                {postRowsByType.corner.map((row) => (
+                  <div key={`corner-${row.heightMm}`}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)}</dt>
+                    <dd>{row.count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <div className="count-group">
+            <h3>Junction Posts</h3>
+            {postRowsByType.junction.length === 0 ? (
+              <p className="muted-line">No junction posts.</p>
+            ) : (
+              <dl className="dense-list">
+                {postRowsByType.junction.map((row) => (
+                  <div key={`junction-${row.heightMm}`}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)}</dt>
+                    <dd>{row.count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <div className="count-group">
+            <h3>Inline Join Posts</h3>
+            {postRowsByType.inlineJoin.length === 0 ? (
+              <p className="muted-line">No inline join posts.</p>
+            ) : (
+              <dl className="dense-list">
+                {postRowsByType.inlineJoin.map((row) => (
+                  <div key={`inline-${row.heightMm}`}>
+                    <dt>{formatHeightLabelFromMm(row.heightMm)}</dt>
+                    <dd>{row.count}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <div className="count-group">
+            <h3>Gates</h3>
+            {gateCounts.total === 0 ? (
+              <p className="muted-line">No gates placed.</p>
+            ) : (
+              <>
+                <dl className="dense-list">
+                  <div>
+                    <dt>Total</dt>
+                    <dd>{gateCounts.total}</dd>
+                  </div>
+                  <div>
+                    <dt>Single Leaf</dt>
+                    <dd>{gateCounts.single}</dd>
+                  </div>
+                  <div>
+                    <dt>Double Leaf</dt>
+                    <dd>{gateCounts.double}</dd>
+                  </div>
+                  <div>
+                    <dt>Custom</dt>
+                    <dd>{gateCounts.custom}</dd>
+                  </div>
+                </dl>
+                <dl className="dense-list">
+                  {gateCountsByHeight.map((row) => (
+                    <div key={`gate-height-${row.height}`}>
+                      <dt>{row.height}</dt>
+                      <dd>{row.count}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            )}
+          </div>
+          <div className="count-group">
+            <h3>Fence Heights (Std / SR)</h3>
             {twinBarFenceRows.length === 0 ? (
               <p className="muted-line">No twin bar fence runs yet.</p>
             ) : (
               <dl className="dense-list">
                 {twinBarFenceRows.map((row) => (
                   <div key={row.height}>
-                    <dt>{row.height} (Std / SR)</dt>
+                    <dt>{row.height}</dt>
                     <dd>
                       {row.standard} / {row.superRebound}
                     </dd>
@@ -1765,133 +3557,6 @@ export function App() {
               </dl>
             )}
           </div>
-
-          <div className="count-group">
-            <h3>Roll Form Rolls</h3>
-            {rollFormRows.length === 0 ? (
-              <p className="muted-line">No roll form runs in layout.</p>
-            ) : (
-              <dl className="dense-list">
-                {rollFormRows.map((row) => (
-                  <div key={row.height}>
-                    <dt>{row.height} (2100 / 900)</dt>
-                    <dd>
-                      {row.roll2100} / {row.roll900}
-                    </dd>
-                  </div>
-                ))}
-                <div>
-                  <dt>Total Rolls</dt>
-                  <dd>{estimate.materials.totalRolls}</dd>
-                </div>
-              </dl>
-            )}
-          </div>
-        </section>
-
-        <section className="panel-block panel-optimization" style={panelDragStyle("optimization")}>
-          <div className="panel-heading panel-drag-handle" onMouseDown={(event) => startPanelDrag("optimization", event)}>
-            <h2>Optimization</h2>
-          </div>
-          <p className="muted-line">Run this after layout drawing is finished. Results are cleared when geometry changes.</p>
-          <p className="muted-line">
-            5.5m example: {formatLengthMm(TWIN_BAR_PANEL_WIDTH_MM)} panels {"=>"} 2 full panels (
-            {formatLengthMm(TWIN_BAR_PANEL_WIDTH_MM * 2)}), cut need {formatLengthMm(5500 - TWIN_BAR_PANEL_WIDTH_MM * 2)},
-            spare offcut {formatLengthMm(TWIN_BAR_PANEL_WIDTH_MM - (5500 - TWIN_BAR_PANEL_WIDTH_MM * 2))}.
-          </p>
-          <button type="button" onClick={runOptimization} disabled={segments.length === 0}>
-            Run Offcut Optimization
-          </button>
-          {!optimizationSummary ? (
-            <p className="muted-line">No optimization run yet.</p>
-          ) : (
-            <>
-              <p className="muted-line">
-                Strategy: {optimizationSummary.strategy} | Baseline Panels: {optimizationSummary.twinBar.baselinePanels}
-                {" | "}
-                Optimized Panels: {optimizationSummary.twinBar.optimizedPanels} | Saved Panels:{" "}
-                {optimizationSummary.twinBar.panelsSaved}
-              </p>
-              <p className="muted-line">
-                Reuse Allowance: {formatLengthMm(optimizationSummary.twinBar.reuseAllowanceMm)} | Cut Demands:{" "}
-                {optimizationStats.total} | Transfers Placed: {optimizationStats.reused} | Uncovered Gaps:{" "}
-                {optimizationStats.uncovered}
-              </p>
-              <p className="muted-line">
-                {optimizationStats.reusableCandidatesMissed === 0
-                  ? "All eligible transfers were matched."
-                  : `${optimizationStats.reusableCandidatesMissed} eligible transfers could not be matched.`}{" "}
-                {optimizationStats.multiOption > 0
-                  ? `Largest-offcut choices were made across ${optimizationStats.multiOption} demands with multiple options.`
-                  : "No competing source choices were available."}
-              </p>
-              {optimizationRows.length === 0 ? (
-                <p className="muted-line">No Twin Bar cut demands in this layout.</p>
-              ) : (
-                <dl className="dense-list">
-                  {optimizationRows.map((row) => (
-                    <div key={`${row.variant}-${row.stockPanelHeightMm}`}>
-                      <dt>
-                        {row.variant === "SUPER_REBOUND" ? "SR" : "Std"} {formatHeightLabelFromMm(row.stockPanelHeightMm)}
-                      </dt>
-                      <dd>
-                        reuse {row.cutPiecesReused}/{row.cutPieces} | save {row.panelsSaved}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              <div className="count-group">
-                <button type="button" className="section-toggle" onClick={() => toggleSection("optimizationTransfers")}>
-                  {collapsedSections.optimizationTransfers ? "Show" : "Hide"} Offcut Transfers
-                </button>
-                {!collapsedSections.optimizationTransfers ? (
-                  optimizationTransfers.length === 0 ? (
-                    <p className="muted-line">No offcut transfers found for this optimization run.</p>
-                  ) : (
-                    <div className="transfer-list">
-                      {optimizationTransfers.map((transfer) => {
-                        const destinationIndex = segmentOrdinalById.get(transfer.destination.segmentId);
-                        const sourceIndex = segmentOrdinalById.get(transfer.source.segmentId);
-                        const isSelected = transfer.id === selectedTransferId;
-                        const allowanceMm = transfer.sourceOffcutConsumedMm - transfer.destination.lengthMm;
-                        const optionLabel =
-                          transfer.candidateSourceCount > 1
-                            ? `${transfer.candidateSourceCount} sources considered, largest offcut selected`
-                            : transfer.candidateSourceCount === 1
-                              ? "only eligible source"
-                              : "forced selection";
-                        return (
-                          <button
-                            key={transfer.id}
-                            type="button"
-                            className={`transfer-item reused${isSelected ? " active" : ""}`}
-                            onClick={() => setSelectedTransferId(transfer.id)}
-                          >
-                            <span className="transfer-item-title">
-                              Offcut {transfer.sourceOffcutId} use {transfer.sourceReuseStep}: FROM #{sourceIndex ?? "?"}{" "}
-                              {formatSegmentWindow(transfer.source.startOffsetMm, transfer.source.endOffsetMm)} TO #
-                              {destinationIndex ?? "?"}{" "}
-                              {formatSegmentWindow(transfer.destination.startOffsetMm, transfer.destination.endOffsetMm)}
-                            </span>
-                            <span className="transfer-item-sub">{optionLabel}</span>
-                            <span className="transfer-item-sub">
-                              source {formatLengthMm(transfer.sourceOffcutLengthMm)} | used{" "}
-                              {formatLengthMm(transfer.sourceOffcutConsumedMm)} ({formatLengthMm(allowanceMm)} allowance) |
-                              remaining {formatLengthMm(transfer.sourceOffcutRemainingMm)}
-                            </span>
-                            <strong className="transfer-status">
-                              TRANSFER
-                            </strong>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )
-                ) : null}
-              </div>
-            </>
-          )}
         </section>
 
         <section className="panel-block panel-post-key" style={panelDragStyle("postKey")}>
@@ -1924,6 +3589,11 @@ export function App() {
               <span>Inline Join Post</span>
               <strong>{postTypeCounts.INLINE_JOIN}</strong>
             </div>
+            <div className="post-key-row">
+              <span className="post-icon post-gate" />
+              <span>Gate Post</span>
+              <strong>{postTypeCounts.GATE}</strong>
+            </div>
           </div>
         </section>
 
@@ -1949,7 +3619,9 @@ export function App() {
             <ul>
               <li>Mode Draw: left click start/commit fence line.</li>
               <li>Mode Select: click line to select and edit.</li>
+              <li>Mode Rect: click two corners to draw a rectangle perimeter.</li>
               <li>Mode Recess: hover line and click to insert recess.</li>
+              <li>Mode Gate: hover line and click to insert a gate object.</li>
               <li>Right click cancels active draw chain.</li>
               <li>Hold Shift to disable angle snapping.</li>
               <li>Horizontal/vertical guide lines help match terminations.</li>
@@ -1974,14 +3646,19 @@ export function App() {
               type="button"
               className="icon-btn"
               onClick={() => {
+                if (selectedGateId) {
+                  setGatePlacements((previous) => previous.filter((gate) => gate.id !== selectedGateId));
+                  setSelectedGateId(null);
+                  return;
+                }
                 if (!selectedSegmentId) {
                   return;
                 }
                 applySegments((previous) => previous.filter((segment) => segment.id !== selectedSegmentId));
                 setSelectedSegmentId(null);
               }}
-              disabled={interactionMode !== "SELECT" || !selectedSegmentId}
-              title="Delete Selected Segment"
+              disabled={interactionMode !== "SELECT" || (!selectedSegmentId && !selectedGateId)}
+              title="Delete Selected"
             >
               D
             </button>
@@ -1990,8 +3667,10 @@ export function App() {
               className="icon-btn"
               onClick={() => {
                 dispatchHistory({ type: "SET", segments: [] });
+                setGatePlacements([]);
                 setDrawStart(null);
                 setSelectedSegmentId(null);
+                setSelectedGateId(null);
               }}
               title="Clear Layout"
             >
@@ -2013,6 +3692,183 @@ export function App() {
         </section>
 
       </aside>
+
+      {isOptimizationInspectorOpen ? (
+        <div className="optimization-modal-backdrop" onMouseDown={() => setIsOptimizationInspectorOpen(false)}>
+          <section className="panel-block optimization-modal" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="optimization-inspector-head">
+              <div>
+                <h2>Offcut Optimization Details</h2>
+                {optimizationSummary ? (
+                  <p className="muted-line">
+                    Strategy: {optimizationSummary.strategy} | Baseline {optimizationSummary.twinBar.baselinePanels} | Optimized{" "}
+                    {optimizationSummary.twinBar.optimizedPanels}
+                  </p>
+                ) : (
+                  <p className="muted-line">Run optimization to generate detail.</p>
+                )}
+              </div>
+              <div className="optimization-inspector-actions">
+                <button type="button" className="ghost optimization-rerun" onClick={runOptimization} disabled={segments.length === 0}>
+                  Re-run
+                </button>
+                <button type="button" className="panel-close" onClick={() => setIsOptimizationInspectorOpen(false)}>
+                  x
+                </button>
+              </div>
+            </div>
+            {!optimizationSummary ? (
+              <p className="muted-line">No optimization run yet.</p>
+            ) : (
+              <>
+                <div className="optimization-metrics">
+                  <article className="optimization-metric">
+                    <span>Saved Panels</span>
+                    <strong>{optimizationSummary.twinBar.panelsSaved}</strong>
+                  </article>
+                  <article className="optimization-metric">
+                    <span>Transfers Placed</span>
+                    <strong>{optimizationStats.reused}</strong>
+                  </article>
+                  <article className="optimization-metric">
+                    <span>Reuse Allowance</span>
+                    <strong>{formatLengthMm(optimizationSummary.twinBar.reuseAllowanceMm)}</strong>
+                  </article>
+                </div>
+                {optimizationRows.length > 0 ? (
+                  <div className="optimization-row-strip">
+                    {optimizationRows.map((row) => (
+                      <div key={`${row.variant}-${row.stockPanelHeightMm}`} className="optimization-row-pill">
+                        <span>
+                          {formatVariantShortLabel(row.variant)} {formatHeightLabelFromMm(row.stockPanelHeightMm)}
+                        </span>
+                        <strong>
+                          reuse {row.cutPiecesReused}/{row.cutPieces} | save {row.panelsSaved}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted-line">No Twin Bar cut demands in this layout.</p>
+                )}
+                {optimizationTransfers.length === 0 ? (
+                  <p className="muted-line">No offcut transfers found for this optimization run.</p>
+                ) : (
+                  <div className="optimization-inspector-body">
+                    <div className="optimization-inspector-list">
+                      {optimizationTransfers.map((transfer) => {
+                        const destinationIndex = segmentOrdinalById.get(transfer.destination.segmentId);
+                        const sourceIndex = segmentOrdinalById.get(transfer.source.segmentId);
+                        const isSelected = transfer.id === selectedTransferId;
+                        return (
+                          <button
+                            key={transfer.id}
+                            type="button"
+                            className={`transfer-item transfer-item-compact reused${isSelected ? " active" : ""}`}
+                            onClick={() => setSelectedTransferId(transfer.id)}
+                          >
+                            <span className="transfer-item-title">
+                              Offcut {transfer.sourceOffcutId} #{sourceIndex ?? "?"} to #{destinationIndex ?? "?"}
+                            </span>
+                            <span className="transfer-item-sub">
+                              {formatSegmentWindow(transfer.source.startOffsetMm, transfer.source.endOffsetMm)} to{" "}
+                              {formatSegmentWindow(transfer.destination.startOffsetMm, transfer.destination.endOffsetMm)}
+                            </span>
+                            <span className="transfer-item-sub">
+                              {formatLengthMm(transfer.sourceOffcutConsumedMm)} used of{" "}
+                              {formatLengthMm(transfer.sourceOffcutLengthMm)} ({formatLengthMm(transfer.sourceOffcutRemainingMm)} left)
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <aside className="optimization-inspector-detail">
+                      {selectedTransfer ? (
+                        <>
+                          <h3>Selected Transfer</h3>
+                          <p className="optimization-detail-line">
+                            Source: #{segmentOrdinalById.get(selectedTransfer.source.segmentId) ?? "?"}{" "}
+                            {formatSegmentWindow(selectedTransfer.source.startOffsetMm, selectedTransfer.source.endOffsetMm)}
+                          </p>
+                          <p className="optimization-detail-line">
+                            Destination: #{segmentOrdinalById.get(selectedTransfer.destination.segmentId) ?? "?"}{" "}
+                            {formatSegmentWindow(selectedTransfer.destination.startOffsetMm, selectedTransfer.destination.endOffsetMm)}
+                          </p>
+                          <p className="optimization-detail-line">
+                            Source offcut: {formatLengthMm(selectedTransfer.sourceOffcutLengthMm)}
+                          </p>
+                          <p className="optimization-detail-line">
+                            Used: {formatLengthMm(selectedTransfer.sourceOffcutConsumedMm)} | Remaining:{" "}
+                            {formatLengthMm(selectedTransfer.sourceOffcutRemainingMm)}
+                          </p>
+                          <p className="optimization-detail-line">
+                            Selection mode: {formatTransferChoiceLabel(selectedTransfer.candidateSourceCount)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="muted-line">Select a transfer to view details.</p>
+                      )}
+                    </aside>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      <section className="optimization-mini">
+        <p className="optimization-mini-headline">
+          {optimizationSummary ? `Panels Saved: ${optimizationSummary.twinBar.panelsSaved}` : "Optimization not run"}
+        </p>
+        <div className="optimization-mini-actions">
+          <button type="button" className="optimization-dock-btn" onClick={runOptimization} disabled={segments.length === 0}>
+            {optimizationSummary ? "Re-run" : "Run"}
+          </button>
+          <button
+            type="button"
+            className="ghost optimization-mini-detail-btn"
+            onClick={openOptimizationInspector}
+            disabled={segments.length === 0}
+          >
+            Details
+          </button>
+        </div>
+      </section>
+
+      {isLengthEditorOpen && selectedSegment ? (
+        <section className="panel-block length-editor">
+          <h2>Edit Segment Length</h2>
+          <label>
+            Length (m)
+            <input
+              type="number"
+              min={RECESS_INPUT_STEP_M}
+              step={RECESS_INPUT_STEP_M}
+              value={selectedLengthInputM}
+              onChange={(event) => setSelectedLengthInputM(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  applySelectedLengthEdit();
+                }
+              }}
+            />
+          </label>
+          <p className="muted-line">
+            {selectedComponentClosed
+              ? "Closed perimeter: matching parallel spans update as a rigid body."
+              : "Open run: downstream connected segments move with the edited endpoint."}
+          </p>
+          <div className="length-editor-actions">
+            <button type="button" onClick={applySelectedLengthEdit}>
+              Apply Length
+            </button>
+            <button type="button" className="ghost" onClick={() => setIsLengthEditorOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <main className="canvas-wrap">
         <Stage
@@ -2049,84 +3905,6 @@ export function App() {
           </Layer>
 
           <Layer>
-            {selectedTransferVisual ? (
-              <Group key={`transfer-${selectedTransferVisual.transfer.id}`} listening={false}>
-                <Line
-                  points={[
-                    selectedTransferVisual.sourceStart.x,
-                    selectedTransferVisual.sourceStart.y,
-                    selectedTransferVisual.sourceEnd.x,
-                    selectedTransferVisual.sourceEnd.y
-                  ]}
-                  stroke="#ffb000"
-                  strokeWidth={7 / view.scale}
-                  lineCap="round"
-                />
-                <Line
-                  points={[
-                    selectedTransferVisual.destinationStart.x,
-                    selectedTransferVisual.destinationStart.y,
-                    selectedTransferVisual.destinationEnd.x,
-                    selectedTransferVisual.destinationEnd.y
-                  ]}
-                  stroke="#00d2ff"
-                  strokeWidth={7 / view.scale}
-                  lineCap="round"
-                />
-                <Circle
-                  x={selectedTransferVisual.linkStart.x}
-                  y={selectedTransferVisual.linkStart.y}
-                  radius={4.2 / view.scale}
-                  fill="#ffb000"
-                />
-                <Circle
-                  x={selectedTransferVisual.linkEnd.x}
-                  y={selectedTransferVisual.linkEnd.y}
-                  radius={4.2 / view.scale}
-                  fill="#00d2ff"
-                />
-                <Arrow
-                  points={[
-                    selectedTransferVisual.linkStart.x,
-                    selectedTransferVisual.linkStart.y,
-                    selectedTransferVisual.linkEnd.x,
-                    selectedTransferVisual.linkEnd.y
-                  ]}
-                  stroke="#f7fbff"
-                  fill="#f7fbff"
-                  strokeWidth={2.1 / view.scale}
-                  pointerLength={10 / view.scale}
-                  pointerWidth={10 / view.scale}
-                  dash={[8 / view.scale, 6 / view.scale]}
-                  opacity={0.95}
-                />
-                <Text
-                  x={selectedTransferVisual.linkStart.x}
-                  y={selectedTransferVisual.linkStart.y - 16 / view.scale}
-                  text={`FROM offcut ${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutLengthMm)}`}
-                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                  fill="#ffb000"
-                  offsetX={(16 + `${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutLengthMm)}`.length * 3.5) / view.scale}
-                />
-                <Text
-                  x={selectedTransferVisual.linkEnd.x}
-                  y={selectedTransferVisual.linkEnd.y - 16 / view.scale}
-                  text={`TO ${formatLengthMm(selectedTransferVisual.transfer.destination.lengthMm)}`}
-                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                  fill="#00d2ff"
-                  offsetX={(4 + `${formatLengthMm(selectedTransferVisual.transfer.destination.lengthMm)}`.length * 3.5) / view.scale}
-                />
-                <Text
-                  x={(selectedTransferVisual.linkStart.x + selectedTransferVisual.linkEnd.x) / 2}
-                  y={(selectedTransferVisual.linkStart.y + selectedTransferVisual.linkEnd.y) / 2}
-                  text={`${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)} used`}
-                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                  fill="#f7fbff"
-                  offsetX={(8 + `${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)}`.length * 3.5) / view.scale}
-                  offsetY={10 / view.scale}
-                />
-              </Group>
-            ) : null}
             {interactionMode === "RECESS" && recessPreview ? (
               <Group key={`recess-preview-${recessPreview.segment.id}`} listening={false}>
                 <Line
@@ -2174,6 +3952,28 @@ export function App() {
                   radius={4 / view.scale}
                   fill="#00e0a4"
                 />
+                {recessPreview.alignmentGuide ? (
+                  <>
+                    <Line
+                      points={[
+                        recessPreview.alignmentGuide.anchorPoint.x,
+                        recessPreview.alignmentGuide.anchorPoint.y,
+                        recessPreview.alignmentGuide.targetPoint.x,
+                        recessPreview.alignmentGuide.targetPoint.y
+                      ]}
+                      stroke="#8fd9ff"
+                      strokeWidth={1.8 / view.scale}
+                      dash={[7 / view.scale, 5 / view.scale]}
+                      opacity={0.9}
+                    />
+                    <Circle
+                      x={recessPreview.alignmentGuide.anchorPoint.x}
+                      y={recessPreview.alignmentGuide.anchorPoint.y}
+                      radius={4.2 / view.scale}
+                      fill="#8fd9ff"
+                    />
+                  </>
+                ) : null}
                 {recessPreview.startOffsetMm > MIN_SEGMENT_MM ? (
                   <Text
                     x={(recessPreview.segment.start.x + recessPreview.entryPoint.x) / 2}
@@ -2182,7 +3982,7 @@ export function App() {
                     fontSize={LABEL_FONT_SIZE_PX / view.scale}
                     fill="#7dd3fc"
                     offsetX={24 / view.scale}
-                    offsetY={10 / view.scale}
+                    offsetY={18 / view.scale}
                   />
                 ) : null}
                 {recessPreview.segmentLengthMm - recessPreview.endOffsetMm > MIN_SEGMENT_MM ? (
@@ -2193,7 +3993,7 @@ export function App() {
                     fontSize={LABEL_FONT_SIZE_PX / view.scale}
                     fill="#7dd3fc"
                     offsetX={24 / view.scale}
-                    offsetY={10 / view.scale}
+                    offsetY={18 / view.scale}
                   />
                 ) : null}
                 <Text
@@ -2203,13 +4003,76 @@ export function App() {
                   fontSize={LABEL_FONT_SIZE_PX / view.scale}
                   fill="#00e0a4"
                   offsetX={48 / view.scale}
-                  offsetY={12 / view.scale}
+                  offsetY={20 / view.scale}
                 />
+              </Group>
+            ) : null}
+            {interactionMode === "GATE" && gatePreview ? (
+              <Group key={`gate-preview-${gatePreview.segment.id}`} listening={false}>
+                <Line
+                  points={[
+                    gatePreview.segment.start.x,
+                    gatePreview.segment.start.y,
+                    gatePreview.entryPoint.x,
+                    gatePreview.entryPoint.y
+                  ]}
+                  stroke="#41d9ff"
+                  strokeWidth={4 / view.scale}
+                  lineCap="round"
+                />
+                {gatePreviewVisual
+                  ? renderGateSymbol(
+                      gatePreviewVisual,
+                      view.scale,
+                      {
+                        frameStroke: "#d8f6ff",
+                        leafStroke: "#ffffff",
+                        swingStroke: "#ffe29a",
+                        markerFill: "#ffffff",
+                        labelColor: "#ffe29a"
+                      },
+                      `Gate ${formatLengthMm(gatePreview.widthMm)}`,
+                      `gate-preview-symbol-${gatePreview.segment.id}`,
+                    )
+                  : null}
+                <Line
+                  points={[
+                    gatePreview.exitPoint.x,
+                    gatePreview.exitPoint.y,
+                    gatePreview.segment.end.x,
+                    gatePreview.segment.end.y
+                  ]}
+                  stroke="#41d9ff"
+                  strokeWidth={4 / view.scale}
+                  lineCap="round"
+                />
+                {gatePreview.startOffsetMm > MIN_SEGMENT_MM ? (
+                  <Text
+                    x={(gatePreview.segment.start.x + gatePreview.entryPoint.x) / 2}
+                    y={(gatePreview.segment.start.y + gatePreview.entryPoint.y) / 2}
+                    text={formatLengthMm(gatePreview.startOffsetMm)}
+                    fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                    fill="#7dd3fc"
+                    offsetX={24 / view.scale}
+                    offsetY={18 / view.scale}
+                  />
+                ) : null}
+                {gatePreview.segmentLengthMm - gatePreview.endOffsetMm > MIN_SEGMENT_MM ? (
+                  <Text
+                    x={(gatePreview.exitPoint.x + gatePreview.segment.end.x) / 2}
+                    y={(gatePreview.exitPoint.y + gatePreview.segment.end.y) / 2}
+                    text={formatLengthMm(gatePreview.segmentLengthMm - gatePreview.endOffsetMm)}
+                    fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                    fill="#7dd3fc"
+                    offsetX={24 / view.scale}
+                    offsetY={18 / view.scale}
+                  />
+                ) : null}
               </Group>
             ) : null}
             {visualPosts.map((post) => {
               const size = POST_SYMBOL_RADIUS_PX / view.scale;
-              const strokeWidth = 1.2 / view.scale;
+              const strokeWidth = 1.35 / view.scale;
 
               if (post.kind === "INTERMEDIATE") {
                 return (
@@ -2219,8 +4082,8 @@ export function App() {
                     y={post.point.y - size}
                     width={size * 2}
                     height={size * 2}
-                    fill="#6dd3ff"
-                    stroke="#0b1117"
+                    fill="#46d3ff"
+                    stroke="#061019"
                     strokeWidth={strokeWidth}
                     listening={false}
                   />
@@ -2236,8 +4099,8 @@ export function App() {
                     sides={4}
                     radius={size * 1.2}
                     rotation={45}
-                    fill="#ffb703"
-                    stroke="#0b1117"
+                    fill="#ff9f5a"
+                    stroke="#061019"
                     strokeWidth={strokeWidth}
                     listening={false}
                   />
@@ -2254,7 +4117,7 @@ export function App() {
                     radius={size * 1.35}
                     rotation={180}
                     fill="#ff5d8f"
-                    stroke="#0b1117"
+                    stroke="#061019"
                     strokeWidth={strokeWidth}
                     listening={false}
                   />
@@ -2269,8 +4132,24 @@ export function App() {
                     y={post.point.y}
                     sides={6}
                     radius={size * 1.1}
-                    fill="#c3ccde"
-                    stroke="#0b1117"
+                    fill="#b9d3f0"
+                    stroke="#061019"
+                    strokeWidth={strokeWidth}
+                    listening={false}
+                  />
+                );
+              }
+
+              if (post.kind === "GATE") {
+                return (
+                  <RegularPolygon
+                    key={post.key}
+                    x={post.point.x}
+                    y={post.point.y}
+                    sides={4}
+                    radius={size * 1.25}
+                    fill="#ffe08a"
+                    stroke="#061019"
                     strokeWidth={strokeWidth}
                     listening={false}
                   />
@@ -2284,7 +4163,7 @@ export function App() {
                   y={post.point.y}
                   radius={size * 1.1}
                   fill="#ffd166"
-                  stroke="#0b1117"
+                  stroke="#061019"
                   strokeWidth={strokeWidth}
                   listening={false}
                 />
@@ -2292,68 +4171,106 @@ export function App() {
             })}
             {segments.map((segment) => {
               const isSelected = segment.id === selectedSegmentId;
-              const labelPosition = {
+              const segmentMidpoint = {
                 x: (segment.start.x + segment.end.x) / 2,
                 y: (segment.start.y + segment.end.y) / 2
               };
+              const segmentNormal = normalizeVector({
+                x: -(segment.end.y - segment.start.y),
+                y: segment.end.x - segment.start.x
+              });
+              const labelOffsetMm = SEGMENT_LABEL_OFFSET_PX / view.scale;
+              const labelPosition = segmentNormal
+                ? {
+                    x: segmentMidpoint.x + segmentNormal.x * labelOffsetMm,
+                    y: segmentMidpoint.y + segmentNormal.y * labelOffsetMm
+                  }
+                : segmentMidpoint;
+              const segmentRuns = buildSegmentRuns(segment, gatesBySegmentId.get(segment.id) ?? []);
               const lengthLabel = formatLengthMm(distanceMm(segment.start, segment.end));
               const color = getSegmentColor(segment.spec);
+              const showLengthLabel = true;
 
               return (
                 <Group key={segment.id}>
+                  {segmentRuns.map((run, runIndex) => (
+                    <Line
+                      key={`${segment.id}-run-${runIndex}`}
+                      points={[run.start.x, run.start.y, run.end.x, run.end.y]}
+                      stroke={color}
+                      opacity={selectedTransferVisual ? 0.75 : 1}
+                      strokeWidth={(isSelected ? SEGMENT_SELECTED_STROKE_PX : SEGMENT_STROKE_PX) / view.scale}
+                      {...(segment.spec.system === "ROLL_FORM"
+                        ? { dash: [12 / view.scale, 8 / view.scale] }
+                        : {})}
+                      lineCap="round"
+                      lineJoin="round"
+                      listening={false}
+                    />
+                  ))}
                   <Line
                     points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
-                    stroke={color}
-                    strokeWidth={(isSelected ? SEGMENT_SELECTED_STROKE_PX : SEGMENT_STROKE_PX) / view.scale}
-                    {...(segment.spec.system === "ROLL_FORM"
-                      ? { dash: [12 / view.scale, 8 / view.scale] }
-                      : {})}
+                    stroke="#ffffff"
+                    opacity={0.001}
+                    strokeWidth={Math.max(SEGMENT_STROKE_PX, SEGMENT_SELECTED_STROKE_PX) / view.scale}
+                    hitStrokeWidth={22 / view.scale}
                     lineCap="round"
                     lineJoin="round"
-                    draggable={interactionMode === "SELECT" && isSelected && selectedRunMovable}
+                    onMouseDown={(event) => {
+                      if (interactionMode !== "SELECT" || !isSelected || event.evt.button !== 0) {
+                        return;
+                      }
+                      event.cancelBubble = true;
+                      setSelectedGateId(null);
+                      startSelectedSegmentDrag(segment.id);
+                    }}
+                    onTouchStart={(event) => {
+                      if (interactionMode !== "SELECT" || !isSelected) {
+                        return;
+                      }
+                      event.cancelBubble = true;
+                      startSelectedSegmentDrag(segment.id);
+                    }}
                     onClick={(event) => {
                       event.cancelBubble = true;
                       if (interactionMode !== "SELECT") {
                         return;
                       }
-                      if (skipNextSegmentSelection.current) {
-                        skipNextSegmentSelection.current = false;
-                        return;
-                      }
                       setSelectedSegmentId(segment.id);
+                      setSelectedGateId(null);
                       setDrawStart(null);
                     }}
                     onTap={() => {
                       if (interactionMode !== "SELECT") {
                         return;
                       }
-                      if (skipNextSegmentSelection.current) {
-                        skipNextSegmentSelection.current = false;
-                        return;
-                      }
                       setSelectedSegmentId(segment.id);
+                      setSelectedGateId(null);
                       setDrawStart(null);
                     }}
-                    onDragEnd={(event) => {
-                      if (!selectedRunMovable) {
-                        event.target.position({ x: 0, y: 0 });
-                        return;
-                      }
-                      const deltaX = event.target.x();
-                      const deltaY = event.target.y();
-                      moveSegments(selectedRunSegmentIds, { x: deltaX, y: deltaY });
-                      event.target.position({ x: 0, y: 0 });
-                    }}
                   />
-                  <Text
-                    x={labelPosition.x}
-                    y={labelPosition.y}
-                    text={lengthLabel}
-                    fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                    fill="#f5f7fa"
-                    offsetX={(lengthLabel.length * 3.6) / view.scale}
-                    offsetY={8 / view.scale}
-                  />
+                  {showLengthLabel ? (
+                    <Text
+                      x={labelPosition.x}
+                      y={labelPosition.y}
+                      text={lengthLabel}
+                      fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                      fill={isSelected ? "#ffd166" : "#d8e8f7"}
+                      offsetX={(lengthLabel.length * 3.6) / view.scale}
+                      offsetY={8 / view.scale}
+                      listening={interactionMode === "SELECT"}
+                      onClick={(event) => {
+                        event.cancelBubble = true;
+                        setSelectedGateId(null);
+                        openLengthEditor(segment.id);
+                      }}
+                      onTap={(event) => {
+                        event.cancelBubble = true;
+                        setSelectedGateId(null);
+                        openLengthEditor(segment.id);
+                      }}
+                    />
+                  ) : null}
                   {interactionMode === "SELECT" && isSelected ? (
                     <>
                       <Circle
@@ -2383,6 +4300,143 @@ export function App() {
                 </Group>
               );
             })}
+            {placedGateVisuals.map((gateVisual) => {
+              const isGateSelected = interactionMode === "SELECT" && gateVisual.id === selectedGateId;
+
+              return (
+                <Group key={`gate-group-${gateVisual.id}`}>
+                  {renderGateSymbol(
+                    gateVisual,
+                    view.scale,
+                    {
+                      frameStroke: isGateSelected ? "#fff6d6" : "#d8f6ff",
+                      leafStroke: isGateSelected ? "#ffbe0b" : "#ffd166",
+                      swingStroke: isGateSelected ? "#ffd166" : "#ffe5a6",
+                      markerFill: isGateSelected ? "#ffffff" : "#fff4cf",
+                      labelColor: isGateSelected ? "#fff1c4" : "#ffe29a",
+                      opacity: selectedTransferVisual ? 0.88 : 1
+                    },
+                    `Gate ${formatLengthMm(gateVisual.widthMm)}`,
+                    `gate-${gateVisual.key}`,
+                  )}
+                  {interactionMode === "SELECT" ? (
+                    <Line
+                      points={[gateVisual.startPoint.x, gateVisual.startPoint.y, gateVisual.endPoint.x, gateVisual.endPoint.y]}
+                      stroke="#ffffff"
+                      opacity={0.001}
+                      strokeWidth={6 / view.scale}
+                      hitStrokeWidth={24 / view.scale}
+                      lineCap="round"
+                      onMouseDown={(event) => {
+                        if (event.evt.button !== 0) {
+                          return;
+                        }
+                        event.cancelBubble = true;
+                        setSelectedSegmentId(null);
+                        setSelectedGateId(gateVisual.id);
+                        setIsLengthEditorOpen(false);
+                        startSelectedGateDrag(gateVisual.id);
+                      }}
+                      onTouchStart={(event) => {
+                        event.cancelBubble = true;
+                        setSelectedSegmentId(null);
+                        setSelectedGateId(gateVisual.id);
+                        setIsLengthEditorOpen(false);
+                        startSelectedGateDrag(gateVisual.id);
+                      }}
+                      onClick={(event) => {
+                        event.cancelBubble = true;
+                        setSelectedSegmentId(null);
+                        setSelectedGateId(gateVisual.id);
+                        setIsLengthEditorOpen(false);
+                      }}
+                      onTap={(event) => {
+                        event.cancelBubble = true;
+                        setSelectedSegmentId(null);
+                        setSelectedGateId(gateVisual.id);
+                        setIsLengthEditorOpen(false);
+                      }}
+                    />
+                  ) : null}
+                </Group>
+              );
+            })}
+            {interactionMode === "DRAW" && drawHoverSnap ? (
+              <Group listening={false}>
+                <Line
+                  points={[drawHoverSnap.segment.start.x, drawHoverSnap.segment.start.y, drawHoverSnap.point.x, drawHoverSnap.point.y]}
+                  stroke="#41d9ff"
+                  strokeWidth={2.2 / view.scale}
+                  dash={[8 / view.scale, 5 / view.scale]}
+                />
+                <Line
+                  points={[drawHoverSnap.point.x, drawHoverSnap.point.y, drawHoverSnap.segment.end.x, drawHoverSnap.segment.end.y]}
+                  stroke="#ffd166"
+                  strokeWidth={2.2 / view.scale}
+                  dash={[8 / view.scale, 5 / view.scale]}
+                />
+                <Circle x={drawHoverSnap.point.x} y={drawHoverSnap.point.y} radius={4.2 / view.scale} fill="#ffffff" opacity={0.95} />
+                <Text
+                  x={(drawHoverSnap.segment.start.x + drawHoverSnap.point.x) / 2}
+                  y={(drawHoverSnap.segment.start.y + drawHoverSnap.point.y) / 2}
+                  text={formatLengthMm(drawHoverSnap.startOffsetMm)}
+                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                  fill="#41d9ff"
+                  offsetX={(formatLengthMm(drawHoverSnap.startOffsetMm).length * 3.6) / view.scale}
+                  offsetY={18 / view.scale}
+                />
+                <Text
+                  x={(drawHoverSnap.segment.end.x + drawHoverSnap.point.x) / 2}
+                  y={(drawHoverSnap.segment.end.y + drawHoverSnap.point.y) / 2}
+                  text={formatLengthMm(drawHoverSnap.endOffsetMm)}
+                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                  fill="#ffd166"
+                  offsetX={(formatLengthMm(drawHoverSnap.endOffsetMm).length * 3.6) / view.scale}
+                  offsetY={18 / view.scale}
+                />
+              </Group>
+            ) : null}
+            {interactionMode === "RECTANGLE" && rectangleStart && rectanglePreviewEnd ? (
+              <Group listening={false}>
+                <Line
+                  points={[
+                    rectangleStart.x,
+                    rectangleStart.y,
+                    rectanglePreviewEnd.x,
+                    rectangleStart.y,
+                    rectanglePreviewEnd.x,
+                    rectanglePreviewEnd.y,
+                    rectangleStart.x,
+                    rectanglePreviewEnd.y,
+                    rectangleStart.x,
+                    rectangleStart.y
+                  ]}
+                  stroke="#8fd9ff"
+                  strokeWidth={GHOST_STROKE_PX / view.scale}
+                  dash={[10 / view.scale, 7 / view.scale]}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+                <Text
+                  x={(rectangleStart.x + rectanglePreviewEnd.x) / 2}
+                  y={rectangleStart.y}
+                  text={formatLengthMm(Math.abs(rectanglePreviewEnd.x - rectangleStart.x))}
+                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                  fill="#8fd9ff"
+                  offsetX={40 / view.scale}
+                  offsetY={12 / view.scale}
+                />
+                <Text
+                  x={rectanglePreviewEnd.x}
+                  y={(rectangleStart.y + rectanglePreviewEnd.y) / 2}
+                  text={formatLengthMm(Math.abs(rectanglePreviewEnd.y - rectangleStart.y))}
+                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                  fill="#8fd9ff"
+                  offsetX={10 / view.scale}
+                  offsetY={12 / view.scale}
+                />
+              </Group>
+            ) : null}
 
             {drawStart && ghostEnd ? (
               <>
@@ -2425,9 +4479,61 @@ export function App() {
                   fontSize={LABEL_FONT_SIZE_PX / view.scale}
                   fill="#ffd166"
                   offsetX={42 / view.scale}
-                  offsetY={10 / view.scale}
+                  offsetY={20 / view.scale}
                 />
               </>
+            ) : null}
+          </Layer>
+          <Layer listening={false}>
+            {selectedTransferVisual ? (
+              <Group key={`transfer-${selectedTransferVisual.transfer.id}`}>
+                <Line
+                  points={[
+                    selectedTransferVisual.sourceStart.x,
+                    selectedTransferVisual.sourceStart.y,
+                    selectedTransferVisual.sourceEnd.x,
+                    selectedTransferVisual.sourceEnd.y
+                  ]}
+                  stroke="#ffb347"
+                  strokeWidth={8 / view.scale}
+                  lineCap="round"
+                />
+                <Line
+                  points={[
+                    selectedTransferVisual.destinationStart.x,
+                    selectedTransferVisual.destinationStart.y,
+                    selectedTransferVisual.destinationEnd.x,
+                    selectedTransferVisual.destinationEnd.y
+                  ]}
+                  stroke="#17e3d0"
+                  strokeWidth={8 / view.scale}
+                  lineCap="round"
+                />
+                <Arrow
+                  points={[
+                    selectedTransferVisual.linkStart.x,
+                    selectedTransferVisual.linkStart.y,
+                    selectedTransferVisual.linkEnd.x,
+                    selectedTransferVisual.linkEnd.y
+                  ]}
+                  stroke="#ffffff"
+                  fill="#ffffff"
+                  strokeWidth={2.2 / view.scale}
+                  pointerLength={11 / view.scale}
+                  pointerWidth={11 / view.scale}
+                  dash={[8 / view.scale, 6 / view.scale]}
+                  opacity={0.95}
+                />
+                <Text
+                  x={(selectedTransferVisual.linkStart.x + selectedTransferVisual.linkEnd.x) / 2}
+                  y={(selectedTransferVisual.linkStart.y + selectedTransferVisual.linkEnd.y) / 2}
+                  text={`${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)} used`}
+                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                  fill="#f7fbff"
+                  offsetX={(8 + `${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)}`.length * 3.5) / view.scale}
+                  offsetY={10 / view.scale}
+                />
+              </Group>
             ) : null}
           </Layer>
         </Stage>
@@ -2446,9 +4552,8 @@ export function App() {
         <div className="statusbar">
           <span>Mode: {interactionMode}</span>
           <span>Snap: {disableSnap ? "OFF" : "5 deg"}</span>
-          <span>Point Step: 0.1m</span>
+          <span>Point Step: {formatLengthMm(DRAW_INCREMENT_MM)}</span>
           <span>Active Start: {drawStart ? formatPointMeters(drawStart) : "None"}</span>
-          <span>Cursor: {pointerWorld ? formatPointMeters(quantize(pointerWorld)) : "N/A"}</span>
         </div>
       </main>
     </div>
