@@ -160,6 +160,29 @@ interface RecessAlignmentAnchor {
   tangent: { x: number; y: number };
 }
 
+interface ScreenRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+interface GateOppositeGuide {
+  key: string;
+  start: PointMm;
+  end: PointMm;
+}
+
+interface SegmentLengthLabel {
+  key: string;
+  segmentId: string;
+  x: number;
+  y: number;
+  text: string;
+  lengthMm: number;
+  isSelected: boolean;
+}
+
 const MIN_SEGMENT_MM = 50;
 const DRAW_INCREMENT_MM = 50;
 const GRID_STEPS_MM = [250, 500, 1000, 2500, 5000, 10000];
@@ -345,6 +368,10 @@ function dot(left: { x: number; y: number }, right: { x: number; y: number }): n
   return left.x * right.x + left.y * right.y;
 }
 
+function cross(left: { x: number; y: number }, right: { x: number; y: number }): number {
+  return left.x * right.y - left.y * right.x;
+}
+
 function rotateVector(vector: { x: number; y: number }, degrees: number): { x: number; y: number } {
   const radians = (degrees * Math.PI) / 180;
   const cos = Math.cos(radians);
@@ -371,6 +398,200 @@ function resolveGatePreviewLeafCount(gateType: GateType, widthMm: number): 1 | 2
 
 function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
   return Math.max(startA, startB) < Math.min(endA, endB);
+}
+
+function rectanglesOverlap(left: ScreenRect, right: ScreenRect, paddingPx = 5): boolean {
+  return (
+    left.left - paddingPx < right.right &&
+    left.right + paddingPx > right.left &&
+    left.top - paddingPx < right.bottom &&
+    left.bottom + paddingPx > right.top
+  );
+}
+
+function offsetAlongSegmentMm(segment: LayoutSegment, point: PointMm): number {
+  const segmentVector = {
+    x: segment.end.x - segment.start.x,
+    y: segment.end.y - segment.start.y
+  };
+  const segmentLength = Math.hypot(segmentVector.x, segmentVector.y);
+  if (segmentLength <= 1e-6) {
+    return 0;
+  }
+  const toPoint = {
+    x: point.x - segment.start.x,
+    y: point.y - segment.start.y
+  };
+  return Math.max(0, Math.min(segmentLength, dot(toPoint, segmentVector) / segmentLength));
+}
+
+function isPointOnSegmentInterior(point: PointMm, segment: LayoutSegment, toleranceMm = 1): boolean {
+  const segmentVector = {
+    x: segment.end.x - segment.start.x,
+    y: segment.end.y - segment.start.y
+  };
+  const segmentLength = Math.hypot(segmentVector.x, segmentVector.y);
+  if (segmentLength <= 1e-6) {
+    return false;
+  }
+  const fromStart = {
+    x: point.x - segment.start.x,
+    y: point.y - segment.start.y
+  };
+  const perpendicularDistanceMm = Math.abs(cross(fromStart, segmentVector)) / segmentLength;
+  if (perpendicularDistanceMm > toleranceMm) {
+    return false;
+  }
+  const projectionFraction = dot(fromStart, segmentVector) / (segmentLength * segmentLength);
+  const endpointTolerance = toleranceMm / segmentLength;
+  return projectionFraction > endpointTolerance && projectionFraction < 1 - endpointTolerance;
+}
+
+function segmentIntersectionPoint(first: LayoutSegment, second: LayoutSegment): PointMm | null {
+  const p = first.start;
+  const q = second.start;
+  const r = {
+    x: first.end.x - first.start.x,
+    y: first.end.y - first.start.y
+  };
+  const s = {
+    x: second.end.x - second.start.x,
+    y: second.end.y - second.start.y
+  };
+  const rCrossS = cross(r, s);
+  if (Math.abs(rCrossS) < 1e-6) {
+    return null;
+  }
+  const qMinusP = {
+    x: q.x - p.x,
+    y: q.y - p.y
+  };
+  const t = cross(qMinusP, s) / rCrossS;
+  const u = cross(qMinusP, r) / rCrossS;
+  const tolerance = 1e-6;
+  if (t < -tolerance || t > 1 + tolerance || u < -tolerance || u > 1 + tolerance) {
+    return null;
+  }
+  return {
+    x: p.x + r.x * t,
+    y: p.y + r.y * t
+  };
+}
+
+function collectInteriorIntersectionOffsetsMm(target: LayoutSegment, allSegments: LayoutSegment[]): number[] {
+  const targetLengthMm = distanceMm(target.start, target.end);
+  if (targetLengthMm <= MIN_SEGMENT_MM) {
+    return [];
+  }
+
+  const rawOffsets: number[] = [];
+  const addOffsetIfInterior = (point: PointMm): void => {
+    if (!isPointOnSegmentInterior(point, target, 1)) {
+      return;
+    }
+    const offsetMm = offsetAlongSegmentMm(target, point);
+    if (offsetMm <= MIN_SEGMENT_MM || offsetMm >= targetLengthMm - MIN_SEGMENT_MM) {
+      return;
+    }
+    rawOffsets.push(offsetMm);
+  };
+
+  for (const segment of allSegments) {
+    if (segment.id === target.id) {
+      continue;
+    }
+    addOffsetIfInterior(segment.start);
+    addOffsetIfInterior(segment.end);
+    const intersection = segmentIntersectionPoint(target, segment);
+    if (intersection) {
+      addOffsetIfInterior(intersection);
+    }
+  }
+
+  rawOffsets.sort((left, right) => left - right);
+  const deduped: number[] = [];
+  const mergeThresholdMm = DRAW_INCREMENT_MM * 0.2;
+  for (const offsetMm of rawOffsets) {
+    const last = deduped[deduped.length - 1];
+    if (last === undefined || Math.abs(offsetMm - last) > mergeThresholdMm) {
+      deduped.push(offsetMm);
+    }
+  }
+  return deduped;
+}
+
+function isOppositeGatePair(left: GateVisual, right: GateVisual): boolean {
+  const tangentAlignment = Math.abs(dot(left.tangent, right.tangent));
+  if (tangentAlignment < 0.92) {
+    return false;
+  }
+
+  const delta = {
+    x: right.centerPoint.x - left.centerPoint.x,
+    y: right.centerPoint.y - left.centerPoint.y
+  };
+  const distanceBetweenCentersMm = Math.hypot(delta.x, delta.y);
+  if (distanceBetweenCentersMm < 150) {
+    return false;
+  }
+
+  const acrossMm = Math.abs(dot(delta, left.normal));
+  if (acrossMm < 300) {
+    return false;
+  }
+
+  const alongDriftMm = Math.abs(dot(delta, left.tangent));
+  const maxAllowedAlongDriftMm = Math.max(left.widthMm, right.widthMm) * 0.8 + 250;
+  return alongDriftMm <= maxAllowedAlongDriftMm;
+}
+
+function buildOppositeGateGuides(gates: GateVisual[]): GateOppositeGuide[] {
+  if (gates.length < 2) {
+    return [];
+  }
+
+  const candidates: Array<{ firstIndex: number; secondIndex: number; distanceMm: number }> = [];
+  for (let leftIndex = 0; leftIndex < gates.length - 1; leftIndex += 1) {
+    const left = gates[leftIndex];
+    if (!left) {
+      continue;
+    }
+    for (let rightIndex = leftIndex + 1; rightIndex < gates.length; rightIndex += 1) {
+      const right = gates[rightIndex];
+      if (!right || !isOppositeGatePair(left, right)) {
+        continue;
+      }
+      candidates.push({
+        firstIndex: leftIndex,
+        secondIndex: rightIndex,
+        distanceMm: distanceMm(left.centerPoint, right.centerPoint)
+      });
+    }
+  }
+
+  candidates.sort((left, right) => left.distanceMm - right.distanceMm);
+  const usedIndices = new Set<number>();
+  const guides: GateOppositeGuide[] = [];
+
+  for (const candidate of candidates) {
+    if (usedIndices.has(candidate.firstIndex) || usedIndices.has(candidate.secondIndex)) {
+      continue;
+    }
+    const first = gates[candidate.firstIndex];
+    const second = gates[candidate.secondIndex];
+    if (!first || !second) {
+      continue;
+    }
+    guides.push({
+      key: `${first.key}::${second.key}`,
+      start: first.centerPoint,
+      end: second.centerPoint
+    });
+    usedIndices.add(candidate.firstIndex);
+    usedIndices.add(candidate.secondIndex);
+  }
+
+  return guides;
 }
 
 function clampGatePlacementToSegment(
@@ -1968,6 +2189,124 @@ export function App() {
   );
   const connectivity = useMemo(() => buildSegmentConnectivity(segments), [segments]);
   const placedGateVisuals = useMemo(() => resolvedGatePlacements, [resolvedGatePlacements]);
+  const segmentLengthLabelsBySegmentId = useMemo(() => {
+    const map = new Map<string, SegmentLengthLabel[]>();
+
+    for (const segment of segments) {
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      if (segmentLengthMm <= MIN_SEGMENT_MM) {
+        continue;
+      }
+      const segmentNormal = normalizeVector({
+        x: -(segment.end.y - segment.start.y),
+        y: segment.end.x - segment.start.x
+      });
+      const labelOffsetMm = SEGMENT_LABEL_OFFSET_PX / view.scale;
+      const offsets = collectInteriorIntersectionOffsetsMm(segment, segments);
+      const boundaries = [0, ...offsets, segmentLengthMm];
+      const labels: SegmentLengthLabel[] = [];
+
+      for (let index = 0; index < boundaries.length - 1; index += 1) {
+        const startOffsetMm = boundaries[index];
+        const endOffsetMm = boundaries[index + 1];
+        if (startOffsetMm === undefined || endOffsetMm === undefined) {
+          continue;
+        }
+        const runLengthMm = endOffsetMm - startOffsetMm;
+        if (runLengthMm <= MIN_SEGMENT_MM) {
+          continue;
+        }
+        const centerPoint = interpolateAlongSegment(segment, startOffsetMm + runLengthMm / 2);
+        const labelPosition = segmentNormal
+          ? {
+              x: centerPoint.x + segmentNormal.x * labelOffsetMm,
+              y: centerPoint.y + segmentNormal.y * labelOffsetMm
+            }
+          : centerPoint;
+
+        labels.push({
+          key: `${segment.id}::${Math.round(startOffsetMm)}-${Math.round(endOffsetMm)}`,
+          segmentId: segment.id,
+          x: labelPosition.x,
+          y: labelPosition.y,
+          text: formatLengthMm(runLengthMm),
+          lengthMm: runLengthMm,
+          isSelected: segment.id === selectedSegmentId
+        });
+      }
+
+      if (labels.length === 0) {
+        const midpoint = {
+          x: (segment.start.x + segment.end.x) / 2,
+          y: (segment.start.y + segment.end.y) / 2
+        };
+        const labelPosition = segmentNormal
+          ? {
+              x: midpoint.x + segmentNormal.x * labelOffsetMm,
+              y: midpoint.y + segmentNormal.y * labelOffsetMm
+            }
+          : midpoint;
+        labels.push({
+          key: `${segment.id}::full`,
+          segmentId: segment.id,
+          x: labelPosition.x,
+          y: labelPosition.y,
+          text: formatLengthMm(segmentLengthMm),
+          lengthMm: segmentLengthMm,
+          isSelected: segment.id === selectedSegmentId
+        });
+      }
+
+      map.set(segment.id, labels);
+    }
+
+    return map;
+  }, [segments, selectedSegmentId, view.scale]);
+  const visibleSegmentLabelKeys = useMemo(() => {
+    const allLabels: SegmentLengthLabel[] = [];
+    for (const labels of segmentLengthLabelsBySegmentId.values()) {
+      allLabels.push(...labels);
+    }
+
+    const candidates = allLabels.map((label) => {
+      const widthPx = Math.max(34, label.text.length * 7.2 + 6);
+      const heightPx = LABEL_FONT_SIZE_PX + 6;
+      const centerXpx = label.x * view.scale;
+      const centerYpx = label.y * view.scale;
+      return {
+        ...label,
+        rect: {
+          left: centerXpx - widthPx / 2,
+          top: centerYpx - heightPx / 2,
+          right: centerXpx + widthPx / 2,
+          bottom: centerYpx + heightPx / 2
+        } satisfies ScreenRect
+      };
+    });
+
+    candidates.sort((left, right) => {
+      if (left.isSelected !== right.isSelected) {
+        return left.isSelected ? -1 : 1;
+      }
+      if (left.lengthMm !== right.lengthMm) {
+        return right.lengthMm - left.lengthMm;
+      }
+      return left.key.localeCompare(right.key);
+    });
+
+    const acceptedRects: ScreenRect[] = [];
+    const visibleKeys = new Set<string>();
+    for (const candidate of candidates) {
+      const overlaps = acceptedRects.some((rect) => rectanglesOverlap(candidate.rect, rect));
+      if (overlaps && !candidate.isSelected) {
+        continue;
+      }
+      acceptedRects.push(candidate.rect);
+      visibleKeys.add(candidate.key);
+    }
+    return visibleKeys;
+  }, [segmentLengthLabelsBySegmentId, view.scale]);
+  const oppositeGateGuides = useMemo(() => buildOppositeGateGuides(placedGateVisuals), [placedGateVisuals]);
   const selectedComponentId = useMemo(() => {
     if (!selectedSegmentId) {
       return null;
@@ -4171,25 +4510,9 @@ export function App() {
             })}
             {segments.map((segment) => {
               const isSelected = segment.id === selectedSegmentId;
-              const segmentMidpoint = {
-                x: (segment.start.x + segment.end.x) / 2,
-                y: (segment.start.y + segment.end.y) / 2
-              };
-              const segmentNormal = normalizeVector({
-                x: -(segment.end.y - segment.start.y),
-                y: segment.end.x - segment.start.x
-              });
-              const labelOffsetMm = SEGMENT_LABEL_OFFSET_PX / view.scale;
-              const labelPosition = segmentNormal
-                ? {
-                    x: segmentMidpoint.x + segmentNormal.x * labelOffsetMm,
-                    y: segmentMidpoint.y + segmentNormal.y * labelOffsetMm
-                  }
-                : segmentMidpoint;
+              const lengthLabels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
               const segmentRuns = buildSegmentRuns(segment, gatesBySegmentId.get(segment.id) ?? []);
-              const lengthLabel = formatLengthMm(distanceMm(segment.start, segment.end));
               const color = getSegmentColor(segment.spec);
-              const showLengthLabel = true;
 
               return (
                 <Group key={segment.id}>
@@ -4249,14 +4572,42 @@ export function App() {
                       setDrawStart(null);
                     }}
                   />
-                  {showLengthLabel ? (
+                  {lengthLabels.map((label) =>
+                    visibleSegmentLabelKeys.has(label.key) ? (
+                      <Text
+                        key={`segment-label-${label.key}`}
+                        x={label.x}
+                        y={label.y}
+                        text={label.text}
+                        fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                        fill={isSelected ? "#ffd166" : "#d8e8f7"}
+                        offsetX={(label.text.length * 3.6) / view.scale}
+                        offsetY={8 / view.scale}
+                        listening={interactionMode === "SELECT"}
+                        onClick={(event) => {
+                          event.cancelBubble = true;
+                          setSelectedGateId(null);
+                          openLengthEditor(segment.id);
+                        }}
+                        onTap={(event) => {
+                          event.cancelBubble = true;
+                          setSelectedGateId(null);
+                          openLengthEditor(segment.id);
+                        }}
+                      />
+                    ) : null,
+                  )}
+                  {/*
+                    Fallback for very dense views where all labels are culled by overlap logic.
+                  */}
+                  {lengthLabels.length === 0 ? (
                     <Text
-                      x={labelPosition.x}
-                      y={labelPosition.y}
-                      text={lengthLabel}
+                      x={(segment.start.x + segment.end.x) / 2}
+                      y={(segment.start.y + segment.end.y) / 2}
+                      text={formatLengthMm(distanceMm(segment.start, segment.end))}
                       fontSize={LABEL_FONT_SIZE_PX / view.scale}
                       fill={isSelected ? "#ffd166" : "#d8e8f7"}
-                      offsetX={(lengthLabel.length * 3.6) / view.scale}
+                      offsetX={22 / view.scale}
                       offsetY={8 / view.scale}
                       listening={interactionMode === "SELECT"}
                       onClick={(event) => {
@@ -4361,6 +4712,18 @@ export function App() {
                 </Group>
               );
             })}
+            {oppositeGateGuides.map((guide) => (
+              <Line
+                key={`gate-opposite-guide-${guide.key}`}
+                points={[guide.start.x, guide.start.y, guide.end.x, guide.end.y]}
+                stroke="#ffd166"
+                strokeWidth={2.8 / view.scale}
+                dash={[12 / view.scale, 7 / view.scale]}
+                lineCap="round"
+                listening={false}
+                opacity={0.98}
+              />
+            ))}
             {interactionMode === "DRAW" && drawHoverSnap ? (
               <Group listening={false}>
                 <Line
