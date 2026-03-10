@@ -26,8 +26,19 @@ export interface LayoutSegment {
   spec: FenceSpec;
 }
 
+export type GateType = "SINGLE_LEAF" | "DOUBLE_LEAF" | "CUSTOM";
+
+export interface GatePlacement {
+  id: string;
+  segmentId: string;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  gateType: GateType;
+}
+
 export interface LayoutModel {
   segments: LayoutSegment[];
+  gates?: GatePlacement[];
 }
 
 export interface SegmentEstimate {
@@ -159,4 +170,59 @@ export interface EstimateSnapshot {
   createdAtIso: string;
   layout: LayoutModel;
   estimate: EstimateResult;
+}
+
+export type CompanyUserRole = "OWNER" | "ADMIN" | "MEMBER";
+
+export interface CompanyRecord {
+  id: string;
+  name: string;
+  createdAtIso: string;
+}
+
+export interface CompanyUserRecord {
+  id: string;
+  companyId: string;
+  email: string;
+  displayName: string;
+  role: CompanyUserRole;
+  createdAtIso: string;
+}
+
+export interface AuthSessionRecord {
+  id: string;
+  companyId: string;
+  userId: string;
+  createdAtIso: string;
+  expiresAtIso: string;
+}
+
+export interface AuthSessionEnvelope {
+  company: CompanyRecord;
+  user: CompanyUserRecord;
+  session: AuthSessionRecord & {
+    token: string;
+  };
+}
+
+export interface DrawingRecord {
+  id: string;
+  companyId: string;
+  name: string;
+  layout: LayoutModel;
+  estimate: EstimateResult;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface DrawingSummary {
+  id: string;
+  companyId: string;
+  name: string;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
 }

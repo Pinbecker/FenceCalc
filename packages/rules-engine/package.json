@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "files": [
+    "src",
     "dist"
   ],
   "dependencies": {
@@ -19,6 +20,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8"
   }
 }

@@ -1,5 +1,8 @@
 import type { OptimizationSummary, TwinBarOptimizationBucket, TwinBarOptimizationPlan, TwinBarVariant } from "@fence-estimator/contracts";
 
+import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
+import { getVisibleOptimizationBuckets } from "./optimizationDisplay";
+
 interface OptimizationPlannerProps {
   summary: OptimizationSummary;
   canInspect: boolean;
@@ -9,14 +12,6 @@ interface OptimizationPlannerProps {
   onOpen: () => void;
   onClose: () => void;
   onSelectPlan: (planId: string) => void;
-}
-
-function formatLengthMm(lengthMm: number): string {
-  return `${(lengthMm / 1000).toFixed(2)}m`;
-}
-
-function formatHeightLabelFromMm(heightMm: number): string {
-  return `${(heightMm / 1000).toFixed(heightMm % 1000 === 0 ? 0 : 1)}m`;
 }
 
 function formatVariantShortLabel(variant: TwinBarVariant): string {
@@ -93,12 +88,7 @@ export function OptimizationPlanner({
 }: OptimizationPlannerProps) {
   const { twinBar } = summary;
   const hasCutDemand = twinBar.totalCutDemands > 0;
-  const visibleBuckets = twinBar.buckets
-    .map((bucket) => ({
-      ...bucket,
-      plans: bucket.plans.filter((plan) => plan.panelsSaved > 0)
-    }))
-    .filter((bucket) => bucket.plans.length > 0);
+  const visibleBuckets = getVisibleOptimizationBuckets(summary);
   const visiblePlans = visibleBuckets.flatMap((bucket) => bucket.plans);
   const hasVisibleSavings = visiblePlans.length > 0;
   const visiblePanelsSaved = visiblePlans.reduce((sum, plan) => sum + plan.panelsSaved, 0);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LayoutModel } from "@fence-estimator/contracts";
 
-import { estimateLayout } from "../src/estimate.js";
+import { estimateDrawingLayout, estimateLayout } from "../src/index.js";
 
 describe("estimateLayout", () => {
   it("counts panels and posts on a straight twin bar run", () => {
@@ -250,5 +250,31 @@ describe("estimateLayout", () => {
     expect(bucket3000?.plans[0]?.reusedCuts).toBe(1);
     expect(bucket2000?.plans[0]?.cuts.map((cut) => cut.demand.segmentId).sort()).toEqual(["five", "two"]);
     expect(bucket3000?.plans[0]?.cuts.map((cut) => cut.demand.segmentId).sort()).toEqual(["five", "three"]);
+  });
+
+  it("removes gate spans before calculating materials", () => {
+    const layout: LayoutModel = {
+      segments: [
+        {
+          id: "gate-run",
+          start: { x: 0, y: 0 },
+          end: { x: 10000, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        }
+      ],
+      gates: [
+        {
+          id: "gate-1",
+          segmentId: "gate-run",
+          startOffsetMm: 4000,
+          endOffsetMm: 5200,
+          gateType: "SINGLE_LEAF"
+        }
+      ]
+    };
+
+    const result = estimateDrawingLayout(layout);
+    expect(result.materials.twinBarPanels).toBe(4);
+    expect(result.posts.total).toBe(6);
   });
 });

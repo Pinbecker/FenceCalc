@@ -38,10 +38,64 @@ export const layoutSegmentSchema = z.object({
   spec: fenceSpecSchema
 });
 
+export const gateTypeSchema = z.enum(["SINGLE_LEAF", "DOUBLE_LEAF", "CUSTOM"]);
+export const gatePlacementSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  startOffsetMm: z.number().finite().nonnegative(),
+  endOffsetMm: z.number().finite().positive(),
+  gateType: gateTypeSchema
+}).superRefine((gate, context) => {
+  if (gate.endOffsetMm <= gate.startOffsetMm) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Gate end offset must be greater than the start offset"
+    });
+  }
+});
+
 export const layoutModelSchema = z.object({
-  segments: z.array(layoutSegmentSchema)
+  segments: z.array(layoutSegmentSchema),
+  gates: z.array(gatePlacementSchema).default([])
 });
 
 export const estimateSnapshotRequestSchema = z.object({
   layout: layoutModelSchema
 });
+
+export const emailSchema = z.string().trim().email().max(320).transform((value) => value.toLowerCase());
+export const passwordSchema = z.string().min(10).max(128);
+export const companyNameSchema = z.string().trim().min(2).max(120);
+export const displayNameSchema = z.string().trim().min(2).max(120);
+export const drawingNameSchema = z.string().trim().min(1).max(160);
+
+export const registerRequestSchema = z.object({
+  companyName: companyNameSchema,
+  displayName: displayNameSchema,
+  email: emailSchema,
+  password: passwordSchema
+});
+
+export const loginRequestSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema
+});
+
+export const drawingCreateRequestSchema = z.object({
+  name: drawingNameSchema,
+  layout: layoutModelSchema
+});
+
+export const drawingUpdateRequestSchema = z
+  .object({
+    name: drawingNameSchema.optional(),
+    layout: layoutModelSchema.optional()
+  })
+  .superRefine((value, context) => {
+    if (value.name === undefined && value.layout === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one drawing field must be provided"
+      });
+    }
+  });

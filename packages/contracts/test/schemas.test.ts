@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { estimateSnapshotRequestSchema, fenceSpecSchema, layoutModelSchema } from "../src/schemas.js";
+import {
+  drawingCreateRequestSchema,
+  drawingUpdateRequestSchema,
+  estimateSnapshotRequestSchema,
+  fenceSpecSchema,
+  layoutModelSchema,
+  loginRequestSchema,
+  registerRequestSchema
+} from "../src/schemas.js";
 
 describe("contracts schemas", () => {
   it("rejects roll-form fence heights that are not supported by the system", () => {
@@ -41,5 +49,42 @@ describe("contracts schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("normalizes emails for auth payloads", () => {
+    const result = loginRequestSchema.parse({
+      email: "Jane@Example.com",
+      password: "supersecure123"
+    });
+
+    expect(result.email).toBe("jane@example.com");
+  });
+
+  it("requires company registration details", () => {
+    const result = registerRequestSchema.safeParse({
+      companyName: "A",
+      displayName: "JD",
+      email: "bad",
+      password: "short"
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty drawing updates", () => {
+    const result = drawingUpdateRequestSchema.safeParse({});
+
+    expect(result.success).toBe(false);
+  });
+
+  it("defaults missing gate lists on drawing payloads", () => {
+    const result = drawingCreateRequestSchema.parse({
+      name: "Main yard",
+      layout: {
+        segments: []
+      }
+    });
+
+    expect(result.layout.gates).toEqual([]);
   });
 });

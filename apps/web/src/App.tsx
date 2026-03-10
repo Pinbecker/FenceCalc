@@ -8,6 +8,9 @@ import {
   TWIN_BAR_HEIGHT_KEYS,
   type FenceHeightKey,
   type FenceSpec,
+  type GatePlacement,
+  type GateType,
+  type LayoutModel,
   type LayoutSegment,
   type PointMm,
   type TwinBarVariant
@@ -15,7 +18,18 @@ import {
 import { areOpposite, snapPointToAngle, distanceMm } from "@fence-estimator/geometry";
 import { estimateLayout, getSpecConfig } from "@fence-estimator/rules-engine";
 
+import {
+  formatDistanceLabel,
+  formatHeightLabelFromMm,
+  formatLengthMm,
+  formatMetersInputFromMm,
+  formatPointMeters
+} from "./formatters";
 import { OptimizationPlanner } from "./OptimizationPlanner";
+import { WorkspacePanel } from "./WorkspacePanel";
+import { getVisibleOptimizationPlans } from "./optimizationDisplay";
+import { buildOptimizationPlanVisual } from "./optimizationVisual";
+import { useWorkspacePersistence } from "./useWorkspacePersistence";
 
 interface Viewport {
   x: number;
@@ -84,8 +98,6 @@ type HistoryAction =
 
 type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
 type RecessSide = "LEFT" | "RIGHT";
-type GateType = "SINGLE_LEAF" | "DOUBLE_LEAF" | "CUSTOM";
-
 interface RecessInsertionPreview {
   segment: LayoutSegment;
   segmentLengthMm: number;
@@ -124,14 +136,6 @@ interface GateInsertionPreview {
   tangent: { x: number; y: number };
   normal: { x: number; y: number };
   targetPoint: PointMm;
-}
-
-interface GatePlacement {
-  id: string;
-  segmentId: string;
-  startOffsetMm: number;
-  endOffsetMm: number;
-  gateType: GateType;
 }
 
 interface ResolvedGatePlacement extends GateVisual {
@@ -292,14 +296,6 @@ function getSegmentColor(spec: FenceSpec): string {
   }
 }
 
-function formatLengthMm(lengthMm: number): string {
-  return `${(lengthMm / 1000).toFixed(2)}m`;
-}
-
-function formatMetersInputFromMm(mm: number): string {
-  return (mm / 1000).toFixed(2);
-}
-
 function parseMetersInputToMm(value: string): number | null {
   const parsedMeters = Number(value);
   if (!Number.isFinite(parsedMeters)) {
@@ -310,21 +306,6 @@ function parseMetersInputToMm(value: string): number | null {
     return null;
   }
   return parsedMm;
-}
-
-function formatPointMeters(point: PointMm): string {
-  return `${(point.x / 1000).toFixed(2)}m, ${(point.y / 1000).toFixed(2)}m`;
-}
-
-function formatHeightLabelFromMm(heightMm: number): string {
-  return `${(heightMm / 1000).toFixed(heightMm % 1000 === 0 ? 0 : 1)}m`;
-}
-
-function formatDistanceLabel(lengthMm: number): string {
-  if (lengthMm >= 1000000) {
-    return `${(lengthMm / 1000000).toFixed(1)}km`;
-  }
-  return `${(lengthMm / 1000).toFixed(lengthMm >= 10000 ? 0 : 1)}m`;
 }
 
 function sameSpec(left: FenceSpec, right: FenceSpec): boolean {
@@ -1714,7 +1695,6 @@ export function App() {
   const [panAnchor, setPanAnchor] = useState<{ x: number; y: number } | null>(null);
   const [activeSegmentDrag, setActiveSegmentDrag] = useState<{ segmentId: string; lastPointer: PointMm } | null>(null);
   const [activeGateDrag, setActiveGateDrag] = useState<{ gateId: string; lastPointer: PointMm } | null>(null);
-  const [snapshotStatus, setSnapshotStatus] = useState<string>("");
   const [isLengthEditorOpen, setIsLengthEditorOpen] = useState(false);
   const [selectedLengthInputM, setSelectedLengthInputM] = useState<string>("");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -1735,10 +1715,33 @@ export function App() {
   const initialScaleApplied = useRef(false);
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  const currentLayout = useMemo<LayoutModel>(
+    () => ({
+      segments,
+      gates: gatePlacements
+    }),
+    [gatePlacements, segments],
+  );
 
   const applySegments = useCallback((updater: (previous: LayoutSegment[]) => LayoutSegment[]) => {
     dispatchHistory({ type: "APPLY", updater });
   }, []);
+
+  const loadWorkspaceLayout = useCallback((layout: LayoutModel) => {
+    dispatchHistory({ type: "SET", segments: layout.segments });
+    setGatePlacements(layout.gates ?? []);
+    setDrawStart(null);
+    setRectangleStart(null);
+    setSelectedSegmentId(null);
+    setSelectedGateId(null);
+    setSelectedPlanId(null);
+    setIsLengthEditorOpen(false);
+  }, []);
+
+  const workspace = useWorkspacePersistence({
+    layout: currentLayout,
+    onLoadLayout: loadWorkspaceLayout
+  });
 
   const undoSegments = useCallback(() => {
     dispatchHistory({ type: "UNDO" });
@@ -2331,14 +2334,9 @@ export function App() {
     [estimate.materials.twinBarPanelsByFenceHeight],
   );
   const optimizationSummary = estimate.optimization;
-  const optimizationBuckets = optimizationSummary.twinBar.buckets;
-  const optimizationPlans = useMemo(
-    () => optimizationBuckets.flatMap((bucket) => bucket.plans),
-    [optimizationBuckets],
-  );
   const highlightableOptimizationPlans = useMemo(
-    () => optimizationPlans.filter((plan) => plan.panelsSaved > 0),
-    [optimizationPlans],
+    () => getVisibleOptimizationPlans(optimizationSummary),
+    [optimizationSummary],
   );
   const selectedSegment = useMemo(() => {
     if (!selectedSegmentId) {
@@ -2378,40 +2376,7 @@ export function App() {
     return highlightableOptimizationPlans.find((plan) => plan.id === selectedPlanId) ?? null;
   }, [highlightableOptimizationPlans, selectedPlanId]);
   const selectedPlanVisual = useMemo(() => {
-    if (!selectedPlan) {
-      return null;
-    }
-    const cuts = selectedPlan.cuts
-      .map((cut) => {
-        const segment = estimateSegmentsById.get(cut.demand.segmentId);
-        if (!segment) {
-          return null;
-        }
-        const start = interpolateAlongSegment(segment, cut.demand.startOffsetMm);
-        const end = interpolateAlongSegment(segment, cut.demand.endOffsetMm);
-        return {
-          cut,
-          start,
-          end,
-          center: {
-            x: (start.x + end.x) / 2,
-            y: (start.y + end.y) / 2
-          }
-        };
-      })
-      .filter((entry) => entry !== null);
-
-    if (cuts.length === 0) {
-      return null;
-    }
-    return {
-      plan: selectedPlan,
-      cuts,
-      links: cuts.slice(1).map((cut, index) => ({
-        start: cuts[index]?.center ?? cut.center,
-        end: cut.center
-      }))
-    };
+    return buildOptimizationPlanVisual(selectedPlan, estimateSegmentsById, interpolateAlongSegment);
   }, [estimateSegmentsById, selectedPlan]);
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / view.scale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / view.scale);
@@ -3417,39 +3382,62 @@ export function App() {
     setRectangleStart(null);
   }
 
-  async function createSnapshot(): Promise<void> {
-    try {
-      setSnapshotStatus("Saving snapshot...");
-      const response = await fetch("http://localhost:3001/api/v1/snapshots", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          layout: {
-            segments
-          }
-        })
-      });
-      if (!response.ok) {
-        setSnapshotStatus(`Snapshot failed (${response.status})`);
-        return;
-      }
-      const body = (await response.json()) as { id: string };
-      setSnapshotStatus(`Snapshot saved: ${body.id}`);
-    } catch (error) {
-      setSnapshotStatus(`Snapshot failed: ${(error as Error).message}`);
-    }
-  }
-
   function openOptimizationInspector(): void {
     setIsOptimizationInspectorOpen(true);
+  }
+
+  function resetWorkspaceCanvas(): void {
+    dispatchHistory({ type: "SET", segments: [] });
+    setGatePlacements([]);
+    setDrawStart(null);
+    setRectangleStart(null);
+    setSelectedSegmentId(null);
+    setSelectedGateId(null);
+    setSelectedPlanId(null);
+    setIsLengthEditorOpen(false);
+  }
+
+  function handleStartNewDraft(): void {
+    if (workspace.isDirty && !window.confirm("Discard unsaved changes and start a new draft?")) {
+      return;
+    }
+    resetWorkspaceCanvas();
+    workspace.startNewDraft();
+  }
+
+  async function handleLoadDrawing(drawingId: string): Promise<void> {
+    if (workspace.isDirty && !window.confirm("Discard unsaved changes and load the selected drawing?")) {
+      return;
+    }
+    await workspace.loadDrawing(drawingId);
   }
 
   return (
     <div className="app-shell">
       <aside className="left-panel">
         <div className="left-panel-stack">
+          <WorkspacePanel
+            session={workspace.session}
+            drawings={workspace.drawings}
+            currentDrawingId={workspace.currentDrawingId}
+            currentDrawingName={workspace.currentDrawingName}
+            isDirty={workspace.isDirty}
+            isRestoringSession={workspace.isRestoringSession}
+            isAuthenticating={workspace.isAuthenticating}
+            isLoadingDrawings={workspace.isLoadingDrawings}
+            isSavingDrawing={workspace.isSavingDrawing}
+            errorMessage={workspace.errorMessage}
+            noticeMessage={workspace.noticeMessage}
+            onSetCurrentDrawingName={workspace.setCurrentDrawingName}
+            onRegister={workspace.register}
+            onLogin={workspace.login}
+            onLogout={workspace.logout}
+            onRefreshDrawings={workspace.refreshDrawings}
+            onLoadDrawing={handleLoadDrawing}
+            onSaveDrawing={workspace.saveDrawing}
+            onSaveDrawingAsNew={workspace.saveDrawingAsNew}
+            onStartNewDraft={handleStartNewDraft}
+          />
           <section className="panel-block panel-interaction">
             <h2>Interaction</h2>
             <div className="mode-toggle-row mode-toggle-row-5" role="tablist" aria-label="Interaction mode">
@@ -3939,19 +3927,7 @@ export function App() {
             >
               C
             </button>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => {
-                void createSnapshot();
-              }}
-              disabled={segments.length === 0}
-              title="Save Snapshot To API"
-            >
-              S
-            </button>
           </div>
-          {snapshotStatus ? <p className="snapshot-status">{snapshotStatus}</p> : null}
         </section>
 
       </aside>
