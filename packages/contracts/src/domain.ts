@@ -58,20 +58,6 @@ export interface MaterialSummary {
   rollsByFenceHeight: Record<string, { roll2100: number; roll900: number; total: number }>;
 }
 
-export interface TwinBarOptimizationEntry {
-  variant: TwinBarVariant;
-  stockPanelHeightMm: number;
-  fullPanels: number;
-  cutPieces: number;
-  cutPiecesReused: number;
-  cutPanelsOpened: number;
-  baselinePanels: number;
-  optimizedPanels: number;
-  panelsSaved: number;
-  offcutsRemainingCount: number;
-  offcutsRemainingLengthMm: number;
-}
-
 export interface TwinBarCutSection {
   segmentId: string;
   startOffsetMm: number;
@@ -79,41 +65,65 @@ export interface TwinBarCutSection {
   lengthMm: number;
 }
 
-export interface TwinBarOffcutTransfer {
+export interface TwinBarOptimizationCut {
   id: string;
-  variant: TwinBarVariant;
-  stockPanelHeightMm: number;
-  sourceOffcutId: string;
-  sourceReuseStep: number;
-  source: TwinBarCutSection;
-  destination: TwinBarCutSection;
-  sourceOffcutLengthMm: number;
-  sourceOffcutConsumedMm: number;
-  sourceOffcutRemainingMm: number;
-  candidateSourceCount: number;
+  step: number;
+  mode: "OPEN_STOCK_PANEL" | "REUSE_OFFCUT";
+  demand: TwinBarCutSection;
+  lengthMm: number;
+  effectiveLengthMm: number;
+  offcutBeforeMm: number;
+  offcutAfterMm: number;
 }
 
-export interface TwinBarCutDemandDecision {
+export interface TwinBarOptimizationPlan {
   id: string;
   variant: TwinBarVariant;
   stockPanelHeightMm: number;
-  demand: TwinBarCutSection;
-  requiredLengthWithAllowanceMm: number;
-  candidateSourceCount: number;
-  selectedTransferId: string | null;
-  status: "REUSED_OFFCUT" | "OPEN_NEW_PANEL";
+  stockPanelWidthMm: number;
+  cuts: TwinBarOptimizationCut[];
+  consumedMm: number;
+  leftoverMm: number;
+  reusableLeftoverMm: number;
+  reusedCuts: number;
+  panelsSaved: number;
+}
+
+export interface TwinBarOptimizationBucket {
+  variant: TwinBarVariant;
+  stockPanelHeightMm: number;
+  solver: "EXACT_SEARCH" | "BEST_FIT_DECREASING";
+  fullPanels: number;
+  cutDemands: number;
+  stockPanelsOpened: number;
+  reusedCuts: number;
+  baselinePanels: number;
+  optimizedPanels: number;
+  panelsSaved: number;
+  totalConsumedMm: number;
+  totalLeftoverMm: number;
+  reusableLeftoverMm: number;
+  utilizationRate: number;
+  plans: TwinBarOptimizationPlan[];
 }
 
 export interface OptimizationSummary {
-  strategy: "GREEDY_LARGEST_OFFCUT";
+  strategy: "CHAINED_CUT_PLANNER";
   twinBar: {
     reuseAllowanceMm: number;
+    stockPanelWidthMm: number;
+    fixedFullPanels: number;
     baselinePanels: number;
     optimizedPanels: number;
     panelsSaved: number;
-    entries: TwinBarOptimizationEntry[];
-    transfers: TwinBarOffcutTransfer[];
-    demands: TwinBarCutDemandDecision[];
+    totalCutDemands: number;
+    stockPanelsOpened: number;
+    reusedCuts: number;
+    totalConsumedMm: number;
+    totalLeftoverMm: number;
+    reusableLeftoverMm: number;
+    utilizationRate: number;
+    buckets: TwinBarOptimizationBucket[];
   };
 }
 

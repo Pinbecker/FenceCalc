@@ -1,10 +1,10 @@
 import type {
   LayoutModel,
-  TwinBarCutDemandDecision,
   OptimizationSummary,
   TwinBarCutSection,
-  TwinBarOffcutTransfer,
-  TwinBarOptimizationEntry,
+  TwinBarOptimizationBucket,
+  TwinBarOptimizationCut,
+  TwinBarOptimizationPlan,
   TwinBarVariant
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
@@ -18,44 +18,297 @@ interface TwinBarDemandBucket {
   cutDemands: TwinBarCutSection[];
 }
 
-interface OffcutPiece {
+interface DemandRecord {
   id: string;
-  availableMm: number;
-  sourceCut: TwinBarCutSection;
-  reuseStep: number;
+  section: TwinBarCutSection;
+  effectiveLengthMm: number;
 }
+
+interface PackedBin {
+  itemIds: string[];
+  usedMm: number;
+}
+
+interface PackedPlanSet {
+  solver: TwinBarOptimizationBucket["solver"];
+  bins: PackedBin[];
+}
+
+const OFFCUT_REUSE_ALLOWANCE_MM = 200;
+const EXACT_SEARCH_LIMIT = 20;
 
 function demandBucketKey(variant: TwinBarVariant, stockPanelHeightMm: number): string {
   return `${variant}:${stockPanelHeightMm}`;
 }
 
-const OFFCUT_REUSE_ALLOWANCE_MM = 200;
+function compareSections(left: TwinBarCutSection, right: TwinBarCutSection): number {
+  if (left.lengthMm !== right.lengthMm) {
+    return right.lengthMm - left.lengthMm;
+  }
+  if (left.segmentId !== right.segmentId) {
+    return left.segmentId.localeCompare(right.segmentId);
+  }
+  if (left.startOffsetMm !== right.startOffsetMm) {
+    return left.startOffsetMm - right.startOffsetMm;
+  }
+  return left.endOffsetMm - right.endOffsetMm;
+}
 
-function takeLargestFit(offcuts: OffcutPiece[], requiredMm: number): { piece: OffcutPiece | null; candidateCount: number } {
+function compareRemaindersDescending(left: PackedBin[], right: PackedBin[], capacityMm: number): number {
+  const leftRemainders = left.map((bin) => capacityMm - bin.usedMm).sort((a, b) => b - a);
+  const rightRemainders = right.map((bin) => capacityMm - bin.usedMm).sort((a, b) => b - a);
+  const longest = Math.max(leftRemainders.length, rightRemainders.length);
+
+  for (let index = 0; index < longest; index += 1) {
+    const leftValue = leftRemainders[index] ?? Number.NEGATIVE_INFINITY;
+    const rightValue = rightRemainders[index] ?? Number.NEGATIVE_INFINITY;
+    if (leftValue !== rightValue) {
+      return leftValue - rightValue;
+    }
+  }
+
+  return 0;
+}
+
+function cloneBins(bins: PackedBin[]): PackedBin[] {
+  return bins.map((bin) => ({
+    itemIds: [...bin.itemIds],
+    usedMm: bin.usedMm
+  }));
+}
+
+function placeBestFit(bins: PackedBin[], item: DemandRecord, capacityMm: number): boolean {
   let bestIndex = -1;
-  let bestLength = Number.NEGATIVE_INFINITY;
-  let candidateCount = 0;
+  let bestRemaining = Number.POSITIVE_INFINITY;
 
-  for (let index = 0; index < offcuts.length; index += 1) {
-    const candidate = offcuts[index];
-    if (!candidate) {
+  for (let index = 0; index < bins.length; index += 1) {
+    const bin = bins[index];
+    if (!bin) {
       continue;
     }
-    if (candidate.availableMm < requiredMm) {
+    const nextUsed = bin.usedMm + item.effectiveLengthMm;
+    if (nextUsed > capacityMm) {
       continue;
     }
-    candidateCount += 1;
-    if (candidate.availableMm > bestLength) {
-      bestLength = candidate.availableMm;
+    const remaining = capacityMm - nextUsed;
+    if (remaining < bestRemaining) {
+      bestRemaining = remaining;
       bestIndex = index;
     }
   }
 
   if (bestIndex < 0) {
-    return { piece: null, candidateCount };
+    return false;
   }
-  const [selected] = offcuts.splice(bestIndex, 1);
-  return { piece: selected ?? null, candidateCount };
+
+  const target = bins[bestIndex];
+  if (!target) {
+    return false;
+  }
+  target.itemIds.push(item.id);
+  target.usedMm += item.effectiveLengthMm;
+  return true;
+}
+
+function packBestFitDecreasing(items: DemandRecord[], capacityMm: number): PackedBin[] {
+  const bins: PackedBin[] = [];
+
+  for (const item of items) {
+    if (!placeBestFit(bins, item, capacityMm)) {
+      bins.push({
+        itemIds: [item.id],
+        usedMm: item.effectiveLengthMm
+      });
+    }
+  }
+
+  return bins;
+}
+
+function attemptCollapseBins(itemsById: Map<string, DemandRecord>, bins: PackedBin[], capacityMm: number): PackedBin[] {
+  const collapsed = cloneBins(bins);
+
+  for (let index = 0; index < collapsed.length; index += 1) {
+    const candidate = collapsed[index];
+    if (!candidate || collapsed.length <= 1) {
+      continue;
+    }
+
+    const remainingBins = collapsed.filter((_, currentIndex) => currentIndex !== index).map((bin) => ({
+      itemIds: [...bin.itemIds],
+      usedMm: bin.usedMm
+    }));
+    const items = candidate.itemIds
+      .map((itemId) => itemsById.get(itemId))
+      .filter((item): item is DemandRecord => item !== undefined)
+      .sort((left, right) => right.effectiveLengthMm - left.effectiveLengthMm);
+
+    let fits = true;
+    for (const item of items) {
+      if (!placeBestFit(remainingBins, item, capacityMm)) {
+        fits = false;
+        break;
+      }
+    }
+
+    if (!fits) {
+      continue;
+    }
+
+    remainingBins.sort((left, right) => right.usedMm - left.usedMm);
+    return attemptCollapseBins(itemsById, remainingBins, capacityMm);
+  }
+
+  collapsed.sort((left, right) => right.usedMm - left.usedMm);
+  return collapsed;
+}
+
+function packExactly(items: DemandRecord[], capacityMm: number): PackedBin[] {
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+  const suffixSums = new Array<number>(items.length + 1).fill(0);
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    suffixSums[index] = (suffixSums[index + 1] ?? 0) + (items[index]?.effectiveLengthMm ?? 0);
+  }
+
+  let best = attemptCollapseBins(itemsById, packBestFitDecreasing(items, capacityMm), capacityMm);
+
+  function search(index: number, bins: PackedBin[]): void {
+    if (bins.length > best.length) {
+      return;
+    }
+
+    const freeCapacityMm = bins.reduce((sum, bin) => sum + (capacityMm - bin.usedMm), 0);
+    const remainingDemandMm = suffixSums[index] ?? 0;
+    const deficitMm = Math.max(0, remainingDemandMm - freeCapacityMm);
+    const lowerBound = bins.length + Math.ceil(deficitMm / capacityMm);
+    if (lowerBound > best.length) {
+      return;
+    }
+
+    if (index >= items.length) {
+      if (
+        bins.length < best.length ||
+        (bins.length === best.length && compareRemaindersDescending(bins, best, capacityMm) > 0)
+      ) {
+        best = cloneBins(bins);
+      }
+      return;
+    }
+
+    const item = items[index];
+    if (!item) {
+      return;
+    }
+
+    const candidateBins = bins
+      .map((bin, binIndex) => ({
+        binIndex,
+        remainingMm: capacityMm - (bin.usedMm + item.effectiveLengthMm)
+      }))
+      .filter((candidate) => candidate.remainingMm >= 0)
+      .sort((left, right) => left.remainingMm - right.remainingMm);
+
+    const seenRemaining = new Set<number>();
+    for (const candidate of candidateBins) {
+      if (seenRemaining.has(candidate.remainingMm)) {
+        continue;
+      }
+      seenRemaining.add(candidate.remainingMm);
+      const nextBins = cloneBins(bins);
+      const target = nextBins[candidate.binIndex];
+      if (!target) {
+        continue;
+      }
+      target.itemIds.push(item.id);
+      target.usedMm += item.effectiveLengthMm;
+      search(index + 1, nextBins);
+    }
+
+    if (bins.length + 1 > best.length) {
+      return;
+    }
+
+    const nextBins = cloneBins(bins);
+    nextBins.push({
+      itemIds: [item.id],
+      usedMm: item.effectiveLengthMm
+    });
+    search(index + 1, nextBins);
+  }
+
+  search(0, []);
+  best.sort((left, right) => right.usedMm - left.usedMm);
+  return best;
+}
+
+function packDemands(items: DemandRecord[], capacityMm: number): PackedPlanSet {
+  const sorted = [...items].sort((left, right) => {
+    if (left.effectiveLengthMm !== right.effectiveLengthMm) {
+      return right.effectiveLengthMm - left.effectiveLengthMm;
+    }
+    return compareSections(left.section, right.section);
+  });
+
+  const itemsById = new Map(sorted.map((item) => [item.id, item]));
+  const heuristic = attemptCollapseBins(itemsById, packBestFitDecreasing(sorted, capacityMm), capacityMm);
+
+  if (sorted.length > EXACT_SEARCH_LIMIT) {
+    return {
+      solver: "BEST_FIT_DECREASING",
+      bins: heuristic
+    };
+  }
+
+  return {
+    solver: "EXACT_SEARCH",
+    bins: packExactly(sorted, capacityMm)
+  };
+}
+
+function buildPlan(
+  bucket: TwinBarDemandBucket,
+  itemIds: string[],
+  demandById: Map<string, DemandRecord>,
+  planId: string,
+): TwinBarOptimizationPlan {
+  const items = itemIds
+    .map((itemId) => demandById.get(itemId))
+    .filter((item): item is DemandRecord => item !== undefined)
+    .sort((left, right) => compareSections(left.section, right.section));
+
+  let offcutMm = TWIN_BAR_PANEL_WIDTH_MM;
+  const cuts: TwinBarOptimizationCut[] = items.map((item, index) => {
+    const consumedMm = index === 0 ? item.section.lengthMm : item.effectiveLengthMm;
+    const cut: TwinBarOptimizationCut = {
+      id: `${planId}-cut-${index + 1}`,
+      step: index + 1,
+      mode: index === 0 ? "OPEN_STOCK_PANEL" : "REUSE_OFFCUT",
+      demand: item.section,
+      lengthMm: item.section.lengthMm,
+      effectiveLengthMm: item.effectiveLengthMm,
+      offcutBeforeMm: offcutMm,
+      offcutAfterMm: offcutMm - consumedMm
+    };
+    offcutMm = cut.offcutAfterMm;
+    return cut;
+  });
+
+  const reusedCuts = Math.max(0, cuts.length - 1);
+  const leftoverMm = Math.max(0, offcutMm);
+  const consumedMm = TWIN_BAR_PANEL_WIDTH_MM - leftoverMm;
+
+  return {
+    id: planId,
+    variant: bucket.variant,
+    stockPanelHeightMm: bucket.stockPanelHeightMm,
+    stockPanelWidthMm: TWIN_BAR_PANEL_WIDTH_MM,
+    cuts,
+    consumedMm,
+    leftoverMm,
+    reusableLeftoverMm: leftoverMm > OFFCUT_REUSE_ALLOWANCE_MM ? leftoverMm : 0,
+    reusedCuts,
+    panelsSaved: reusedCuts
+  };
 }
 
 export function buildOptimizationSummary(layout: LayoutModel): OptimizationSummary {
@@ -96,127 +349,97 @@ export function buildOptimizationSummary(layout: LayoutModel): OptimizationSumma
     }
   }
 
-  const entries: TwinBarOptimizationEntry[] = [];
-  const transfers: TwinBarOffcutTransfer[] = [];
-  const demands: TwinBarCutDemandDecision[] = [];
-  let transferId = 0;
-  let demandDecisionId = 0;
-  let offcutId = 0;
+  const capacityMm = TWIN_BAR_PANEL_WIDTH_MM + OFFCUT_REUSE_ALLOWANCE_MM;
+  const optimizationBuckets: TwinBarOptimizationBucket[] = [];
+  let fixedFullPanels = 0;
+  let totalCutDemands = 0;
+  let stockPanelsOpened = 0;
+  let reusedCuts = 0;
+  let totalConsumedMm = 0;
+  let totalLeftoverMm = 0;
+  let reusableLeftoverMm = 0;
 
   for (const bucket of buckets.values()) {
-    const offcuts: OffcutPiece[] = [];
-    const cutDemands = [...bucket.cutDemands].sort((a, b) => a.lengthMm - b.lengthMm);
-
-    let cutPiecesReused = 0;
-    let cutPanelsOpened = 0;
-
-    for (const demand of cutDemands) {
-      const requiredWithAllowanceMm = demand.lengthMm + OFFCUT_REUSE_ALLOWANCE_MM;
-      const { piece: reusedPiece, candidateCount } = takeLargestFit(offcuts, requiredWithAllowanceMm);
-      const decisionId = `demand-${demandDecisionId}`;
-      demandDecisionId += 1;
-
-      if (reusedPiece !== null) {
-        cutPiecesReused += 1;
-        const remaining = Math.max(0, reusedPiece.availableMm - requiredWithAllowanceMm);
-        const transferKey = `transfer-${transferId}`;
-
-        transfers.push({
-          id: transferKey,
-          variant: bucket.variant,
-          stockPanelHeightMm: bucket.stockPanelHeightMm,
-          sourceOffcutId: reusedPiece.id,
-          sourceReuseStep: reusedPiece.reuseStep + 1,
-          source: reusedPiece.sourceCut,
-          destination: demand,
-          sourceOffcutLengthMm: reusedPiece.availableMm,
-          sourceOffcutConsumedMm: requiredWithAllowanceMm,
-          sourceOffcutRemainingMm: remaining,
-          candidateSourceCount: candidateCount
-        });
-        if (remaining > OFFCUT_REUSE_ALLOWANCE_MM) {
-          offcuts.push({
-            id: reusedPiece.id,
-            availableMm: remaining,
-            sourceCut: reusedPiece.sourceCut,
-            reuseStep: reusedPiece.reuseStep + 1
-          });
-        }
-        demands.push({
-          id: decisionId,
-          variant: bucket.variant,
-          stockPanelHeightMm: bucket.stockPanelHeightMm,
-          demand,
-          requiredLengthWithAllowanceMm: requiredWithAllowanceMm,
-          candidateSourceCount: candidateCount,
-          selectedTransferId: transferKey,
-          status: "REUSED_OFFCUT"
-        });
-        transferId += 1;
-        continue;
-      }
-
-      cutPanelsOpened += 1;
-      const remaining = TWIN_BAR_PANEL_WIDTH_MM - demand.lengthMm;
-      if (remaining > OFFCUT_REUSE_ALLOWANCE_MM) {
-        offcuts.push({
-          id: `offcut-${offcutId}`,
-          availableMm: remaining,
-          sourceCut: demand,
-          reuseStep: 0
-        });
-        offcutId += 1;
-      }
-      demands.push({
-        id: decisionId,
-        variant: bucket.variant,
-        stockPanelHeightMm: bucket.stockPanelHeightMm,
-        demand,
-        requiredLengthWithAllowanceMm: requiredWithAllowanceMm,
-        candidateSourceCount: candidateCount,
-        selectedTransferId: null,
-        status: "OPEN_NEW_PANEL"
-      });
+    fixedFullPanels += bucket.fullPanels;
+    if (bucket.cutDemands.length === 0) {
+      continue;
     }
 
-    const baselinePanels = bucket.fullPanels + cutDemands.length;
-    const optimizedPanels = bucket.fullPanels + cutPanelsOpened;
+    const demandRecords = bucket.cutDemands.map((section, index) => ({
+      id: `${bucket.variant}-${bucket.stockPanelHeightMm}-demand-${index}`,
+      section,
+      effectiveLengthMm: section.lengthMm + OFFCUT_REUSE_ALLOWANCE_MM
+    }));
+    const demandById = new Map(demandRecords.map((record) => [record.id, record]));
+    const packed = packDemands(demandRecords, capacityMm);
+    const plans = packed.bins
+      .map((bin, index) => buildPlan(bucket, bin.itemIds, demandById, `${bucket.variant}-${bucket.stockPanelHeightMm}-plan-${index + 1}`))
+      .sort((left, right) => {
+        if (left.panelsSaved !== right.panelsSaved) {
+          return right.panelsSaved - left.panelsSaved;
+        }
+        if (left.leftoverMm !== right.leftoverMm) {
+          return right.leftoverMm - left.leftoverMm;
+        }
+        return left.id.localeCompare(right.id);
+      });
 
-    entries.push({
+    const bucketReusedCuts = plans.reduce((sum, plan) => sum + plan.reusedCuts, 0);
+    const bucketConsumedMm = plans.reduce((sum, plan) => sum + plan.consumedMm, 0);
+    const bucketLeftoverMm = plans.reduce((sum, plan) => sum + plan.leftoverMm, 0);
+    const bucketReusableLeftoverMm = plans.reduce((sum, plan) => sum + plan.reusableLeftoverMm, 0);
+    const stockPanelsForCuts = plans.length;
+
+    optimizationBuckets.push({
       variant: bucket.variant,
       stockPanelHeightMm: bucket.stockPanelHeightMm,
+      solver: packed.solver,
       fullPanels: bucket.fullPanels,
-      cutPieces: cutDemands.length,
-      cutPiecesReused,
-      cutPanelsOpened,
-      baselinePanels,
-      optimizedPanels,
-      panelsSaved: baselinePanels - optimizedPanels,
-      offcutsRemainingCount: offcuts.length,
-      offcutsRemainingLengthMm: offcuts.reduce((sum, value) => sum + value.availableMm, 0)
+      cutDemands: bucket.cutDemands.length,
+      stockPanelsOpened: stockPanelsForCuts,
+      reusedCuts: bucketReusedCuts,
+      baselinePanels: bucket.fullPanels + bucket.cutDemands.length,
+      optimizedPanels: bucket.fullPanels + stockPanelsForCuts,
+      panelsSaved: bucket.cutDemands.length - stockPanelsForCuts,
+      totalConsumedMm: bucketConsumedMm,
+      totalLeftoverMm: bucketLeftoverMm,
+      reusableLeftoverMm: bucketReusableLeftoverMm,
+      utilizationRate: stockPanelsForCuts > 0 ? bucketConsumedMm / (stockPanelsForCuts * TWIN_BAR_PANEL_WIDTH_MM) : 0,
+      plans
     });
+
+    totalCutDemands += bucket.cutDemands.length;
+    stockPanelsOpened += stockPanelsForCuts;
+    reusedCuts += bucketReusedCuts;
+    totalConsumedMm += bucketConsumedMm;
+    totalLeftoverMm += bucketLeftoverMm;
+    reusableLeftoverMm += bucketReusableLeftoverMm;
   }
 
-  entries.sort((left, right) => {
+  optimizationBuckets.sort((left, right) => {
     if (left.variant !== right.variant) {
       return left.variant.localeCompare(right.variant);
     }
     return left.stockPanelHeightMm - right.stockPanelHeightMm;
   });
 
-  const baselinePanels = entries.reduce((sum, entry) => sum + entry.baselinePanels, 0);
-  const optimizedPanels = entries.reduce((sum, entry) => sum + entry.optimizedPanels, 0);
-
   return {
-    strategy: "GREEDY_LARGEST_OFFCUT",
+    strategy: "CHAINED_CUT_PLANNER",
     twinBar: {
       reuseAllowanceMm: OFFCUT_REUSE_ALLOWANCE_MM,
-      baselinePanels,
-      optimizedPanels,
-      panelsSaved: baselinePanels - optimizedPanels,
-      entries,
-      transfers,
-      demands
+      stockPanelWidthMm: TWIN_BAR_PANEL_WIDTH_MM,
+      fixedFullPanels,
+      baselinePanels: fixedFullPanels + totalCutDemands,
+      optimizedPanels: fixedFullPanels + stockPanelsOpened,
+      panelsSaved: totalCutDemands - stockPanelsOpened,
+      totalCutDemands,
+      stockPanelsOpened,
+      reusedCuts,
+      totalConsumedMm,
+      totalLeftoverMm,
+      reusableLeftoverMm,
+      utilizationRate: stockPanelsOpened > 0 ? totalConsumedMm / (stockPanelsOpened * TWIN_BAR_PANEL_WIDTH_MM) : 0,
+      buckets: optimizationBuckets
     }
   };
 }

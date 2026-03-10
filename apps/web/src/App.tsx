@@ -4,18 +4,18 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import {
-  type OptimizationSummary,
   ROLL_FORM_HEIGHT_KEYS,
   TWIN_BAR_HEIGHT_KEYS,
   type FenceHeightKey,
   type FenceSpec,
   type LayoutSegment,
   type PointMm,
-  type TwinBarOffcutTransfer,
   type TwinBarVariant
 } from "@fence-estimator/contracts";
 import { areOpposite, snapPointToAngle, distanceMm } from "@fence-estimator/geometry";
-import { buildOptimizationSummary, estimateLayout, getSpecConfig } from "@fence-estimator/rules-engine";
+import { estimateLayout, getSpecConfig } from "@fence-estimator/rules-engine";
+
+import { OptimizationPlanner } from "./OptimizationPlanner";
 
 interface Viewport {
   x: number;
@@ -325,24 +325,6 @@ function formatDistanceLabel(lengthMm: number): string {
     return `${(lengthMm / 1000000).toFixed(1)}km`;
   }
   return `${(lengthMm / 1000).toFixed(lengthMm >= 10000 ? 0 : 1)}m`;
-}
-
-function formatSegmentWindow(startOffsetMm: number, endOffsetMm: number): string {
-  return `[${formatLengthMm(startOffsetMm)}-${formatLengthMm(endOffsetMm)}]`;
-}
-
-function formatTransferChoiceLabel(candidateSourceCount: number): string {
-  if (candidateSourceCount > 1) {
-    return `${candidateSourceCount} sources considered, largest offcut selected`;
-  }
-  if (candidateSourceCount === 1) {
-    return "only eligible source";
-  }
-  return "forced selection";
-}
-
-function formatVariantShortLabel(variant: TwinBarVariant): string {
-  return variant === "SUPER_REBOUND" ? "SR" : "Std";
 }
 
 function sameSpec(left: FenceSpec, right: FenceSpec): boolean {
@@ -1735,11 +1717,7 @@ export function App() {
   const [snapshotStatus, setSnapshotStatus] = useState<string>("");
   const [isLengthEditorOpen, setIsLengthEditorOpen] = useState(false);
   const [selectedLengthInputM, setSelectedLengthInputM] = useState<string>("");
-  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
-  const [optimizationRun, setOptimizationRun] = useState<{
-    layoutKey: string;
-    summary: OptimizationSummary;
-  } | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isOptimizationInspectorOpen, setIsOptimizationInspectorOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanel, PanelOffset>>({
@@ -2052,27 +2030,6 @@ export function App() {
     });
     previousSegmentsByIdRef.current = new Map(segmentsById);
   }, [segmentsById]);
-  const layoutKey = useMemo(
-    () =>
-      JSON.stringify(
-        {
-          segments: segments.map((segment) => ({
-            id: segment.id,
-            start: segment.start,
-            end: segment.end,
-            spec: segment.spec
-          })),
-          gates: resolvedGatePlacements.map((gate) => ({
-            id: gate.id,
-            segmentId: gate.segmentId,
-            startOffsetMm: gate.startOffsetMm,
-            endOffsetMm: gate.endOffsetMm,
-            leafCount: gate.leafCount
-          }))
-        },
-      ),
-    [resolvedGatePlacements, segments],
-  );
   const visualPosts = useMemo(() => {
     const postsByCoordinate = new Map<string, VisualPost>();
     const incidentNodes = new Map<string, IncidentNode>();
@@ -2373,25 +2330,16 @@ export function App() {
         .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height)),
     [estimate.materials.twinBarPanelsByFenceHeight],
   );
-  const optimizationSummary = optimizationRun?.summary ?? null;
-  const optimizationRows = useMemo(
-    () => optimizationSummary?.twinBar.entries ?? [],
-    [optimizationSummary],
+  const optimizationSummary = estimate.optimization;
+  const optimizationBuckets = optimizationSummary.twinBar.buckets;
+  const optimizationPlans = useMemo(
+    () => optimizationBuckets.flatMap((bucket) => bucket.plans),
+    [optimizationBuckets],
   );
-  const optimizationTransfers = useMemo(
-    () => optimizationSummary?.twinBar.transfers ?? [],
-    [optimizationSummary],
+  const highlightableOptimizationPlans = useMemo(
+    () => optimizationPlans.filter((plan) => plan.panelsSaved > 0),
+    [optimizationPlans],
   );
-  const optimizationDemands = useMemo(
-    () => optimizationSummary?.twinBar.demands ?? [],
-    [optimizationSummary],
-  );
-  const optimizationStats = useMemo(() => {
-    const reused = optimizationDemands.filter((decision) => decision.status === "REUSED_OFFCUT").length;
-    return {
-      reused
-    };
-  }, [optimizationDemands]);
   const selectedSegment = useMemo(() => {
     if (!selectedSegmentId) {
       return null;
@@ -2422,49 +2370,49 @@ export function App() {
       setActiveGateDrag(null);
     }
   }, [resolvedGateById, selectedGateId]);
-  const transferById = useMemo(() => {
-    const map = new Map<string, TwinBarOffcutTransfer>();
-    optimizationTransfers.forEach((transfer) => {
-      map.set(transfer.id, transfer);
-    });
-    return map;
-  }, [optimizationTransfers]);
   const scaleBar = useMemo(() => buildScaleBar(view.scale, canvasWidth), [canvasWidth, view.scale]);
-  const selectedTransfer = useMemo(() => {
-    if (!selectedTransferId) {
+  const selectedPlan = useMemo(() => {
+    if (!selectedPlanId) {
       return null;
     }
-    return transferById.get(selectedTransferId) ?? null;
-  }, [selectedTransferId, transferById]);
-  const selectedTransferVisual = useMemo(() => {
-    if (!selectedTransfer) {
+    return highlightableOptimizationPlans.find((plan) => plan.id === selectedPlanId) ?? null;
+  }, [highlightableOptimizationPlans, selectedPlanId]);
+  const selectedPlanVisual = useMemo(() => {
+    if (!selectedPlan) {
       return null;
     }
-    const sourceSegment = estimateSegmentsById.get(selectedTransfer.source.segmentId);
-    const destinationSegment = estimateSegmentsById.get(selectedTransfer.destination.segmentId);
-    if (!sourceSegment || !destinationSegment) {
+    const cuts = selectedPlan.cuts
+      .map((cut) => {
+        const segment = estimateSegmentsById.get(cut.demand.segmentId);
+        if (!segment) {
+          return null;
+        }
+        const start = interpolateAlongSegment(segment, cut.demand.startOffsetMm);
+        const end = interpolateAlongSegment(segment, cut.demand.endOffsetMm);
+        return {
+          cut,
+          start,
+          end,
+          center: {
+            x: (start.x + end.x) / 2,
+            y: (start.y + end.y) / 2
+          }
+        };
+      })
+      .filter((entry) => entry !== null);
+
+    if (cuts.length === 0) {
       return null;
     }
-    const sourceStart = interpolateAlongSegment(sourceSegment, selectedTransfer.source.startOffsetMm);
-    const sourceEnd = interpolateAlongSegment(sourceSegment, selectedTransfer.source.endOffsetMm);
-    const destinationStart = interpolateAlongSegment(destinationSegment, selectedTransfer.destination.startOffsetMm);
-    const destinationEnd = interpolateAlongSegment(destinationSegment, selectedTransfer.destination.endOffsetMm);
     return {
-      transfer: selectedTransfer,
-      sourceStart,
-      sourceEnd,
-      destinationStart,
-      destinationEnd,
-      linkStart: {
-        x: (sourceStart.x + sourceEnd.x) / 2,
-        y: (sourceStart.y + sourceEnd.y) / 2
-      },
-      linkEnd: {
-        x: (destinationStart.x + destinationEnd.x) / 2,
-        y: (destinationStart.y + destinationEnd.y) / 2
-      }
+      plan: selectedPlan,
+      cuts,
+      links: cuts.slice(1).map((cut, index) => ({
+        start: cuts[index]?.center ?? cut.center,
+        end: cut.center
+      }))
     };
-  }, [estimateSegmentsById, selectedTransfer]);
+  }, [estimateSegmentsById, selectedPlan]);
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / view.scale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / view.scale);
   const drawLineSnapDistanceMm = Math.min(900, DRAW_LINE_SNAP_PX / view.scale);
@@ -2501,26 +2449,14 @@ export function App() {
   );
 
   useEffect(() => {
-    if (optimizationTransfers.length === 0) {
-      setSelectedTransferId(null);
+    if (highlightableOptimizationPlans.length === 0) {
+      setSelectedPlanId(null);
       return;
     }
-    if (!selectedTransferId || !optimizationTransfers.some((transfer) => transfer.id === selectedTransferId)) {
-      setSelectedTransferId(optimizationTransfers[0]?.id ?? null);
+    if (!selectedPlanId || !highlightableOptimizationPlans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(highlightableOptimizationPlans[0]?.id ?? null);
     }
-  }, [optimizationTransfers, selectedTransferId]);
-
-  useEffect(() => {
-    setOptimizationRun((previous) => {
-      if (!previous) {
-        return previous;
-      }
-      if (previous.layoutKey === layoutKey) {
-        return previous;
-      }
-      return null;
-    });
-  }, [layoutKey]);
+  }, [highlightableOptimizationPlans, selectedPlanId]);
 
   const ghostSnap = useMemo(() => {
     if (!drawStart || !pointerWorld) {
@@ -3506,19 +3442,7 @@ export function App() {
     }
   }
 
-  function runOptimization(): void {
-    const summary = buildOptimizationSummary({ segments: estimateSegments });
-    setOptimizationRun({
-      layoutKey,
-      summary
-    });
-    setSelectedTransferId(summary.twinBar.transfers[0]?.id ?? null);
-  }
-
   function openOptimizationInspector(): void {
-    if (!optimizationSummary) {
-      runOptimization();
-    }
     setIsOptimizationInspectorOpen(true);
   }
 
@@ -3965,7 +3889,7 @@ export function App() {
               <li>Hold Shift to disable angle snapping.</li>
               <li>Horizontal/vertical guide lines help match terminations.</li>
               <li>Middle drag or Space + drag to pan.</li>
-              <li>Run Offcut Optimization after drawing to generate transfers.</li>
+              <li>Open Cut Planner after drawing to review stock-panel plans and reuse steps.</li>
             </ul>
           </section>
         ) : null}
@@ -4032,148 +3956,16 @@ export function App() {
 
       </aside>
 
-      {isOptimizationInspectorOpen ? (
-        <div className="optimization-modal-backdrop" onMouseDown={() => setIsOptimizationInspectorOpen(false)}>
-          <section className="panel-block optimization-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="optimization-inspector-head">
-              <div>
-                <h2>Offcut Optimization Details</h2>
-                {optimizationSummary ? (
-                  <p className="muted-line">
-                    Strategy: {optimizationSummary.strategy} | Baseline {optimizationSummary.twinBar.baselinePanels} | Optimized{" "}
-                    {optimizationSummary.twinBar.optimizedPanels}
-                  </p>
-                ) : (
-                  <p className="muted-line">Run optimization to generate detail.</p>
-                )}
-              </div>
-              <div className="optimization-inspector-actions">
-                <button type="button" className="ghost optimization-rerun" onClick={runOptimization} disabled={segments.length === 0}>
-                  Re-run
-                </button>
-                <button type="button" className="panel-close" onClick={() => setIsOptimizationInspectorOpen(false)}>
-                  x
-                </button>
-              </div>
-            </div>
-            {!optimizationSummary ? (
-              <p className="muted-line">No optimization run yet.</p>
-            ) : (
-              <>
-                <div className="optimization-metrics">
-                  <article className="optimization-metric">
-                    <span>Saved Panels</span>
-                    <strong>{optimizationSummary.twinBar.panelsSaved}</strong>
-                  </article>
-                  <article className="optimization-metric">
-                    <span>Transfers Placed</span>
-                    <strong>{optimizationStats.reused}</strong>
-                  </article>
-                  <article className="optimization-metric">
-                    <span>Reuse Allowance</span>
-                    <strong>{formatLengthMm(optimizationSummary.twinBar.reuseAllowanceMm)}</strong>
-                  </article>
-                </div>
-                {optimizationRows.length > 0 ? (
-                  <div className="optimization-row-strip">
-                    {optimizationRows.map((row) => (
-                      <div key={`${row.variant}-${row.stockPanelHeightMm}`} className="optimization-row-pill">
-                        <span>
-                          {formatVariantShortLabel(row.variant)} {formatHeightLabelFromMm(row.stockPanelHeightMm)}
-                        </span>
-                        <strong>
-                          reuse {row.cutPiecesReused}/{row.cutPieces} | save {row.panelsSaved}
-                        </strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted-line">No Twin Bar cut demands in this layout.</p>
-                )}
-                {optimizationTransfers.length === 0 ? (
-                  <p className="muted-line">No offcut transfers found for this optimization run.</p>
-                ) : (
-                  <div className="optimization-inspector-body">
-                    <div className="optimization-inspector-list">
-                      {optimizationTransfers.map((transfer) => {
-                        const destinationIndex = segmentOrdinalById.get(transfer.destination.segmentId);
-                        const sourceIndex = segmentOrdinalById.get(transfer.source.segmentId);
-                        const isSelected = transfer.id === selectedTransferId;
-                        return (
-                          <button
-                            key={transfer.id}
-                            type="button"
-                            className={`transfer-item transfer-item-compact reused${isSelected ? " active" : ""}`}
-                            onClick={() => setSelectedTransferId(transfer.id)}
-                          >
-                            <span className="transfer-item-title">
-                              Offcut {transfer.sourceOffcutId} #{sourceIndex ?? "?"} to #{destinationIndex ?? "?"}
-                            </span>
-                            <span className="transfer-item-sub">
-                              {formatSegmentWindow(transfer.source.startOffsetMm, transfer.source.endOffsetMm)} to{" "}
-                              {formatSegmentWindow(transfer.destination.startOffsetMm, transfer.destination.endOffsetMm)}
-                            </span>
-                            <span className="transfer-item-sub">
-                              {formatLengthMm(transfer.sourceOffcutConsumedMm)} used of{" "}
-                              {formatLengthMm(transfer.sourceOffcutLengthMm)} ({formatLengthMm(transfer.sourceOffcutRemainingMm)} left)
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <aside className="optimization-inspector-detail">
-                      {selectedTransfer ? (
-                        <>
-                          <h3>Selected Transfer</h3>
-                          <p className="optimization-detail-line">
-                            Source: #{segmentOrdinalById.get(selectedTransfer.source.segmentId) ?? "?"}{" "}
-                            {formatSegmentWindow(selectedTransfer.source.startOffsetMm, selectedTransfer.source.endOffsetMm)}
-                          </p>
-                          <p className="optimization-detail-line">
-                            Destination: #{segmentOrdinalById.get(selectedTransfer.destination.segmentId) ?? "?"}{" "}
-                            {formatSegmentWindow(selectedTransfer.destination.startOffsetMm, selectedTransfer.destination.endOffsetMm)}
-                          </p>
-                          <p className="optimization-detail-line">
-                            Source offcut: {formatLengthMm(selectedTransfer.sourceOffcutLengthMm)}
-                          </p>
-                          <p className="optimization-detail-line">
-                            Used: {formatLengthMm(selectedTransfer.sourceOffcutConsumedMm)} | Remaining:{" "}
-                            {formatLengthMm(selectedTransfer.sourceOffcutRemainingMm)}
-                          </p>
-                          <p className="optimization-detail-line">
-                            Selection mode: {formatTransferChoiceLabel(selectedTransfer.candidateSourceCount)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="muted-line">Select a transfer to view details.</p>
-                      )}
-                    </aside>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        </div>
-      ) : null}
-
-      <section className="optimization-mini">
-        <p className="optimization-mini-headline">
-          {optimizationSummary ? `Panels Saved: ${optimizationSummary.twinBar.panelsSaved}` : "Optimization not run"}
-        </p>
-        <div className="optimization-mini-actions">
-          <button type="button" className="optimization-dock-btn" onClick={runOptimization} disabled={segments.length === 0}>
-            {optimizationSummary ? "Re-run" : "Run"}
-          </button>
-          <button
-            type="button"
-            className="ghost optimization-mini-detail-btn"
-            onClick={openOptimizationInspector}
-            disabled={segments.length === 0}
-          >
-            Details
-          </button>
-        </div>
-      </section>
+      <OptimizationPlanner
+        summary={optimizationSummary}
+        canInspect={segments.length > 0}
+        isOpen={isOptimizationInspectorOpen}
+        selectedPlanId={selectedPlanId}
+        segmentOrdinalById={segmentOrdinalById}
+        onOpen={openOptimizationInspector}
+        onClose={() => setIsOptimizationInspectorOpen(false)}
+        onSelectPlan={setSelectedPlanId}
+      />
 
       {isLengthEditorOpen && selectedSegment ? (
         <section className="panel-block length-editor">
@@ -4521,7 +4313,7 @@ export function App() {
                       key={`${segment.id}-run-${runIndex}`}
                       points={[run.start.x, run.start.y, run.end.x, run.end.y]}
                       stroke={color}
-                      opacity={selectedTransferVisual ? 0.75 : 1}
+                      opacity={selectedPlanVisual ? 0.75 : 1}
                       strokeWidth={(isSelected ? SEGMENT_SELECTED_STROKE_PX : SEGMENT_STROKE_PX) / view.scale}
                       {...(segment.spec.system === "ROLL_FORM"
                         ? { dash: [12 / view.scale, 8 / view.scale] }
@@ -4665,7 +4457,7 @@ export function App() {
                       swingStroke: isGateSelected ? "#ffd166" : "#ffe5a6",
                       markerFill: isGateSelected ? "#ffffff" : "#fff4cf",
                       labelColor: isGateSelected ? "#fff1c4" : "#ffe29a",
-                      opacity: selectedTransferVisual ? 0.88 : 1
+                      opacity: selectedPlanVisual ? 0.88 : 1
                     },
                     `Gate ${formatLengthMm(gateVisual.widthMm)}`,
                     `gate-${gateVisual.key}`,
@@ -4848,54 +4640,43 @@ export function App() {
             ) : null}
           </Layer>
           <Layer listening={false}>
-            {selectedTransferVisual ? (
-              <Group key={`transfer-${selectedTransferVisual.transfer.id}`}>
-                <Line
-                  points={[
-                    selectedTransferVisual.sourceStart.x,
-                    selectedTransferVisual.sourceStart.y,
-                    selectedTransferVisual.sourceEnd.x,
-                    selectedTransferVisual.sourceEnd.y
-                  ]}
-                  stroke="#ffb347"
-                  strokeWidth={8 / view.scale}
-                  lineCap="round"
-                />
-                <Line
-                  points={[
-                    selectedTransferVisual.destinationStart.x,
-                    selectedTransferVisual.destinationStart.y,
-                    selectedTransferVisual.destinationEnd.x,
-                    selectedTransferVisual.destinationEnd.y
-                  ]}
-                  stroke="#17e3d0"
-                  strokeWidth={8 / view.scale}
-                  lineCap="round"
-                />
-                <Arrow
-                  points={[
-                    selectedTransferVisual.linkStart.x,
-                    selectedTransferVisual.linkStart.y,
-                    selectedTransferVisual.linkEnd.x,
-                    selectedTransferVisual.linkEnd.y
-                  ]}
-                  stroke="#ffffff"
-                  fill="#ffffff"
-                  strokeWidth={2.2 / view.scale}
-                  pointerLength={11 / view.scale}
-                  pointerWidth={11 / view.scale}
-                  dash={[8 / view.scale, 6 / view.scale]}
-                  opacity={0.95}
-                />
-                <Text
-                  x={(selectedTransferVisual.linkStart.x + selectedTransferVisual.linkEnd.x) / 2}
-                  y={(selectedTransferVisual.linkStart.y + selectedTransferVisual.linkEnd.y) / 2}
-                  text={`${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)} used`}
-                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                  fill="#f7fbff"
-                  offsetX={(8 + `${formatLengthMm(selectedTransferVisual.transfer.sourceOffcutConsumedMm)}`.length * 3.5) / view.scale}
-                  offsetY={10 / view.scale}
-                />
+            {selectedPlanVisual ? (
+              <Group key={`plan-${selectedPlanVisual.plan.id}`}>
+                {selectedPlanVisual.links.map((link, index) => (
+                  <Arrow
+                    key={`plan-link-${index + 1}`}
+                    points={[link.start.x, link.start.y, link.end.x, link.end.y]}
+                    stroke="#ffffff"
+                    fill="#ffffff"
+                    strokeWidth={2.2 / view.scale}
+                    pointerLength={11 / view.scale}
+                    pointerWidth={11 / view.scale}
+                    dash={[8 / view.scale, 6 / view.scale]}
+                    opacity={0.9}
+                  />
+                ))}
+                {selectedPlanVisual.cuts.map((entry) => (
+                  <Group key={entry.cut.id}>
+                    <Line
+                      points={[entry.start.x, entry.start.y, entry.end.x, entry.end.y]}
+                      stroke={entry.cut.mode === "OPEN_STOCK_PANEL" ? "#ffb347" : "#17e3d0"}
+                      strokeWidth={8 / view.scale}
+                      lineCap="round"
+                    />
+                    <Circle x={entry.center.x} y={entry.center.y} radius={8 / view.scale} fill="#061019" stroke="#ffffff" strokeWidth={1.6 / view.scale} />
+                    <Text
+                      x={entry.center.x}
+                      y={entry.center.y}
+                      text={String(entry.cut.step)}
+                      fontSize={LABEL_FONT_SIZE_PX / view.scale}
+                      fill="#f7fbff"
+                      align="center"
+                      verticalAlign="middle"
+                      offsetX={3.6 / view.scale}
+                      offsetY={6 / view.scale}
+                    />
+                  </Group>
+                ))}
               </Group>
             ) : null}
           </Layer>

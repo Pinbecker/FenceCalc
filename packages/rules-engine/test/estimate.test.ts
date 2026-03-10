@@ -165,10 +165,10 @@ describe("estimateLayout", () => {
 
     const result = estimateLayout(layout);
     expect(result.optimization.twinBar.panelsSaved).toBeGreaterThan(0);
-    expect(result.optimization.twinBar.entries.length).toBeGreaterThan(0);
+    expect(result.optimization.twinBar.buckets.length).toBeGreaterThan(0);
   });
 
-  it("uses a 200mm allowance and allows a large offcut to cover multiple smaller gaps", () => {
+  it("uses a 200mm allowance and builds a chained cut plan from one stock panel", () => {
     const layout: LayoutModel = {
       segments: [
         {
@@ -194,24 +194,24 @@ describe("estimateLayout", () => {
 
     const result = estimateLayout(layout);
     expect(result.optimization.twinBar.reuseAllowanceMm).toBe(200);
-    expect(result.optimization.twinBar.transfers).toHaveLength(2);
-    expect(result.optimization.twinBar.demands).toHaveLength(3);
+    expect(result.optimization.twinBar.totalCutDemands).toBe(3);
+    expect(result.optimization.twinBar.stockPanelsOpened).toBe(1);
     expect(result.optimization.twinBar.panelsSaved).toBe(2);
 
-    const firstTransfer = result.optimization.twinBar.transfers[0];
-    const secondTransfer = result.optimization.twinBar.transfers[1];
-    expect(firstTransfer?.sourceOffcutLengthMm).toBe(1925);
-    expect(firstTransfer?.sourceOffcutConsumedMm).toBe(900);
-    expect(firstTransfer?.sourceOffcutRemainingMm).toBe(1025);
-    expect(secondTransfer?.sourceOffcutId).toBe(firstTransfer?.sourceOffcutId);
-    expect(secondTransfer?.sourceOffcutLengthMm).toBe(1025);
-    expect(secondTransfer?.sourceOffcutConsumedMm).toBe(900);
-    expect(secondTransfer?.sourceOffcutRemainingMm).toBe(125);
+    const bucket = result.optimization.twinBar.buckets[0];
+    const plan = bucket?.plans[0];
 
-    const reusedCount = result.optimization.twinBar.demands.filter(
-      (decision) => decision.status === "REUSED_OFFCUT",
-    ).length;
-    expect(reusedCount).toBe(2);
+    expect(bucket?.reusedCuts).toBe(2);
+    expect(plan?.cuts).toHaveLength(3);
+    expect(plan?.cuts[0]?.mode).toBe("OPEN_STOCK_PANEL");
+    expect(plan?.cuts[0]?.lengthMm).toBe(700);
+    expect(plan?.cuts[0]?.offcutAfterMm).toBe(1825);
+    expect(plan?.cuts[1]?.mode).toBe("REUSE_OFFCUT");
+    expect(plan?.cuts[1]?.effectiveLengthMm).toBe(900);
+    expect(plan?.cuts[1]?.offcutAfterMm).toBe(925);
+    expect(plan?.cuts[2]?.mode).toBe("REUSE_OFFCUT");
+    expect(plan?.cuts[2]?.effectiveLengthMm).toBe(800);
+    expect(plan?.leftoverMm).toBe(125);
   });
 
   it("shares stock-height offcuts across different twin bar fence heights", () => {
@@ -239,16 +239,16 @@ describe("estimateLayout", () => {
     };
 
     const result = estimateLayout(layout);
-    expect(result.optimization.strategy).toBe("GREEDY_LARGEST_OFFCUT");
+    expect(result.optimization.strategy).toBe("CHAINED_CUT_PLANNER");
     expect(result.optimization.twinBar.panelsSaved).toBe(2);
-    expect(result.optimization.twinBar.transfers).toHaveLength(2);
+    expect(result.optimization.twinBar.buckets).toHaveLength(2);
 
-    const transfer2000 = result.optimization.twinBar.transfers.find((transfer) => transfer.stockPanelHeightMm === 2000);
-    const transfer3000 = result.optimization.twinBar.transfers.find((transfer) => transfer.stockPanelHeightMm === 3000);
+    const bucket2000 = result.optimization.twinBar.buckets.find((bucket) => bucket.stockPanelHeightMm === 2000);
+    const bucket3000 = result.optimization.twinBar.buckets.find((bucket) => bucket.stockPanelHeightMm === 3000);
 
-    expect(transfer2000?.source.segmentId).toBe("five");
-    expect(transfer2000?.destination.segmentId).toBe("two");
-    expect(transfer3000?.source.segmentId).toBe("five");
-    expect(transfer3000?.destination.segmentId).toBe("three");
+    expect(bucket2000?.plans[0]?.reusedCuts).toBe(1);
+    expect(bucket3000?.plans[0]?.reusedCuts).toBe(1);
+    expect(bucket2000?.plans[0]?.cuts.map((cut) => cut.demand.segmentId).sort()).toEqual(["five", "two"]);
+    expect(bucket3000?.plans[0]?.cuts.map((cut) => cut.demand.segmentId).sort()).toEqual(["five", "three"]);
   });
 });
