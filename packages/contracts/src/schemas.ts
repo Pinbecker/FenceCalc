@@ -76,6 +76,17 @@ export const registerRequestSchema = z.object({
   password: passwordSchema
 });
 
+export const bootstrapOwnerRequestSchema = registerRequestSchema;
+
+export const companyUserRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
+
+export const userCreateRequestSchema = z.object({
+  displayName: displayNameSchema,
+  email: emailSchema,
+  password: passwordSchema,
+  role: z.enum(["ADMIN", "MEMBER"])
+});
+
 export const loginRequestSchema = z.object({
   email: emailSchema,
   password: passwordSchema
@@ -99,3 +110,16 @@ export const drawingUpdateRequestSchema = z
       });
     }
   });
+
+export const drawingArchiveRequestSchema = z.object({
+  archived: z.boolean()
+});
+
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string().trim().min(32).max(128),
+  password: passwordSchema
+});

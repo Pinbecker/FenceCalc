@@ -1,0 +1,17 @@
+import type { RouteDependencies } from "../app-support.js";
+
+import { registerAuditRoutes } from "./audit/index.js";
+import { registerAuthRoutes } from "./auth/index.js";
+import { registerDrawingRoutes } from "./drawings/index.js";
+import { registerEstimateRoutes } from "./estimate/index.js";
+import { registerSetupRoutes } from "./setup/index.js";
+import { registerUserRoutes } from "./users/index.js";
+
+export function registerModules(dependencies: RouteDependencies): void {
+  registerEstimateRoutes(dependencies);
+  registerSetupRoutes(dependencies);
+  registerAuthRoutes(dependencies);
+  registerUserRoutes(dependencies);
+  registerDrawingRoutes(dependencies);
+  registerAuditRoutes(dependencies);
+}

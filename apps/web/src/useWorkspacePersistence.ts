@@ -9,13 +9,14 @@ import {
   getDrawing,
   listDrawings,
   login,
+  logout as logoutSession,
   registerAccount,
   updateDrawing,
   type LoginInput,
   type RegisterAccountInput
 } from "./apiClient";
 
-const SESSION_STORAGE_KEY = "fence-estimator.auth-session";
+export const SESSION_STORAGE_KEY = "fence-estimator.auth-session";
 
 function buildDefaultDrawingName(): string {
   const now = new Date();
@@ -75,7 +76,7 @@ function extractMessage(error: unknown): string {
 
 interface UseWorkspacePersistenceOptions {
   layout: LayoutModel;
-  onLoadLayout(layout: LayoutModel): void;
+  onLoadLayout: (layout: LayoutModel) => void;
 }
 
 export interface WorkspacePersistenceState {
@@ -101,8 +102,8 @@ export interface WorkspacePersistenceState {
   startNewDraft: (nextName?: string) => void;
 }
 
-export function useWorkspacePersistence(options: UseWorkspacePersistenceOptions): WorkspacePersistenceState {
-  const normalizedLayout = useMemo(() => normalizeLayout(options.layout), [options.layout]);
+export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePersistenceOptions): WorkspacePersistenceState {
+  const normalizedLayout = useMemo(() => normalizeLayout(layout), [layout]);
   const [session, setSession] = useState<AuthSessionEnvelope | null>(null);
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
@@ -229,6 +230,9 @@ export function useWorkspacePersistence(options: UseWorkspacePersistenceOptions)
   }, [clearMessages]);
 
   const logout = useCallback(() => {
+    if (session) {
+      void logoutSession(session.session.token);
+    }
     setSession(null);
     setDrawings([]);
     setCurrentDrawingId(null);
@@ -236,7 +240,7 @@ export function useWorkspacePersistence(options: UseWorkspacePersistenceOptions)
     rememberSavedState({ segments: [], gates: [] }, "");
     writeStoredSession(null);
     clearMessages();
-  }, [clearMessages, rememberSavedState]);
+  }, [clearMessages, rememberSavedState, session]);
 
   const loadDrawingIntoWorkspace = useCallback(async (drawingId: string) => {
     if (!session) {
@@ -247,7 +251,7 @@ export function useWorkspacePersistence(options: UseWorkspacePersistenceOptions)
     try {
       const drawing = await getDrawing(session.session.token, drawingId);
       const nextLayout = normalizeLayout(drawing.layout);
-      options.onLoadLayout(nextLayout);
+      onLoadLayout(nextLayout);
       setCurrentDrawingId(drawing.id);
       setCurrentDrawingName(drawing.name);
       rememberSavedState(nextLayout, drawing.name);
@@ -257,7 +261,7 @@ export function useWorkspacePersistence(options: UseWorkspacePersistenceOptions)
     } finally {
       setIsLoadingDrawings(false);
     }
-  }, [clearMessages, options, rememberSavedState, session]);
+  }, [clearMessages, onLoadLayout, rememberSavedState, session]);
 
   const persistDrawing = useCallback(async (forceCreate: boolean) => {
     if (!session) {

@@ -1,0 +1,212 @@
+import type { GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import { distanceMm } from "@fence-estimator/geometry";
+
+import { MIN_SEGMENT_MM, quantize } from "./constants.js";
+import { clampGatePlacementToSegment, normalizeVector, pointCoordinateKey, resolveGatePreviewLeafCount } from "./editorMath.js";
+import { interpolateAlongSegment } from "./gateGeometry.js";
+import type { ResolvedGatePlacement, SegmentConnectivity } from "./types.js";
+
+export function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivity {
+  const segmentComponent = new Map<string, string>();
+  const segmentIdsByComponent = new Map<string, string[]>();
+  const movableComponentIds = new Set<string>();
+  const closedComponentIds = new Set<string>();
+  const nodeDegreeByKey = new Map<string, number>();
+  const segmentById = new Map<string, LayoutSegment>();
+  const segmentIdsByNode = new Map<string, string[]>();
+
+  function addNodeSegment(nodeKey: string, segmentId: string): void {
+    const bucket = segmentIdsByNode.get(nodeKey);
+    if (bucket) {
+      bucket.push(segmentId);
+      return;
+    }
+    segmentIdsByNode.set(nodeKey, [segmentId]);
+  }
+
+  for (const segment of segments) {
+    segmentById.set(segment.id, segment);
+    addNodeSegment(pointCoordinateKey(segment.start), segment.id);
+    addNodeSegment(pointCoordinateKey(segment.end), segment.id);
+  }
+
+  for (const [nodeKey, segmentIds] of segmentIdsByNode) {
+    nodeDegreeByKey.set(nodeKey, segmentIds.length);
+  }
+
+  const visited = new Set<string>();
+  let componentIndex = 0;
+
+  for (const segment of segments) {
+    if (visited.has(segment.id)) {
+      continue;
+    }
+    const componentId = `component-${componentIndex}`;
+    componentIndex += 1;
+    const queue: string[] = [segment.id];
+    const componentSegmentIds: string[] = [];
+    const componentNodeKeys = new Set<string>();
+    visited.add(segment.id);
+
+    while (queue.length > 0) {
+      const currentSegmentId = queue.shift();
+      if (!currentSegmentId) {
+        break;
+      }
+      const currentSegment = segmentById.get(currentSegmentId);
+      if (!currentSegment) {
+        continue;
+      }
+
+      componentSegmentIds.push(currentSegmentId);
+      segmentComponent.set(currentSegmentId, componentId);
+
+      const nodeKeys = [
+        pointCoordinateKey(currentSegment.start),
+        pointCoordinateKey(currentSegment.end)
+      ];
+      for (const nodeKey of nodeKeys) {
+        componentNodeKeys.add(nodeKey);
+        const neighborSegmentIds = segmentIdsByNode.get(nodeKey) ?? [];
+        for (const neighborSegmentId of neighborSegmentIds) {
+          if (visited.has(neighborSegmentId)) {
+            continue;
+          }
+          visited.add(neighborSegmentId);
+          queue.push(neighborSegmentId);
+        }
+      }
+    }
+
+    segmentIdsByComponent.set(componentId, componentSegmentIds);
+    const isClosed =
+      componentSegmentIds.length >= 3 &&
+      [...componentNodeKeys].every((nodeKey) => (nodeDegreeByKey.get(nodeKey) ?? 0) === 2);
+    if (isClosed) {
+      closedComponentIds.add(componentId);
+    }
+    const onlyOneSegment = componentSegmentIds.length === 1;
+    const firstSegment = onlyOneSegment ? segmentById.get(componentSegmentIds[0] ?? "") : undefined;
+    const firstNodeDegree = firstSegment ? nodeDegreeByKey.get(pointCoordinateKey(firstSegment.start)) ?? 0 : 0;
+    const secondNodeDegree = firstSegment ? nodeDegreeByKey.get(pointCoordinateKey(firstSegment.end)) ?? 0 : 0;
+    const isMovable = isClosed || (onlyOneSegment && firstNodeDegree === 1 && secondNodeDegree === 1);
+    if (isMovable) {
+      movableComponentIds.add(componentId);
+    }
+  }
+
+  return {
+    segmentComponent,
+    segmentIdsByComponent,
+    movableComponentIds,
+    closedComponentIds,
+    nodeDegreeByKey
+  };
+}
+
+export function resolveGatePlacements(
+  segmentsById: Map<string, LayoutSegment>,
+  gatePlacements: GatePlacement[],
+): ResolvedGatePlacement[] {
+  const sorted = [...gatePlacements].sort((left, right) => left.id.localeCompare(right.id));
+  const resolved: ResolvedGatePlacement[] = [];
+
+  for (const placement of sorted) {
+    const segment = segmentsById.get(placement.segmentId);
+    if (!segment) {
+      continue;
+    }
+    const segmentLengthMm = distanceMm(segment.start, segment.end);
+    const clamped = clampGatePlacementToSegment(placement, segmentLengthMm);
+    if (!clamped) {
+      continue;
+    }
+    const entryPoint = interpolateAlongSegment(segment, clamped.startOffsetMm);
+    const exitPoint = interpolateAlongSegment(segment, clamped.endOffsetMm);
+    const tangent = normalizeVector({
+      x: exitPoint.x - entryPoint.x,
+      y: exitPoint.y - entryPoint.y
+    });
+    if (!tangent) {
+      continue;
+    }
+    const widthMm = clamped.endOffsetMm - clamped.startOffsetMm;
+    resolved.push({
+      id: placement.id,
+      segmentId: placement.segmentId,
+      startOffsetMm: clamped.startOffsetMm,
+      endOffsetMm: clamped.endOffsetMm,
+      gateType: placement.gateType,
+      key: placement.id,
+      startPoint: entryPoint,
+      endPoint: exitPoint,
+      centerPoint: {
+        x: (entryPoint.x + exitPoint.x) / 2,
+        y: (entryPoint.y + exitPoint.y) / 2
+      },
+      widthMm,
+      tangent,
+      normal: { x: -tangent.y, y: tangent.x },
+      leafCount: resolveGatePreviewLeafCount(placement.gateType, widthMm),
+      spec: segment.spec
+    });
+  }
+
+  return resolved;
+}
+
+export function buildSegmentRuns(segment: LayoutSegment, gateSpans: ResolvedGatePlacement[]): Array<{ start: PointMm; end: PointMm }> {
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  if (segmentLengthMm <= 0) {
+    return [];
+  }
+  if (gateSpans.length === 0) {
+    return [{ start: segment.start, end: segment.end }];
+  }
+
+  const sortedGates = [...gateSpans].sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+  const runs: Array<{ start: PointMm; end: PointMm }> = [];
+  let cursorMm = 0;
+
+  for (const gate of sortedGates) {
+    const runEndMm = Math.max(cursorMm, gate.startOffsetMm);
+    if (runEndMm - cursorMm >= MIN_SEGMENT_MM) {
+      runs.push({
+        start: interpolateAlongSegment(segment, cursorMm),
+        end: interpolateAlongSegment(segment, runEndMm)
+      });
+    }
+    cursorMm = Math.max(cursorMm, gate.endOffsetMm);
+  }
+
+  if (segmentLengthMm - cursorMm >= MIN_SEGMENT_MM) {
+    runs.push({
+      start: interpolateAlongSegment(segment, cursorMm),
+      end: interpolateAlongSegment(segment, segmentLengthMm)
+    });
+  }
+
+  return runs;
+}
+
+export function buildEstimateSegments(segments: LayoutSegment[], gatesBySegmentId: Map<string, ResolvedGatePlacement[]>): LayoutSegment[] {
+  const derived: LayoutSegment[] = [];
+
+  for (const segment of segments) {
+    const gateSpans = gatesBySegmentId.get(segment.id) ?? [];
+    const runs = buildSegmentRuns(segment, gateSpans);
+    if (runs.length === 0) {
+      continue;
+    }
+    runs.forEach((run, index) => {
+      derived.push({
+        id: `${segment.id}::run-${index}`,
+        start: quantize(run.start),
+        end: quantize(run.end),
+        spec: segment.spec
+      });
+    });
+  }
+
+  return derived;
+}

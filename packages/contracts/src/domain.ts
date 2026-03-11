@@ -195,6 +195,7 @@ export interface AuthSessionRecord {
   userId: string;
   createdAtIso: string;
   expiresAtIso: string;
+  revokedAtIso?: string | null;
 }
 
 export interface AuthSessionEnvelope {
@@ -211,6 +212,10 @@ export interface DrawingRecord {
   name: string;
   layout: LayoutModel;
   estimate: EstimateResult;
+  versionNumber: number;
+  isArchived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
   createdByUserId: string;
   updatedByUserId: string;
   createdAtIso: string;
@@ -221,8 +226,56 @@ export interface DrawingSummary {
   id: string;
   companyId: string;
   name: string;
+  previewLayout: LayoutModel;
+  segmentCount: number;
+  gateCount: number;
+  versionNumber: number;
+  isArchived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
   createdByUserId: string;
   updatedByUserId: string;
   createdAtIso: string;
   updatedAtIso: string;
+}
+
+export type DrawingVersionSource = "CREATE" | "UPDATE" | "RESTORE";
+
+export interface DrawingVersionRecord {
+  id: string;
+  drawingId: string;
+  companyId: string;
+  versionNumber: number;
+  source: DrawingVersionSource;
+  name: string;
+  layout: LayoutModel;
+  estimate: EstimateResult;
+  createdByUserId: string;
+  createdAtIso: string;
+}
+
+export type AuditEntityType = "AUTH" | "USER" | "DRAWING";
+export type AuditAction =
+  | "OWNER_BOOTSTRAPPED"
+  | "LOGIN_SUCCEEDED"
+  | "PASSWORD_RESET_REQUESTED"
+  | "PASSWORD_RESET_COMPLETED"
+  | "SESSION_REVOKED"
+  | "USER_CREATED"
+  | "DRAWING_CREATED"
+  | "DRAWING_UPDATED"
+  | "DRAWING_ARCHIVED"
+  | "DRAWING_UNARCHIVED"
+  | "DRAWING_VERSION_RESTORED";
+
+export interface AuditLogRecord {
+  id: string;
+  companyId: string;
+  actorUserId: string | null;
+  entityType: AuditEntityType;
+  entityId: string | null;
+  action: AuditAction;
+  summary: string;
+  createdAtIso: string;
+  metadata?: Record<string, string | number | boolean | null>;
 }

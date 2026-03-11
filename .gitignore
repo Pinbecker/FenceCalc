@@ -3,8 +3,11 @@ dist/
 coverage/
 .turbo/
 *.log
+*.db
+*.db-shm
+*.db-wal
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
 .DS_Store
-

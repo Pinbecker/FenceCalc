@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bootstrapOwnerRequestSchema,
+  drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
   drawingUpdateRequestSchema,
   estimateSnapshotRequestSchema,
   fenceSpecSchema,
   layoutModelSchema,
   loginRequestSchema,
-  registerRequestSchema
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  userCreateRequestSchema
 } from "../src/schemas.js";
 
 describe("contracts schemas", () => {
@@ -61,7 +65,7 @@ describe("contracts schemas", () => {
   });
 
   it("requires company registration details", () => {
-    const result = registerRequestSchema.safeParse({
+    const result = bootstrapOwnerRequestSchema.safeParse({
       companyName: "A",
       displayName: "JD",
       email: "bad",
@@ -86,5 +90,36 @@ describe("contracts schemas", () => {
     });
 
     expect(result.layout.gates).toEqual([]);
+  });
+
+  it("rejects owner role creation through the admin user schema", () => {
+    const result = userCreateRequestSchema.safeParse({
+      displayName: "Jane Doe",
+      email: "jane@example.com",
+      password: "supersecure123",
+      role: "OWNER"
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts drawing archive payloads", () => {
+    const result = drawingArchiveRequestSchema.safeParse({ archived: true });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("requires reset token and password for password resets", () => {
+    expect(
+      passwordResetRequestSchema.safeParse({
+        email: "jane@example.com"
+      }).success,
+    ).toBe(true);
+    expect(
+      passwordResetConfirmSchema.safeParse({
+        token: "too-short",
+        password: "supersecure123"
+      }).success,
+    ).toBe(false);
   });
 });
