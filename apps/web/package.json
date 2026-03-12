@@ -16,7 +16,7 @@
     "@fence-estimator/contracts": "0.1.0",
     "@fence-estimator/geometry": "0.1.0",
     "@fence-estimator/rules-engine": "0.1.0",
-    "konva": "^9.3.20",
+    "konva": "^10.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-konva": "^19.0.5"
