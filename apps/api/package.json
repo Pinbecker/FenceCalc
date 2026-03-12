@@ -15,7 +15,7 @@
     "recover:user": "node scripts/reset-user-password.mjs"
   },
   "dependencies": {
-    "@fastify/cors": "^10.0.2",
+    "@fastify/cors": "^11.2.0",
     "@fence-estimator/contracts": "0.1.0",
     "@fence-estimator/rules-engine": "0.1.0",
     "better-sqlite3": "^11.10.0",
