@@ -376,9 +376,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isDirty: workspace.isDirty,
     onNavigate
   });
+  const zoomInAtCanvasCenter = useCallback(() => {
+    zoomAtPointer({ x: canvasWidth / 2, y: canvasHeight / 2 }, -120);
+  }, [canvasHeight, canvasWidth, zoomAtPointer]);
+  const zoomOutAtCanvasCenter = useCallback(() => {
+    zoomAtPointer({ x: canvasWidth / 2, y: canvasHeight / 2 }, 120);
+  }, [canvasHeight, canvasWidth, zoomAtPointer]);
   const session = workspace.session;
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
+  const hasActiveInteraction = selectionState.drawStart !== null || selectionState.rectangleStart !== null;
   const interactionLabel =
     shellState.interactionMode === "DRAW"
       ? "Draw"
@@ -540,8 +547,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 canDeleteSelection={
                   shellState.interactionMode === "SELECT" && (!!selectionState.selectedSegmentId || !!selectionState.selectedGateId)
                 }
+                canFinishInteraction={hasActiveInteraction}
                 onUndo={undoSegments}
                 onRedo={redoSegments}
+                onZoomIn={zoomInAtCanvasCenter}
+                onZoomOut={zoomOutAtCanvasCenter}
+                onResetView={resetView}
+                onFinishInteraction={cancelActiveDrawing}
                 onDeleteSelection={handleDeleteSelection}
                 onClearLayout={handleClearLayout}
               />

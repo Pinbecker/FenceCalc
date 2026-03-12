@@ -210,6 +210,16 @@ function createMouseEvent(button: number, target: unknown) {
   } as never;
 }
 
+function createTouchEvent(target: unknown) {
+  return {
+    evt: {
+      preventDefault: vi.fn()
+    },
+    cancelBubble: false,
+    target
+  } as never;
+}
+
 describe("useEditorCommands", () => {
   it("updates editor inputs, opens the length editor, and applies resized lengths", () => {
     const harness = createCommandHarness({
@@ -413,5 +423,16 @@ describe("useEditorCommands", () => {
       end: { x: 5200, y: 0 }
     }));
     expect(harness.state.layout.segments[0]?.end.x).toBe(5200);
+  });
+
+  it("starts panning from a background touch in select mode", () => {
+    const harness = createCommandHarness({
+      interactionMode: "SELECT"
+    });
+
+    harness.stage.pointer = { x: 140, y: 260 };
+    harness.commands.onStageMouseDown(createTouchEvent(harness.stage));
+
+    expect(harness.beginPan).toHaveBeenCalledWith({ x: 140, y: 260 });
   });
 });

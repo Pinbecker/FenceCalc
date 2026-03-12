@@ -3372,6 +3372,14 @@ button:disabled {
   overflow: hidden;
 }
 
+.canvas-wrap,
+.editor-canvas-frame {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 @media (max-width: 1180px) {
   .editor-stage-shell {
     position: relative;

@@ -42,6 +42,9 @@ export function EditorCanvasStage({
         onMouseDown={onStageMouseDown}
         onMouseMove={onStageMouseMove}
         onMouseUp={onStageMouseUp}
+        onTouchStart={onStageMouseDown}
+        onTouchMove={onStageMouseMove}
+        onTouchEnd={onStageMouseUp}
         onWheel={onStageWheel}
         onContextMenu={onContextMenu}
       >

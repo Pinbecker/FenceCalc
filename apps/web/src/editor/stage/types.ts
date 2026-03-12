@@ -49,7 +49,7 @@ export interface EditorCanvasStageProps {
   oppositeGateGuides: Array<{ key: string; start: PointMm; end: PointMm }>;
   selectedPlanVisual: OptimizationPlanVisual | null;
   scaleBar: ScaleBarState;
-  onStageMouseDown: (event: KonvaEventObject<MouseEvent>) => void;
+  onStageMouseDown: (event: KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onStageMouseMove: () => void;
   onStageMouseUp: () => void;
   onStageWheel: (event: KonvaEventObject<WheelEvent>) => void;

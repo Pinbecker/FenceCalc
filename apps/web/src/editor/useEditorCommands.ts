@@ -31,6 +31,10 @@ import type {
   SegmentConnectivity
 } from "./types";
 
+function isTouchStageEvent(event: KonvaEventObject<MouseEvent | TouchEvent>): boolean {
+  return typeof (event.evt as MouseEvent).button !== "number";
+}
+
 interface SegmentDragEntry {
   segmentId: string;
   lastPointer: PointMm;
@@ -442,13 +446,15 @@ export function useEditorCommands({
   );
 
   const onStageMouseDown = useCallback(
-    (event: KonvaEventObject<MouseEvent>): void => {
+    (event: KonvaEventObject<MouseEvent | TouchEvent>): void => {
       const stage = stageRef.current;
       if (!stage) {
         return;
       }
 
-      const isMiddleButton = event.evt.button === 1;
+      const isTouchInput = isTouchStageEvent(event);
+      const mouseButton = isTouchInput ? 0 : (event.evt as MouseEvent).button;
+      const isMiddleButton = mouseButton === 1;
       const isPanIntent = isMiddleButton || isSpacePressed;
       if (isPanIntent) {
         const pointer = stage.getPointerPosition();
@@ -459,7 +465,7 @@ export function useEditorCommands({
         return;
       }
 
-      if (event.evt.button !== 0) {
+      if (mouseButton !== 0) {
         return;
       }
 
@@ -470,6 +476,10 @@ export function useEditorCommands({
       const world = toWorld(pointer);
 
       if (interactionMode === "SELECT") {
+        if (isTouchInput && event.target === stage) {
+          beginPan(pointer);
+          return;
+        }
         if (event.target === stage) {
           setSelectedSegmentId(null);
           setSelectedGateId(null);
