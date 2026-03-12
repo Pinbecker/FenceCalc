@@ -1,7 +1,7 @@
 ﻿import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingsPage } from "./DrawingsPage.js";
 
@@ -13,6 +13,7 @@ const drawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front perimeter",
+    customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 8,
     gateCount: 1,
@@ -23,11 +24,38 @@ const drawings: DrawingSummary[] = [
     archivedAtIso: null,
     archivedByUserId: null,
     createdByUserId: "user-1",
+    createdByDisplayName: "Jane Doe",
     updatedByUserId: "user-1",
+    updatedByDisplayName: "Jane Doe",
+    contributorUserIds: ["user-1"],
+    contributorDisplayNames: ["Jane Doe"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T12:00:00.000Z"
   }
 ];
+
+const session: AuthSessionEnvelope = {
+  company: {
+    id: "company-1",
+    name: "Acme Fencing",
+    createdAtIso: "2026-03-10T10:00:00.000Z"
+  },
+  user: {
+    id: "user-1",
+    companyId: "company-1",
+    email: "jane@example.com",
+    displayName: "Jane Doe",
+    role: "OWNER",
+    createdAtIso: "2026-03-10T10:00:00.000Z"
+  },
+  session: {
+    id: "session-1",
+    companyId: "company-1",
+    userId: "user-1",
+    createdAtIso: "2026-03-10T10:00:00.000Z",
+    expiresAtIso: "2026-04-10T10:00:00.000Z"
+  }
+};
 
 const versions: DrawingVersionRecord[] = [
   {
@@ -39,6 +67,7 @@ const versions: DrawingVersionRecord[] = [
     versionNumber: 2,
     source: "UPDATE",
     name: "Front perimeter",
+    customerName: "Cleveland Land Services",
     layout: { segments: [], gates: [] },
     estimate: {
       posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
@@ -83,6 +112,7 @@ describe("DrawingsPage", () => {
   it("renders drawing management controls", () => {
     const html = renderToStaticMarkup(
       <DrawingsPage
+        session={session}
         drawings={drawings}
         isLoading={false}
         onRefresh={() => Promise.resolve()}
@@ -95,6 +125,8 @@ describe("DrawingsPage", () => {
     );
 
     expect(html).toContain("Saved drawings");
+    expect(html).toContain("Cleveland Land Services");
+    expect(html).toContain("Mine");
     expect(html).toContain("Version History");
     expect(html).toContain("Archive");
     expect(html).toContain("Open In Editor");

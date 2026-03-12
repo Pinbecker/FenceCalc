@@ -36,7 +36,8 @@ export class InMemoryAppRepository implements AppRepository {
   });
   private readonly drawings = new InMemoryDrawingStore({
     drawings: this.drawingsMap,
-    drawingVersions: this.drawingVersionsMap
+    drawingVersions: this.drawingVersionsMap,
+    users: this.users
   });
   private readonly support = new InMemorySupportStore({
     companies: this.companies,

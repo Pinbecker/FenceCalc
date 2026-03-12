@@ -18,6 +18,7 @@ const sampleDrawing = {
   id: "drawing-1",
   companyId: "company-1",
   name: "Rear boundary",
+  customerName: "Cleveland Land Services",
   layout: baseLayout,
   estimate: {
     posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },

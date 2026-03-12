@@ -1,12 +1,14 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import type { DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 
-type DrawingFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+type DrawingStatusFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+type DrawingOwnershipFilter = "COMPANY" | "MINE";
 
 interface DrawingsPageProps {
+  session: AuthSessionEnvelope;
   drawings: DrawingSummary[];
   isLoading: boolean;
   onRefresh(this: void): Promise<void>;
@@ -24,7 +26,12 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
+function sortStrings(left: string, right: string): number {
+  return left.localeCompare(right, "en-GB", { sensitivity: "base" });
+}
+
 export function DrawingsPage({
+  session,
   drawings,
   isLoading,
   onRefresh,
@@ -34,22 +41,59 @@ export function DrawingsPage({
   onLoadVersions,
   onRestoreVersion
 }: DrawingsPageProps) {
-  const [filter, setFilter] = useState<DrawingFilter>("ACTIVE");
+  const [statusFilter, setStatusFilter] = useState<DrawingStatusFilter>("ACTIVE");
+  const [ownershipFilter, setOwnershipFilter] = useState<DrawingOwnershipFilter>("COMPANY");
+  const [selectedCustomer, setSelectedCustomer] = useState("ALL_CUSTOMERS");
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
 
+  const customerNames = useMemo(
+    () =>
+      [...new Set(drawings.map((drawing) => drawing.customerName.trim()).filter((customerName) => customerName.length > 0))].sort(
+        sortStrings,
+      ),
+    [drawings],
+  );
+
   const visibleDrawings = useMemo(() => {
-    if (filter === "ACTIVE") {
-      return drawings.filter((drawing) => !drawing.isArchived);
+    return drawings
+      .filter((drawing) => {
+        if (statusFilter === "ACTIVE") {
+          return !drawing.isArchived;
+        }
+        if (statusFilter === "ARCHIVED") {
+          return drawing.isArchived;
+        }
+        return true;
+      })
+      .filter((drawing) => {
+        if (ownershipFilter === "MINE") {
+          return drawing.contributorUserIds.includes(session.user.id);
+        }
+        return true;
+      })
+      .filter((drawing) => selectedCustomer === "ALL_CUSTOMERS" || drawing.customerName === selectedCustomer)
+      .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
+  }, [drawings, ownershipFilter, selectedCustomer, session.user.id, statusFilter]);
+
+  const groupedDrawings = useMemo(() => {
+    const groups = new Map<string, DrawingSummary[]>();
+    for (const drawing of visibleDrawings) {
+      const customerName = drawing.customerName.trim() || "Unassigned customer";
+      const bucket = groups.get(customerName);
+      if (bucket) {
+        bucket.push(drawing);
+      } else {
+        groups.set(customerName, [drawing]);
+      }
     }
-    if (filter === "ARCHIVED") {
-      return drawings.filter((drawing) => drawing.isArchived);
-    }
-    return drawings;
-  }, [drawings, filter]);
+
+    return [...groups.entries()].sort(([left], [right]) => sortStrings(left, right));
+  }, [visibleDrawings]);
+
   const activeCount = drawings.filter((drawing) => !drawing.isArchived).length;
-  const archivedCount = drawings.length - activeCount;
+  const mineCount = drawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id)).length;
 
   const handleToggleHistory = async (drawingId: string) => {
     if (expandedDrawingId === drawingId) {
@@ -74,18 +118,30 @@ export function DrawingsPage({
         <div>
           <span className="portal-eyebrow">Drawing Library</span>
           <h1>Saved drawings</h1>
-          <p>Scan active work quickly, jump back into a draft, and open history only when you need to restore a version.</p>
+          <p>Switch between the whole company library and the drawings you have touched, then narrow the queue by customer.</p>
         </div>
         <div className="portal-header-actions">
-          <div className="portal-filter-row" role="tablist" aria-label="Drawing filter">
-            {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingFilter[]).map((option) => (
+          <div className="portal-filter-row" role="tablist" aria-label="Drawing status filter">
+            {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingStatusFilter[]).map((option) => (
               <button
                 type="button"
                 key={option}
-                className={filter === option ? "is-active" : undefined}
-                onClick={() => setFilter(option)}
+                className={statusFilter === option ? "is-active" : undefined}
+                onClick={() => setStatusFilter(option)}
               >
                 {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
+              </button>
+            ))}
+          </div>
+          <div className="portal-filter-row" role="tablist" aria-label="Drawing ownership filter">
+            {(["COMPANY", "MINE"] as DrawingOwnershipFilter[]).map((option) => (
+              <button
+                type="button"
+                key={option}
+                className={ownershipFilter === option ? "is-active" : undefined}
+                onClick={() => setOwnershipFilter(option)}
+              >
+                {option === "COMPANY" ? "Company" : "Mine"}
               </button>
             ))}
           </div>
@@ -101,10 +157,9 @@ export function DrawingsPage({
       <section className="portal-surface-card drawing-library-overview">
         <div className="drawing-library-overview-copy">
           <span className="portal-section-kicker">Library Focus</span>
-          <h2>{filter === "ACTIVE" ? "Current work queue" : filter === "ARCHIVED" ? "Archived reference set" : "Full company archive"}</h2>
+          <h2>{ownershipFilter === "MINE" ? "Your customer work" : "Company customer archive"}</h2>
           <p className="portal-empty-copy">
-            Keep the library dense and scannable. Open a drawing to continue work, or expand history only when you need
-            to restore a previous revision.
+            Customer is now separate from the drawing title, so you can scan by client first and still keep each drawing named precisely.
           </p>
         </div>
         <div className="drawing-library-overview-metrics">
@@ -113,93 +168,139 @@ export function DrawingsPage({
             <strong>{visibleDrawings.length}</strong>
           </article>
           <article className="drawing-library-overview-metric">
-            <span>Active</span>
-            <strong>{activeCount}</strong>
+            <span>Mine</span>
+            <strong>{mineCount}</strong>
           </article>
           <article className="drawing-library-overview-metric">
-            <span>Archived</span>
-            <strong>{archivedCount}</strong>
+            <span>Customers</span>
+            <strong>{customerNames.length}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Active</span>
+            <strong>{activeCount}</strong>
           </article>
         </div>
       </section>
 
-      {visibleDrawings.length === 0 ? (
+      <section className="portal-surface-card drawing-library-filter-panel">
+        <label className="drawing-library-customer-filter">
+          <span>Customer View</span>
+          <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
+            <option value="ALL_CUSTOMERS">All customers</option>
+            {customerNames.map((customerName) => (
+              <option key={customerName} value={customerName}>
+                {customerName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="portal-empty-copy">
+          {ownershipFilter === "MINE"
+            ? "Mine includes drawings you created, updated, or otherwise touched through version history."
+            : "Company view includes every drawing stored for the current company workspace."}
+        </p>
+      </section>
+
+      {groupedDrawings.length === 0 ? (
         <div className="portal-empty-state">
           <h2>No drawings in this view</h2>
           <p>Create or restore a drawing to populate the library.</p>
         </div>
       ) : null}
 
-      <div className="drawing-library-grid">
-        {visibleDrawings.map((drawing) => {
-          const versions = versionsByDrawingId[drawing.id] ?? [];
-          const isLoadingVersions = isLoadingVersionsForId === drawing.id;
-          return (
-            <article key={drawing.id} className={`drawing-library-card${expandedDrawingId === drawing.id ? " is-expanded" : ""}`}>
-              <div className="drawing-library-preview-cell">
-                <DrawingPreview layout={drawing.previewLayout} label={drawing.name} />
+      <div className="drawing-library-groups">
+        {groupedDrawings.map(([customerName, customerDrawings]) => (
+          <section key={customerName} className="drawing-library-group">
+            <header className="drawing-library-group-header">
+              <div>
+                <span className="portal-section-kicker">Customer</span>
+                <h2>{customerName}</h2>
               </div>
-              <div className="drawing-library-card-body">
-                <div className="drawing-library-row-top">
-                  <div className="drawing-library-card-header">
-                    <div>
-                      <h2>{drawing.name}</h2>
-                      <p>Updated {formatTimestamp(drawing.updatedAtIso)}</p>
+              <span className="drawing-library-group-count">{customerDrawings.length}</span>
+            </header>
+
+            <div className="drawing-library-grid">
+              {customerDrawings.map((drawing) => {
+                const versions = versionsByDrawingId[drawing.id] ?? [];
+                const isLoadingVersions = isLoadingVersionsForId === drawing.id;
+                const isMine = drawing.contributorUserIds.includes(session.user.id);
+
+                return (
+                  <article key={drawing.id} className={`drawing-library-card${expandedDrawingId === drawing.id ? " is-expanded" : ""}`}>
+                    <div className="drawing-library-preview-cell">
+                      <DrawingPreview layout={drawing.previewLayout} label={drawing.name} />
                     </div>
-                    <div className="drawing-library-badge-stack">
-                      <span className="drawing-library-badge">v{drawing.versionNumber}</span>
-                      <span className={`drawing-library-badge${drawing.isArchived ? " archived" : ""}`}>
-                        {drawing.isArchived ? "Archived" : "Active"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="drawing-library-card-actions">
-                    <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
-                      Open In Editor
-                    </button>
-                    <button
-                      type="button"
-                      className="portal-secondary-button"
-                      onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
-                    >
-                      {drawing.isArchived ? "Unarchive" : "Archive"}
-                    </button>
-                    <button type="button" className="portal-secondary-button" onClick={() => void handleToggleHistory(drawing.id)}>
-                      {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
-                    </button>
-                  </div>
-                </div>
-                <div className="drawing-library-card-metrics">
-                  <span>{drawing.segmentCount} segments</span>
-                  <span>{drawing.gateCount} gates</span>
-                  <span>{drawing.schemaVersion > 0 ? `Schema ${drawing.schemaVersion}` : "Schema pending"}</span>
-                </div>
-                {expandedDrawingId === drawing.id ? (
-                  <div className="drawing-history-panel">
-                    {isLoadingVersions ? <p className="portal-empty-copy">Loading versions...</p> : null}
-                    {versions.map((version) => (
-                      <div key={version.id} className="drawing-history-row">
-                        <div>
-                          <strong>Version {version.versionNumber}</strong>
-                          <span>
-                            {version.source} · {formatTimestamp(version.createdAtIso)}
-                          </span>
+                    <div className="drawing-library-card-body">
+                      <div className="drawing-library-row-top">
+                        <div className="drawing-library-card-header">
+                          <div>
+                            <h2>{drawing.name}</h2>
+                            <p>
+                              Updated {formatTimestamp(drawing.updatedAtIso)} by {drawing.updatedByDisplayName || "Unknown user"}
+                            </p>
+                          </div>
+                          <div className="drawing-library-badge-stack">
+                            <span className="drawing-library-badge">v{drawing.versionNumber}</span>
+                            {isMine ? <span className="drawing-library-badge">Mine</span> : null}
+                            <span className={`drawing-library-badge${drawing.isArchived ? " archived" : ""}`}>
+                              {drawing.isArchived ? "Archived" : "Active"}
+                            </span>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          className="portal-text-button"
-                          onClick={() => void onRestoreVersion(drawing.id, version.versionNumber)}
-                        >
-                          Restore
-                        </button>
+                        <div className="drawing-library-card-actions">
+                          <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
+                            Open In Editor
+                          </button>
+                          <button
+                            type="button"
+                            className="portal-secondary-button"
+                            onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
+                          >
+                            {drawing.isArchived ? "Unarchive" : "Archive"}
+                          </button>
+                          <button type="button" className="portal-secondary-button" onClick={() => void handleToggleHistory(drawing.id)}>
+                            {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
+                      <div className="drawing-library-card-metrics">
+                        <span>{drawing.segmentCount} segments</span>
+                        <span>{drawing.gateCount} gates</span>
+                        <span>Created by {drawing.createdByDisplayName || "Unknown user"}</span>
+                        <span>{drawing.contributorDisplayNames.length} contributors</span>
+                      </div>
+                      <p className="drawing-library-meta-line">
+                        Contributors: {drawing.contributorDisplayNames.join(", ") || "Unknown user"}
+                      </p>
+                      {expandedDrawingId === drawing.id ? (
+                        <div className="drawing-history-panel">
+                          {isLoadingVersions ? <p className="portal-empty-copy">Loading versions...</p> : null}
+                          {versions.map((version) => (
+                            <div key={version.id} className="drawing-history-row">
+                              <div>
+                                <strong>Version {version.versionNumber}</strong>
+                                <span>
+                                  {version.source} · {version.customerName} · {formatTimestamp(version.createdAtIso)}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="portal-text-button"
+                                onClick={() => void onRestoreVersion(drawing.id, version.versionNumber)}
+                              >
+                                Restore
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </section>
   );

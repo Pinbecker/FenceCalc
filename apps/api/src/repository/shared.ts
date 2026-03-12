@@ -43,6 +43,7 @@ export interface DrawingRow {
   id: string;
   company_id: string;
   name: string;
+  customer_name: string;
   layout_json: string;
   viewport_json?: string | null;
   estimate_json: string;
@@ -67,6 +68,7 @@ export interface DrawingVersionRow {
   version_number: number;
   source: DrawingVersionSource;
   name: string;
+  customer_name: string;
   layout_json: string;
   viewport_json?: string | null;
   estimate_json: string;
@@ -171,6 +173,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
+    customerName: row.customer_name,
     layout,
     ...(savedViewport ? { savedViewport } : {}),
     estimate,
@@ -187,11 +190,19 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
   };
 }
 
-export function toDrawingSummary(drawing: DrawingRecord): DrawingSummary {
+interface DrawingSummaryMetadata {
+  createdByDisplayName: string;
+  updatedByDisplayName: string;
+  contributorUserIds: string[];
+  contributorDisplayNames: string[];
+}
+
+export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<DrawingSummaryMetadata>): DrawingSummary {
   return {
     id: drawing.id,
     companyId: drawing.companyId,
     name: drawing.name,
+    customerName: drawing.customerName,
     previewLayout: buildPreviewLayout(drawing.layout),
     segmentCount: drawing.layout.segments.length,
     gateCount: drawing.layout.gates?.length ?? 0,
@@ -202,7 +213,11 @@ export function toDrawingSummary(drawing: DrawingRecord): DrawingSummary {
     archivedAtIso: drawing.archivedAtIso,
     archivedByUserId: drawing.archivedByUserId,
     createdByUserId: drawing.createdByUserId,
+    createdByDisplayName: metadata?.createdByDisplayName ?? "",
     updatedByUserId: drawing.updatedByUserId,
+    updatedByDisplayName: metadata?.updatedByDisplayName ?? "",
+    contributorUserIds: metadata?.contributorUserIds ?? [],
+    contributorDisplayNames: metadata?.contributorDisplayNames ?? [],
     createdAtIso: drawing.createdAtIso,
     updatedAtIso: drawing.updatedAtIso
   };
@@ -230,6 +245,7 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     versionNumber: row.version_number,
     source: row.source,
     name: row.name,
+    customerName: row.customer_name,
     layout,
     ...(savedViewport ? { savedViewport } : {}),
     estimate,

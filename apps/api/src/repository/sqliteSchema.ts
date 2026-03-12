@@ -53,6 +53,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           id TEXT PRIMARY KEY,
           company_id TEXT NOT NULL,
           name TEXT NOT NULL,
+          customer_name TEXT NOT NULL,
           layout_json TEXT NOT NULL,
           estimate_json TEXT NOT NULL,
           schema_version INTEGER NOT NULL DEFAULT 1,
@@ -87,6 +88,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           version_number INTEGER NOT NULL,
           source TEXT NOT NULL,
           name TEXT NOT NULL,
+          customer_name TEXT NOT NULL,
           layout_json TEXT NOT NULL,
           estimate_json TEXT NOT NULL,
           created_by_user_id TEXT NOT NULL,
@@ -136,6 +138,12 @@ export function migrateSqliteDatabase(database: Database.Database): void {
       sql: `
         ALTER TABLE drawings ADD COLUMN viewport_json TEXT;
         ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT;
+      `
+    },
+    {
+      name: "005_drawing_customers",
+      sql: `
+        SELECT 1;
       `
     }
   ] as const;
@@ -204,6 +212,26 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "viewport_json")) {
     database.exec("ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT");
   }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "customer_name")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "drawings")) {
+    database.exec(`
+      UPDATE drawings
+      SET customer_name = name
+      WHERE TRIM(COALESCE(customer_name, '')) = ''
+    `);
+  }
+  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "customer_name")) {
+    database.exec("ALTER TABLE drawing_versions ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "drawing_versions")) {
+    database.exec(`
+      UPDATE drawing_versions
+      SET customer_name = name
+      WHERE TRIM(COALESCE(customer_name, '')) = ''
+    `);
+  }
 
   if (tableExists(database, "drawings") && tableExists(database, "drawing_versions")) {
     database.exec(`
@@ -216,6 +244,7 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         version_number,
         source,
         name,
+        customer_name,
         layout_json,
         estimate_json,
         created_by_user_id,
@@ -230,6 +259,7 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         1,
         'CREATE',
         d.name,
+        COALESCE(NULLIF(TRIM(d.customer_name), ''), d.name),
         d.layout_json,
         d.estimate_json,
         d.created_by_user_id,

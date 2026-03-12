@@ -423,15 +423,26 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           </div>
           {session ? (
             <div className="editor-document-bar">
-              <label className="editor-document-name">
-                <span>Drawing Name</span>
-                <input
-                  type="text"
-                  value={workspace.currentDrawingName}
-                  placeholder="Name this drawing"
-                  onChange={(event) => workspace.setCurrentDrawingName(event.target.value)}
-                />
-              </label>
+              <div className="editor-document-fields">
+                <label className="editor-document-name">
+                  <span>Customer</span>
+                  <input
+                    type="text"
+                    value={workspace.currentCustomerName}
+                    placeholder="Customer name"
+                    onChange={(event) => workspace.setCurrentCustomerName(event.target.value)}
+                  />
+                </label>
+                <label className="editor-document-name">
+                  <span>Drawing Name</span>
+                  <input
+                    type="text"
+                    value={workspace.currentDrawingName}
+                    placeholder="Name this drawing"
+                    onChange={(event) => workspace.setCurrentDrawingName(event.target.value)}
+                  />
+                </label>
+              </div>
               <div className="editor-document-actions-compact">
                 <button type="button" onClick={() => void workspace.saveDrawing()} disabled={workspace.isSavingDrawing}>
                   {workspace.currentDrawingId ? "Save" : "Save New"}

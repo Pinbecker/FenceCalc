@@ -30,6 +30,7 @@ const sampleDrawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front boundary",
+    customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 4,
     gateCount: 1,
@@ -40,7 +41,11 @@ const sampleDrawings: DrawingSummary[] = [
     archivedAtIso: null,
     archivedByUserId: null,
     createdByUserId: "user-1",
+    createdByDisplayName: "Owner",
     updatedByUserId: "user-1",
+    updatedByDisplayName: "Owner",
+    contributorUserIds: ["user-1"],
+    contributorDisplayNames: ["Owner"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T11:00:00.000Z"
   }
@@ -116,7 +121,57 @@ async function loadUsePortalCompanyData(options?: {
       createdAtIso: "2026-03-10T12:00:00.000Z"
     })),
     listAuditLog: vi.fn(async () => sampleAuditLog),
-    listDrawingVersions: vi.fn(async () => [{ id: "version-1", drawingId: "drawing-1", versionNumber: 1 }]),
+    listDrawingVersions: vi.fn(async () => [
+      {
+        id: "version-1",
+        drawingId: "drawing-1",
+        companyId: "company-1",
+        schemaVersion: 1,
+        rulesVersion: "2026-03-11",
+        versionNumber: 1,
+        source: "CREATE",
+        name: "Front boundary",
+        customerName: "Cleveland Land Services",
+        layout: { segments: [], gates: [] },
+        estimate: {
+          posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+          corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+          materials: {
+            twinBarPanels: 0,
+            twinBarPanelsSuperRebound: 0,
+            twinBarPanelsByStockHeightMm: {},
+            twinBarPanelsByFenceHeight: {},
+            roll2100: 0,
+            roll900: 0,
+            totalRolls: 0,
+            rollsByFenceHeight: {}
+          },
+          optimization: {
+            strategy: "CHAINED_CUT_PLANNER",
+            twinBar: {
+              reuseAllowanceMm: 200,
+              stockPanelWidthMm: 2525,
+              fixedFullPanels: 0,
+              baselinePanels: 0,
+              optimizedPanels: 0,
+              panelsSaved: 0,
+              totalCutDemands: 0,
+              stockPanelsOpened: 0,
+              reusedCuts: 0,
+              totalConsumedMm: 0,
+              totalLeftoverMm: 0,
+              reusableLeftoverMm: 0,
+              utilizationRate: 0,
+              buckets: []
+            }
+          },
+          segments: []
+        },
+        savedViewport: null,
+        createdByUserId: "user-1",
+        createdAtIso: "2026-03-10T10:00:00.000Z"
+      }
+    ]),
     listDrawings: vi.fn(async () => sampleDrawings),
     listUsers: vi.fn(async () => sampleUsers),
     restoreDrawingVersion: vi.fn(async () => ({
@@ -150,8 +205,25 @@ async function loadUsePortalCompanyData(options?: {
     })),
     updateDrawingSummaryFromRecord: vi.fn((drawing: { id: string; name: string; versionNumber: number }) => ({
       id: drawing.id,
+      companyId: "company-1",
       name: drawing.name,
+      customerName: "Cleveland Land Services",
+      previewLayout: { segments: [], gates: [] },
+      segmentCount: 0,
+      gateCount: 0,
+      schemaVersion: 1,
+      rulesVersion: "2026-03-11",
       versionNumber: drawing.versionNumber,
+      isArchived: false,
+      archivedAtIso: null,
+      archivedByUserId: null,
+      createdByUserId: "user-1",
+      createdByDisplayName: "Owner",
+      updatedByUserId: "user-1",
+      updatedByDisplayName: "Owner",
+      contributorUserIds: ["user-1"],
+      contributorDisplayNames: ["Owner"],
+      createdAtIso: "2026-03-10T10:00:00.000Z",
       updatedAtIso: "2026-03-10T12:00:00.000Z"
     })),
     ...options?.portalOverrides
@@ -213,7 +285,14 @@ describe("usePortalCompanyData", () => {
     await state.refreshAuditLog();
     expect(await state.createUser({ displayName: "Admin", email: "admin@example.com", password: "Secret123!", role: "ADMIN" })).toBe(true);
     expect(await state.resetUserPassword("user-1", "Secret123!")).toBe(true);
-    expect(await state.loadDrawingVersions("drawing-1")).toEqual([{ id: "version-1", drawingId: "drawing-1", versionNumber: 1 }]);
+    expect(await state.loadDrawingVersions("drawing-1")).toEqual([
+      expect.objectContaining({
+        id: "version-1",
+        drawingId: "drawing-1",
+        versionNumber: 1,
+        customerName: "Cleveland Land Services"
+      })
+    ]);
 
     expect(portalSessionData.loadPortalCompanyData).toHaveBeenCalledWith(sampleSession);
     expect(apiClient.listDrawings).toHaveBeenCalled();
@@ -301,6 +380,8 @@ describe("usePortalCompanyData", () => {
         ...sampleDrawings[0],
         id: "drawing-1",
         name: "Restored boundary",
+        segmentCount: 0,
+        gateCount: 0,
         versionNumber: 3,
         updatedAtIso: "2026-03-10T12:00:00.000Z"
       }

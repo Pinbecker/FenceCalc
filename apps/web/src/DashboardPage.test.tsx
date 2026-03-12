@@ -36,6 +36,7 @@ const drawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front perimeter",
+    customerName: "Cleveland Land Services",
     previewLayout: {
       segments: [
         {
@@ -56,7 +57,11 @@ const drawings: DrawingSummary[] = [
     archivedAtIso: null,
     archivedByUserId: null,
     createdByUserId: "user-1",
+    createdByDisplayName: "Jane Doe",
     updatedByUserId: "user-1",
+    updatedByDisplayName: "Jane Doe",
+    contributorUserIds: ["user-1"],
+    contributorDisplayNames: ["Jane Doe"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T12:00:00.000Z"
   }
@@ -69,6 +74,7 @@ describe("DashboardPage", () => {
     );
 
     expect(html).toContain("Front perimeter");
+    expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Drawing preview for Front perimeter");
     expect(html).toContain("v3");
   });

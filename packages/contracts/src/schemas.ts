@@ -273,6 +273,7 @@ export const passwordSchema = z.string().min(10).max(128);
 export const companyNameSchema = z.string().trim().min(2).max(120);
 export const displayNameSchema = z.string().trim().min(2).max(120);
 export const drawingNameSchema = z.string().trim().min(1).max(160);
+export const customerNameSchema = z.string().trim().min(1).max(160);
 
 export const registerRequestSchema = z.object({
   companyName: companyNameSchema,
@@ -303,6 +304,7 @@ export const loginRequestSchema = z.object({
 
 export const drawingCreateRequestSchema = z.object({
   name: drawingNameSchema,
+  customerName: customerNameSchema,
   layout: layoutModelSchema,
   savedViewport: drawingCanvasViewportSchema.nullable().optional()
 });
@@ -311,11 +313,17 @@ export const drawingUpdateRequestSchema = z
   .object({
     expectedVersionNumber: z.coerce.number().int().min(1),
     name: drawingNameSchema.optional(),
+    customerName: customerNameSchema.optional(),
     layout: layoutModelSchema.optional(),
     savedViewport: drawingCanvasViewportSchema.nullable().optional()
   })
   .superRefine((value, context) => {
-    if (value.name === undefined && value.layout === undefined) {
+    if (
+      value.name === undefined &&
+      value.customerName === undefined &&
+      value.layout === undefined &&
+      value.savedViewport === undefined
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "At least one drawing field must be provided"

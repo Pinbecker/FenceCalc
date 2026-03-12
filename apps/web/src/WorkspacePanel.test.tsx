@@ -37,6 +37,7 @@ const drawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front perimeter",
+    customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 0,
     gateCount: 0,
@@ -47,7 +48,11 @@ const drawings: DrawingSummary[] = [
     archivedAtIso: null,
     archivedByUserId: null,
     createdByUserId: "user-1",
+    createdByDisplayName: "Jane Doe",
     updatedByUserId: "user-1",
+    updatedByDisplayName: "Jane Doe",
+    contributorUserIds: ["user-1"],
+    contributorDisplayNames: ["Jane Doe"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T12:00:00.000Z"
   }
@@ -61,6 +66,7 @@ describe("WorkspacePanel", () => {
         drawings={[]}
         currentDrawingId={null}
         currentDrawingName=""
+        currentCustomerName=""
         isDirty={false}
         isRestoringSession={false}
         isAuthenticating={false}
@@ -69,6 +75,7 @@ describe("WorkspacePanel", () => {
         errorMessage={null}
         noticeMessage={null}
         onSetCurrentDrawingName={() => undefined}
+        onSetCurrentCustomerName={() => undefined}
         onRegister={resolvedPromise}
         onLogin={resolvedPromise}
         onLogout={() => undefined}
@@ -92,6 +99,7 @@ describe("WorkspacePanel", () => {
         drawings={drawings}
         currentDrawingId="drawing-1"
         currentDrawingName="Front perimeter"
+        currentCustomerName="Cleveland Land Services"
         isDirty
         isRestoringSession={false}
         isAuthenticating={false}
@@ -100,6 +108,7 @@ describe("WorkspacePanel", () => {
         errorMessage={null}
         noticeMessage="Loaded"
         onSetCurrentDrawingName={() => undefined}
+        onSetCurrentCustomerName={() => undefined}
         onRegister={resolvedPromise}
         onLogin={resolvedPromise}
         onLogout={() => undefined}

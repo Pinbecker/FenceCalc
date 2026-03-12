@@ -2345,7 +2345,7 @@ button:disabled {
 
 .drawing-library-overview-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -2372,7 +2372,69 @@ button:disabled {
   line-height: 1;
 }
 
+.drawing-library-filter-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.drawing-library-customer-filter {
+  display: grid;
+  gap: 6px;
+  min-width: min(300px, 100%);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drawing-library-customer-filter select {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(103, 115, 103, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 251, 245, 0.9);
+  color: var(--text-body);
+}
+
+.drawing-library-groups {
+  display: grid;
+  gap: 22px;
+}
+
+.drawing-library-group {
+  display: grid;
+  gap: 14px;
+}
+
+.drawing-library-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+}
+
+.drawing-library-group-header h2 {
+  margin: 0;
+}
+
+.drawing-library-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(201, 113, 56, 0.12);
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
 .drawing-library-grid {
+  display: grid;
   grid-template-columns: 1fr;
   gap: 18px;
 }
@@ -2411,6 +2473,13 @@ button:disabled {
 .drawing-library-card-actions .portal-primary-button,
 .drawing-library-card-actions .portal-secondary-button {
   width: auto;
+}
+
+.drawing-library-meta-line {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .drawing-library-card.is-expanded {
@@ -2709,12 +2778,18 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  .drawing-library-filter-panel,
+  .drawing-library-group-header,
   .drawing-library-row-top,
   .editor-stage-toolbar,
   .editor-header {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .drawing-library-customer-filter {
+    min-width: 0;
   }
 
   .drawing-library-card {
@@ -2828,10 +2903,18 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.editor-document-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(260px, 1fr);
+  gap: 10px;
+  flex: 1 1 520px;
+  min-width: min(100%, 520px);
+}
+
 .editor-document-name {
   display: grid;
   gap: 6px;
-  min-width: min(320px, 100%);
+  min-width: 0;
   margin: 0;
   color: rgba(246, 238, 226, 0.78);
   font-size: 0.72rem;
@@ -3053,6 +3136,11 @@ button:disabled {
   .editor-document-bar,
   .editor-header-meta {
     align-items: stretch;
+  }
+
+  .editor-document-fields {
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .editor-document-name {

@@ -11,6 +11,7 @@ interface WorkspacePanelProps {
   drawings: DrawingSummary[];
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentCustomerName: string;
   isDirty: boolean;
   isRestoringSession: boolean;
   isAuthenticating: boolean;
@@ -19,6 +20,7 @@ interface WorkspacePanelProps {
   errorMessage: string | null;
   noticeMessage: string | null;
   onSetCurrentDrawingName: (name: string) => void;
+  onSetCurrentCustomerName: (name: string) => void;
   onRegister: (input: RegisterAccountInput) => Promise<void>;
   onLogin: (input: LoginInput) => Promise<void>;
   onLogout: () => void;
@@ -170,6 +172,16 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
               Log Out
             </button>
           </div>
+
+          <label>
+            Customer
+            <input
+              type="text"
+              value={props.currentCustomerName}
+              placeholder="Customer name"
+              onChange={(event) => props.onSetCurrentCustomerName(event.target.value)}
+            />
+          </label>
 
           <label>
             Drawing Name

@@ -90,9 +90,11 @@ const mockWorkspace = {
   session: baseSession as AuthSessionEnvelope | null,
   currentDrawingId: "drawing-1" as string | null,
   currentDrawingName: "Perimeter A",
+  currentCustomerName: "Cleveland Land Services",
   isDirty: false,
   isSavingDrawing: false,
   setCurrentDrawingName: vi.fn(),
+  setCurrentCustomerName: vi.fn(),
   saveDrawing: vi.fn(async () => undefined),
   saveDrawingAsNew: vi.fn(async () => undefined),
   startNewDraft: vi.fn(),
@@ -337,6 +339,7 @@ describe("EditorPage", () => {
     mockWorkspace.session = baseSession;
     mockWorkspace.currentDrawingId = "drawing-1";
     mockWorkspace.currentDrawingName = "Perimeter A";
+    mockWorkspace.currentCustomerName = "Cleveland Land Services";
     mockWorkspace.isDirty = false;
     mockSelectionState.selectedSegmentId = null;
     mockSelectionState.selectedGateId = null;
@@ -349,6 +352,7 @@ describe("EditorPage", () => {
 
     expect(html).toContain("Workspace Editor");
     expect(html).toContain("Perimeter A");
+    expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Acme Fencing workspace");
     expect(html).toContain("Jane Owner");
     expect(html).toContain("Admin");

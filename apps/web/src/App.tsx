@@ -196,6 +196,7 @@ export function App() {
           ) : null}
           {route === "drawings" ? (
             <DrawingsPage
+              session={portal.session}
               drawings={portal.drawings}
               isLoading={portal.isLoadingDrawings}
               onRefresh={portal.refreshDrawings}

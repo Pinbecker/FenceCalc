@@ -185,7 +185,7 @@ export function usePortalCompanyData({
         }
 
         const drawing = await setDrawingArchivedState(drawingId, archived, currentDrawing.versionNumber);
-        const nextSummary = updateDrawingSummaryFromRecord(drawing);
+        const nextSummary = updateDrawingSummaryFromRecord(drawing, currentDrawing);
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
@@ -240,7 +240,7 @@ export function usePortalCompanyData({
         }
 
         const drawing = await restoreDrawingVersion(drawingId, versionNumber, currentDrawing.versionNumber);
-        const nextSummary = updateDrawingSummaryFromRecord(drawing);
+        const nextSummary = updateDrawingSummaryFromRecord(drawing, currentDrawing);
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );

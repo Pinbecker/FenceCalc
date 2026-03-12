@@ -30,6 +30,7 @@ const sampleDrawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front boundary",
+    customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 4,
     gateCount: 1,
@@ -40,7 +41,11 @@ const sampleDrawings: DrawingSummary[] = [
     archivedAtIso: null,
     archivedByUserId: null,
     createdByUserId: "user-1",
+    createdByDisplayName: "Owner",
     updatedByUserId: "user-1",
+    updatedByDisplayName: "Owner",
+    contributorUserIds: ["user-1"],
+    contributorDisplayNames: ["Owner"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T11:00:00.000Z"
   }

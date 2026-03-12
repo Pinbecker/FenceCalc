@@ -32,6 +32,7 @@ describe("portalSessionData", () => {
       id: "drawing-1",
       companyId: "company-1",
       name: "Perimeter",
+      customerName: "Cleveland Land Services",
       layout: {
         segments: [
           {
@@ -66,6 +67,7 @@ describe("portalSessionData", () => {
 
     expect(summary.segmentCount).toBe(1);
     expect(summary.gateCount).toBe(1);
+    expect(summary.customerName).toBe("Cleveland Land Services");
     expect(summary.previewLayout.gates?.[0]?.id).toBe("gate-1");
   });
 });

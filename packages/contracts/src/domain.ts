@@ -216,6 +216,7 @@ export interface DrawingRecord {
   id: string;
   companyId: string;
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
@@ -235,6 +236,7 @@ export interface DrawingSummary {
   id: string;
   companyId: string;
   name: string;
+  customerName: string;
   previewLayout: LayoutModel;
   segmentCount: number;
   gateCount: number;
@@ -245,7 +247,11 @@ export interface DrawingSummary {
   archivedAtIso: string | null;
   archivedByUserId: string | null;
   createdByUserId: string;
+  createdByDisplayName: string;
   updatedByUserId: string;
+  updatedByDisplayName: string;
+  contributorUserIds: string[];
+  contributorDisplayNames: string[];
   createdAtIso: string;
   updatedAtIso: string;
 }
@@ -261,6 +267,7 @@ export interface DrawingVersionRecord {
   versionNumber: number;
   source: DrawingVersionSource;
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;

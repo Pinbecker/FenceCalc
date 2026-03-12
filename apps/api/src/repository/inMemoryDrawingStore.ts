@@ -1,20 +1,40 @@
-import type { DrawingRecord, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { toDrawingSummary } from "./shared.js";
 import type {
   CreateDrawingInput,
   RestoreDrawingVersionInput,
   SetDrawingArchivedStateInput,
+  StoredUser,
   UpdateDrawingInput
 } from "./types.js";
 
 export interface InMemoryDrawingState {
   drawings: Map<string, DrawingRecord>;
   drawingVersions: Map<string, DrawingVersionRecord[]>;
+  users: Map<string, StoredUser>;
 }
 
 export class InMemoryDrawingStore {
   public constructor(private readonly state: InMemoryDrawingState) {}
+
+  private toSummary(drawing: DrawingRecord): DrawingSummary {
+    const versions = this.state.drawingVersions.get(drawing.id) ?? [];
+    const contributorUserIds = [...new Set([
+      drawing.createdByUserId,
+      drawing.updatedByUserId,
+      ...versions.map((version) => version.createdByUserId)
+    ])];
+
+    return toDrawingSummary(drawing, {
+      createdByDisplayName: this.state.users.get(drawing.createdByUserId)?.displayName ?? "",
+      updatedByDisplayName: this.state.users.get(drawing.updatedByUserId)?.displayName ?? "",
+      contributorUserIds,
+      contributorDisplayNames: contributorUserIds
+        .map((userId) => this.state.users.get(userId)?.displayName)
+        .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
+    });
+  }
 
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
     const drawing: DrawingRecord = {
@@ -35,6 +55,7 @@ export class InMemoryDrawingStore {
         versionNumber: 1,
         source: "CREATE",
         name: drawing.name,
+        customerName: drawing.customerName,
         layout: drawing.layout,
         ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),
         estimate: drawing.estimate,
@@ -58,7 +79,7 @@ export class InMemoryDrawingStore {
         return true;
       })
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
-      .map(toDrawingSummary);
+      .map((drawing) => this.toSummary(drawing));
   }
 
   public getDrawingById(drawingId: string, companyId: string): DrawingRecord | null {
@@ -77,6 +98,7 @@ export class InMemoryDrawingStore {
     const updated: DrawingRecord = {
       ...existing,
       name: input.name,
+      customerName: input.customerName,
       layout: input.layout,
       savedViewport: input.savedViewport ?? null,
       estimate: input.estimate,
@@ -97,6 +119,7 @@ export class InMemoryDrawingStore {
       versionNumber: updated.versionNumber,
       source: "UPDATE",
       name: updated.name,
+      customerName: updated.customerName,
       layout: updated.layout,
       ...(updated.savedViewport ? { savedViewport: updated.savedViewport } : {}),
       estimate: updated.estimate,
@@ -142,6 +165,7 @@ export class InMemoryDrawingStore {
     const restored: DrawingRecord = {
       ...existing,
       name: version.name,
+      customerName: version.customerName,
       layout: version.layout,
       savedViewport: version.savedViewport ?? null,
       estimate: version.estimate,
@@ -162,6 +186,7 @@ export class InMemoryDrawingStore {
       versionNumber: restored.versionNumber,
       source: "RESTORE",
       name: restored.name,
+      customerName: restored.customerName,
       layout: restored.layout,
       ...(restored.savedViewport ? { savedViewport: restored.savedViewport } : {}),
       estimate: restored.estimate,

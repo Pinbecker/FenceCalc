@@ -19,7 +19,8 @@ function formatTimestamp(value: string): string {
 export function DashboardPage({ session, drawings, onNavigate }: DashboardPageProps) {
   const activeDrawings = drawings.filter((drawing) => !drawing.isArchived);
   const archivedDrawings = drawings.filter((drawing) => drawing.isArchived);
-  const recent = activeDrawings.slice(0, 3);
+  const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
+  const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 3);
   const totalSegments = activeDrawings.reduce((sum, drawing) => sum + drawing.segmentCount, 0);
   const totalGates = activeDrawings.reduce((sum, drawing) => sum + drawing.gateCount, 0);
 
@@ -29,7 +30,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
         <div>
           <span className="portal-eyebrow">Company Dashboard</span>
           <h1>{session.company.name}</h1>
-          <p>Start from the work that matters now: reopen the latest drawings, create a clean draft, or head to operations.</p>
+          <p>Start from your recent customer work first, then branch into the wider company library when you need another team drawing.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("drawings")}>
@@ -46,7 +47,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Recent drawings</span>
-              <h2>Continue where the team left off</h2>
+              <h2>{myDrawings.length > 0 ? "Your latest customer work" : "Continue where the team left off"}</h2>
             </div>
             <button type="button" className="portal-text-button" onClick={() => onNavigate("drawings")}>
               View all
@@ -66,6 +67,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
                 </div>
                 <div className="portal-recent-copy">
                   <strong>{drawing.name}</strong>
+                  <span>{drawing.customerName}</span>
                   <span>{formatTimestamp(drawing.updatedAtIso)}</span>
                   <span>
                     {drawing.segmentCount} segments · {drawing.gateCount} gates
@@ -87,11 +89,11 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
           <div className="portal-action-list">
             <button type="button" className="portal-action-card" onClick={() => onNavigate("drawings")}>
               <strong>Drawing library</strong>
-              <span>Scan saved work in a denser queue and open only the drawings you need to continue.</span>
+              <span>Filter the library by customer or switch to just the drawings you have worked on.</span>
             </button>
             <button type="button" className="portal-action-card" onClick={() => onNavigate("editor")}>
               <strong>Open editor</strong>
-              <span>Start a fresh layout in the dedicated workspace with tools, canvas, and estimate rails separated.</span>
+              <span>Start a fresh layout with separate customer and drawing names captured from the beginning.</span>
             </button>
             {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
               <button type="button" className="portal-action-card" onClick={() => onNavigate("admin")}>
@@ -104,6 +106,10 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
       </div>
 
       <div className="portal-stat-grid portal-stat-grid-secondary">
+        <article className="portal-stat-card">
+          <span className="portal-stat-label">Your Drawings</span>
+          <strong>{myDrawings.length}</strong>
+        </article>
         <article className="portal-stat-card">
           <span className="portal-stat-label">Saved Drawings</span>
           <strong>{activeDrawings.length}</strong>

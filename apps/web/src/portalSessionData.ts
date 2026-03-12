@@ -39,11 +39,13 @@ export async function loadPortalCompanyData(session: AuthSessionEnvelope): Promi
   };
 }
 
-export function updateDrawingSummaryFromRecord(drawing: DrawingRecord): DrawingSummary {
+export function updateDrawingSummaryFromRecord(drawing: DrawingRecord, current?: DrawingSummary): DrawingSummary {
+  const contributorUserIds = current?.contributorUserIds ?? [...new Set([drawing.createdByUserId, drawing.updatedByUserId])];
   return {
     id: drawing.id,
     companyId: drawing.companyId,
     name: drawing.name,
+    customerName: drawing.customerName,
     previewLayout: drawing.layout,
     segmentCount: drawing.layout.segments.length,
     gateCount: drawing.layout.gates?.length ?? 0,
@@ -54,7 +56,11 @@ export function updateDrawingSummaryFromRecord(drawing: DrawingRecord): DrawingS
     archivedAtIso: drawing.archivedAtIso,
     archivedByUserId: drawing.archivedByUserId,
     createdByUserId: drawing.createdByUserId,
+    createdByDisplayName: current?.createdByDisplayName ?? "",
     updatedByUserId: drawing.updatedByUserId,
+    updatedByDisplayName: current?.updatedByDisplayName ?? "",
+    contributorUserIds,
+    contributorDisplayNames: current?.contributorDisplayNames ?? [],
     createdAtIso: drawing.createdAtIso,
     updatedAtIso: drawing.updatedAtIso
   };

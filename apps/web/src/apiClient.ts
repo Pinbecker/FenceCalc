@@ -169,6 +169,7 @@ export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
 
 export async function createDrawing(input: {
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
 }): Promise<DrawingRecord> {
@@ -184,6 +185,7 @@ export async function updateDrawing(
   input: {
     expectedVersionNumber: number;
     name?: string;
+    customerName?: string;
     layout?: LayoutModel;
     savedViewport?: DrawingCanvasViewport | null;
   },

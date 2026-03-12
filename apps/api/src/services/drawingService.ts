@@ -38,6 +38,7 @@ export type DrawingMutationResult =
 
 interface DrawingCreateInput {
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -45,6 +46,7 @@ interface DrawingCreateInput {
 interface DrawingUpdateInput {
   expectedVersionNumber: number;
   name?: string | undefined;
+  customerName?: string | undefined;
   layout?: LayoutModel | undefined;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -66,6 +68,7 @@ export async function createDrawingForCompany(
       id: randomUUID(),
       companyId: authenticated.company.id,
       name: input.name,
+      customerName: input.customerName,
       layout: result.layout,
       savedViewport: input.savedViewport ?? null,
       estimate: result.estimate,
@@ -123,6 +126,7 @@ export async function updateDrawingForCompany(
       drawingId: existing.id,
       companyId: authenticated.company.id,
       name: input.name ?? existing.name,
+      customerName: input.customerName ?? existing.customerName,
       layout: nextLayout.layout,
       savedViewport: input.savedViewport ?? existing.savedViewport ?? null,
       estimate: nextLayout.estimate,

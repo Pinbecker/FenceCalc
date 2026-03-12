@@ -128,6 +128,7 @@ describe("apiClient", () => {
               id: "drawing-1",
               companyId: "company-1",
               name: "Yard",
+              customerName: "Cleveland Land Services",
               previewLayout: { segments: [], gates: [] },
               segmentCount: 0,
               gateCount: 0,
@@ -138,7 +139,11 @@ describe("apiClient", () => {
               archivedAtIso: null,
               archivedByUserId: null,
               createdByUserId: "user-1",
+              createdByDisplayName: "Jane",
               updatedByUserId: "user-1",
+              updatedByDisplayName: "Jane",
+              contributorUserIds: ["user-1"],
+              contributorDisplayNames: ["Jane"],
               createdAtIso: "2026-03-10T10:00:00.000Z",
               updatedAtIso: "2026-03-10T10:00:00.000Z"
             }
@@ -157,6 +162,7 @@ describe("apiClient", () => {
             id: "drawing-1",
             companyId: "company-1",
             name: "Yard",
+            customerName: "Cleveland Land Services",
             layout: { segments: [], gates: [] },
             estimate: {
               posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
@@ -214,6 +220,7 @@ describe("apiClient", () => {
             id: "drawing-1",
             companyId: "company-1",
             name: "Updated yard",
+            customerName: "Cleveland Land Services",
             layout: { segments: [], gates: [] },
             estimate: {
               posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
@@ -271,6 +278,7 @@ describe("apiClient", () => {
             id: "drawing-1",
             companyId: "company-1",
             name: "Updated yard",
+            customerName: "Cleveland Land Services",
             layout: { segments: [], gates: [] },
             estimate: {
               posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
@@ -322,7 +330,7 @@ describe("apiClient", () => {
       ),
     );
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ versions: [{ id: "v2", drawingId: "drawing-1", companyId: "company-1", schemaVersion: TEST_SCHEMA_VERSION, rulesVersion: TEST_RULES_VERSION, versionNumber: 2, source: "UPDATE", name: "Updated yard", layout: { segments: [], gates: [] }, estimate: { posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} }, corners: { total: 0, internal: 0, external: 0, unclassified: 0 }, materials: { twinBarPanels: 0, twinBarPanelsSuperRebound: 0, twinBarPanelsByStockHeightMm: {}, twinBarPanelsByFenceHeight: {}, roll2100: 0, roll900: 0, totalRolls: 0, rollsByFenceHeight: {} }, optimization: { strategy: "CHAINED_CUT_PLANNER", twinBar: { reuseAllowanceMm: 200, stockPanelWidthMm: 2525, fixedFullPanels: 0, baselinePanels: 0, optimizedPanels: 0, panelsSaved: 0, totalCutDemands: 0, stockPanelsOpened: 0, reusedCuts: 0, totalConsumedMm: 0, totalLeftoverMm: 0, reusableLeftoverMm: 0, utilizationRate: 0, buckets: [] } }, segments: [] }, createdByUserId: "user-1", createdAtIso: "2026-03-10T11:00:00.000Z" }] }), { status: 200 }),
+      new Response(JSON.stringify({ versions: [{ id: "v2", drawingId: "drawing-1", companyId: "company-1", schemaVersion: TEST_SCHEMA_VERSION, rulesVersion: TEST_RULES_VERSION, versionNumber: 2, source: "UPDATE", name: "Updated yard", customerName: "Cleveland Land Services", layout: { segments: [], gates: [] }, estimate: { posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} }, corners: { total: 0, internal: 0, external: 0, unclassified: 0 }, materials: { twinBarPanels: 0, twinBarPanelsSuperRebound: 0, twinBarPanelsByStockHeightMm: {}, twinBarPanelsByFenceHeight: {}, roll2100: 0, roll900: 0, totalRolls: 0, rollsByFenceHeight: {} }, optimization: { strategy: "CHAINED_CUT_PLANNER", twinBar: { reuseAllowanceMm: 200, stockPanelWidthMm: 2525, fixedFullPanels: 0, baselinePanels: 0, optimizedPanels: 0, panelsSaved: 0, totalCutDemands: 0, stockPanelsOpened: 0, reusedCuts: 0, totalConsumedMm: 0, totalLeftoverMm: 0, reusableLeftoverMm: 0, utilizationRate: 0, buckets: [] } }, segments: [] }, createdByUserId: "user-1", createdAtIso: "2026-03-10T11:00:00.000Z" }] }), { status: 200 }),
     );
     fetchMock.mockResolvedValueOnce(
       new Response(
@@ -331,6 +339,7 @@ describe("apiClient", () => {
             id: "drawing-1",
             companyId: "company-1",
             name: "Updated yard",
+            customerName: "Cleveland Land Services",
             layout: { segments: [], gates: [] },
             estimate: {
               posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
@@ -391,10 +400,11 @@ describe("apiClient", () => {
     await listUsers();
     await listAuditLog();
     await logout();
-    await createDrawing({ name: "Yard", layout: { segments: [], gates: [] } });
+    await createDrawing({ name: "Yard", customerName: "Cleveland Land Services", layout: { segments: [], gates: [] } });
     await updateDrawing("drawing-1", {
       expectedVersionNumber: 1,
       name: "Updated yard",
+      customerName: "Cleveland Land Services",
       layout: { segments: [], gates: [] }
     });
     await setDrawingArchivedState("drawing-1", true, 2);

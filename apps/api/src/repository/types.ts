@@ -64,6 +64,7 @@ export interface CreateDrawingInput {
   id: string;
   companyId: string;
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
@@ -79,6 +80,7 @@ export interface UpdateDrawingInput {
   drawingId: string;
   companyId: string;
   name: string;
+  customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;

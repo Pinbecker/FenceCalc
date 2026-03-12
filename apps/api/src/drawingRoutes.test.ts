@@ -37,6 +37,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Yard perimeter",
+        customerName: "Cleveland Land Services",
         layout: {
           segments: [
             {
@@ -159,6 +160,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Conflict test",
+        customerName: "Cleveland Land Services",
         layout: { segments: [] }
       }
     });
@@ -200,6 +202,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Archive me",
+        customerName: "Cleveland Land Services",
         layout: { segments: [] }
       }
     });
