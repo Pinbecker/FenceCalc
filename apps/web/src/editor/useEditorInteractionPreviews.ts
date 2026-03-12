@@ -23,7 +23,7 @@ import {
   findNearestSegmentSnap,
   projectPointOntoSegment,
   resolveGateWidthMm
-} from "./gateGeometry";
+} from "./gateMath";
 import {
   buildRecessPreview,
   recessAnchorSnapWindowMm,

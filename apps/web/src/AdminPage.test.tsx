@@ -35,15 +35,18 @@ describe("AdminPage", () => {
       <AdminPage
         users={users}
         auditLog={auditLog}
+        currentUserId="user-1"
         currentUserRole="OWNER"
         isLoadingUsers={false}
         isLoadingAuditLog={false}
         isSavingUser={false}
+        isResettingUserId={null}
         errorMessage={null}
         noticeMessage={null}
         onRefresh={() => Promise.resolve()}
         onRefreshAudit={() => Promise.resolve()}
         onCreateUser={() => Promise.resolve(true)}
+        onResetUserPassword={() => Promise.resolve(true)}
       />,
     );
 

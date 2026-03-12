@@ -3,7 +3,7 @@ import { distanceMm } from "@fence-estimator/geometry";
 
 import { MIN_SEGMENT_MM, quantize } from "./constants.js";
 import { clampGatePlacementToSegment, normalizeVector, pointCoordinateKey, resolveGatePreviewLeafCount } from "./editorMath.js";
-import { interpolateAlongSegment } from "./gateGeometry.js";
+import { interpolateAlongSegment } from "./gateMath.js";
 import type { ResolvedGatePlacement, SegmentConnectivity } from "./types.js";
 
 export function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivity {

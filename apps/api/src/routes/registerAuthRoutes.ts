@@ -1,12 +1,15 @@
-﻿import { randomUUID } from "node:crypto";
-import {
-  loginRequestSchema,
-  passwordResetConfirmSchema,
-  passwordResetRequestSchema
-} from "@fence-estimator/contracts";
+import { loginRequestSchema } from "@fence-estimator/contracts";
 
-import { createSessionToken, hashPassword, hashSessionToken, verifyPassword } from "../auth.js";
-import { createSessionEnvelope, readBearerToken, type RouteDependencies, requireAuth, writeAuditLog } from "../app-support.js";
+import { hashSessionToken, verifyPassword } from "../auth.js";
+import { requireAuth } from "../authorization.js";
+import { writeAuditLog } from "../auditLogSupport.js";
+import type { RouteDependencies } from "../routeSupport.js";
+import {
+  buildClearedSessionCookieHeader,
+  buildSessionCookieHeader,
+  createSessionEnvelope,
+  readSessionToken
+} from "../sessionHttp.js";
 
 export function registerAuthRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
   app.post("/api/v1/auth/register", async (_request, reply) =>
@@ -64,6 +67,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter }: Ro
       metadata: { email: user.email }
     });
 
+    reply.header("set-cookie", buildSessionCookieHeader(config, envelope.sessionToken));
     return reply.code(200).send({
       company: envelope.company,
       user: envelope.user,
@@ -72,24 +76,26 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter }: Ro
   });
 
   app.get("/api/v1/auth/me", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
     return reply.code(200).send({
+      session: authenticated.session,
       company: authenticated.company,
       user: authenticated.user
     });
   });
 
   app.post("/api/v1/auth/logout", async (request, reply) => {
-    const token = readBearerToken(request.headers);
+    const token = readSessionToken(request.headers, config);
     if (!token) {
+      reply.header("set-cookie", buildClearedSessionCookieHeader(config));
       return reply.code(200).send({ ok: true });
     }
 
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -106,87 +112,19 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter }: Ro
       createdAtIso: revokedAtIso
     });
 
+    reply.header("set-cookie", buildClearedSessionCookieHeader(config));
     return reply.code(200).send({ ok: true });
   });
 
-  app.post("/api/v1/auth/request-password-reset", async (request, reply) => {
-    if (!writeLimiter.allow(`password-reset-request:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
+  app.post("/api/v1/auth/request-password-reset", async (_request, reply) =>
+    reply.code(501).send({
+      error: "Password reset is disabled until a secure out-of-band delivery channel is configured"
+    }),
+  );
 
-    const parsed = passwordResetRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid password reset payload",
-        details: parsed.error.flatten()
-      });
-    }
-
-    const user = await repository.getUserByEmail(parsed.data.email);
-    if (user) {
-      const issuedAtIso = new Date().toISOString();
-      const resetToken = createSessionToken();
-      const expiresAtIso = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      await repository.createPasswordResetToken({
-        id: randomUUID(),
-        userId: user.id,
-        tokenHash: hashSessionToken(resetToken),
-        createdAtIso: issuedAtIso,
-        expiresAtIso
-      });
-      await writeAuditLog(repository, {
-        companyId: user.companyId,
-        actorUserId: null,
-        entityType: "AUTH",
-        entityId: user.id,
-        action: "PASSWORD_RESET_REQUESTED",
-        summary: `Password reset requested for ${user.email}`,
-        createdAtIso: issuedAtIso,
-        metadata: {
-          email: user.email,
-          resetToken
-        }
-      });
-    }
-
-    return reply.code(202).send({ ok: true });
-  });
-
-  app.post("/api/v1/auth/reset-password", async (request, reply) => {
-    if (!writeLimiter.allow(`password-reset-confirm:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const parsed = passwordResetConfirmSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid password reset confirmation payload",
-        details: parsed.error.flatten()
-      });
-    }
-
-    const password = hashPassword(parsed.data.password);
-    const consumedAtIso = new Date().toISOString();
-    const consumption = await repository.consumePasswordResetToken(
-      hashSessionToken(parsed.data.token),
-      password.hash,
-      password.salt,
-      consumedAtIso,
-    );
-    if (!consumption) {
-      return reply.code(400).send({ error: "Invalid or expired reset token" });
-    }
-
-    await writeAuditLog(repository, {
-      companyId: consumption.company.id,
-      actorUserId: consumption.user.id,
-      entityType: "AUTH",
-      entityId: consumption.user.id,
-      action: "PASSWORD_RESET_COMPLETED",
-      summary: `Password reset completed for ${consumption.user.email}`,
-      createdAtIso: consumedAtIso
-    });
-
-    return reply.code(200).send({ ok: true });
-  });
+  app.post("/api/v1/auth/reset-password", async (_request, reply) =>
+    reply.code(501).send({
+      error: "Password reset is disabled until a secure out-of-band delivery channel is configured"
+    }),
+  );
 }

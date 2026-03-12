@@ -5,7 +5,7 @@ export type {
   AuthenticatedSession,
   CreateAuditLogInput,
   CreateDrawingInput,
-  CreateOwnerAccountInput,
+  BootstrapOwnerAccountInput,
   CreatePasswordResetTokenInput,
   CreateSessionInput,
   CreateUserInput,

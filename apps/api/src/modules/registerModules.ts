@@ -1,4 +1,4 @@
-import type { RouteDependencies } from "../app-support.js";
+import type { RouteDependencies } from "../routeSupport.js";
 
 import { registerAuditRoutes } from "./audit/index.js";
 import { registerAuthRoutes } from "./auth/index.js";

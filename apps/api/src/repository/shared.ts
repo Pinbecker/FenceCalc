@@ -9,9 +9,15 @@ import type {
   DrawingSummary,
   DrawingVersionRecord,
   DrawingVersionSource,
-  EstimateResult,
   LayoutModel
 } from "@fence-estimator/contracts";
+import {
+  DRAWING_SCHEMA_VERSION,
+  estimateResultSchema,
+  layoutModelSchema
+} from "@fence-estimator/contracts";
+import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
+import type { ZodType } from "zod";
 
 import type { StoredUser } from "./types.js";
 
@@ -38,6 +44,8 @@ export interface DrawingRow {
   name: string;
   layout_json: string;
   estimate_json: string;
+  schema_version: number;
+  rules_version: string;
   version_number: number;
   is_archived: number;
   archived_at_iso: string | null;
@@ -52,6 +60,8 @@ export interface DrawingVersionRow {
   id: string;
   drawing_id: string;
   company_id: string;
+  schema_version: number;
+  rules_version: string;
   version_number: number;
   source: DrawingVersionSource;
   name: string;
@@ -112,13 +122,44 @@ export function toCompany(row: CompanyRow): CompanyRecord {
   };
 }
 
+function parseStoredJson<T>(raw: string, schema: ZodType<T>, label: string): T {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Corrupt stored ${label}: invalid JSON`);
+  }
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`Corrupt stored ${label}: schema validation failed`);
+  }
+  return result.data;
+}
+
+function buildPreviewLayout(layout: LayoutModel): LayoutModel {
+  return {
+    segments: layout.segments.slice(0, 40),
+    gates: (layout.gates ?? []).slice(0, 12)
+  };
+}
+
 export function toDrawing(row: DrawingRow): DrawingRecord {
+  const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing ${row.id}`);
+  const layout: LayoutModel = {
+    segments: parsedLayout.segments,
+    gates: parsedLayout.gates ?? []
+  };
+  const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`);
+
   return {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
-    layout: JSON.parse(row.layout_json) as LayoutModel,
-    estimate: JSON.parse(row.estimate_json) as EstimateResult,
+    layout,
+    estimate,
+    schemaVersion: row.schema_version ?? DRAWING_SCHEMA_VERSION,
+    rulesVersion: row.rules_version ?? RULES_ENGINE_VERSION,
     versionNumber: row.version_number,
     isArchived: row.is_archived === 1,
     archivedAtIso: row.archived_at_iso,
@@ -135,9 +176,11 @@ export function toDrawingSummary(drawing: DrawingRecord): DrawingSummary {
     id: drawing.id,
     companyId: drawing.companyId,
     name: drawing.name,
-    previewLayout: drawing.layout,
+    previewLayout: buildPreviewLayout(drawing.layout),
     segmentCount: drawing.layout.segments.length,
     gateCount: drawing.layout.gates?.length ?? 0,
+    schemaVersion: drawing.schemaVersion,
+    rulesVersion: drawing.rulesVersion,
     versionNumber: drawing.versionNumber,
     isArchived: drawing.isArchived,
     archivedAtIso: drawing.archivedAtIso,
@@ -150,15 +193,24 @@ export function toDrawingSummary(drawing: DrawingRecord): DrawingSummary {
 }
 
 export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
+  const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing version ${row.id}`);
+  const layout: LayoutModel = {
+    segments: parsedLayout.segments,
+    gates: parsedLayout.gates ?? []
+  };
+  const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`);
+
   return {
     id: row.id,
     drawingId: row.drawing_id,
     companyId: row.company_id,
+    schemaVersion: row.schema_version ?? DRAWING_SCHEMA_VERSION,
+    rulesVersion: row.rules_version ?? RULES_ENGINE_VERSION,
     versionNumber: row.version_number,
     source: row.source,
     name: row.name,
-    layout: JSON.parse(row.layout_json) as LayoutModel,
-    estimate: JSON.parse(row.estimate_json) as EstimateResult,
+    layout,
+    estimate,
     createdByUserId: row.created_by_user_id,
     createdAtIso: row.created_at_iso
   };

@@ -6,6 +6,7 @@ import type {
 
 export const TWIN_BAR_PANEL_WIDTH_MM = 2525;
 export const ROLL_LENGTH_MM = 25000;
+export const RULES_ENGINE_VERSION = "2026-03-11";
 
 /**
  * This defaults to the panel center style spacing until a catalogue-specific

@@ -54,9 +54,208 @@ export const gatePlacementSchema = z.object({
   }
 });
 
-export const layoutModelSchema = z.object({
-  segments: z.array(layoutSegmentSchema),
-  gates: z.array(gatePlacementSchema).default([])
+const MAX_LAYOUT_SEGMENTS = 2_000;
+const MAX_LAYOUT_GATES = 500;
+
+export const layoutModelSchema = z
+  .object({
+    segments: z.array(layoutSegmentSchema).max(MAX_LAYOUT_SEGMENTS),
+    gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([])
+  })
+  .superRefine((layout, context) => {
+    const seenSegmentIds = new Set<string>();
+    const segmentLengthById = new Map<string, number>();
+
+    for (const segment of layout.segments) {
+      if (seenSegmentIds.has(segment.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate segment id: ${segment.id}`
+        });
+      }
+      seenSegmentIds.add(segment.id);
+
+      const lengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
+      segmentLengthById.set(segment.id, lengthMm);
+      if (lengthMm <= 0) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Segment ${segment.id} must have a non-zero length`
+        });
+      }
+    }
+
+    const seenGateIds = new Set<string>();
+    const gatesBySegmentId = new Map<string, Array<{ id: string; startOffsetMm: number; endOffsetMm: number }>>();
+
+    for (const gate of layout.gates ?? []) {
+      if (seenGateIds.has(gate.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate gate id: ${gate.id}`
+        });
+      }
+      seenGateIds.add(gate.id);
+
+      const segmentLengthMm = segmentLengthById.get(gate.segmentId);
+      if (segmentLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Gate ${gate.id} references missing segment ${gate.segmentId}`
+        });
+        continue;
+      }
+
+      if (gate.endOffsetMm > segmentLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Gate ${gate.id} exceeds segment ${gate.segmentId} length`
+        });
+      }
+
+      const bucket = gatesBySegmentId.get(gate.segmentId);
+      if (bucket) {
+        bucket.push(gate);
+      } else {
+        gatesBySegmentId.set(gate.segmentId, [gate]);
+      }
+    }
+
+    for (const [segmentId, gates] of gatesBySegmentId) {
+      const ordered = [...gates].sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+      let previousEndMm = Number.NEGATIVE_INFINITY;
+      for (const gate of ordered) {
+        if (gate.startOffsetMm < previousEndMm) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Gates on segment ${segmentId} must not overlap`
+          });
+        }
+        previousEndMm = Math.max(previousEndMm, gate.endOffsetMm);
+      }
+    }
+  });
+
+const nonNegativeIntegerSchema = z.number().int().nonnegative();
+const postBreakdownSchema = z.object({
+  end: nonNegativeIntegerSchema,
+  intermediate: nonNegativeIntegerSchema,
+  corner: nonNegativeIntegerSchema,
+  junction: nonNegativeIntegerSchema,
+  inlineJoin: nonNegativeIntegerSchema,
+  total: nonNegativeIntegerSchema
+});
+const twinBarFenceBreakdownSchema = z.object({
+  standard: nonNegativeIntegerSchema,
+  superRebound: nonNegativeIntegerSchema,
+  total: nonNegativeIntegerSchema
+});
+const rollFenceBreakdownSchema = z.object({
+  roll2100: nonNegativeIntegerSchema,
+  roll900: nonNegativeIntegerSchema,
+  total: nonNegativeIntegerSchema
+});
+const twinBarCutSectionSchema = z.object({
+  segmentId: z.string().min(1),
+  startOffsetMm: z.number().finite().nonnegative(),
+  endOffsetMm: z.number().finite().nonnegative(),
+  lengthMm: z.number().finite().nonnegative()
+});
+const twinBarOptimizationCutSchema = z.object({
+  id: z.string().min(1),
+  step: nonNegativeIntegerSchema,
+  mode: z.enum(["OPEN_STOCK_PANEL", "REUSE_OFFCUT"]),
+  demand: twinBarCutSectionSchema,
+  lengthMm: z.number().finite().nonnegative(),
+  effectiveLengthMm: z.number().finite().nonnegative(),
+  offcutBeforeMm: z.number().finite().nonnegative(),
+  offcutAfterMm: z.number().finite().nonnegative()
+});
+const twinBarOptimizationPlanSchema = z.object({
+  id: z.string().min(1),
+  variant: twinBarVariantSchema,
+  stockPanelHeightMm: nonNegativeIntegerSchema,
+  stockPanelWidthMm: nonNegativeIntegerSchema,
+  cuts: z.array(twinBarOptimizationCutSchema),
+  consumedMm: z.number().finite().nonnegative(),
+  leftoverMm: z.number().finite().nonnegative(),
+  reusableLeftoverMm: z.number().finite().nonnegative(),
+  reusedCuts: nonNegativeIntegerSchema,
+  panelsSaved: nonNegativeIntegerSchema
+});
+const twinBarOptimizationBucketSchema = z.object({
+  variant: twinBarVariantSchema,
+  stockPanelHeightMm: nonNegativeIntegerSchema,
+  solver: z.enum(["EXACT_SEARCH", "BEST_FIT_DECREASING"]),
+  fullPanels: nonNegativeIntegerSchema,
+  cutDemands: nonNegativeIntegerSchema,
+  stockPanelsOpened: nonNegativeIntegerSchema,
+  reusedCuts: nonNegativeIntegerSchema,
+  baselinePanels: nonNegativeIntegerSchema,
+  optimizedPanels: nonNegativeIntegerSchema,
+  panelsSaved: nonNegativeIntegerSchema,
+  totalConsumedMm: z.number().finite().nonnegative(),
+  totalLeftoverMm: z.number().finite().nonnegative(),
+  reusableLeftoverMm: z.number().finite().nonnegative(),
+  utilizationRate: z.number().finite().min(0),
+  plans: z.array(twinBarOptimizationPlanSchema)
+});
+
+export const estimateResultSchema = z.object({
+  posts: z.object({
+    terminal: nonNegativeIntegerSchema,
+    intermediate: nonNegativeIntegerSchema,
+    total: nonNegativeIntegerSchema,
+    cornerPosts: nonNegativeIntegerSchema,
+    byHeightAndType: z.record(z.string(), postBreakdownSchema),
+    byHeightMm: z.record(z.string(), nonNegativeIntegerSchema)
+  }),
+  corners: z.object({
+    total: nonNegativeIntegerSchema,
+    internal: nonNegativeIntegerSchema,
+    external: nonNegativeIntegerSchema,
+    unclassified: nonNegativeIntegerSchema
+  }),
+  materials: z.object({
+    twinBarPanels: nonNegativeIntegerSchema,
+    twinBarPanelsSuperRebound: nonNegativeIntegerSchema,
+    twinBarPanelsByStockHeightMm: z.record(z.string(), nonNegativeIntegerSchema),
+    twinBarPanelsByFenceHeight: z.record(z.string(), twinBarFenceBreakdownSchema),
+    roll2100: nonNegativeIntegerSchema,
+    roll900: nonNegativeIntegerSchema,
+    totalRolls: nonNegativeIntegerSchema,
+    rollsByFenceHeight: z.record(z.string(), rollFenceBreakdownSchema)
+  }),
+  optimization: z.object({
+    strategy: z.literal("CHAINED_CUT_PLANNER"),
+    twinBar: z.object({
+      reuseAllowanceMm: z.number().finite().nonnegative(),
+      stockPanelWidthMm: z.number().finite().nonnegative(),
+      fixedFullPanels: nonNegativeIntegerSchema,
+      baselinePanels: nonNegativeIntegerSchema,
+      optimizedPanels: nonNegativeIntegerSchema,
+      panelsSaved: nonNegativeIntegerSchema,
+      totalCutDemands: nonNegativeIntegerSchema,
+      stockPanelsOpened: nonNegativeIntegerSchema,
+      reusedCuts: nonNegativeIntegerSchema,
+      totalConsumedMm: z.number().finite().nonnegative(),
+      totalLeftoverMm: z.number().finite().nonnegative(),
+      reusableLeftoverMm: z.number().finite().nonnegative(),
+      utilizationRate: z.number().finite().min(0),
+      buckets: z.array(twinBarOptimizationBucketSchema)
+    })
+  }),
+  segments: z.array(
+    z.object({
+      segmentId: z.string().min(1),
+      lengthMm: nonNegativeIntegerSchema,
+      bays: nonNegativeIntegerSchema,
+      intermediatePosts: nonNegativeIntegerSchema,
+      panels: nonNegativeIntegerSchema,
+      roll2100: nonNegativeIntegerSchema,
+      roll900: nonNegativeIntegerSchema
+    })
+  )
 });
 
 export const estimateSnapshotRequestSchema = z.object({
@@ -87,6 +286,10 @@ export const userCreateRequestSchema = z.object({
   role: z.enum(["ADMIN", "MEMBER"])
 });
 
+export const userPasswordSetRequestSchema = z.object({
+  password: passwordSchema
+});
+
 export const loginRequestSchema = z.object({
   email: emailSchema,
   password: passwordSchema
@@ -99,6 +302,7 @@ export const drawingCreateRequestSchema = z.object({
 
 export const drawingUpdateRequestSchema = z
   .object({
+    expectedVersionNumber: z.coerce.number().int().min(1),
     name: drawingNameSchema.optional(),
     layout: layoutModelSchema.optional()
   })
@@ -112,7 +316,8 @@ export const drawingUpdateRequestSchema = z
   });
 
 export const drawingArchiveRequestSchema = z.object({
-  archived: z.boolean()
+  archived: z.boolean(),
+  expectedVersionNumber: z.coerce.number().int().min(1)
 });
 
 export const passwordResetRequestSchema = z.object({

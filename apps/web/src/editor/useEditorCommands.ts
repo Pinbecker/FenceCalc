@@ -6,6 +6,7 @@ import type {
   FenceSpec,
   GatePlacement,
   GateType,
+  LayoutModel,
   LayoutSegment,
   PointMm
 } from "@fence-estimator/contracts";
@@ -24,7 +25,6 @@ import {
 import { buildRecessReplacementSegments } from "./recess";
 import type {
   GateInsertionPreview,
-  HistoryAction,
   InteractionMode,
   RecessInsertionPreview,
   ResolvedGatePlacement,
@@ -51,8 +51,9 @@ interface PointerScreenPoint {
 
 interface UseEditorCommandsOptions {
   stageRef: RefObject<Konva.Stage | null>;
-  dispatchHistory: Dispatch<HistoryAction>;
+  applyLayout: (updater: (previous: LayoutModel) => LayoutModel) => void;
   applySegments: (updater: (previous: LayoutSegment[]) => LayoutSegment[]) => void;
+  applyGatePlacements: (updater: (previous: GatePlacement[]) => GatePlacement[]) => void;
   segmentsById: Map<string, LayoutSegment>;
   resolvedGateById: Map<string, ResolvedGatePlacement>;
   connectivity: SegmentConnectivity;
@@ -80,7 +81,6 @@ interface UseEditorCommandsOptions {
   endPan: () => void;
   zoomAtPointer: (pointer: PointerScreenPoint, deltaY: number) => void;
   setPointerWorld: (point: PointMm | null) => void;
-  setGatePlacements: Dispatch<SetStateAction<GatePlacement[]>>;
   setDrawStart: Dispatch<SetStateAction<PointMm | null>>;
   setRectangleStart: Dispatch<SetStateAction<PointMm | null>>;
   setSelectedSegmentId: Dispatch<SetStateAction<string | null>>;
@@ -100,8 +100,9 @@ interface UseEditorCommandsOptions {
 
 export function useEditorCommands({
   stageRef,
-  dispatchHistory,
+  applyLayout,
   applySegments,
+  applyGatePlacements,
   segmentsById,
   resolvedGateById,
   connectivity,
@@ -129,7 +130,6 @@ export function useEditorCommands({
   endPan,
   zoomAtPointer,
   setPointerWorld,
-  setGatePlacements,
   setDrawStart,
   setRectangleStart,
   setSelectedSegmentId,
@@ -274,11 +274,11 @@ export function useEditorCommands({
       if (Math.abs(deltaAlongMm) < 0.01) {
         return;
       }
-      setGatePlacements((previous) =>
+      applyGatePlacements((previous) =>
         moveGatePlacementCollection(previous, gateId, deltaAlongMm, segmentsById)
       );
     },
-    [segmentsById, setGatePlacements]
+    [applyGatePlacements, segmentsById]
   );
 
   const startSelectedGateDrag = useCallback(
@@ -384,29 +384,28 @@ export function useEditorCommands({
         return;
       }
 
-      applySegments((previous) => {
-        const next: LayoutSegment[] = [];
-        for (const segment of previous) {
+      applyLayout((previous) => {
+        const nextSegments: LayoutSegment[] = [];
+        for (const segment of previous.segments) {
           if (segment.id !== preview.segment.id) {
-            next.push(segment);
+            nextSegments.push(segment);
             continue;
           }
-          next.push(...replacement);
+          nextSegments.push(...replacement);
         }
-        return next;
+        return {
+          segments: nextSegments,
+          gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById)
+        };
       });
-      setGatePlacements((previous) =>
-        remapGatePlacementsForRecess(previous, preview, resolvedGateById)
-      );
       setSelectedSegmentId(null);
       setSelectedGateId(null);
       setDrawStart(null);
     },
     [
-      applySegments,
+      applyLayout,
       resolvedGateById,
       setDrawStart,
-      setGatePlacements,
       setSelectedGateId,
       setSelectedSegmentId
     ]
@@ -414,7 +413,7 @@ export function useEditorCommands({
 
   const insertGate = useCallback(
     (preview: GateInsertionPreview): void => {
-      setGatePlacements((previous) => {
+      applyGatePlacements((previous) => {
         const nextGate: GatePlacement = {
           id: crypto.randomUUID(),
           segmentId: preview.segment.id,
@@ -439,7 +438,7 @@ export function useEditorCommands({
       setSelectedSegmentId(null);
       setDrawStart(null);
     },
-    [gateType, setDrawStart, setGatePlacements, setSelectedSegmentId]
+    [applyGatePlacements, gateType, setDrawStart, setSelectedSegmentId]
   );
 
   const onStageMouseDown = useCallback(
@@ -629,10 +628,10 @@ export function useEditorCommands({
     if (!selectedGateId) {
       return false;
     }
-    setGatePlacements((previous) => previous.filter((gate) => gate.id !== selectedGateId));
+    applyGatePlacements((previous) => previous.filter((gate) => gate.id !== selectedGateId));
     setSelectedGateId(null);
     return true;
-  }, [selectedGateId, setGatePlacements, setSelectedGateId]);
+  }, [applyGatePlacements, selectedGateId, setSelectedGateId]);
 
   const deleteSelectedSegment = useCallback((): boolean => {
     if (!selectedSegmentId) {
@@ -651,8 +650,7 @@ export function useEditorCommands({
   }, [setDrawStart, setRectangleStart]);
 
   const resetWorkspaceCanvas = useCallback((): void => {
-    dispatchHistory({ type: "SET", segments: [] });
-    setGatePlacements([]);
+    applyLayout(() => ({ segments: [], gates: [] }));
     setDrawStart(null);
     setRectangleStart(null);
     setSelectedSegmentId(null);
@@ -660,9 +658,8 @@ export function useEditorCommands({
     setSelectedPlanId(null);
     setIsLengthEditorOpen(false);
   }, [
-    dispatchHistory,
+    applyLayout,
     setDrawStart,
-    setGatePlacements,
     setIsLengthEditorOpen,
     setRectangleStart,
     setSelectedGateId,
@@ -678,15 +675,13 @@ export function useEditorCommands({
   }, [deleteSelectedGate, deleteSelectedSegment]);
 
   const handleClearLayout = useCallback((): void => {
-    dispatchHistory({ type: "SET", segments: [] });
-    setGatePlacements([]);
+    applyLayout(() => ({ segments: [], gates: [] }));
     setDrawStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
   }, [
-    dispatchHistory,
+    applyLayout,
     setDrawStart,
-    setGatePlacements,
     setSelectedGateId,
     setSelectedSegmentId
   ]);

@@ -6,6 +6,8 @@ import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contr
 import { WorkspacePanel } from "./WorkspacePanel.js";
 
 const resolvedPromise = () => Promise.resolve();
+const TEST_SCHEMA_VERSION = 1;
+const TEST_RULES_VERSION = "2026-03-11";
 
 const baseSession: AuthSessionEnvelope = {
   company: {
@@ -26,8 +28,7 @@ const baseSession: AuthSessionEnvelope = {
     companyId: "company-1",
     userId: "user-1",
     createdAtIso: "2026-03-10T10:00:00.000Z",
-    expiresAtIso: "2026-04-10T10:00:00.000Z",
-    token: "secret"
+    expiresAtIso: "2026-04-10T10:00:00.000Z"
   }
 };
 
@@ -39,6 +40,8 @@ const drawings: DrawingSummary[] = [
     previewLayout: { segments: [], gates: [] },
     segmentCount: 0,
     gateCount: 0,
+    schemaVersion: TEST_SCHEMA_VERSION,
+    rulesVersion: TEST_RULES_VERSION,
     versionNumber: 1,
     isArchived: false,
     archivedAtIso: null,

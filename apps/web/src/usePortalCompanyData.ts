@@ -1,0 +1,286 @@
+import { useCallback, useState } from "react";
+import type {
+  AuditLogRecord,
+  AuthSessionEnvelope,
+  CompanyUserRecord,
+  DrawingSummary,
+  DrawingVersionRecord
+} from "@fence-estimator/contracts";
+
+import {
+  createUser,
+  listAuditLog,
+  listDrawingVersions,
+  listDrawings,
+  listUsers,
+  restoreDrawingVersion,
+  setDrawingArchivedState,
+  setUserPassword,
+  type CreateCompanyUserInput
+} from "./apiClient";
+import { extractApiErrorMessage, extractCurrentVersionNumber } from "./apiErrors";
+import {
+  EMPTY_PORTAL_COMPANY_DATA,
+  loadPortalCompanyData,
+  updateDrawingSummaryFromRecord
+} from "./portalSessionData";
+
+function mergeDrawingSummary(current: DrawingSummary, update: DrawingSummary): DrawingSummary {
+  return {
+    ...current,
+    ...update
+  };
+}
+
+interface UsePortalCompanyDataOptions {
+  session: AuthSessionEnvelope | null;
+  clearMessages: () => void;
+  setErrorMessage: (message: string | null) => void;
+  setNoticeMessage: (message: string | null) => void;
+}
+
+export function usePortalCompanyData({
+  session,
+  clearMessages,
+  setErrorMessage,
+  setNoticeMessage
+}: UsePortalCompanyDataOptions) {
+  const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
+  const [users, setUsers] = useState<CompanyUserRecord[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditLogRecord[]>([]);
+  const [isLoadingDrawings, setIsLoadingDrawings] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isLoadingAuditLog, setIsLoadingAuditLog] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isResettingUserId, setIsResettingUserId] = useState<string | null>(null);
+
+  const clearCompanyData = useCallback(() => {
+    setDrawings(EMPTY_PORTAL_COMPANY_DATA.drawings);
+    setUsers(EMPTY_PORTAL_COMPANY_DATA.users);
+    setAuditLog(EMPTY_PORTAL_COMPANY_DATA.auditLog);
+  }, []);
+
+  const loadCompanyData = useCallback(async (nextSession: AuthSessionEnvelope) => {
+    const nextData = await loadPortalCompanyData(nextSession);
+    setDrawings(nextData.drawings);
+    setUsers(nextData.users);
+    setAuditLog(nextData.auditLog);
+  }, []);
+
+  const refreshDrawings = useCallback(async () => {
+    if (!session) {
+      setDrawings([]);
+      return;
+    }
+
+    setIsLoadingDrawings(true);
+    try {
+      setDrawings(await listDrawings());
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+    } finally {
+      setIsLoadingDrawings(false);
+    }
+  }, [session, setErrorMessage]);
+
+  const refreshUsers = useCallback(async () => {
+    if (!session) {
+      setUsers([]);
+      return;
+    }
+
+    setIsLoadingUsers(true);
+    try {
+      setUsers(await listUsers());
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, [session, setErrorMessage]);
+
+  const refreshAuditLog = useCallback(async () => {
+    if (!session) {
+      setAuditLog([]);
+      return;
+    }
+
+    setIsLoadingAuditLog(true);
+    try {
+      setAuditLog(await listAuditLog());
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+    } finally {
+      setIsLoadingAuditLog(false);
+    }
+  }, [session, setErrorMessage]);
+
+  const createCompanyUser = useCallback(
+    async (input: CreateCompanyUserInput) => {
+      if (!session) {
+        return false;
+      }
+
+      setIsSavingUser(true);
+      clearMessages();
+      try {
+        const user = await createUser(input);
+        setUsers((current) => [...current, user].sort((left, right) => left.createdAtIso.localeCompare(right.createdAtIso)));
+        setAuditLog(await listAuditLog());
+        setNoticeMessage(`Added ${user.displayName}`);
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      } finally {
+        setIsSavingUser(false);
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const resetCompanyUserPassword = useCallback(
+    async (userId: string, password: string) => {
+      if (!session) {
+        return false;
+      }
+
+      setIsResettingUserId(userId);
+      clearMessages();
+      try {
+        await setUserPassword(userId, { password });
+        const [nextUsers, nextAuditLog] = await Promise.all([listUsers(), listAuditLog()]);
+        const targetUser = nextUsers.find((entry) => entry.id === userId) ?? null;
+        setUsers(nextUsers);
+        setAuditLog(nextAuditLog);
+        setNoticeMessage(
+          targetUser
+            ? `Reset password for ${targetUser.displayName}. Their active sessions were revoked.`
+            : "Password updated. Active sessions were revoked.",
+        );
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      } finally {
+        setIsResettingUserId(null);
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const setDrawingArchived = useCallback(
+    async (drawingId: string, archived: boolean) => {
+      if (!session) {
+        return false;
+      }
+
+      clearMessages();
+      const currentDrawing = drawings.find((entry) => entry.id === drawingId);
+      const currentDrawingName = currentDrawing?.name ?? "Drawing";
+      try {
+        if (!currentDrawing) {
+          setErrorMessage("Drawing not found");
+          return false;
+        }
+
+        const drawing = await setDrawingArchivedState(drawingId, archived, currentDrawing.versionNumber);
+        const nextSummary = updateDrawingSummaryFromRecord(drawing);
+        setDrawings((current) =>
+          current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
+        );
+        setAuditLog(await listAuditLog());
+        setNoticeMessage(archived ? `Archived "${drawing.name}"` : `Restored "${drawing.name}"`);
+        return true;
+      } catch (error) {
+        if (extractCurrentVersionNumber(error) !== null) {
+          setDrawings(await listDrawings());
+          setErrorMessage(
+            `"${currentDrawingName}" changed before this action completed. The drawings list has been refreshed; retry the action.`,
+          );
+          return false;
+        }
+
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const loadDrawingVersions = useCallback(
+    async (drawingId: string): Promise<DrawingVersionRecord[]> => {
+      if (!session) {
+        return [];
+      }
+
+      try {
+        return await listDrawingVersions(drawingId);
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return [];
+      }
+    },
+    [session, setErrorMessage],
+  );
+
+  const restoreVersion = useCallback(
+    async (drawingId: string, versionNumber: number) => {
+      if (!session) {
+        return false;
+      }
+
+      clearMessages();
+      const currentDrawing = drawings.find((entry) => entry.id === drawingId);
+      const currentDrawingName = currentDrawing?.name ?? "Drawing";
+      try {
+        if (!currentDrawing) {
+          setErrorMessage("Drawing not found");
+          return false;
+        }
+
+        const drawing = await restoreDrawingVersion(drawingId, versionNumber, currentDrawing.versionNumber);
+        const nextSummary = updateDrawingSummaryFromRecord(drawing);
+        setDrawings((current) =>
+          current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
+        );
+        setAuditLog(await listAuditLog());
+        setNoticeMessage(`Restored drawing version ${versionNumber}`);
+        return true;
+      } catch (error) {
+        if (extractCurrentVersionNumber(error) !== null) {
+          setDrawings(await listDrawings());
+          setErrorMessage(
+            `"${currentDrawingName}" changed before this version restore completed. The drawings list has been refreshed; retry the action.`,
+          );
+          return false;
+        }
+
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+  );
+
+  return {
+    drawings,
+    users,
+    auditLog,
+    isLoadingDrawings,
+    isLoadingUsers,
+    isLoadingAuditLog,
+    isSavingUser,
+    isResettingUserId,
+    clearCompanyData,
+    loadCompanyData,
+    refreshDrawings,
+    refreshUsers,
+    refreshAuditLog,
+    createUser: createCompanyUser,
+    resetUserPassword: resetCompanyUserPassword,
+    setDrawingArchived,
+    loadDrawingVersions,
+    restoreDrawingVersion: restoreVersion
+  };
+}

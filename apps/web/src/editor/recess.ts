@@ -10,7 +10,7 @@ import {
   quantize
 } from "./constants.js";
 import { dot, normalizeVector, pointCoordinateKey, samePointApprox } from "./editorMath.js";
-import { interpolateAlongSegment } from "./gateGeometry.js";
+import { interpolateAlongSegment } from "./gateMath.js";
 import type { RecessAlignmentAnchor, RecessInsertionPreview, RecessSide } from "./types.js";
 
 export function buildRecessPreview(

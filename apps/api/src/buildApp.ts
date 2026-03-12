@@ -4,16 +4,20 @@ import cors from "@fastify/cors";
 import { loadConfig } from "./config.js";
 import { InMemoryAppRepository, type AppRepository, SqliteAppRepository } from "./repository.js";
 import { InMemoryWriteRequestLimiter, type WriteRequestLimiter } from "./security.js";
-import { BuildAppOptions, isAllowedOrigin } from "./app-support.js";
+import { BuildAppOptions, isAllowedOrigin } from "./routeSupport.js";
 import { registerModules } from "./modules/registerModules.js";
 
 export function buildApp(options: BuildAppOptions = {}) {
   const config = options.config ?? loadConfig();
   const app = Fastify({
-    logger: true,
+    trustProxy: config.trustProxy,
+    logger: {
+      level: config.logLevel
+    },
     bodyLimit: config.bodyLimitBytes
   });
   app.register(cors, {
+    credentials: true,
     origin(origin, callback) {
       callback(null, isAllowedOrigin(origin, config.allowedOrigins));
     }

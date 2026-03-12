@@ -81,9 +81,9 @@ export {
   findNearestSegmentSnap,
   interpolateAlongSegment,
   projectPointOntoSegment,
-  renderGateSymbol,
   resolveGateWidthMm
-} from "./gateGeometry.js";
+} from "./gateMath.js";
+export { renderGateSymbol } from "./gateGeometry.js";
 export {
   buildEstimateSegments,
   buildSegmentConnectivity,

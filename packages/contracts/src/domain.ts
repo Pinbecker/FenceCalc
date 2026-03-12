@@ -172,6 +172,8 @@ export interface EstimateSnapshot {
   estimate: EstimateResult;
 }
 
+export const DRAWING_SCHEMA_VERSION = 1;
+
 export type CompanyUserRole = "OWNER" | "ADMIN" | "MEMBER";
 
 export interface CompanyRecord {
@@ -201,9 +203,7 @@ export interface AuthSessionRecord {
 export interface AuthSessionEnvelope {
   company: CompanyRecord;
   user: CompanyUserRecord;
-  session: AuthSessionRecord & {
-    token: string;
-  };
+  session: AuthSessionRecord;
 }
 
 export interface DrawingRecord {
@@ -212,6 +212,8 @@ export interface DrawingRecord {
   name: string;
   layout: LayoutModel;
   estimate: EstimateResult;
+  schemaVersion: number;
+  rulesVersion: string;
   versionNumber: number;
   isArchived: boolean;
   archivedAtIso: string | null;
@@ -229,6 +231,8 @@ export interface DrawingSummary {
   previewLayout: LayoutModel;
   segmentCount: number;
   gateCount: number;
+  schemaVersion: number;
+  rulesVersion: string;
   versionNumber: number;
   isArchived: boolean;
   archivedAtIso: string | null;
@@ -245,6 +249,8 @@ export interface DrawingVersionRecord {
   id: string;
   drawingId: string;
   companyId: string;
+  schemaVersion: number;
+  rulesVersion: string;
   versionNumber: number;
   source: DrawingVersionSource;
   name: string;
@@ -262,6 +268,7 @@ export type AuditAction =
   | "PASSWORD_RESET_COMPLETED"
   | "SESSION_REVOKED"
   | "USER_CREATED"
+  | "USER_PASSWORD_RESET"
   | "DRAWING_CREATED"
   | "DRAWING_UPDATED"
   | "DRAWING_ARCHIVED"

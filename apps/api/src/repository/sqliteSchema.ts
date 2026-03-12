@@ -55,6 +55,8 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           name TEXT NOT NULL,
           layout_json TEXT NOT NULL,
           estimate_json TEXT NOT NULL,
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          rules_version TEXT NOT NULL DEFAULT '2026-03-11',
           version_number INTEGER NOT NULL DEFAULT 1,
           is_archived INTEGER NOT NULL DEFAULT 0,
           archived_at_iso TEXT,
@@ -80,6 +82,8 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           id TEXT PRIMARY KEY,
           drawing_id TEXT NOT NULL,
           company_id TEXT NOT NULL,
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          rules_version TEXT NOT NULL DEFAULT '2026-03-11',
           version_number INTEGER NOT NULL,
           source TEXT NOT NULL,
           name TEXT NOT NULL,
@@ -174,6 +178,19 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "archived_by_user_id")) {
     database.exec("ALTER TABLE drawings ADD COLUMN archived_by_user_id TEXT");
   }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "schema_version")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1");
+  }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "rules_version")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'");
+  }
+
+  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "schema_version")) {
+    database.exec("ALTER TABLE drawing_versions ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1");
+  }
+  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "rules_version")) {
+    database.exec("ALTER TABLE drawing_versions ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'");
+  }
 
   if (tableExists(database, "drawings") && tableExists(database, "drawing_versions")) {
     database.exec(`
@@ -181,6 +198,8 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         id,
         drawing_id,
         company_id,
+        schema_version,
+        rules_version,
         version_number,
         source,
         name,
@@ -193,6 +212,8 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         d.id || ':1',
         d.id,
         d.company_id,
+        COALESCE(d.schema_version, 1),
+        COALESCE(d.rules_version, '2026-03-11'),
         1,
         'CREATE',
         d.name,

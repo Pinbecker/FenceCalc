@@ -5,6 +5,9 @@ import type { DrawingSummary, DrawingVersionRecord } from "@fence-estimator/cont
 
 import { DrawingsPage } from "./DrawingsPage.js";
 
+const TEST_SCHEMA_VERSION = 1;
+const TEST_RULES_VERSION = "2026-03-11";
+
 const drawings: DrawingSummary[] = [
   {
     id: "drawing-1",
@@ -13,6 +16,8 @@ const drawings: DrawingSummary[] = [
     previewLayout: { segments: [], gates: [] },
     segmentCount: 8,
     gateCount: 1,
+    schemaVersion: TEST_SCHEMA_VERSION,
+    rulesVersion: TEST_RULES_VERSION,
     versionNumber: 3,
     isArchived: false,
     archivedAtIso: null,
@@ -29,6 +34,8 @@ const versions: DrawingVersionRecord[] = [
     id: "version-1",
     drawingId: "drawing-1",
     companyId: "company-1",
+    schemaVersion: TEST_SCHEMA_VERSION,
+    rulesVersion: TEST_RULES_VERSION,
     versionNumber: 2,
     source: "UPDATE",
     name: "Front perimeter",

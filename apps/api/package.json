@@ -9,7 +9,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8"
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8",
+    "backup:sqlite": "node scripts/backup-sqlite.mjs",
+    "restore:sqlite": "node scripts/restore-sqlite.mjs",
+    "recover:user": "node scripts/reset-user-password.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

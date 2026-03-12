@@ -1,0 +1,130 @@
+import { describe, expect, it } from "vitest";
+
+import { registerAndGetSession, getCookieHeader } from "./testSupport.js";
+
+describe("API user administration", { timeout: 10000 }, () => {
+  it("allows owners to provision company users", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const createUser = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: cookieHeader,
+      payload: {
+        displayName: "John Smith",
+        email: "john@example.com",
+        password: "supersecure123",
+        role: "ADMIN"
+      }
+    });
+
+    expect(createUser.statusCode).toBe(201);
+    expect(createUser.json<{ user: { role: string } }>().user.role).toBe("ADMIN");
+
+    const listUsers = await app.inject({
+      method: "GET",
+      url: "/api/v1/users",
+      headers: cookieHeader
+    });
+
+    expect(listUsers.statusCode).toBe(200);
+    expect(listUsers.json<{ users: Array<{ email: string }> }>().users).toEqual(
+      expect.arrayContaining([expect.objectContaining({ email: "john@example.com" })]),
+    );
+    await app.close();
+  });
+
+  it("lets a manager reset another user's password and revokes active sessions", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const createUser = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: cookieHeader,
+      payload: {
+        displayName: "John Smith",
+        email: "john@example.com",
+        password: "supersecure123",
+        role: "ADMIN"
+      }
+    });
+    expect(createUser.statusCode).toBe(201);
+    const userId = createUser.json<{ user: { id: string } }>().user.id;
+
+    const loginBeforeReset = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "john@example.com",
+        password: "supersecure123"
+      }
+    });
+    expect(loginBeforeReset.statusCode).toBe(200);
+    const userCookieHeader = getCookieHeader(loginBeforeReset);
+
+    const resetPassword = await app.inject({
+      method: "PUT",
+      url: `/api/v1/users/${userId}/password`,
+      headers: cookieHeader,
+      payload: {
+        password: "evenmoresecure123"
+      }
+    });
+    expect(resetPassword.statusCode).toBe(202);
+
+    const userMeAfterReset = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: userCookieHeader
+    });
+    expect(userMeAfterReset.statusCode).toBe(401);
+
+    const oldPasswordLogin = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "john@example.com",
+        password: "supersecure123"
+      }
+    });
+    expect(oldPasswordLogin.statusCode).toBe(401);
+
+    const newPasswordLogin = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "john@example.com",
+        password: "evenmoresecure123"
+      }
+    });
+    expect(newPasswordLogin.statusCode).toBe(200);
+
+    const audit = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit-log?limit=20",
+      headers: cookieHeader
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json<{ entries: Array<{ action: string }> }>().entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "USER_PASSWORD_RESET" })]),
+    );
+
+    await app.close();
+  });
+
+  it("rejects manager password recovery for the current session user", async () => {
+    const { app, cookieHeader, registration } = await registerAndGetSession();
+
+    const resetSelf = await app.inject({
+      method: "PUT",
+      url: `/api/v1/users/${registration.user.id}/password`,
+      headers: cookieHeader,
+      payload: {
+        password: "evenmoresecure123"
+      }
+    });
+
+    expect(resetSelf.statusCode).toBe(400);
+    await app.close();
+  });
+});

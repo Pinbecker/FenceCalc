@@ -27,7 +27,7 @@ export interface SessionRecord {
   revokedAtIso?: string | null;
 }
 
-export interface CreateOwnerAccountInput {
+export interface BootstrapOwnerAccountInput {
   companyId: string;
   companyName: string;
   userId: string;
@@ -65,6 +65,8 @@ export interface CreateDrawingInput {
   name: string;
   layout: LayoutModel;
   estimate: EstimateResult;
+  schemaVersion: number;
+  rulesVersion: string;
   createdByUserId: string;
   updatedByUserId: string;
   createdAtIso: string;
@@ -77,6 +79,8 @@ export interface UpdateDrawingInput {
   name: string;
   layout: LayoutModel;
   estimate: EstimateResult;
+  schemaVersion: number;
+  rulesVersion: string;
   updatedByUserId: string;
   updatedAtIso: string;
 }
@@ -137,14 +141,18 @@ export interface AuthenticatedSession {
 }
 
 export interface AppRepository {
+  checkHealth(): Promise<void>;
   getUserCount(): Promise<number>;
-  createOwnerAccount(input: CreateOwnerAccountInput): Promise<{ company: CompanyRecord; user: CompanyUserRecord }>;
+  bootstrapOwnerAccount(input: BootstrapOwnerAccountInput): Promise<{ company: CompanyRecord; user: CompanyUserRecord } | null>;
   createUser(input: CreateUserInput): Promise<CompanyUserRecord>;
   getCompanyById(companyId: string): Promise<CompanyRecord | null>;
+  getUserById(userId: string, companyId: string): Promise<CompanyUserRecord | null>;
   getUserByEmail(email: string): Promise<StoredUser | null>;
   listUsers(companyId: string): Promise<CompanyUserRecord[]>;
+  updateUserPassword(userId: string, companyId: string, passwordHash: string, passwordSalt: string): Promise<void>;
   createSession(input: CreateSessionInput): Promise<SessionRecord>;
   revokeSession(tokenHash: string, revokedAtIso: string): Promise<void>;
+  revokeSessionsForUser(userId: string, companyId: string, revokedAtIso: string): Promise<void>;
   getAuthenticatedSession(tokenHash: string): Promise<AuthenticatedSession | null>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
   listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED"): Promise<DrawingSummary[]>;

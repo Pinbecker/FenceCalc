@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import {
   drawingArchiveRequestSchema,
@@ -6,16 +6,55 @@ import {
   drawingUpdateRequestSchema
 } from "@fence-estimator/contracts";
 
-import { buildEstimate, requireAuth, type RouteDependencies, writeAuditLog } from "../app-support.js";
+import { requireAuth } from "../authorization.js";
+import type { RouteDependencies } from "../routeSupport.js";
+import {
+  createDrawingForCompany,
+  restoreDrawingVersionForCompany,
+  setDrawingArchivedStateForCompany,
+  updateDrawingForCompany
+} from "../services/drawingService.js";
 
 const drawingScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
 const drawingRestoreRequestSchema = z.object({
-  versionNumber: z.coerce.number().int().min(1)
+  versionNumber: z.coerce.number().int().min(1),
+  expectedVersionNumber: z.coerce.number().int().min(1)
 });
 
-export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDependencies): void {
+function sendDrawingMutationFailure(
+  reply: FastifyReply,
+  result:
+    | { kind: "conflict"; currentVersionNumber: number }
+    | { kind: "drawing_not_found" }
+    | { kind: "version_not_found" }
+    | { kind: "invalid_layout"; message: string },
+) {
+  if (result.kind === "conflict") {
+    return reply.code(409).send({
+      error: "Drawing has changed since it was loaded",
+      details: {
+        currentVersionNumber: result.currentVersionNumber
+      }
+    });
+  }
+
+  if (result.kind === "version_not_found") {
+    return reply.code(404).send({ error: "Drawing version not found" });
+  }
+
+  if (result.kind === "invalid_layout") {
+    return reply.code(400).send({
+      error: "Invalid layout configuration",
+      details: result.message
+    });
+  }
+
+  return reply.code(404).send({ error: "Drawing not found" });
+}
+
+export function registerDrawingRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
   app.get("/api/v1/drawings", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -26,7 +65,7 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
   });
 
   app.post("/api/v1/drawings", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -42,42 +81,16 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
       });
     }
 
-    try {
-      const result = buildEstimate(parsed.data.layout);
-      const nowIso = new Date().toISOString();
-      const drawing = await repository.createDrawing({
-        id: randomUUID(),
-        companyId: authenticated.company.id,
-        name: parsed.data.name,
-        layout: result.layout,
-        estimate: result.estimate,
-        createdByUserId: authenticated.user.id,
-        updatedByUserId: authenticated.user.id,
-        createdAtIso: nowIso,
-        updatedAtIso: nowIso
-      });
-      await writeAuditLog(repository, {
-        companyId: authenticated.company.id,
-        actorUserId: authenticated.user.id,
-        entityType: "DRAWING",
-        entityId: drawing.id,
-        action: "DRAWING_CREATED",
-        summary: `${authenticated.user.displayName} created ${drawing.name}`,
-        createdAtIso: nowIso,
-        metadata: { versionNumber: drawing.versionNumber }
-      });
-
-      return reply.code(201).send({ drawing });
-    } catch (error) {
-      return reply.code(400).send({
-        error: "Invalid layout configuration",
-        details: (error as Error).message
-      });
+    const result = await createDrawingForCompany(repository, authenticated, parsed.data);
+    if (result.kind !== "success") {
+      return sendDrawingMutationFailure(reply, result);
     }
+
+    return reply.code(201).send({ drawing: result.drawing });
   });
 
   app.get("/api/v1/drawings/:id", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -95,7 +108,7 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
   });
 
   app.put("/api/v1/drawings/:id", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -116,47 +129,16 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
       });
     }
 
-    const existing = await repository.getDrawingById(params.id, authenticated.company.id);
-    if (!existing) {
-      return reply.code(404).send({ error: "Drawing not found" });
+    const result = await updateDrawingForCompany(repository, authenticated, params.id, parsed.data);
+    if (result.kind !== "success") {
+      return sendDrawingMutationFailure(reply, result);
     }
 
-    try {
-      const nextLayout = parsed.data.layout ? buildEstimate(parsed.data.layout) : { layout: existing.layout, estimate: existing.estimate };
-      const updated = await repository.updateDrawing({
-        drawingId: existing.id,
-        companyId: authenticated.company.id,
-        name: parsed.data.name ?? existing.name,
-        layout: nextLayout.layout,
-        estimate: nextLayout.estimate,
-        updatedByUserId: authenticated.user.id,
-        updatedAtIso: new Date().toISOString()
-      });
-      if (!updated) {
-        return reply.code(404).send({ error: "Drawing not found" });
-      }
-      await writeAuditLog(repository, {
-        companyId: authenticated.company.id,
-        actorUserId: authenticated.user.id,
-        entityType: "DRAWING",
-        entityId: updated.id,
-        action: "DRAWING_UPDATED",
-        summary: `${authenticated.user.displayName} updated ${updated.name}`,
-        createdAtIso: updated.updatedAtIso,
-        metadata: { versionNumber: updated.versionNumber }
-      });
-
-      return reply.code(200).send({ drawing: updated });
-    } catch (error) {
-      return reply.code(400).send({
-        error: "Invalid layout configuration",
-        details: (error as Error).message
-      });
-    }
+    return reply.code(200).send({ drawing: result.drawing });
   });
 
   app.put("/api/v1/drawings/:id/archive", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -177,34 +159,16 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
       });
     }
 
-    const updatedAtIso = new Date().toISOString();
-    const drawing = await repository.setDrawingArchivedState({
-      drawingId: params.id,
-      companyId: authenticated.company.id,
-      archived: parsed.data.archived,
-      archivedAtIso: parsed.data.archived ? updatedAtIso : null,
-      archivedByUserId: parsed.data.archived ? authenticated.user.id : null,
-      updatedAtIso,
-      updatedByUserId: authenticated.user.id
-    });
-    if (!drawing) {
-      return reply.code(404).send({ error: "Drawing not found" });
+    const result = await setDrawingArchivedStateForCompany(repository, authenticated, params.id, parsed.data);
+    if (result.kind !== "success") {
+      return sendDrawingMutationFailure(reply, result);
     }
-    await writeAuditLog(repository, {
-      companyId: authenticated.company.id,
-      actorUserId: authenticated.user.id,
-      entityType: "DRAWING",
-      entityId: drawing.id,
-      action: parsed.data.archived ? "DRAWING_ARCHIVED" : "DRAWING_UNARCHIVED",
-      summary: `${authenticated.user.displayName} ${parsed.data.archived ? "archived" : "restored"} ${drawing.name}`,
-      createdAtIso: updatedAtIso
-    });
 
-    return reply.code(200).send({ drawing });
+    return reply.code(200).send({ drawing: result.drawing });
   });
 
   app.get("/api/v1/drawings/:id/versions", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -219,7 +183,7 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
   });
 
   app.post("/api/v1/drawings/:id/restore", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository);
+    const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -240,27 +204,17 @@ export function registerDrawingRoutes({ app, repository, writeLimiter }: RouteDe
       });
     }
 
-    const restored = await repository.restoreDrawingVersion({
-      drawingId: params.id,
-      companyId: authenticated.company.id,
-      versionNumber: parsed.data.versionNumber,
-      restoredByUserId: authenticated.user.id,
-      restoredAtIso: new Date().toISOString()
-    });
-    if (!restored) {
-      return reply.code(404).send({ error: "Drawing version not found" });
+    const result = await restoreDrawingVersionForCompany(
+      repository,
+      authenticated,
+      params.id,
+      parsed.data.versionNumber,
+      parsed.data.expectedVersionNumber,
+    );
+    if (result.kind !== "success") {
+      return sendDrawingMutationFailure(reply, result);
     }
-    await writeAuditLog(repository, {
-      companyId: authenticated.company.id,
-      actorUserId: authenticated.user.id,
-      entityType: "DRAWING",
-      entityId: restored.id,
-      action: "DRAWING_VERSION_RESTORED",
-      summary: `${authenticated.user.displayName} restored version ${parsed.data.versionNumber} of ${restored.name}`,
-      createdAtIso: restored.updatedAtIso,
-      metadata: { restoredFromVersion: parsed.data.versionNumber, versionNumber: restored.versionNumber }
-    });
 
-    return reply.code(200).send({ drawing: restored });
+    return reply.code(200).send({ drawing: result.drawing });
   });
 }

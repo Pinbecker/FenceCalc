@@ -5,10 +5,12 @@ import type { AuditLogRecord, CompanyUserRecord } from "@fence-estimator/contrac
 interface AdminPageProps {
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
+  currentUserId: string;
   currentUserRole: CompanyUserRecord["role"];
   isLoadingUsers: boolean;
   isLoadingAuditLog: boolean;
   isSavingUser: boolean;
+  isResettingUserId: string | null;
   errorMessage: string | null;
   noticeMessage: string | null;
   onRefresh(this: void): Promise<void>;
@@ -17,6 +19,7 @@ interface AdminPageProps {
     this: void,
     input: { displayName: string; email: string; password: string; role: "ADMIN" | "MEMBER" },
   ): Promise<boolean>;
+  onResetUserPassword(this: void, userId: string, password: string): Promise<boolean>;
 }
 
 function formatTimestamp(value: string): string {
@@ -29,20 +32,24 @@ function formatTimestamp(value: string): string {
 export function AdminPage({
   users,
   auditLog,
+  currentUserId,
   currentUserRole,
   isLoadingUsers,
   isLoadingAuditLog,
   isSavingUser,
+  isResettingUserId,
   errorMessage,
   noticeMessage,
   onRefresh,
   onRefreshAudit,
-  onCreateUser
+  onCreateUser,
+  onResetUserPassword
 }: AdminPageProps) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [resetPasswordsByUserId, setResetPasswordsByUserId] = useState<Record<string, string>>({});
 
   const canManageUsers = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
 
@@ -53,6 +60,16 @@ export function AdminPage({
       setEmail("");
       setPassword("");
       setRole("MEMBER");
+    }
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    const nextPassword = resetPasswordsByUserId[userId]?.trim() ?? "";
+    if (!nextPassword) {
+      return;
+    }
+    if (await onResetUserPassword(userId, nextPassword)) {
+      setResetPasswordsByUserId((current) => ({ ...current, [userId]: "" }));
     }
   };
 
@@ -85,6 +102,9 @@ export function AdminPage({
         </div>
       </header>
 
+      {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
+      {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
+
       <div className="admin-page-grid">
         <section className="portal-surface-card">
           <div className="portal-section-heading">
@@ -93,8 +113,6 @@ export function AdminPage({
               <h2>Add a company login</h2>
             </div>
           </div>
-          {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
-          {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
           <form className="portal-form-grid" onSubmit={(event) => void handleSubmit(event)}>
             <label className="portal-field">
               <span>Name</span>
@@ -138,6 +156,35 @@ export function AdminPage({
                 <div className="admin-user-meta">
                   <span>{user.role}</span>
                   <span>{formatTimestamp(user.createdAtIso)}</span>
+                </div>
+                <div className="portal-form-grid">
+                  {user.id === currentUserId ? (
+                    <p className="portal-empty-copy">
+                      Your own password must be reset by another manager or through the operator recovery runbook.
+                    </p>
+                  ) : (
+                    <>
+                      <label className="portal-field">
+                        <span>Set temporary password</span>
+                        <input
+                          type="password"
+                          value={resetPasswordsByUserId[user.id] ?? ""}
+                          onChange={(event) =>
+                            setResetPasswordsByUserId((current) => ({ ...current, [user.id]: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="portal-secondary-button"
+                        onClick={() => void handleResetPassword(user.id)}
+                        disabled={isResettingUserId === user.id || !(resetPasswordsByUserId[user.id]?.trim())}
+                      >
+                        {isResettingUserId === user.id ? "Setting Password..." : "Set Password"}
+                      </button>
+                      <p className="portal-empty-copy">Active sessions are revoked immediately after a reset.</p>
+                    </>
+                  )}
                 </div>
               </article>
             ))}

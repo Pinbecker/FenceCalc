@@ -1,14 +1,15 @@
 ﻿import { z } from "zod";
 
-import { requireUserManager, type RouteDependencies } from "../app-support.js";
+import { requireUserManager } from "../authorization.js";
+import type { RouteDependencies } from "../routeSupport.js";
 
 const auditLogQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 
-export function registerAuditRoutes({ app, repository }: RouteDependencies): void {
+export function registerAuditRoutes({ app, config, repository }: RouteDependencies): void {
   app.get("/api/v1/audit-log", async (request, reply) => {
-    const authenticated = await requireUserManager(request, reply, repository);
+    const authenticated = await requireUserManager(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }

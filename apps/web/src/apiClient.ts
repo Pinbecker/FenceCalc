@@ -1,7 +1,6 @@
 import type {
   AuditLogRecord,
   AuthSessionEnvelope,
-  CompanyRecord,
   CompanyUserRecord,
   DrawingRecord,
   DrawingSummary,
@@ -16,10 +15,12 @@ export interface RegisterAccountInput {
   displayName: string;
   email: string;
   password: string;
+  bootstrapSecret?: string;
 }
 
 export interface SetupStatus {
   bootstrapRequired: boolean;
+  bootstrapSecretRequired: boolean;
 }
 
 export interface LoginInput {
@@ -34,6 +35,10 @@ export interface CreateCompanyUserInput {
   role: "ADMIN" | "MEMBER";
 }
 
+export interface SetCompanyUserPasswordInput {
+  password: string;
+}
+
 export interface PasswordResetRequestInput {
   email: string;
 }
@@ -45,8 +50,8 @@ export interface PasswordResetConfirmInput {
 
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT";
-  token?: string;
   body?: unknown;
+  headers?: Record<string, string>;
 }
 
 export class ApiClientError extends Error {
@@ -68,9 +73,10 @@ function buildUrl(path: string): string {
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const requestInit: RequestInit = {
     method: options.method ?? "GET",
+    credentials: "include",
     headers: {
       "content-type": "application/json",
-      ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+      ...(options.headers ?? {})
     }
   };
   if (options.body !== undefined) {
@@ -96,9 +102,16 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 }
 
 export async function bootstrapOwner(input: RegisterAccountInput): Promise<AuthSessionEnvelope> {
+  const bootstrapSecret = input.bootstrapSecret?.trim();
   return requestJson<AuthSessionEnvelope>("/api/v1/setup/bootstrap-owner", {
     method: "POST",
-    body: input
+    ...(bootstrapSecret ? { headers: { "x-bootstrap-secret": bootstrapSecret } } : {}),
+    body: {
+      companyName: input.companyName,
+      displayName: input.displayName,
+      email: input.email,
+      password: input.password
+    }
   });
 }
 
@@ -113,94 +126,96 @@ export async function login(input: LoginInput): Promise<AuthSessionEnvelope> {
   });
 }
 
-export async function logout(token: string): Promise<void> {
+export async function logout(): Promise<void> {
   await requestJson<{ ok: boolean }>("/api/v1/auth/logout", {
-    method: "POST",
-    token
+    method: "POST"
   });
 }
 
-export async function getAuthenticatedUser(token: string): Promise<{ company: CompanyRecord; user: CompanyUserRecord }> {
-  return requestJson<{ company: CompanyRecord; user: CompanyUserRecord }>("/api/v1/auth/me", {
-    token
-  });
+export async function getAuthenticatedUser(): Promise<AuthSessionEnvelope> {
+  return requestJson<AuthSessionEnvelope>("/api/v1/auth/me");
 }
 
-export async function listUsers(token: string): Promise<CompanyUserRecord[]> {
-  const response = await requestJson<{ users: CompanyUserRecord[] }>("/api/v1/users", { token });
+export async function listUsers(): Promise<CompanyUserRecord[]> {
+  const response = await requestJson<{ users: CompanyUserRecord[] }>("/api/v1/users");
   return response.users;
 }
 
-export async function createUser(token: string, input: CreateCompanyUserInput): Promise<CompanyUserRecord> {
+export async function createUser(input: CreateCompanyUserInput): Promise<CompanyUserRecord> {
   const response = await requestJson<{ user: CompanyUserRecord }>("/api/v1/users", {
     method: "POST",
-    token,
     body: input
   });
   return response.user;
 }
 
-export async function listDrawings(token: string): Promise<DrawingSummary[]> {
-  const response = await requestJson<{ drawings: DrawingSummary[] }>("/api/v1/drawings?scope=ALL", { token });
+export async function setUserPassword(userId: string, input: SetCompanyUserPasswordInput): Promise<void> {
+  await requestJson<{ ok: boolean }>(`/api/v1/users/${userId}/password`, {
+    method: "PUT",
+    body: input
+  });
+}
+
+export async function listDrawings(): Promise<DrawingSummary[]> {
+  const response = await requestJson<{ drawings: DrawingSummary[] }>("/api/v1/drawings?scope=ALL");
   return response.drawings;
 }
 
-export async function getDrawing(token: string, drawingId: string): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`, { token });
+export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
+  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`);
   return response.drawing;
 }
 
-export async function createDrawing(token: string, input: { name: string; layout: LayoutModel }): Promise<DrawingRecord> {
+export async function createDrawing(input: { name: string; layout: LayoutModel }): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
     method: "POST",
-    token,
     body: input
   });
   return response.drawing;
 }
 
 export async function updateDrawing(
-  token: string,
   drawingId: string,
-  input: { name?: string; layout?: LayoutModel },
+  input: { expectedVersionNumber: number; name?: string; layout?: LayoutModel },
 ): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`, {
     method: "PUT",
-    token,
     body: input
   });
   return response.drawing;
 }
 
-export async function setDrawingArchivedState(token: string, drawingId: string, archived: boolean): Promise<DrawingRecord> {
+export async function setDrawingArchivedState(
+  drawingId: string,
+  archived: boolean,
+  expectedVersionNumber: number,
+): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/archive`, {
     method: "PUT",
-    token,
-    body: { archived }
+    body: { archived, expectedVersionNumber }
   });
   return response.drawing;
 }
 
-export async function listDrawingVersions(token: string, drawingId: string): Promise<DrawingVersionRecord[]> {
-  const response = await requestJson<{ versions: DrawingVersionRecord[] }>(`/api/v1/drawings/${drawingId}/versions`, {
-    token
-  });
+export async function listDrawingVersions(drawingId: string): Promise<DrawingVersionRecord[]> {
+  const response = await requestJson<{ versions: DrawingVersionRecord[] }>(`/api/v1/drawings/${drawingId}/versions`);
   return response.versions;
 }
 
-export async function restoreDrawingVersion(token: string, drawingId: string, versionNumber: number): Promise<DrawingRecord> {
+export async function restoreDrawingVersion(
+  drawingId: string,
+  versionNumber: number,
+  expectedVersionNumber: number,
+): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/restore`, {
     method: "POST",
-    token,
-    body: { versionNumber }
+    body: { versionNumber, expectedVersionNumber }
   });
   return response.drawing;
 }
 
-export async function listAuditLog(token: string, limit = 50): Promise<AuditLogRecord[]> {
-  const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/audit-log?limit=${limit}`, {
-    token
-  });
+export async function listAuditLog(limit = 50): Promise<AuditLogRecord[]> {
+  const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/audit-log?limit=${limit}`);
   return response.entries;
 }
 

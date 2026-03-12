@@ -1,14 +1,15 @@
-﻿import { randomUUID } from "node:crypto";
 import { bootstrapOwnerRequestSchema } from "@fence-estimator/contracts";
 
-import { hashPassword } from "../auth.js";
-import { createSessionEnvelope, type RouteDependencies, writeAuditLog } from "../app-support.js";
+import type { RouteDependencies } from "../routeSupport.js";
+import { buildSessionCookieHeader, createSessionEnvelope } from "../sessionHttp.js";
+import { bootstrapOwnerAccount } from "../services/setupService.js";
 
 export function registerSetupRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
   app.get("/api/v1/setup/status", async (_request, reply) => {
     const userCount = await repository.getUserCount();
     return reply.code(200).send({
-      bootstrapRequired: userCount === 0
+      bootstrapRequired: userCount === 0,
+      bootstrapSecretRequired: userCount === 0 && config.bootstrapOwnerSecret !== null
     });
   });
 
@@ -25,29 +26,22 @@ export function registerSetupRoutes({ app, config, repository, writeLimiter }: R
       });
     }
 
-    const userCount = await repository.getUserCount();
-    if (userCount > 0) {
+    const providedSecret =
+      typeof request.headers["x-bootstrap-secret"] === "string"
+        ? request.headers["x-bootstrap-secret"].trim()
+        : Array.isArray(request.headers["x-bootstrap-secret"])
+          ? request.headers["x-bootstrap-secret"][0]?.trim() ?? ""
+          : "";
+
+    const result = await bootstrapOwnerAccount(repository, config, parsed.data, providedSecret);
+    if (result.kind === "forbidden") {
+      return reply.code(403).send({ error: "Bootstrap secret is required" });
+    }
+    if (result.kind === "conflict") {
       return reply.code(409).send({ error: "Bootstrap is no longer available" });
     }
 
-    const existingUser = await repository.getUserByEmail(parsed.data.email);
-    if (existingUser) {
-      return reply.code(409).send({ error: "Email already registered" });
-    }
-
-    const nowIso = new Date().toISOString();
-    const password = hashPassword(parsed.data.password);
-    const account = await repository.createOwnerAccount({
-      companyId: randomUUID(),
-      companyName: parsed.data.companyName,
-      userId: randomUUID(),
-      displayName: parsed.data.displayName,
-      email: parsed.data.email,
-      passwordHash: password.hash,
-      passwordSalt: password.salt,
-      createdAtIso: nowIso
-    });
-    const envelope = createSessionEnvelope(config, account.company, account.user);
+    const envelope = createSessionEnvelope(config, result.account.company, result.account.user);
     await repository.createSession({
       id: envelope.session.id,
       companyId: envelope.company.id,
@@ -57,17 +51,8 @@ export function registerSetupRoutes({ app, config, repository, writeLimiter }: R
       expiresAtIso: envelope.session.expiresAtIso,
       revokedAtIso: null
     });
-    await writeAuditLog(repository, {
-      companyId: account.company.id,
-      actorUserId: account.user.id,
-      entityType: "AUTH",
-      entityId: account.user.id,
-      action: "OWNER_BOOTSTRAPPED",
-      summary: `Bootstrapped owner ${account.user.displayName}`,
-      createdAtIso: nowIso,
-      metadata: { email: account.user.email }
-    });
 
+    reply.header("set-cookie", buildSessionCookieHeader(config, envelope.sessionToken));
     return reply.code(201).send({
       company: envelope.company,
       user: envelope.user,

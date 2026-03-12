@@ -1,4 +1,4 @@
-import type { FenceSpec, GateType, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { FenceSpec, GateType, LayoutModel, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 
 export type PostKind = "END" | "INTERMEDIATE" | "CORNER" | "JUNCTION" | "INLINE_JOIN" | "GATE";
 
@@ -36,18 +36,19 @@ export interface AxisGuide {
 }
 
 export interface HistoryState {
-  past: LayoutSegment[][];
-  present: LayoutSegment[];
-  future: LayoutSegment[][];
+  past: LayoutModel[];
+  present: LayoutModel;
+  future: LayoutModel[];
 }
 
 export type DraggablePanel = "controls" | "itemCounts" | "postKey" | "tutorial";
 
 export type HistoryAction =
-  | { type: "APPLY"; updater: (segments: LayoutSegment[]) => LayoutSegment[] }
+  | { type: "APPLY"; updater: (layout: LayoutModel) => LayoutModel }
   | { type: "UNDO" }
   | { type: "REDO" }
-  | { type: "SET"; segments: LayoutSegment[] };
+  | { type: "RESET"; layout: LayoutModel }
+  | { type: "SET"; layout: LayoutModel };
 
 export type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
 

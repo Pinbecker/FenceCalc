@@ -1,5 +1,5 @@
-import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
@@ -18,5 +18,18 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: true
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/konva") || id.includes("node_modules/react-konva")) {
+            return "editor-canvas";
+          }
+
+          return undefined;
+        }
+      }
+    }
   }
 });

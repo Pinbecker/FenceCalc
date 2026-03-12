@@ -1,4 +1,4 @@
-import type { FenceSpec, GatePlacement, GateType, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { FenceSpec, GatePlacement, GateType, LayoutModel, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 import { areOpposite, distanceMm } from "@fence-estimator/geometry";
 
 import {
@@ -358,11 +358,15 @@ export function sameSegmentList(left: LayoutSegment[], right: LayoutSegment[]): 
   return true;
 }
 
+export function sameLayoutModel(left: LayoutModel, right: LayoutModel): boolean {
+  return sameSegmentList(left.segments, right.segments) && sameGatePlacementList(left.gates ?? [], right.gates ?? []);
+}
+
 export function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
   switch (action.type) {
     case "APPLY": {
       const next = action.updater(state.present);
-      if (sameSegmentList(state.present, next)) {
+      if (sameLayoutModel(state.present, next)) {
         return state;
       }
       return {
@@ -393,13 +397,23 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
         future: state.future.slice(1)
       };
     }
+    case "RESET": {
+      if (sameLayoutModel(state.present, action.layout) && state.past.length === 0 && state.future.length === 0) {
+        return state;
+      }
+      return {
+        past: [],
+        present: action.layout,
+        future: []
+      };
+    }
     case "SET": {
-      if (sameSegmentList(state.present, action.segments)) {
+      if (sameLayoutModel(state.present, action.layout)) {
         return state;
       }
       return {
         past: [...state.past, state.present],
-        present: action.segments,
+        present: action.layout,
         future: []
       };
     }

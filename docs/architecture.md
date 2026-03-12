@@ -1,44 +1,49 @@
 # Architecture
 
-## Scope
+## System Shape
 
-Fence Estimator is a deterministic 2D layout and estimate platform. Layout geometry is user-authored in the web client and material/post counts are produced by a versioned rules engine.
+Fence Estimator is a monorepo with a browser editor, a Fastify API, and shared domain packages.
 
-## Monorepo
-
-- `apps/web`: primary drawing experience and live counts.
-- `apps/api`: HTTP API for estimates and snapshot persistence.
-- `packages/contracts`: shared type + schema contracts.
-- `packages/geometry`: pure geometry/snap math.
-- `packages/rules-engine`: deterministic counting logic.
+- `apps/web`: UI, portal navigation, editor orchestration, and browser persistence flows
+- `apps/api`: auth, persistence, audit log, estimate endpoints, and operational endpoints
+- `packages/contracts`: shared DTOs and boundary validation
+- `packages/geometry`: pure geometry helpers
+- `packages/rules-engine`: deterministic layout-to-estimate logic
 
 ## Runtime Flow
 
-1. User draws/edits layout segments in `apps/web`.
-2. `packages/rules-engine` computes live estimate directly in-browser.
-3. Optional snapshot save posts layout to API.
-4. API re-runs deterministic estimate and stores immutable snapshot payload.
+1. A user authenticates through the API and receives a cookie-backed session.
+2. The web app loads company-scoped drawings, users, and audit data as permitted by role.
+3. The editor builds live derived state from the current layout.
+4. On save, the API normalizes the layout, re-runs the rules engine, versions the drawing, and stores the estimate snapshot.
+5. Audit entries capture auth, user-management, archive, and version-restore actions.
 
-## Rules Engine Principles
+## Persistence Model
 
-- Deterministic and side-effect free.
-- Integer millimeter domain.
-- Versionable constants and catalogue rules.
-- Test-first for edge cases (open paths, odd topologies, mixed heights).
+- SQLite stores companies, users, sessions, drawings, drawing versions, password-reset artifacts, and audit log entries.
+- Drawings persist normalized layout JSON plus deterministic estimate JSON.
+- Drawings carry `schemaVersion`, `rulesVersion`, and `versionNumber`.
+- Archive and restore flows are company-scoped and version-aware.
 
-## Topology Model
+## Recovery Model
 
-- Segment endpoints map to node keys in mm-space.
-- Node degree and vector relationships classify:
-  - terminal posts
-  - intermediate posts
-  - corner candidates
-- Closed-loop components are analyzed for internal/external corner classification.
+- user recovery is manager-driven, not public self-service
+- active sessions are revoked after a manager or operator reset
+- operator recovery is handled through CLI tooling against the production database
+- first-owner bootstrap can be gated by a deployment-managed one-time secret
 
-## Production Hardening Path
+## Current Production Envelope
 
-- Replace in-memory snapshot repository with PostgreSQL.
-- Add authentication and tenant boundaries.
-- Add OpenTelemetry traces across web and API.
-- Add rule-set version pinning to persisted estimates.
+This codebase is now appropriate for a single-instance internal deployment with:
 
+- one API process
+- one web build
+- one persistent SQLite database
+- scheduled backups and tested restore procedure
+- proxy-aware client IP forwarding when deployed behind a reverse proxy
+
+## Remaining Architectural Limits
+
+- SQLite keeps the deployment single-instance
+- the editor route is still a large orchestration surface even though the logic underneath is now better tested
+- there is no external identity provider or self-service invite flow

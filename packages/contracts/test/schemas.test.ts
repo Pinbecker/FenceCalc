@@ -11,6 +11,7 @@ import {
   loginRequestSchema,
   passwordResetConfirmSchema,
   passwordResetRequestSchema,
+  userPasswordSetRequestSchema,
   userCreateRequestSchema
 } from "../src/schemas.js";
 
@@ -47,6 +48,58 @@ describe("contracts schemas", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects duplicate or overlapping gate definitions", () => {
+    const result = layoutModelSchema.safeParse({
+      segments: [
+        {
+          id: "one",
+          start: { x: 0, y: 0 },
+          end: { x: 10000, y: 0 },
+          spec: {
+            system: "TWIN_BAR",
+            height: "2m",
+            twinBarVariant: "STANDARD"
+          }
+        }
+      ],
+      gates: [
+        {
+          id: "gate-1",
+          segmentId: "one",
+          startOffsetMm: 1000,
+          endOffsetMm: 2500,
+          gateType: "SINGLE_LEAF"
+        },
+        {
+          id: "gate-2",
+          segmentId: "one",
+          startOffsetMm: 2000,
+          endOffsetMm: 3000,
+          gateType: "DOUBLE_LEAF"
+        }
+      ]
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects gates that reference missing segments", () => {
+    const result = layoutModelSchema.safeParse({
+      segments: [],
+      gates: [
+        {
+          id: "gate-1",
+          segmentId: "missing",
+          startOffsetMm: 1000,
+          endOffsetMm: 2000,
+          gateType: "SINGLE_LEAF"
+        }
+      ]
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("requires snapshot requests to be wrapped in a layout object", () => {
     const result = estimateSnapshotRequestSchema.safeParse({
       segments: []
@@ -81,6 +134,14 @@ describe("contracts schemas", () => {
     expect(result.success).toBe(false);
   });
 
+  it("requires drawing updates to include an expected version number", () => {
+    const result = drawingUpdateRequestSchema.safeParse({
+      name: "Main yard"
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("defaults missing gate lists on drawing payloads", () => {
     const result = drawingCreateRequestSchema.parse({
       name: "Main yard",
@@ -103,8 +164,21 @@ describe("contracts schemas", () => {
     expect(result.success).toBe(false);
   });
 
+  it("requires a strong password for manager-set password recovery", () => {
+    expect(
+      userPasswordSetRequestSchema.safeParse({
+        password: "supersecure123"
+      }).success,
+    ).toBe(true);
+    expect(
+      userPasswordSetRequestSchema.safeParse({
+        password: "short"
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts drawing archive payloads", () => {
-    const result = drawingArchiveRequestSchema.safeParse({ archived: true });
+    const result = drawingArchiveRequestSchema.safeParse({ archived: true, expectedVersionNumber: 3 });
 
     expect(result.success).toBe(true);
   });

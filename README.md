@@ -1,80 +1,77 @@
 # Fence Estimator
 
-Production-grade monorepo for a 2D fence layout editor, deterministic estimate engine, and authenticated drawing persistence.
+Fence Estimator is a monorepo for a 2D fence layout editor, deterministic estimating engine, company-scoped drawing storage, and operational audit trail.
 
 ## Workspace
 
-- `apps/web`: React + Konva drawing editor with live estimation.
-- `apps/api`: Fastify API for estimates, company/user auth, and persisted drawings.
-- `packages/contracts`: Shared domain contracts.
-- `packages/geometry`: Pure geometry utilities.
-- `packages/rules-engine`: Deterministic fence counting rules.
+- `apps/web`: React + Konva portal, drawing editor, drawing library, and admin surface.
+- `apps/api`: Fastify API for auth, drawing persistence, audit logging, and operational endpoints.
+- `packages/contracts`: shared domain contracts and validation schemas.
+- `packages/geometry`: pure geometry utilities.
+- `packages/rules-engine`: deterministic fence counting and optimization rules.
 
-## Quick Start
+## Current Product Profile
 
-1. Use Node 20+ (24 LTS recommended for production). The current local machine is on Node 18 and should be upgraded before running.
+This repo is now shaped for a serious internal deployment:
+
+- bootstrap-once owner account creation
+- cookie-backed company sessions
+- admin-managed user provisioning
+- admin-managed password recovery with forced session revocation
+- drawing save/load/archive/restore/version history
+- audit log for auth, user management, and drawing operations
+- unit, integration, and browser E2E coverage on critical workflows
+
+It is still not positioned as a public self-service SaaS product. Self-service invite and email reset flows are intentionally absent.
+
+## Local Start
+
+1. Use Node 20+.
 2. Install dependencies: `npm ci`
-3. Run web app: `npm run dev:web`
-4. Run API app: `npm run dev:api`
-5. Run checks: `npm run lint && npm run typecheck && npm run test`
-6. Run coverage gate: `npm run test:coverage`
+3. Copy `.env.example` if you want explicit local overrides.
+4. Run the API: `npm run dev:api`
+5. Run the web app: `npm run dev:web`
 
-## API Runtime Configuration
+## Verification
 
-- `HOST`: bind host for the API process. Default `127.0.0.1`.
-- `PORT`: bind port for the API process. Default `3001`.
-- `DATABASE_PATH`: SQLite database path for companies, users, sessions, and drawings.
-- `ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS. Defaults to local Vite hosts only.
-- `BODY_LIMIT_BYTES`: maximum accepted request body size. Default `262144`.
-- `WRITE_RATE_LIMIT_WINDOW_MS`: write rate limit window. Default `60000`.
-- `WRITE_RATE_LIMIT_MAX_REQUESTS`: max write requests per IP inside the active window. Default `120`.
-- `SESSION_TTL_DAYS`: bearer session lifetime. Default `30`.
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
+- `npm run test:coverage`
+- `npm run test:e2e`
+- `npm run build`
 
-## Web Runtime Configuration
+## Runtime Configuration
 
-- `VITE_API_BASE_URL`: optional absolute API origin for deployed environments. Leave unset in local development to use the built-in `/api` proxy to `http://127.0.0.1:3001`.
+See `.env.example` for the supported variables.
 
-## Current Product Capabilities
+Important production rules:
 
-- Company-scoped account registration and login.
-- Bearer-session restore in the web app.
-- Saved drawing library per company.
-- Load, edit, and update persisted drawings.
-- Gate placements are now part of the saved drawing model and server-side estimate calculation.
+- `DATABASE_PATH` must be an absolute path in `NODE_ENV=production`.
+- `ALLOWED_ORIGINS` must be set explicitly in `NODE_ENV=production`.
+- `SESSION_COOKIE_SECURE=true` is required in `NODE_ENV=production`.
+- `TRUST_PROXY=true` should be set when the API runs behind the supported reverse proxy.
+- `BOOTSTRAP_OWNER_SECRET` should be set until the first owner account is created.
+- `VITE_API_BASE_URL` should point at the deployed API origin when the web app is built for production.
 
-## Current Scope
+## Operations
 
-- Draw arbitrary fence layouts (including incomplete paths).
-- Live counts for:
-  - posts
-  - corners (internal/external where determinable)
-  - Twin Bar panels
-  - Roll Form mesh rolls
+- Deployment: [docs/deployment.md](/c:/Users/danco/CodingProjectsLocal/FenceEstimator/docs/deployment.md)
+- Backups and restore: [docs/operations.md](/c:/Users/danco/CodingProjectsLocal/FenceEstimator/docs/operations.md)
+- Account recovery: [docs/account-recovery.md](/c:/Users/danco/CodingProjectsLocal/FenceEstimator/docs/account-recovery.md)
+- Architecture: [docs/architecture.md](/c:/Users/danco/CodingProjectsLocal/FenceEstimator/docs/architecture.md)
 
-## Domain Defaults Implemented
+## Internal Recovery Model
 
-- Twin Bar panel width: `2515mm`
-- Roll length: `25000mm`
-- Roll Form bay width (temporary default): `2515mm`
-- Roll Form 2m: `2100mm`
-- Roll Form 3m: `2100mm + 900mm` stacked
+For internal use, account recovery is intentionally manager-driven:
 
-These defaults are versioned in code and can be expanded per catalogue rules.
+- an owner or admin can set another user’s password from the Admin page
+- that action revokes the target user’s active sessions
+- a sole locked-out owner is recovered through the operator CLI runbook, not a public reset token flow
 
-## Implemented Interaction Model
+## Remaining Gaps
 
-- Left click to start/commit segments.
-- Right click to cancel active chain.
-- 5 degree snap while drawing (hold Shift to disable).
-- Pointer-relative wheel zoom + space/middle-button pan.
-- Dynamic grid based on zoom scale.
-- Per-segment length labels and live ghost length.
-- Segment selection, move, endpoint drag, and delete.
-- Live posts/corners/panels/roll counts while editing.
-
-## Known Production Gaps
-
-- SQLite is now the real persistence layer, but there are no versioned SQL migrations yet.
-- Auth is session-token based and company-aware, but there is no invitation flow, password reset, or per-user authorization policy beyond role fields.
-- Drawings persist segments and gates; other future editor state should be treated as schema-managed data, not ad hoc client state.
-- The web bundle is still too large and needs code-splitting before serious production traffic.
+- SQLite remains a single-instance deployment choice; use Postgres before attempting multi-instance or customer-facing scale.
+- There is still no self-service invite or email delivery pipeline.
+- Browser E2E coverage now exists for the critical internal flows, but it is not exhaustive across every editor interaction.
+- Repo-local SQLite files under `apps/api/data` are for local development only and should never be treated as production storage.

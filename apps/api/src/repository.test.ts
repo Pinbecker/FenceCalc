@@ -4,7 +4,8 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
-import type { EstimateResult, LayoutModel } from "@fence-estimator/contracts";
+import { DRAWING_SCHEMA_VERSION, type EstimateResult, type LayoutModel } from "@fence-estimator/contracts";
+import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 
 import { InMemoryAppRepository, SqliteAppRepository } from "./repository.js";
 
@@ -63,7 +64,7 @@ describe("InMemoryAppRepository", () => {
   it("stores owner accounts and retrieves users by email", async () => {
     const repository = new InMemoryAppRepository();
 
-    await repository.createOwnerAccount({
+    const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
       userId: "user-1",
@@ -73,6 +74,7 @@ describe("InMemoryAppRepository", () => {
       passwordSalt: "salt",
       createdAtIso: "2026-03-10T00:00:00.000Z"
     });
+    expect(account).not.toBeNull();
 
     await expect(repository.getUserByEmail("jane@example.com")).resolves.toMatchObject({
       id: "user-1",
@@ -80,9 +82,38 @@ describe("InMemoryAppRepository", () => {
     });
   });
 
+  it("allows bootstrap only once", async () => {
+    const repository = new InMemoryAppRepository();
+
+    const firstAccount = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    const secondAccount = await repository.bootstrapOwnerAccount({
+      companyId: "company-2",
+      companyName: "Other",
+      userId: "user-2",
+      displayName: "John",
+      email: "john@example.com",
+      passwordHash: "hash-2",
+      passwordSalt: "salt-2",
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+
+    expect(firstAccount).not.toBeNull();
+    expect(secondAccount).toBeNull();
+    await expect(repository.getUserCount()).resolves.toBe(1);
+  });
+
   it("stores and updates drawings per company", async () => {
     const repository = new InMemoryAppRepository();
-    await repository.createOwnerAccount({
+    await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
       userId: "user-1",
@@ -99,6 +130,8 @@ describe("InMemoryAppRepository", () => {
       name: "Initial",
       layout: emptyLayout,
       estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
@@ -121,6 +154,8 @@ describe("InMemoryAppRepository", () => {
       name: "Updated",
       layout: emptyLayout,
       estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
       updatedAtIso: "2026-03-11T00:00:00.000Z"
     });
@@ -132,7 +167,7 @@ describe("InMemoryAppRepository", () => {
 
   it("stores company users beyond the owner account", async () => {
     const repository = new InMemoryAppRepository();
-    await repository.createOwnerAccount({
+    await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
       userId: "user-1",
@@ -158,9 +193,55 @@ describe("InMemoryAppRepository", () => {
     await expect(repository.listUsers("company-1")).resolves.toHaveLength(2);
   });
 
+  it("updates stored passwords and revokes all active sessions for a user", async () => {
+    const repository = new InMemoryAppRepository();
+    await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await repository.createUser({
+      id: "user-2",
+      companyId: "company-1",
+      displayName: "John",
+      email: "john@example.com",
+      role: "ADMIN",
+      passwordHash: "hash-2",
+      passwordSalt: "salt-2",
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+    await repository.createSession({
+      id: "session-2",
+      companyId: "company-1",
+      userId: "user-2",
+      tokenHash: "token-hash-2",
+      createdAtIso: "2026-03-10T02:00:00.000Z",
+      expiresAtIso: "2026-04-10T02:00:00.000Z"
+    });
+
+    await repository.updateUserPassword("user-2", "company-1", "hash-3", "salt-3");
+    await repository.revokeSessionsForUser("user-2", "company-1", "2026-03-10T03:00:00.000Z");
+
+    await expect(repository.getUserById("user-2", "company-1")).resolves.toMatchObject({
+      id: "user-2",
+      email: "john@example.com"
+    });
+    await expect(repository.getUserByEmail("john@example.com")).resolves.toMatchObject({
+      passwordHash: "hash-3",
+      passwordSalt: "salt-3"
+    });
+    await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
+  });
+
   it("archives drawings, restores versions, and records audit items", async () => {
     const repository = new InMemoryAppRepository();
-    await repository.createOwnerAccount({
+    await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
       userId: "user-1",
@@ -176,6 +257,8 @@ describe("InMemoryAppRepository", () => {
       name: "Initial",
       layout: emptyLayout,
       estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
@@ -187,6 +270,8 @@ describe("InMemoryAppRepository", () => {
       name: "Updated",
       layout: emptyLayout,
       estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
       updatedAtIso: "2026-03-11T00:00:00.000Z"
     });
@@ -233,7 +318,7 @@ describe("SqliteAppRepository", () => {
   it("persists accounts, sessions, and drawings", async () => {
     const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
 
-    const account = await repository.createOwnerAccount({
+    const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
       userId: "user-1",
@@ -243,6 +328,10 @@ describe("SqliteAppRepository", () => {
       passwordSalt: "salt",
       createdAtIso: "2026-03-10T00:00:00.000Z"
     });
+    expect(account).not.toBeNull();
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
     await repository.createSession({
       id: "session-1",
       companyId: account.company.id,
@@ -257,6 +346,8 @@ describe("SqliteAppRepository", () => {
       name: "Stored drawing",
       layout: emptyLayout,
       estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
       createdByUserId: account.user.id,
       updatedByUserId: account.user.id,
       createdAtIso: "2026-03-10T00:00:00.000Z",
@@ -280,6 +371,56 @@ describe("SqliteAppRepository", () => {
     });
     await expect(repository.listDrawings(account.company.id)).resolves.toHaveLength(1);
     await expect(repository.listAuditLog(account.company.id)).resolves.toHaveLength(1);
+  });
+
+  it("supports manager recovery primitives for persisted users", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    expect(account).not.toBeNull();
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+    await repository.createUser({
+      id: "user-2",
+      companyId: account.company.id,
+      displayName: "John",
+      email: "john@example.com",
+      role: "ADMIN",
+      passwordHash: "hash-2",
+      passwordSalt: "salt-2",
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+    await repository.createSession({
+      id: "session-2",
+      companyId: account.company.id,
+      userId: "user-2",
+      tokenHash: "token-hash-2",
+      createdAtIso: "2026-03-10T02:00:00.000Z",
+      expiresAtIso: "2026-04-10T02:00:00.000Z"
+    });
+
+    await repository.updateUserPassword("user-2", account.company.id, "hash-3", "salt-3");
+    await repository.revokeSessionsForUser("user-2", account.company.id, "2026-03-10T03:00:00.000Z");
+
+    await expect(repository.getUserById("user-2", account.company.id)).resolves.toMatchObject({
+      id: "user-2",
+      email: "john@example.com"
+    });
+    await expect(repository.getUserByEmail("john@example.com")).resolves.toMatchObject({
+      passwordHash: "hash-3",
+      passwordSalt: "salt-3"
+    });
+    await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
   });
 
   it("patches legacy sqlite databases with missing newer columns", async () => {
@@ -362,5 +503,34 @@ describe("SqliteAppRepository", () => {
     });
     await expect(repository.listDrawings("company-1")).resolves.toHaveLength(1);
     await expect(repository.listDrawingVersions("drawing-1", "company-1")).resolves.toHaveLength(1);
+  });
+
+  it("rejects a second persisted bootstrap attempt", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const firstAccount = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    const secondAccount = await repository.bootstrapOwnerAccount({
+      companyId: "company-2",
+      companyName: "Other",
+      userId: "user-2",
+      displayName: "John",
+      email: "john@example.com",
+      passwordHash: "hash-2",
+      passwordSalt: "salt-2",
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+
+    expect(firstAccount).not.toBeNull();
+    expect(secondAccount).toBeNull();
+    await expect(repository.getUserCount()).resolves.toBe(1);
   });
 });
