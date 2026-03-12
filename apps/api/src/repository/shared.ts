@@ -13,6 +13,7 @@ import type {
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
+  drawingCanvasViewportSchema,
   estimateResultSchema,
   layoutModelSchema
 } from "@fence-estimator/contracts";
@@ -43,6 +44,7 @@ export interface DrawingRow {
   company_id: string;
   name: string;
   layout_json: string;
+  viewport_json?: string | null;
   estimate_json: string;
   schema_version: number;
   rules_version: string;
@@ -66,6 +68,7 @@ export interface DrawingVersionRow {
   source: DrawingVersionSource;
   name: string;
   layout_json: string;
+  viewport_json?: string | null;
   estimate_json: string;
   created_by_user_id: string;
   created_at_iso: string;
@@ -137,6 +140,13 @@ function parseStoredJson<T>(raw: string, schema: ZodType<T>, label: string): T {
   return result.data;
 }
 
+function parseOptionalStoredJson<T>(raw: string | null | undefined, schema: ZodType<T>, label: string): T | null {
+  if (!raw) {
+    return null;
+  }
+  return parseStoredJson(raw, schema, label);
+}
+
 function buildPreviewLayout(layout: LayoutModel): LayoutModel {
   return {
     segments: layout.segments.slice(0, 40),
@@ -146,6 +156,11 @@ function buildPreviewLayout(layout: LayoutModel): LayoutModel {
 
 export function toDrawing(row: DrawingRow): DrawingRecord {
   const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing ${row.id}`);
+  const savedViewport = parseOptionalStoredJson(
+    row.viewport_json,
+    drawingCanvasViewportSchema,
+    `viewport for drawing ${row.id}`
+  );
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
     gates: parsedLayout.gates ?? []
@@ -157,6 +172,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     companyId: row.company_id,
     name: row.name,
     layout,
+    ...(savedViewport ? { savedViewport } : {}),
     estimate,
     schemaVersion: row.schema_version ?? DRAWING_SCHEMA_VERSION,
     rulesVersion: row.rules_version ?? RULES_ENGINE_VERSION,
@@ -194,6 +210,11 @@ export function toDrawingSummary(drawing: DrawingRecord): DrawingSummary {
 
 export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
   const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing version ${row.id}`);
+  const savedViewport = parseOptionalStoredJson(
+    row.viewport_json,
+    drawingCanvasViewportSchema,
+    `viewport for drawing version ${row.id}`
+  );
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
     gates: parsedLayout.gates ?? []
@@ -210,6 +231,7 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     source: row.source,
     name: row.name,
     layout,
+    ...(savedViewport ? { savedViewport } : {}),
     estimate,
     createdByUserId: row.created_by_user_id,
     createdAtIso: row.created_at_iso

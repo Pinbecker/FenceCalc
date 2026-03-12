@@ -1,7 +1,11 @@
-﻿import type { LayoutModel } from "@fence-estimator/contracts";
+import type { LayoutModel, PointMm } from "@fence-estimator/contracts";
+
+import { getSegmentColor } from "./editor/constants";
 
 interface DrawingPreviewProps {
   layout: LayoutModel;
+  label?: string;
+  variant?: "card" | "inline";
 }
 
 interface Bounds {
@@ -9,6 +13,11 @@ interface Bounds {
   minY: number;
   maxX: number;
   maxY: number;
+}
+
+interface ProjectedPoint {
+  x: number;
+  y: number;
 }
 
 function getBounds(layout: LayoutModel): Bounds | null {
@@ -34,76 +43,111 @@ function getBounds(layout: LayoutModel): Bounds | null {
   );
 }
 
-function project(value: number, min: number, size: number, viewportSize: number, padding: number): number {
-  if (size === 0) {
-    return viewportSize / 2;
-  }
-  return padding + ((value - min) / size) * (viewportSize - padding * 2);
+function buildProjector(bounds: Bounds, viewportWidth: number, viewportHeight: number, padding: number) {
+  const width = Math.max(bounds.maxX - bounds.minX, 1);
+  const height = Math.max(bounds.maxY - bounds.minY, 1);
+  const scale = Math.min((viewportWidth - padding * 2) / width, (viewportHeight - padding * 2) / height);
+  const contentWidth = width * scale;
+  const contentHeight = height * scale;
+  const offsetX = (viewportWidth - contentWidth) / 2;
+  const offsetY = (viewportHeight - contentHeight) / 2;
+
+  return (point: PointMm): ProjectedPoint => ({
+    x: offsetX + (point.x - bounds.minX) * scale,
+    y: offsetY + (point.y - bounds.minY) * scale
+  });
 }
 
-export function DrawingPreview({ layout }: DrawingPreviewProps) {
+function buildNodeKey(point: PointMm): string {
+  return `${point.x}:${point.y}`;
+}
+
+export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: DrawingPreviewProps) {
   const bounds = getBounds(layout);
+  const width = variant === "inline" ? 132 : 240;
+  const height = variant === "inline" ? 92 : 156;
+  const padding = variant === "inline" ? 12 : 18;
 
   if (!bounds) {
     return (
-      <div className="drawing-preview drawing-preview-empty">
+      <div className={`drawing-preview drawing-preview-${variant} drawing-preview-empty`}>
         <span>Blank drawing</span>
       </div>
     );
   }
 
-  const width = Math.max(bounds.maxX - bounds.minX, 1);
-  const height = Math.max(bounds.maxY - bounds.minY, 1);
-  const size = Math.max(width, height);
+  const projectPoint = buildProjector(bounds, width, height, padding);
+  const nodes = new Map<string, ProjectedPoint>();
+
+  for (const segment of layout.segments) {
+    nodes.set(buildNodeKey(segment.start), projectPoint(segment.start));
+    nodes.set(buildNodeKey(segment.end), projectPoint(segment.end));
+  }
 
   return (
-    <svg className="drawing-preview" viewBox="0 0 220 140" role="img" aria-label="Drawing preview">
-      <defs>
-        <linearGradient id="drawing-preview-fill" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#142737" />
-          <stop offset="100%" stopColor="#0b141d" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="220" height="140" rx="18" fill="url(#drawing-preview-fill)" />
-      <g opacity="0.22" stroke="#35536c" strokeWidth="1">
-        <line x1="20" y1="35" x2="200" y2="35" />
-        <line x1="20" y1="70" x2="200" y2="70" />
-        <line x1="20" y1="105" x2="200" y2="105" />
+    <svg
+      className={`drawing-preview drawing-preview-${variant}`}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`Drawing preview for ${label}`}
+    >
+      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="20" fill="#f2ebe0" stroke="rgba(32, 47, 43, 0.08)" />
+      <rect x="10" y="10" width={width - 20} height={height - 20} rx="16" fill="#fcf7f0" />
+      <g opacity="0.6" stroke="#e4d7c5" strokeWidth="1">
+        {Array.from({ length: 5 }, (_, index) => {
+          const y = 20 + index * ((height - 40) / 4);
+          return <line key={`h-${index}`} x1="16" y1={y} x2={width - 16} y2={y} />;
+        })}
+        {Array.from({ length: 6 }, (_, index) => {
+          const x = 18 + index * ((width - 36) / 5);
+          return <line key={`v-${index}`} x1={x} y1="16" x2={x} y2={height - 16} />;
+        })}
       </g>
       <g strokeLinecap="round" strokeLinejoin="round">
         {layout.segments.map((segment) => {
-          const x1 = project(segment.start.x, bounds.minX, size, 220, 18);
-          const y1 = project(segment.start.y, bounds.minY, size, 140, 18);
-          const x2 = project(segment.end.x, bounds.minX, size, 220, 18);
-          const y2 = project(segment.end.y, bounds.minY, size, 140, 18);
-          return <line key={segment.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#d7e7f7" strokeWidth="4" />;
+          const start = projectPoint(segment.start);
+          const end = projectPoint(segment.end);
+          return (
+            <g key={segment.id}>
+              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="rgba(39, 54, 50, 0.12)" strokeWidth="8" />
+              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={getSegmentColor(segment.spec)} strokeWidth="5" />
+            </g>
+          );
         })}
         {layout.gates?.map((gate) => {
           const segment = layout.segments.find((entry) => entry.id === gate.segmentId);
           if (!segment) {
             return null;
           }
-          const length = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y) || 1;
-          const startRatio = gate.startOffsetMm / length;
-          const endRatio = gate.endOffsetMm / length;
-          const gateStartX = segment.start.x + (segment.end.x - segment.start.x) * startRatio;
-          const gateStartY = segment.start.y + (segment.end.y - segment.start.y) * startRatio;
-          const gateEndX = segment.start.x + (segment.end.x - segment.start.x) * endRatio;
-          const gateEndY = segment.start.y + (segment.end.y - segment.start.y) * endRatio;
+
+          const segmentLengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y) || 1;
+          const startRatio = gate.startOffsetMm / segmentLengthMm;
+          const endRatio = gate.endOffsetMm / segmentLengthMm;
+          const gateStart = projectPoint({
+            x: segment.start.x + (segment.end.x - segment.start.x) * startRatio,
+            y: segment.start.y + (segment.end.y - segment.start.y) * startRatio
+          });
+          const gateEnd = projectPoint({
+            x: segment.start.x + (segment.end.x - segment.start.x) * endRatio,
+            y: segment.start.y + (segment.end.y - segment.start.y) * endRatio
+          });
+
           return (
-            <line
-              key={gate.id}
-              x1={project(gateStartX, bounds.minX, size, 220, 18)}
-              y1={project(gateStartY, bounds.minY, size, 140, 18)}
-              x2={project(gateEndX, bounds.minX, size, 220, 18)}
-              y2={project(gateEndY, bounds.minY, size, 140, 18)}
-              stroke="#ff7a45"
-              strokeWidth="5"
-            />
+            <g key={gate.id}>
+              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#fffaf3" strokeWidth="8" />
+              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#b35c3c" strokeWidth="4" />
+            </g>
           );
         })}
+      </g>
+      <g>
+        {Array.from(nodes.entries()).map(([key, point]) => (
+          <g key={key}>
+            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "3.5" : "4.5"} fill="#fffaf3" />
+            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "2" : "2.5"} fill="#31433f" />
+          </g>
+        ))}
       </g>
     </svg>
   );
 }
-

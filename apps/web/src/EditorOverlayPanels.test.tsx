@@ -25,22 +25,19 @@ describe("EditorOverlayPanels", () => {
           INLINE_JOIN: 0,
           GATE: 2
         }}
+        panelCount={5}
+        fenceRunCount={2}
         isTutorialOpen={false}
         onOpenTutorial={vi.fn()}
         onCloseTutorial={vi.fn()}
-        onStartItemCountsDrag={vi.fn()}
-        onStartPostKeyDrag={vi.fn()}
-        onStartTutorialDrag={vi.fn()}
-        itemCountsStyle={{}}
-        postKeyStyle={{}}
-        tutorialStyle={{}}
         formatHeightLabelFromMm={(value) => `${value / 1000}m`}
       />,
     );
 
     expect(html).toContain("Item Counts");
+    expect(html).toContain("Show Detail");
     expect(html).toContain("Post Key");
-    expect(html).toContain("Tutorial");
-    expect(html).toContain("Fence Heights (Std / SR)");
+    expect(html).toContain("Workflow Guide");
+    expect(html).toContain("Panels");
   });
 });

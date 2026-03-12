@@ -55,6 +55,11 @@ describe("API drawing routes", { timeout: 10000 }, () => {
               gateType: "SINGLE_LEAF"
             }
           ]
+        },
+        savedViewport: {
+          x: 320,
+          y: 180,
+          scale: 0.27
         }
       }
     });
@@ -63,6 +68,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       drawing: {
         id: string;
         versionNumber: number;
+        savedViewport?: { x: number; y: number; scale: number } | null;
         layout: {
           segments: Array<{ end: { x: number; y: number } }>;
           gates: Array<{ startOffsetMm: number; endOffsetMm: number }>;
@@ -77,6 +83,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
     expect(createdBody.drawing.estimate.posts.total).toBe(6);
     expect(createdBody.drawing.versionNumber).toBe(1);
+    expect(createdBody.drawing.savedViewport).toEqual({ x: 320, y: 180, scale: 0.27 });
 
     const list = await app.inject({
       method: "GET",
@@ -94,6 +101,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     expect(load.statusCode).toBe(200);
     const loadedDrawing = load.json<{
       drawing: {
+        savedViewport?: { x: number; y: number; scale: number } | null;
         layout: {
           segments: Array<{ end: { x: number; y: number } }>;
           gates: Array<{ startOffsetMm: number; endOffsetMm: number }>;
@@ -108,6 +116,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       startOffsetMm: 4000,
       endOffsetMm: 5201
     });
+    expect(loadedDrawing.savedViewport).toEqual({ x: 320, y: 180, scale: 0.27 });
 
     const update = await app.inject({
       method: "PUT",
@@ -115,13 +124,21 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         expectedVersionNumber: 1,
-        name: "Updated yard perimeter"
+        name: "Updated yard perimeter",
+        savedViewport: {
+          x: 640,
+          y: 260,
+          scale: 0.42
+        }
       }
     });
     expect(update.statusCode).toBe(200);
-    const updatedDrawing = update.json<{ drawing: { name: string; versionNumber: number } }>().drawing;
+    const updatedDrawing = update.json<{
+      drawing: { name: string; versionNumber: number; savedViewport?: { x: number; y: number; scale: number } | null };
+    }>().drawing;
     expect(updatedDrawing.name).toBe("Updated yard perimeter");
     expect(updatedDrawing.versionNumber).toBe(2);
+    expect(updatedDrawing.savedViewport).toEqual({ x: 640, y: 260, scale: 0.42 });
 
     const versions = await app.inject({
       method: "GET",

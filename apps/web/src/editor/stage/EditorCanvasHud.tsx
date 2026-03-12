@@ -27,10 +27,22 @@ export function EditorCanvasHud({
       </div>
 
       <div className="statusbar">
-        <span>Mode: {interactionMode}</span>
-        <span>Snap: {disableSnap ? "OFF" : "5 deg"}</span>
-        <span>Point Step: {formatLengthMm(DRAW_INCREMENT_MM)}</span>
-        <span>Active Start: {drawStart ? formatPointMeters(drawStart) : "None"}</span>
+        <span className="statusbar-item">
+          <strong>Mode</strong>
+          <em>{interactionMode}</em>
+        </span>
+        <span className="statusbar-item">
+          <strong>Snap</strong>
+          <em>{disableSnap ? "Off" : "5 deg"}</em>
+        </span>
+        <span className="statusbar-item">
+          <strong>Step</strong>
+          <em>{formatLengthMm(DRAW_INCREMENT_MM)}</em>
+        </span>
+        <span className="statusbar-item">
+          <strong>Start</strong>
+          <em>{drawStart ? formatPointMeters(drawStart) : "None"}</em>
+        </span>
       </div>
     </>
   );

@@ -41,6 +41,12 @@ export interface LayoutModel {
   gates?: GatePlacement[];
 }
 
+export interface DrawingCanvasViewport {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface SegmentEstimate {
   segmentId: string;
   lengthMm: number;
@@ -211,6 +217,7 @@ export interface DrawingRecord {
   companyId: string;
   name: string;
   layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
   schemaVersion: number;
   rulesVersion: string;
@@ -255,6 +262,7 @@ export interface DrawingVersionRecord {
   source: DrawingVersionSource;
   name: string;
   layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
   createdByUserId: string;
   createdAtIso: string;

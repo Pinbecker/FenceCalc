@@ -17,7 +17,8 @@ describe("EditorCanvasControls", () => {
       />,
     );
 
-    expect(html).toContain("Controls");
+    expect(html).toContain("Undo");
+    expect(html).toContain("Ctrl+Z");
     expect(html).toContain('title="Undo"');
     expect(html).toContain('title="Clear Layout"');
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
 
 import {
@@ -29,6 +29,14 @@ export function useWorkspaceSessionState({
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isLoadingDrawings, setIsLoadingDrawings] = useState(false);
+  const sessionRequestIdRef = useRef(0);
+
+  const beginSessionRequest = useCallback(() => {
+    sessionRequestIdRef.current += 1;
+    return sessionRequestIdRef.current;
+  }, []);
+
+  const isActiveSessionRequest = useCallback((requestId: number) => sessionRequestIdRef.current === requestId, []);
 
   const clearSessionData = useCallback(() => {
     setSession(null);
@@ -54,6 +62,7 @@ export function useWorkspaceSessionState({
 
   useEffect(() => {
     let cancelled = false;
+    const requestId = beginSessionRequest();
     const storedSession = readStoredSession();
     if (storedSession) {
       setSession(storedSession);
@@ -62,26 +71,31 @@ export function useWorkspaceSessionState({
     void (async () => {
       try {
         const authenticated = await getAuthenticatedUser();
-        if (cancelled) {
+        if (cancelled || !isActiveSessionRequest(requestId)) {
           return;
         }
 
         setSession(authenticated);
         writeStoredSession(authenticated);
-        const nextDrawings = await listDrawings();
-        if (cancelled) {
-          return;
+        setDrawings([]);
+        try {
+          const nextDrawings = await listDrawings();
+          if (!cancelled && isActiveSessionRequest(requestId)) {
+            setDrawings(nextDrawings);
+          }
+        } catch (error) {
+          if (!cancelled && isActiveSessionRequest(requestId)) {
+            setErrorMessage(extractApiErrorMessage(error));
+          }
         }
-
-        setDrawings(nextDrawings);
       } catch {
-        if (cancelled) {
+        if (cancelled || !isActiveSessionRequest(requestId)) {
           return;
         }
 
         clearSessionData();
       } finally {
-        if (!cancelled) {
+        if (!cancelled && isActiveSessionRequest(requestId)) {
           setIsRestoringSession(false);
         }
       }
@@ -90,51 +104,92 @@ export function useWorkspaceSessionState({
     return () => {
       cancelled = true;
     };
-  }, [clearSessionData]);
+  }, [beginSessionRequest, clearSessionData, isActiveSessionRequest, setErrorMessage]);
 
   const register = useCallback(
     async (input: RegisterAccountInput, onRegistered: () => void) => {
+      const requestId = beginSessionRequest();
       setIsAuthenticating(true);
       clearMessages();
       try {
         const nextSession = await registerAccount(input);
+        if (!isActiveSessionRequest(requestId)) {
+          return;
+        }
+
         setSession(nextSession);
         writeStoredSession(nextSession);
+        setDrawings([]);
         onRegistered();
         setNoticeMessage(`Signed in as ${nextSession.user.displayName}`);
-        setDrawings(await listDrawings());
+        void listDrawings()
+          .then((nextDrawings) => {
+            if (isActiveSessionRequest(requestId)) {
+              setDrawings(nextDrawings);
+            }
+          })
+          .catch((error) => {
+            if (isActiveSessionRequest(requestId)) {
+              setErrorMessage(extractApiErrorMessage(error));
+            }
+          });
       } catch (error) {
-        setErrorMessage(extractApiErrorMessage(error));
+        if (isActiveSessionRequest(requestId)) {
+          setErrorMessage(extractApiErrorMessage(error));
+        }
       } finally {
-        setIsAuthenticating(false);
-        setIsRestoringSession(false);
+        if (isActiveSessionRequest(requestId)) {
+          setIsAuthenticating(false);
+          setIsRestoringSession(false);
+        }
       }
     },
-    [clearMessages, setErrorMessage, setNoticeMessage],
+    [beginSessionRequest, clearMessages, isActiveSessionRequest, setErrorMessage, setNoticeMessage],
   );
 
   const loginToWorkspace = useCallback(
     async (input: LoginInput) => {
+      const requestId = beginSessionRequest();
       setIsAuthenticating(true);
       clearMessages();
       try {
         const nextSession = await login(input);
+        if (!isActiveSessionRequest(requestId)) {
+          return;
+        }
+
         setSession(nextSession);
         writeStoredSession(nextSession);
-        setDrawings(await listDrawings());
+        setDrawings([]);
         setNoticeMessage(`Welcome back, ${nextSession.user.displayName}`);
+        void listDrawings()
+          .then((nextDrawings) => {
+            if (isActiveSessionRequest(requestId)) {
+              setDrawings(nextDrawings);
+            }
+          })
+          .catch((error) => {
+            if (isActiveSessionRequest(requestId)) {
+              setErrorMessage(extractApiErrorMessage(error));
+            }
+          });
       } catch (error) {
-        setErrorMessage(extractApiErrorMessage(error));
+        if (isActiveSessionRequest(requestId)) {
+          setErrorMessage(extractApiErrorMessage(error));
+        }
       } finally {
-        setIsAuthenticating(false);
-        setIsRestoringSession(false);
+        if (isActiveSessionRequest(requestId)) {
+          setIsAuthenticating(false);
+          setIsRestoringSession(false);
+        }
       }
     },
-    [clearMessages, setErrorMessage, setNoticeMessage],
+    [beginSessionRequest, clearMessages, isActiveSessionRequest, setErrorMessage, setNoticeMessage],
   );
 
   const logout = useCallback(
     (onLoggedOut: () => void) => {
+      beginSessionRequest();
       if (session) {
         void logoutSession();
       }
@@ -143,7 +198,7 @@ export function useWorkspaceSessionState({
       onLoggedOut();
       clearMessages();
     },
-    [clearMessages, clearSessionData, session],
+    [beginSessionRequest, clearMessages, clearSessionData, session],
   );
 
   return {

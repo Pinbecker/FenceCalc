@@ -11,9 +11,35 @@ export interface UseEditorKeyboardShortcutsOptions {
   cancelActiveDrawing(): void;
 }
 
+export function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") {
+    return false;
+  }
+
+  const element = target as {
+    tagName?: string;
+    isContentEditable?: boolean;
+    getAttribute?: (name: string) => string | null;
+  };
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  const tagName = typeof element.tagName === "string" ? element.tagName.toLowerCase() : "";
+  if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+    return true;
+  }
+
+  return typeof element.getAttribute === "function" && element.getAttribute("role") === "textbox";
+}
+
 export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOptions): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
+      if (isEditableShortcutTarget(event.target)) {
+        return;
+      }
+
       const isModifierPressed = event.ctrlKey || event.metaKey;
       if (isModifierPressed && event.code === "KeyZ") {
         event.preventDefault();
@@ -45,6 +71,7 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
         options.setInteractionMode("GATE");
       }
       if (event.code === "Space") {
+        event.preventDefault();
         options.setIsSpacePressed(true);
       }
       if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
@@ -62,7 +89,12 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
     }
 
     function onKeyUp(event: KeyboardEvent): void {
+      if (isEditableShortcutTarget(event.target)) {
+        return;
+      }
+
       if (event.code === "Space") {
+        event.preventDefault();
         options.setIsSpacePressed(false);
       }
       if (event.code === "ShiftLeft" || event.code === "ShiftRight") {

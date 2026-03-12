@@ -130,6 +130,13 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
       `
+    },
+    {
+      name: "004_drawing_viewports",
+      sql: `
+        ALTER TABLE drawings ADD COLUMN viewport_json TEXT;
+        ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT;
+      `
     }
   ] as const;
 
@@ -190,6 +197,12 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   }
   if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "rules_version")) {
     database.exec("ALTER TABLE drawing_versions ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'");
+  }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "viewport_json")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN viewport_json TEXT");
+  }
+  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "viewport_json")) {
+    database.exec("ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT");
   }
 
   if (tableExists(database, "drawings") && tableExists(database, "drawing_versions")) {

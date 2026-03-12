@@ -48,6 +48,8 @@ export function DrawingsPage({
     }
     return drawings;
   }, [drawings, filter]);
+  const activeCount = drawings.filter((drawing) => !drawing.isArchived).length;
+  const archivedCount = drawings.length - activeCount;
 
   const handleToggleHistory = async (drawingId: string) => {
     if (expandedDrawingId === drawingId) {
@@ -72,7 +74,7 @@ export function DrawingsPage({
         <div>
           <span className="portal-eyebrow">Drawing Library</span>
           <h1>Saved drawings</h1>
-          <p>Browse company drawings with previews, archive stale work, and restore older versions when needed.</p>
+          <p>Scan active work quickly, jump back into a draft, and open history only when you need to restore a version.</p>
         </div>
         <div className="portal-header-actions">
           <div className="portal-filter-row" role="tablist" aria-label="Drawing filter">
@@ -96,6 +98,31 @@ export function DrawingsPage({
         </div>
       </header>
 
+      <section className="portal-surface-card drawing-library-overview">
+        <div className="drawing-library-overview-copy">
+          <span className="portal-section-kicker">Library Focus</span>
+          <h2>{filter === "ACTIVE" ? "Current work queue" : filter === "ARCHIVED" ? "Archived reference set" : "Full company archive"}</h2>
+          <p className="portal-empty-copy">
+            Keep the library dense and scannable. Open a drawing to continue work, or expand history only when you need
+            to restore a previous revision.
+          </p>
+        </div>
+        <div className="drawing-library-overview-metrics">
+          <article className="drawing-library-overview-metric">
+            <span>Visible</span>
+            <strong>{visibleDrawings.length}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Active</span>
+            <strong>{activeCount}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Archived</span>
+            <strong>{archivedCount}</strong>
+          </article>
+        </div>
+      </section>
+
       {visibleDrawings.length === 0 ? (
         <div className="portal-empty-state">
           <h2>No drawings in this view</h2>
@@ -108,39 +135,44 @@ export function DrawingsPage({
           const versions = versionsByDrawingId[drawing.id] ?? [];
           const isLoadingVersions = isLoadingVersionsForId === drawing.id;
           return (
-            <article key={drawing.id} className="drawing-library-card">
-              <DrawingPreview layout={drawing.previewLayout} />
+            <article key={drawing.id} className={`drawing-library-card${expandedDrawingId === drawing.id ? " is-expanded" : ""}`}>
+              <div className="drawing-library-preview-cell">
+                <DrawingPreview layout={drawing.previewLayout} label={drawing.name} />
+              </div>
               <div className="drawing-library-card-body">
-                <div className="drawing-library-card-header">
-                  <div>
-                    <h2>{drawing.name}</h2>
-                    <p>Updated {formatTimestamp(drawing.updatedAtIso)}</p>
+                <div className="drawing-library-row-top">
+                  <div className="drawing-library-card-header">
+                    <div>
+                      <h2>{drawing.name}</h2>
+                      <p>Updated {formatTimestamp(drawing.updatedAtIso)}</p>
+                    </div>
+                    <div className="drawing-library-badge-stack">
+                      <span className="drawing-library-badge">v{drawing.versionNumber}</span>
+                      <span className={`drawing-library-badge${drawing.isArchived ? " archived" : ""}`}>
+                        {drawing.isArchived ? "Archived" : "Active"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="drawing-library-badge-stack">
-                    <span className="drawing-library-badge">v{drawing.versionNumber}</span>
-                    <span className={`drawing-library-badge${drawing.isArchived ? " archived" : ""}`}>
-                      {drawing.isArchived ? "Archived" : "Active"}
-                    </span>
+                  <div className="drawing-library-card-actions">
+                    <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
+                      Open In Editor
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-secondary-button"
+                      onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
+                    >
+                      {drawing.isArchived ? "Unarchive" : "Archive"}
+                    </button>
+                    <button type="button" className="portal-secondary-button" onClick={() => void handleToggleHistory(drawing.id)}>
+                      {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
+                    </button>
                   </div>
                 </div>
                 <div className="drawing-library-card-metrics">
                   <span>{drawing.segmentCount} segments</span>
                   <span>{drawing.gateCount} gates</span>
-                </div>
-                <div className="drawing-library-card-actions">
-                  <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
-                    Open In Editor
-                  </button>
-                  <button
-                    type="button"
-                    className="portal-secondary-button"
-                    onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
-                  >
-                    {drawing.isArchived ? "Unarchive" : "Archive"}
-                  </button>
-                  <button type="button" className="portal-secondary-button" onClick={() => void handleToggleHistory(drawing.id)}>
-                    {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
-                  </button>
+                  <span>{drawing.schemaVersion > 0 ? `Schema ${drawing.schemaVersion}` : "Schema pending"}</span>
                 </div>
                 {expandedDrawingId === drawing.id ? (
                   <div className="drawing-history-panel">

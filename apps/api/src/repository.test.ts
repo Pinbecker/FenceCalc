@@ -129,6 +129,7 @@ describe("InMemoryAppRepository", () => {
       companyId: "company-1",
       name: "Initial",
       layout: emptyLayout,
+      savedViewport: { x: 120, y: 90, scale: 0.2 },
       estimate: emptyEstimate,
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
@@ -147,12 +148,16 @@ describe("InMemoryAppRepository", () => {
       versionNumber: 1,
       isArchived: false
     });
+    await expect(repository.getDrawingById("drawing-1", "company-1")).resolves.toMatchObject({
+      savedViewport: { x: 120, y: 90, scale: 0.2 }
+    });
 
     const updated = await repository.updateDrawing({
       drawingId: "drawing-1",
       companyId: "company-1",
       name: "Updated",
       layout: emptyLayout,
+      savedViewport: { x: 320, y: 160, scale: 0.35 },
       estimate: emptyEstimate,
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
@@ -162,6 +167,7 @@ describe("InMemoryAppRepository", () => {
 
     expect(updated?.name).toBe("Updated");
     expect(updated?.versionNumber).toBe(2);
+    expect(updated?.savedViewport).toEqual({ x: 320, y: 160, scale: 0.35 });
     await expect(repository.listDrawingVersions("drawing-1", "company-1")).resolves.toHaveLength(2);
   });
 
@@ -256,6 +262,7 @@ describe("InMemoryAppRepository", () => {
       companyId: "company-1",
       name: "Initial",
       layout: emptyLayout,
+      savedViewport: { x: 120, y: 90, scale: 0.2 },
       estimate: emptyEstimate,
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
@@ -269,6 +276,7 @@ describe("InMemoryAppRepository", () => {
       companyId: "company-1",
       name: "Updated",
       layout: emptyLayout,
+      savedViewport: { x: 440, y: 210, scale: 0.45 },
       estimate: emptyEstimate,
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
@@ -298,6 +306,7 @@ describe("InMemoryAppRepository", () => {
     });
 
     expect(restored?.versionNumber).toBe(3);
+    expect(restored?.savedViewport).toEqual({ x: 120, y: 90, scale: 0.2 });
 
     await repository.addAuditLog({
       id: "audit-1",
@@ -345,6 +354,7 @@ describe("SqliteAppRepository", () => {
       companyId: account.company.id,
       name: "Stored drawing",
       layout: emptyLayout,
+      savedViewport: { x: 250, y: 125, scale: 0.3 },
       estimate: emptyEstimate,
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
@@ -370,6 +380,9 @@ describe("SqliteAppRepository", () => {
       user: account.user
     });
     await expect(repository.listDrawings(account.company.id)).resolves.toHaveLength(1);
+    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject({
+      savedViewport: { x: 250, y: 125, scale: 0.3 }
+    });
     await expect(repository.listAuditLog(account.company.id)).resolves.toHaveLength(1);
   });
 

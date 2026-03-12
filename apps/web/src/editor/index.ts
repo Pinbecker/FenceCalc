@@ -122,4 +122,5 @@ export type {
   VisualPost
 } from "./types.js";
 export { useEditorKeyboardShortcuts } from "./useEditorKeyboardShortcuts.js";
+export { useElementSize } from "./useElementSize.js";
 export { useWindowSize } from "./useWindowSize.js";

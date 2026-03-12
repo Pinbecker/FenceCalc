@@ -36,6 +36,7 @@ export class InMemoryDrawingStore {
         source: "CREATE",
         name: drawing.name,
         layout: drawing.layout,
+        ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),
         estimate: drawing.estimate,
         createdByUserId: drawing.createdByUserId,
         createdAtIso: drawing.createdAtIso
@@ -77,6 +78,7 @@ export class InMemoryDrawingStore {
       ...existing,
       name: input.name,
       layout: input.layout,
+      savedViewport: input.savedViewport ?? null,
       estimate: input.estimate,
       schemaVersion: input.schemaVersion,
       rulesVersion: input.rulesVersion,
@@ -96,6 +98,7 @@ export class InMemoryDrawingStore {
       source: "UPDATE",
       name: updated.name,
       layout: updated.layout,
+      ...(updated.savedViewport ? { savedViewport: updated.savedViewport } : {}),
       estimate: updated.estimate,
       createdByUserId: input.updatedByUserId,
       createdAtIso: input.updatedAtIso
@@ -140,6 +143,7 @@ export class InMemoryDrawingStore {
       ...existing,
       name: version.name,
       layout: version.layout,
+      savedViewport: version.savedViewport ?? null,
       estimate: version.estimate,
       schemaVersion: version.schemaVersion,
       rulesVersion: version.rulesVersion,
@@ -159,6 +163,7 @@ export class InMemoryDrawingStore {
       source: "RESTORE",
       name: restored.name,
       layout: restored.layout,
+      ...(restored.savedViewport ? { savedViewport: restored.savedViewport } : {}),
       estimate: restored.estimate,
       createdByUserId: input.restoredByUserId,
       createdAtIso: input.restoredAtIso

@@ -2,6 +2,7 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  DrawingCanvasViewport,
   DrawingRecord,
   DrawingSummary,
   DrawingVersionRecord,
@@ -166,7 +167,11 @@ export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
   return response.drawing;
 }
 
-export async function createDrawing(input: { name: string; layout: LayoutModel }): Promise<DrawingRecord> {
+export async function createDrawing(input: {
+  name: string;
+  layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
+}): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
     method: "POST",
     body: input
@@ -176,7 +181,12 @@ export async function createDrawing(input: { name: string; layout: LayoutModel }
 
 export async function updateDrawing(
   drawingId: string,
-  input: { expectedVersionNumber: number; name?: string; layout?: LayoutModel },
+  input: {
+    expectedVersionNumber: number;
+    name?: string;
+    layout?: LayoutModel;
+    savedViewport?: DrawingCanvasViewport | null;
+  },
 ): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`, {
     method: "PUT",

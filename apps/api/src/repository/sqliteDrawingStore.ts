@@ -18,9 +18,9 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawings (
-              id, company_id, name, layout_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
+              id, company_id, name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
               created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -28,6 +28,7 @@ export class SqliteDrawingStore {
           input.companyId,
           input.name,
           JSON.stringify(input.layout),
+          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
           JSON.stringify(input.estimate),
           input.schemaVersion,
           input.rulesVersion,
@@ -44,8 +45,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -58,6 +59,7 @@ export class SqliteDrawingStore {
           "CREATE",
           input.name,
           JSON.stringify(input.layout),
+          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
           JSON.stringify(input.estimate),
           input.createdByUserId,
           input.createdAtIso,
@@ -103,13 +105,14 @@ export class SqliteDrawingStore {
         .prepare(
           `
             UPDATE drawings
-            SET name = ?, layout_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+            SET name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
             WHERE id = ? AND company_id = ?
           `,
         )
         .run(
           input.name,
           JSON.stringify(input.layout),
+          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
           JSON.stringify(input.estimate),
           input.schemaVersion,
           input.rulesVersion,
@@ -123,8 +126,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -137,6 +140,7 @@ export class SqliteDrawingStore {
           "UPDATE",
           input.name,
           JSON.stringify(input.layout),
+          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
           JSON.stringify(input.estimate),
           input.updatedByUserId,
           input.updatedAtIso,
@@ -148,6 +152,7 @@ export class SqliteDrawingStore {
       ...current,
       name: input.name,
       layout: input.layout,
+      savedViewport: input.savedViewport ?? null,
       estimate: input.estimate,
       schemaVersion: input.schemaVersion,
       rulesVersion: input.rulesVersion,
@@ -232,13 +237,14 @@ export class SqliteDrawingStore {
         .prepare(
           `
             UPDATE drawings
-            SET name = ?, layout_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+            SET name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
             WHERE id = ? AND company_id = ?
           `,
         )
         .run(
           version.name,
           version.layout_json,
+          version.viewport_json ?? null,
           version.estimate_json,
           restoredVersion.schemaVersion,
           restoredVersion.rulesVersion,
@@ -252,8 +258,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -266,6 +272,7 @@ export class SqliteDrawingStore {
           "RESTORE",
           version.name,
           version.layout_json,
+          version.viewport_json ?? null,
           version.estimate_json,
           input.restoredByUserId,
           input.restoredAtIso,
@@ -277,6 +284,7 @@ export class SqliteDrawingStore {
       ...current,
       name: restoredVersion.name,
       layout: restoredVersion.layout,
+      savedViewport: restoredVersion.savedViewport ?? null,
       estimate: restoredVersion.estimate,
       schemaVersion: restoredVersion.schemaVersion,
       rulesVersion: restoredVersion.rulesVersion,

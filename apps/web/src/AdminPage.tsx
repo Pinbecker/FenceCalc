@@ -90,7 +90,7 @@ export function AdminPage({
         <div>
           <span className="portal-eyebrow">Administration</span>
           <h1>User management</h1>
-          <p>Provision company users and review the activity trail from one operational surface.</p>
+          <p>Keep the team list in view, handle resets quickly, and use the form as a secondary setup action instead of the main screen.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoadingUsers}>
@@ -106,39 +106,6 @@ export function AdminPage({
       {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
 
       <div className="admin-page-grid">
-        <section className="portal-surface-card">
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">Create user</span>
-              <h2>Add a company login</h2>
-            </div>
-          </div>
-          <form className="portal-form-grid" onSubmit={(event) => void handleSubmit(event)}>
-            <label className="portal-field">
-              <span>Name</span>
-              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
-            </label>
-            <label className="portal-field">
-              <span>Email</span>
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-            </label>
-            <label className="portal-field">
-              <span>Password</span>
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-            </label>
-            <label className="portal-field">
-              <span>Role</span>
-              <select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}>
-                <option value="MEMBER">Member</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-            </label>
-            <button type="submit" className="portal-primary-button" disabled={isSavingUser}>
-              {isSavingUser ? "Adding..." : "Add User"}
-            </button>
-          </form>
-        </section>
-
         <section className="portal-surface-card">
           <div className="portal-section-heading">
             <div>
@@ -189,6 +156,39 @@ export function AdminPage({
               </article>
             ))}
           </div>
+        </section>
+
+        <section className="portal-surface-card">
+          <div className="portal-section-heading">
+            <div>
+              <span className="portal-section-kicker">Create user</span>
+              <h2>Add a company login</h2>
+            </div>
+          </div>
+          <form className="portal-form-grid" onSubmit={(event) => void handleSubmit(event)}>
+            <label className="portal-field">
+              <span>Name</span>
+              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
+            </label>
+            <label className="portal-field">
+              <span>Email</span>
+              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </label>
+            <label className="portal-field">
+              <span>Password</span>
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+            </label>
+            <label className="portal-field">
+              <span>Role</span>
+              <select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}>
+                <option value="MEMBER">Member</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </label>
+            <button type="submit" className="portal-primary-button" disabled={isSavingUser}>
+              {isSavingUser ? "Adding..." : "Add User"}
+            </button>
+          </form>
         </section>
       </div>
 

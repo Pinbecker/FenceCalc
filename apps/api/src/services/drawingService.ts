@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DrawingRecord, LayoutModel } from "@fence-estimator/contracts";
+import type { DrawingCanvasViewport, DrawingRecord, LayoutModel } from "@fence-estimator/contracts";
 
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { writeAuditLog } from "../auditLogSupport.js";
@@ -39,12 +39,14 @@ export type DrawingMutationResult =
 interface DrawingCreateInput {
   name: string;
   layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null | undefined;
 }
 
 interface DrawingUpdateInput {
   expectedVersionNumber: number;
   name?: string | undefined;
   layout?: LayoutModel | undefined;
+  savedViewport?: DrawingCanvasViewport | null | undefined;
 }
 
 interface DrawingArchiveInput {
@@ -65,6 +67,7 @@ export async function createDrawingForCompany(
       companyId: authenticated.company.id,
       name: input.name,
       layout: result.layout,
+      savedViewport: input.savedViewport ?? null,
       estimate: result.estimate,
       schemaVersion: result.schemaVersion,
       rulesVersion: result.rulesVersion,
@@ -121,6 +124,7 @@ export async function updateDrawingForCompany(
       companyId: authenticated.company.id,
       name: input.name ?? existing.name,
       layout: nextLayout.layout,
+      savedViewport: input.savedViewport ?? existing.savedViewport ?? null,
       estimate: nextLayout.estimate,
       schemaVersion: nextLayout.schemaVersion,
       rulesVersion: nextLayout.rulesVersion,

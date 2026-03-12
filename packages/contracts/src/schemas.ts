@@ -6,6 +6,12 @@ export const pointMmSchema = z.object({
   y: z.number().finite()
 });
 
+export const drawingCanvasViewportSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  scale: z.number().finite().positive()
+});
+
 export const fenceSystemSchema = z.enum(["TWIN_BAR", "ROLL_FORM"]);
 export const fenceHeightKeySchema = z.enum(FENCE_HEIGHT_KEYS);
 export const twinBarVariantSchema = z.enum(["STANDARD", "SUPER_REBOUND"]);
@@ -297,14 +303,16 @@ export const loginRequestSchema = z.object({
 
 export const drawingCreateRequestSchema = z.object({
   name: drawingNameSchema,
-  layout: layoutModelSchema
+  layout: layoutModelSchema,
+  savedViewport: drawingCanvasViewportSchema.nullable().optional()
 });
 
 export const drawingUpdateRequestSchema = z
   .object({
     expectedVersionNumber: z.coerce.number().int().min(1),
     name: drawingNameSchema.optional(),
-    layout: layoutModelSchema.optional()
+    layout: layoutModelSchema.optional(),
+    savedViewport: drawingCanvasViewportSchema.nullable().optional()
   })
   .superRefine((value, context) => {
     if (value.name === undefined && value.layout === undefined) {

@@ -1,5 +1,6 @@
-﻿import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
 
+import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
 
 interface DashboardPageProps {
@@ -28,7 +29,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
         <div>
           <span className="portal-eyebrow">Company Dashboard</span>
           <h1>{session.company.name}</h1>
-          <p>Track your team workspace, jump into saved work, and keep the editor reserved for drawing tasks only.</p>
+          <p>Start from the work that matters now: reopen the latest drawings, create a clean draft, or head to operations.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("drawings")}>
@@ -39,25 +40,6 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
           </button>
         </div>
       </header>
-
-      <div className="portal-stat-grid">
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Saved Drawings</span>
-          <strong>{activeDrawings.length}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Segments Tracked</span>
-          <strong>{totalSegments}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Gate Openings</span>
-          <strong>{totalGates}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Archived</span>
-          <strong>{archivedDrawings.length}</strong>
-        </article>
-      </div>
 
       <div className="portal-dashboard-grid">
         <section className="portal-surface-card">
@@ -79,8 +61,17 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
                 className="portal-recent-item"
                 onClick={() => onNavigate("editor", { drawingId: drawing.id })}
               >
-                <strong>{drawing.name}</strong>
-                <span>{formatTimestamp(drawing.updatedAtIso)}</span>
+                <div className="portal-recent-preview">
+                  <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="inline" />
+                </div>
+                <div className="portal-recent-copy">
+                  <strong>{drawing.name}</strong>
+                  <span>{formatTimestamp(drawing.updatedAtIso)}</span>
+                  <span>
+                    {drawing.segmentCount} segments · {drawing.gateCount} gates
+                  </span>
+                </div>
+                <span className="portal-recent-version">v{drawing.versionNumber}</span>
               </button>
             ))}
           </div>
@@ -96,11 +87,11 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
           <div className="portal-action-list">
             <button type="button" className="portal-action-card" onClick={() => onNavigate("drawings")}>
               <strong>Drawing library</strong>
-              <span>Browse previews, sort recent work, and open a draft cleanly.</span>
+              <span>Scan saved work in a denser queue and open only the drawings you need to continue.</span>
             </button>
             <button type="button" className="portal-action-card" onClick={() => onNavigate("editor")}>
               <strong>Open editor</strong>
-              <span>Start a fresh layout without auth and file controls clogging the rail.</span>
+              <span>Start a fresh layout in the dedicated workspace with tools, canvas, and estimate rails separated.</span>
             </button>
             {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
               <button type="button" className="portal-action-card" onClick={() => onNavigate("admin")}>
@@ -111,7 +102,25 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
           </div>
         </section>
       </div>
+
+      <div className="portal-stat-grid portal-stat-grid-secondary">
+        <article className="portal-stat-card">
+          <span className="portal-stat-label">Saved Drawings</span>
+          <strong>{activeDrawings.length}</strong>
+        </article>
+        <article className="portal-stat-card">
+          <span className="portal-stat-label">Segments Tracked</span>
+          <strong>{totalSegments}</strong>
+        </article>
+        <article className="portal-stat-card">
+          <span className="portal-stat-label">Gate Openings</span>
+          <strong>{totalGates}</strong>
+        </article>
+        <article className="portal-stat-card">
+          <span className="portal-stat-label">Archived</span>
+          <strong>{archivedDrawings.length}</strong>
+        </article>
+      </div>
     </section>
   );
 }
-

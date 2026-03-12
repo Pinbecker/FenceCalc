@@ -8,7 +8,9 @@ import {
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { EditorCanvasStage } from "./EditorCanvasStage";
+import { EditorCanvasControls } from "./EditorCanvasControls";
 import { EditorLengthEditor } from "./EditorLengthEditor";
+import { EditorOverlayPanels } from "./EditorOverlayPanels";
 import { EditorSidebar } from "./EditorSidebar";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorDerivedState } from "./editor/useEditorDerivedState";
@@ -22,6 +24,7 @@ import {
   clampGatePlacementToSegment,
   chooseGridStep,
   useEditorCanvasViewport,
+  useElementSize,
   formatHeightLabelFromMm,
   formatLengthMm,
   formatMetersInputFromMm,
@@ -39,8 +42,7 @@ import {
   samePointApprox,
   type HistoryState,
   TWIN_BAR_HEIGHT_OPTIONS,
-  useEditorKeyboardShortcuts,
-  useWindowSize
+  useEditorKeyboardShortcuts
 } from "./editor";
 
 interface EditorPageProps {
@@ -101,8 +103,8 @@ function reconcileGatePlacementsForSegments(
 }
 
 export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
-  const { width, height } = useWindowSize();
   const stageRef = useRef<Konva.Stage | null>(null);
+  const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
   const [history, dispatchHistory] = useReducer(historyReducer, {
     past: [],
     present: { segments: [], gates: [] },
@@ -115,6 +117,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const gatePlacements = currentLayout.gates ?? [];
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  const canvasWidth = Math.max(Math.round(canvasFrameSize.width), 1);
+  const canvasHeight = Math.max(Math.round(canvasFrameSize.height), 1);
 
   const {
     view,
@@ -127,13 +131,15 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     updatePan,
     endPan,
     zoomAtPointer,
+    restoreView,
+    resetView,
     toWorld,
     visibleBounds,
     verticalLines,
     horizontalLines
   } = useEditorCanvasViewport({
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth,
+    canvasHeight,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
     initialVisibleWidthMm: INITIAL_VISIBLE_WIDTH_MM,
@@ -168,6 +174,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   );
 
   const workspace = useEditorWorkspaceBridge({
+    getSavedViewport: () => view,
     layout: currentLayout,
     initialDrawingId,
     onResetLayout: (layout) => {
@@ -179,7 +186,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onResetEditorState: () => {
       selectionState.resetLoadedWorkspaceState();
       shellState.setSelectedPlanId(null);
-    }
+    },
+    onRestoreViewport: restoreView
   });
 
   const undoSegments = useCallback(() => {
@@ -198,6 +206,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     drawAnchorNodes,
     editorSummary,
     estimate,
+    estimateSegments,
     gatesBySegmentId,
     highlightableOptimizationPlans,
     oppositeGateGuides,
@@ -221,10 +230,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     selectedPlanId: shellState.selectedPlanId,
     activeSpecSystem: shellState.activeSpec.system,
     viewScale: view.scale,
-    canvasWidth: width
+    canvasWidth
   });
   const { postRowsByType, gateCounts, gateCountsByHeight, twinBarFenceRows } = editorSummary;
   const optimizationSummary = estimate.optimization;
+  const panelCount = estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
+  const fenceRunCount = estimateSegments.length;
 
   useEditorSelectionEffects({
     selectedSegment,
@@ -365,6 +376,19 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isDirty: workspace.isDirty,
     onNavigate
   });
+  const session = workspace.session;
+  const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
+  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
+  const interactionLabel =
+    shellState.interactionMode === "DRAW"
+      ? "Draw"
+      : shellState.interactionMode === "SELECT"
+        ? "Select"
+        : shellState.interactionMode === "RECTANGLE"
+          ? "Rectangle"
+          : shellState.interactionMode === "RECESS"
+            ? "Recess"
+            : "Gate";
 
   function handleStartNewDraft(): void {
     if (!confirmDiscardChanges("Discard unsaved changes and start a new draft?")) {
@@ -372,6 +396,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     }
 
     resetWorkspaceCanvas();
+    resetView();
     workspace.startNewDraft();
   }
 
@@ -384,77 +409,230 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   }
 
   return (
-    <div className="app-shell">
-      <EditorSidebar
-        workspace={workspace}
-        onOpenDrawings={handleOpenDrawings}
-        onStartNewDraft={handleStartNewDraft}
-        onNavigate={guardedNavigate}
-        interactionMode={shellState.interactionMode}
-        recessWidthInputM={shellState.recessWidthInputM}
-        recessDepthInputM={shellState.recessDepthInputM}
-        recessSide={shellState.recessSide}
-        gateType={shellState.gateType}
-        customGateWidthInputM={shellState.customGateWidthInputM}
-        recessWidthOptionsMm={RECESS_WIDTH_OPTIONS_MM}
-        recessDepthOptionsMm={RECESS_DEPTH_OPTIONS_MM}
-        gateWidthOptionsMm={GATE_WIDTH_OPTIONS_MM}
-        recessPreview={recessPreview}
-        gatePreview={gatePreview}
-        activeSpec={shellState.activeSpec}
-        activeHeightOptions={activeHeightOptions}
-        twinBarHeightOptions={TWIN_BAR_HEIGHT_OPTIONS}
-        rollFormHeightOptions={ROLL_FORM_HEIGHT_OPTIONS}
-        postRowsByType={postRowsByType}
-        gateCounts={gateCounts}
-        gateCountsByHeight={gateCountsByHeight}
-        twinBarFenceRows={twinBarFenceRows}
-        postTypeCounts={postTypeCounts}
-        isTutorialOpen={shellState.isTutorialOpen}
-        controlsStyle={shellState.panelDragStyle("controls")}
-        itemCountsStyle={shellState.panelDragStyle("itemCounts")}
-        postKeyStyle={shellState.panelDragStyle("postKey")}
-        tutorialStyle={shellState.panelDragStyle("tutorial")}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        canDeleteSelection={
-          shellState.interactionMode === "SELECT" && (!!selectionState.selectedSegmentId || !!selectionState.selectedGateId)
-        }
-        formatLengthMm={formatLengthMm}
-        formatMetersInputFromMm={formatMetersInputFromMm}
-        formatHeightLabelFromMm={formatHeightLabelFromMm}
-        getSegmentColor={getSegmentColor}
-        onSetInteractionMode={shellState.setInteractionMode}
-        onRecessWidthInputChange={onRecessWidthInputChange}
-        onRecessDepthInputChange={onRecessDepthInputChange}
-        onNormalizeRecessInputs={normalizeRecessInputs}
-        onSetRecessSide={shellState.setRecessSide}
-        onSetGateType={shellState.setGateType}
-        onCustomGateWidthInputChange={onCustomGateWidthInputChange}
-        onNormalizeGateInputs={normalizeGateInputs}
-        onSetActiveSpec={shellState.setActiveSpec}
-        onOpenTutorial={() => shellState.setIsTutorialOpen(true)}
-        onCloseTutorial={() => shellState.setIsTutorialOpen(false)}
-        onStartItemCountsDrag={(event) => shellState.startPanelDrag("itemCounts", event)}
-        onStartPostKeyDrag={(event) => shellState.startPanelDrag("postKey", event)}
-        onStartTutorialDrag={(event) => shellState.startPanelDrag("tutorial", event)}
-        onStartControlsDrag={(event) => shellState.startPanelDrag("controls", event)}
-        onUndo={undoSegments}
-        onRedo={redoSegments}
-        onDeleteSelection={handleDeleteSelection}
-        onClearLayout={handleClearLayout}
-      />
+    <div className="editor-page">
+      <header className="editor-header">
+        <div className="editor-header-main">
+          <div className="editor-header-copy">
+            <span className="portal-eyebrow">Workspace Editor</span>
+            <h1>{drawingTitle}</h1>
+            <p>
+              {session
+                ? `${session.company.name} workspace. Keep the canvas central and use the surrounding rails only when you need tooling or estimate detail.`
+                : "Review the drawing canvas and sign in when you need to save or reopen company work."}
+            </p>
+          </div>
+          {session ? (
+            <div className="editor-document-bar">
+              <label className="editor-document-name">
+                <span>Drawing Name</span>
+                <input
+                  type="text"
+                  value={workspace.currentDrawingName}
+                  placeholder="Name this drawing"
+                  onChange={(event) => workspace.setCurrentDrawingName(event.target.value)}
+                />
+              </label>
+              <div className="editor-document-actions-compact">
+                <button type="button" onClick={() => void workspace.saveDrawing()} disabled={workspace.isSavingDrawing}>
+                  {workspace.currentDrawingId ? "Save" : "Save New"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void workspace.saveDrawingAsNew()}
+                  disabled={workspace.isSavingDrawing}
+                >
+                  Save As
+                </button>
+                <button type="button" className="ghost" onClick={handleStartNewDraft}>
+                  New Draft
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="editor-document-bar">
+              <button type="button" onClick={() => guardedNavigate("login")}>
+                Go To Login
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="editor-header-meta">
+          {session ? (
+            <>
+              <span className="editor-session-chip">
+                {session.user.displayName}
+              </span>
+              <span className="portal-user-chip">{session.user.role}</span>
+              <span className={`editor-save-pill${workspace.isDirty ? " dirty" : ""}`}>
+                {workspace.isDirty ? "Unsaved changes" : "All changes saved"}
+              </span>
+            </>
+          ) : null}
+          <nav className="editor-route-nav" aria-label="Editor navigation">
+            <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("dashboard")}>
+              Dashboard
+            </button>
+            <button type="button" className="ghost editor-link-btn" onClick={handleOpenDrawings}>
+              Drawings
+            </button>
+            {canManageAdmin ? (
+              <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("admin")}>
+                Admin
+              </button>
+            ) : null}
+          </nav>
+        </div>
+      </header>
 
-      <OptimizationPlanner
-        summary={optimizationSummary}
-        canInspect={segments.length > 0}
-        isOpen={shellState.isOptimizationInspectorOpen}
-        selectedPlanId={shellState.selectedPlanId}
-        segmentOrdinalById={segmentOrdinalById}
-        onOpen={() => shellState.setIsOptimizationInspectorOpen(true)}
-        onClose={() => shellState.setIsOptimizationInspectorOpen(false)}
-        onSelectPlan={shellState.setSelectedPlanId}
-      />
+      <div className="editor-workspace-shell">
+        <EditorSidebar
+          interactionMode={shellState.interactionMode}
+          recessWidthInputM={shellState.recessWidthInputM}
+          recessDepthInputM={shellState.recessDepthInputM}
+          recessSide={shellState.recessSide}
+          gateType={shellState.gateType}
+          customGateWidthInputM={shellState.customGateWidthInputM}
+          recessWidthOptionsMm={RECESS_WIDTH_OPTIONS_MM}
+          recessDepthOptionsMm={RECESS_DEPTH_OPTIONS_MM}
+          gateWidthOptionsMm={GATE_WIDTH_OPTIONS_MM}
+          recessPreview={recessPreview}
+          gatePreview={gatePreview}
+          activeSpec={shellState.activeSpec}
+          activeHeightOptions={activeHeightOptions}
+          twinBarHeightOptions={TWIN_BAR_HEIGHT_OPTIONS}
+          rollFormHeightOptions={ROLL_FORM_HEIGHT_OPTIONS}
+          formatLengthMm={formatLengthMm}
+          formatMetersInputFromMm={formatMetersInputFromMm}
+          getSegmentColor={getSegmentColor}
+          onSetInteractionMode={shellState.setInteractionMode}
+          onRecessWidthInputChange={onRecessWidthInputChange}
+          onRecessDepthInputChange={onRecessDepthInputChange}
+          onNormalizeRecessInputs={normalizeRecessInputs}
+          onSetRecessSide={shellState.setRecessSide}
+          onSetGateType={shellState.setGateType}
+          onCustomGateWidthInputChange={onCustomGateWidthInputChange}
+          onNormalizeGateInputs={normalizeGateInputs}
+          onSetActiveSpec={shellState.setActiveSpec}
+        />
+
+        <section className="editor-stage-column">
+          <div className="editor-stage-shell">
+            <section className="panel-block editor-stage-toolbar editor-stage-toolbar-compact">
+              <div className="editor-stage-toolbar-copy">
+                <span className="portal-section-kicker">Mode</span>
+                <h2>{interactionLabel}</h2>
+              </div>
+              <EditorCanvasControls
+                canUndo={canUndo}
+                canRedo={canRedo}
+                canDeleteSelection={
+                  shellState.interactionMode === "SELECT" && (!!selectionState.selectedSegmentId || !!selectionState.selectedGateId)
+                }
+                onUndo={undoSegments}
+                onRedo={redoSegments}
+                onDeleteSelection={handleDeleteSelection}
+                onClearLayout={handleClearLayout}
+              />
+            </section>
+
+            <div className="editor-canvas-frame" ref={canvasFrameRef}>
+              <EditorCanvasStage
+                stageRef={stageRef}
+                canvasWidth={canvasWidth}
+                canvasHeight={canvasHeight}
+                view={view}
+                visibleBounds={visibleBounds}
+                verticalLines={verticalLines}
+                horizontalLines={horizontalLines}
+                interactionMode={shellState.interactionMode}
+                disableSnap={shellState.disableSnap}
+                drawStart={selectionState.drawStart}
+                rectangleStart={selectionState.rectangleStart}
+                ghostEnd={ghostEnd}
+                ghostLengthMm={ghostLengthMm}
+                axisGuide={axisGuide}
+                drawHoverSnap={drawHoverSnap}
+                rectanglePreviewEnd={rectanglePreviewEnd}
+                recessPreview={recessPreview}
+                gatePreview={gatePreview}
+                gatePreviewVisual={gatePreviewVisual}
+                visualPosts={visualPosts}
+                segments={segments}
+                selectedSegmentId={selectionState.selectedSegmentId}
+                selectedGateId={selectionState.selectedGateId}
+                gatesBySegmentId={gatesBySegmentId}
+                segmentLengthLabelsBySegmentId={segmentLengthLabelsBySegmentId}
+                visibleSegmentLabelKeys={visibleSegmentLabelKeys}
+                placedGateVisuals={placedGateVisuals}
+                oppositeGateGuides={oppositeGateGuides}
+                selectedPlanVisual={selectedPlanVisual}
+                scaleBar={scaleBar}
+                onStageMouseDown={onStageMouseDown}
+                onStageMouseMove={onStageMouseMove}
+                onStageMouseUp={onStageMouseUp}
+                onStageWheel={onStageWheel}
+                onContextMenu={onContextMenu}
+                onSelectSegment={(segmentId) => {
+                  selectionState.setSelectedSegmentId(segmentId);
+                  selectionState.setSelectedGateId(null);
+                  selectionState.setDrawStart(null);
+                }}
+                onStartSegmentDrag={(segmentId) => {
+                  selectionState.setSelectedGateId(null);
+                  startSelectedSegmentDrag(segmentId);
+                }}
+                onOpenSegmentLengthEditor={(segmentId) => {
+                  selectionState.setSelectedGateId(null);
+                  openLengthEditor(segmentId);
+                }}
+                onUpdateSegmentEndpoint={(segmentId, endpoint, point) => {
+                  updateSegment(segmentId, (current) => ({ ...current, [endpoint]: point }));
+                }}
+                onSelectGate={(gateId) => {
+                  selectionState.setSelectedSegmentId(null);
+                  selectionState.setSelectedGateId(gateId);
+                  selectionState.setIsLengthEditorOpen(false);
+                }}
+                onStartGateDrag={(gateId) => {
+                  selectionState.setSelectedSegmentId(null);
+                  selectionState.setSelectedGateId(gateId);
+                  selectionState.setIsLengthEditorOpen(false);
+                  startSelectedGateDrag(gateId);
+                }}
+              />
+            </div>
+          </div>
+        </section>
+
+        <aside className="editor-secondary-rail">
+          <div className="editor-rail-scroll">
+            <OptimizationPlanner
+              summary={optimizationSummary}
+              canInspect={segments.length > 0}
+              isOpen={shellState.isOptimizationInspectorOpen}
+              selectedPlanId={shellState.selectedPlanId}
+              segmentOrdinalById={segmentOrdinalById}
+              onOpen={() => shellState.setIsOptimizationInspectorOpen(true)}
+              onClose={() => shellState.setIsOptimizationInspectorOpen(false)}
+              onSelectPlan={shellState.setSelectedPlanId}
+            />
+            <EditorOverlayPanels
+              postRowsByType={postRowsByType}
+              gateCounts={gateCounts}
+              gateCountsByHeight={gateCountsByHeight}
+              twinBarFenceRows={twinBarFenceRows}
+              postTypeCounts={postTypeCounts}
+              panelCount={panelCount}
+              fenceRunCount={fenceRunCount}
+              isTutorialOpen={shellState.isTutorialOpen}
+              onOpenTutorial={() => shellState.setIsTutorialOpen(true)}
+              onCloseTutorial={() => shellState.setIsTutorialOpen(false)}
+              formatHeightLabelFromMm={formatHeightLabelFromMm}
+            />
+          </div>
+        </aside>
+      </div>
 
       <EditorLengthEditor
         isOpen={selectionState.isLengthEditorOpen && selectedSegment !== null}
@@ -464,71 +642,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         onChangeLength={selectionState.setSelectedLengthInputM}
         onApply={applySelectedLengthEdit}
         onCancel={() => selectionState.setIsLengthEditorOpen(false)}
-      />
-
-      <EditorCanvasStage
-        stageRef={stageRef}
-        canvasWidth={width}
-        canvasHeight={height}
-        view={view}
-        visibleBounds={visibleBounds}
-        verticalLines={verticalLines}
-        horizontalLines={horizontalLines}
-        interactionMode={shellState.interactionMode}
-        disableSnap={shellState.disableSnap}
-        drawStart={selectionState.drawStart}
-        rectangleStart={selectionState.rectangleStart}
-        ghostEnd={ghostEnd}
-        ghostLengthMm={ghostLengthMm}
-        axisGuide={axisGuide}
-        drawHoverSnap={drawHoverSnap}
-        rectanglePreviewEnd={rectanglePreviewEnd}
-        recessPreview={recessPreview}
-        gatePreview={gatePreview}
-        gatePreviewVisual={gatePreviewVisual}
-        visualPosts={visualPosts}
-        segments={segments}
-        selectedSegmentId={selectionState.selectedSegmentId}
-        selectedGateId={selectionState.selectedGateId}
-        gatesBySegmentId={gatesBySegmentId}
-        segmentLengthLabelsBySegmentId={segmentLengthLabelsBySegmentId}
-        visibleSegmentLabelKeys={visibleSegmentLabelKeys}
-        placedGateVisuals={placedGateVisuals}
-        oppositeGateGuides={oppositeGateGuides}
-        selectedPlanVisual={selectedPlanVisual}
-        scaleBar={scaleBar}
-        onStageMouseDown={onStageMouseDown}
-        onStageMouseMove={onStageMouseMove}
-        onStageMouseUp={onStageMouseUp}
-        onStageWheel={onStageWheel}
-        onContextMenu={onContextMenu}
-        onSelectSegment={(segmentId) => {
-          selectionState.setSelectedSegmentId(segmentId);
-          selectionState.setSelectedGateId(null);
-          selectionState.setDrawStart(null);
-        }}
-        onStartSegmentDrag={(segmentId) => {
-          selectionState.setSelectedGateId(null);
-          startSelectedSegmentDrag(segmentId);
-        }}
-        onOpenSegmentLengthEditor={(segmentId) => {
-          selectionState.setSelectedGateId(null);
-          openLengthEditor(segmentId);
-        }}
-        onUpdateSegmentEndpoint={(segmentId, endpoint, point) => {
-          updateSegment(segmentId, (current) => ({ ...current, [endpoint]: point }));
-        }}
-        onSelectGate={(gateId) => {
-          selectionState.setSelectedSegmentId(null);
-          selectionState.setSelectedGateId(gateId);
-          selectionState.setIsLengthEditorOpen(false);
-        }}
-        onStartGateDrag={(gateId) => {
-          selectionState.setSelectedSegmentId(null);
-          selectionState.setSelectedGateId(gateId);
-          selectionState.setIsLengthEditorOpen(false);
-          startSelectedGateDrag(gateId);
-        }}
       />
     </div>
   );

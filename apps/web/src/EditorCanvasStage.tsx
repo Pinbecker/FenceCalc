@@ -20,7 +20,17 @@ export function EditorCanvasStage({
   ...props
 }: EditorCanvasStageProps) {
   return (
-    <main className="canvas-wrap">
+    <main
+      className="canvas-wrap"
+      onMouseDownCapture={(event) => {
+        if (event.button === 1) {
+          event.preventDefault();
+        }
+      }}
+      onAuxClick={(event) => {
+        event.preventDefault();
+      }}
+    >
       <Stage
         ref={stageRef}
         width={canvasWidth}

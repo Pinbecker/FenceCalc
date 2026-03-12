@@ -209,7 +209,7 @@ describe("EditorCanvasStage", () => {
     const registry = getKonvaMockRegistry();
 
     expect(html).toContain("Canvas scale bar");
-    expect(html).toContain("Mode: SELECT");
+    expect(html).toContain("<strong>Mode</strong><em>SELECT</em>");
     expect(registry.Stage).toHaveLength(1);
     expect(registry.Layer.length).toBeGreaterThanOrEqual(4);
     expect(registry.RegularPolygon.length).toBeGreaterThan(0);

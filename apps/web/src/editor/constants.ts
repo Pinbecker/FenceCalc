@@ -44,27 +44,27 @@ export const SCALE_BAR_CANDIDATES_MM = [
 ];
 
 const TWIN_BAR_STANDARD_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#4cc9f0",
-  "1.8m": "#3a86ff",
-  "2m": "#4361ee",
-  "2.4m": "#8338ec",
-  "3m": "#ff006e",
-  "4m": "#fb5607",
-  "4.5m": "#ffbe0b",
-  "5m": "#2ec4b6",
-  "6m": "#8ac926"
+  "1.2m": "#f6e58d",
+  "1.8m": "#b8f2d0",
+  "2m": "#a9d6ff",
+  "2.4m": "#d7c6ff",
+  "3m": "#ffc3b0",
+  "4m": "#ffd6a5",
+  "4.5m": "#f7b2d9",
+  "5m": "#b8f2e6",
+  "6m": "#d9ed92"
 };
 
 const TWIN_BAR_SUPER_REBOUND_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#06d6a0",
-  "1.8m": "#1b9aaa",
-  "2m": "#ef476f",
-  "2.4m": "#f78c6b",
-  "3m": "#ffd166",
-  "4m": "#9b5de5",
-  "4.5m": "#00bbf9",
-  "5m": "#80ed99",
-  "6m": "#ff9770"
+  "1.2m": "#d4a700",
+  "1.8m": "#18a558",
+  "2m": "#1d6fd6",
+  "2.4m": "#6e44c7",
+  "3m": "#e85d04",
+  "4m": "#f77f00",
+  "4.5m": "#d63384",
+  "5m": "#0f9d8a",
+  "6m": "#7cb518"
 };
 
 const ROLL_FORM_COLORS: Record<(typeof ROLL_FORM_HEIGHT_KEYS)[number], string> = {

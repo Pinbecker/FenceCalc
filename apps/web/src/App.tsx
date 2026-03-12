@@ -39,50 +39,53 @@ function PortalNav(props: {
 }) {
   return (
     <header className="portal-topbar">
-      <div className="portal-brand-block">
-        <span className="portal-logo">FE</span>
-        <div>
-          <strong>{props.companyName}</strong>
-          <span>
-            {props.userName} | {props.userRole}
-          </span>
+      <div className="portal-topbar-main">
+        <div className="portal-brand-block">
+          <span className="portal-logo">FE</span>
+          <div className="portal-brand-copy">
+            <strong>{props.companyName}</strong>
+            <span>{props.userName}</span>
+          </div>
         </div>
-      </div>
-      <nav className="portal-nav-links" aria-label="Primary">
-        <button
-          type="button"
-          className={props.currentRoute === "dashboard" ? "is-active" : undefined}
-          onClick={() => props.onNavigate("dashboard")}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          className={props.currentRoute === "drawings" ? "is-active" : undefined}
-          onClick={() => props.onNavigate("drawings")}
-        >
-          Drawings
-        </button>
-        <button
-          type="button"
-          className={props.currentRoute === "editor" ? "is-active" : undefined}
-          onClick={() => props.onNavigate("editor")}
-        >
-          Editor
-        </button>
-        {props.showAdmin ? (
+        <nav className="portal-nav-links" aria-label="Primary">
           <button
             type="button"
-            className={props.currentRoute === "admin" ? "is-active" : undefined}
-            onClick={() => props.onNavigate("admin")}
+            className={props.currentRoute === "dashboard" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("dashboard")}
           >
-            Admin
+            Dashboard
           </button>
-        ) : null}
-      </nav>
-      <button type="button" className="portal-logout-button" onClick={props.onLogout}>
-        Log Out
-      </button>
+          <button
+            type="button"
+            className={props.currentRoute === "drawings" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("drawings")}
+          >
+            Drawings
+          </button>
+          <button
+            type="button"
+            className={props.currentRoute === "editor" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("editor")}
+          >
+            Editor
+          </button>
+          {props.showAdmin ? (
+            <button
+              type="button"
+              className={props.currentRoute === "admin" ? "is-active" : undefined}
+              onClick={() => props.onNavigate("admin")}
+            >
+              Admin
+            </button>
+          ) : null}
+        </nav>
+      </div>
+      <div className="portal-topbar-actions">
+        <span className="portal-user-chip">{props.userRole}</span>
+        <button type="button" className="portal-logout-button" onClick={props.onLogout}>
+          Log Out
+        </button>
+      </div>
     </header>
   );
 }

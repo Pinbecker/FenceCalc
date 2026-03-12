@@ -62,7 +62,12 @@ export function EditorInteractionPanel({
 }: EditorInteractionPanelProps) {
   return (
     <section className="panel-block panel-interaction">
-      <h2>Interaction</h2>
+      <div className="panel-heading">
+        <div>
+          <h2>Interaction</h2>
+          <p className="muted-line">Choose the canvas task first, then adjust the mode-specific settings below.</p>
+        </div>
+      </div>
       <div className="mode-toggle-row mode-toggle-row-5" role="tablist" aria-label="Interaction mode">
         <button type="button" className={`mode-toggle-btn${interactionMode === "DRAW" ? " active" : ""}`} onClick={() => onSetInteractionMode("DRAW")}>
           Draw

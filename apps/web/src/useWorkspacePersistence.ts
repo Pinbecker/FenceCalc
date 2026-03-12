@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { AuthSessionEnvelope, DrawingSummary, LayoutModel } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingCanvasViewport, DrawingRecord, DrawingSummary, LayoutModel } from "@fence-estimator/contracts";
 
 import {
   createDrawing,
@@ -17,7 +17,8 @@ import { buildDefaultDrawingName, normalizeLayout } from "./workspacePersistence
 
 interface UseWorkspacePersistenceOptions {
   layout: LayoutModel;
-  onLoadLayout: (layout: LayoutModel) => void;
+  getSavedViewport: () => DrawingCanvasViewport | null;
+  onLoadDrawing: (drawing: DrawingRecord) => void;
 }
 
 export interface WorkspacePersistenceState {
@@ -43,7 +44,7 @@ export interface WorkspacePersistenceState {
   startNewDraft: (nextName?: string) => void;
 }
 
-export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePersistenceOptions): WorkspacePersistenceState {
+export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawing }: UseWorkspacePersistenceOptions): WorkspacePersistenceState {
   const normalizedLayout = useMemo(() => normalizeLayout(layout), [layout]);
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [currentDrawingVersion, setCurrentDrawingVersion] = useState<number | null>(null);
@@ -76,14 +77,14 @@ export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePe
 
     const drawing = await getDrawing(drawingId);
     const nextLayout = normalizeLayout(drawing.layout);
-    onLoadLayout(nextLayout);
+    onLoadDrawing({ ...drawing, layout: nextLayout });
     setCurrentDrawingId(drawing.id);
     setCurrentDrawingVersion(drawing.versionNumber);
     setCurrentDrawingName(drawing.name);
     savedState.rememberSavedState(nextLayout, drawing.name);
     setNoticeMessage(notice);
     await refreshDrawings();
-  }, [onLoadLayout, refreshDrawings, savedState, session, setNoticeMessage]);
+  }, [onLoadDrawing, refreshDrawings, savedState, session, setNoticeMessage]);
 
   const register = useCallback(async (input: RegisterAccountInput) => {
     await registerSession(input, () => {
@@ -116,7 +117,7 @@ export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePe
     try {
       const drawing = await getDrawing(drawingId);
       const nextLayout = normalizeLayout(drawing.layout);
-      onLoadLayout(nextLayout);
+      onLoadDrawing({ ...drawing, layout: nextLayout });
       setCurrentDrawingId(drawing.id);
       setCurrentDrawingVersion(drawing.versionNumber);
       setCurrentDrawingName(drawing.name);
@@ -125,7 +126,7 @@ export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePe
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     }
-  }, [clearMessages, onLoadLayout, savedState, session, setErrorMessage, setNoticeMessage]);
+  }, [clearMessages, onLoadDrawing, savedState, session, setErrorMessage, setNoticeMessage]);
 
   const persistDrawing = useCallback(async (forceCreate: boolean) => {
     if (!session) {
@@ -136,17 +137,20 @@ export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePe
     clearMessages();
 
     const drawingName = currentDrawingName.trim() || buildDefaultDrawingName();
+    const savedViewport = getSavedViewport();
     try {
       const drawing =
         !forceCreate && currentDrawingId
           ? await updateDrawing(currentDrawingId, {
               expectedVersionNumber: currentDrawingVersion ?? 1,
               name: drawingName,
-              layout: normalizedLayout
+              layout: normalizedLayout,
+              savedViewport
             })
           : await createDrawing({
               name: drawingName,
-              layout: normalizedLayout
+              layout: normalizedLayout,
+              savedViewport
             });
 
       setCurrentDrawingId(drawing.id);
@@ -189,6 +193,7 @@ export function useWorkspacePersistence({ layout, onLoadLayout }: UseWorkspacePe
     currentDrawingName,
     currentDrawingVersion,
     clearMessages,
+    getSavedViewport,
     normalizedLayout,
     refreshDrawings,
     reloadDrawingFromServer,

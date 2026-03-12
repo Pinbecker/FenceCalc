@@ -49,6 +49,10 @@ export function LoginPage({
           <span>Saved drawing library with previews</span>
           <span>Admin-managed user creation</span>
         </div>
+        <div className="portal-auth-hero-note">
+          <strong>Built for office review and field lookup.</strong>
+          <span>Use the full editor on desktop. On smaller screens, the workspace stays readable for quick checks and drawing review.</span>
+        </div>
       </div>
 
       <form className="portal-auth-card" onSubmit={(event) => void handleSubmit(event)}>

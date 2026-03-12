@@ -36,6 +36,28 @@ interface UseEditorCanvasViewportOptions {
 
 const DEFAULT_VIEWPORT: Viewport = { x: 120, y: 120, scale: 0.1 };
 
+export function buildInitialViewport(
+  canvasWidth: number,
+  canvasHeight: number,
+  initialVisibleWidthMm: number,
+  minScale: number,
+  maxScale: number,
+): Viewport {
+  const targetScale = Math.min(maxScale, Math.max(minScale, canvasWidth / initialVisibleWidthMm));
+  return {
+    x: canvasWidth * 0.08,
+    y: canvasHeight * 0.12,
+    scale: targetScale
+  };
+}
+
+function clampViewportScale(viewport: Viewport, minScale: number, maxScale: number): Viewport {
+  return {
+    ...viewport,
+    scale: Math.min(maxScale, Math.max(minScale, viewport.scale))
+  };
+}
+
 export function screenToWorld(pointer: ScreenPoint, view: Viewport): PointMm {
   return {
     x: (pointer.x - view.x) / view.scale,
@@ -117,20 +139,55 @@ export function useEditorCanvasViewport({
   const [isPanning, setIsPanning] = useState(false);
   const [panAnchor, setPanAnchor] = useState<ScreenPoint | null>(null);
   const initialScaleApplied = useRef(false);
+  const pendingViewportRef = useRef<Viewport | null | undefined>(undefined);
 
   useEffect(() => {
-    if (initialScaleApplied.current || canvasWidth <= 0 || canvasHeight <= 0) {
+    if (canvasWidth <= 0 || canvasHeight <= 0) {
       return;
     }
 
-    const targetScale = Math.min(maxScale, Math.max(minScale, canvasWidth / initialVisibleWidthMm));
-    setView({
-      x: canvasWidth * 0.08,
-      y: canvasHeight * 0.12,
-      scale: targetScale
-    });
+    const pendingViewport = pendingViewportRef.current;
+    if (pendingViewport !== undefined) {
+      setView(
+        pendingViewport === null
+          ? buildInitialViewport(canvasWidth, canvasHeight, initialVisibleWidthMm, minScale, maxScale)
+          : clampViewportScale(pendingViewport, minScale, maxScale)
+      );
+      pendingViewportRef.current = undefined;
+      initialScaleApplied.current = true;
+      return;
+    }
+
+    if (initialScaleApplied.current) {
+      return;
+    }
+
+    setView(buildInitialViewport(canvasWidth, canvasHeight, initialVisibleWidthMm, minScale, maxScale));
     initialScaleApplied.current = true;
   }, [canvasHeight, canvasWidth, initialVisibleWidthMm, maxScale, minScale]);
+
+  const restoreView = useCallback(
+    (nextViewport: Viewport | null) => {
+      if (canvasWidth > 0 && canvasHeight > 0) {
+        setView(
+          nextViewport === null
+            ? buildInitialViewport(canvasWidth, canvasHeight, initialVisibleWidthMm, minScale, maxScale)
+            : clampViewportScale(nextViewport, minScale, maxScale)
+        );
+        pendingViewportRef.current = undefined;
+        initialScaleApplied.current = true;
+        return;
+      }
+
+      pendingViewportRef.current = nextViewport;
+      initialScaleApplied.current = false;
+    },
+    [canvasHeight, canvasWidth, initialVisibleWidthMm, maxScale, minScale],
+  );
+
+  const resetView = useCallback(() => {
+    restoreView(null);
+  }, [restoreView]);
 
   const toWorld = useCallback((pointer: ScreenPoint) => screenToWorld(pointer, view), [view]);
 
@@ -186,6 +243,8 @@ export function useEditorCanvasViewport({
   return {
     view,
     setView,
+    restoreView,
+    resetView,
     pointerWorld,
     setPointerWorld,
     isSpacePressed,

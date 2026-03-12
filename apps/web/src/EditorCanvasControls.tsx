@@ -8,6 +8,28 @@ interface EditorCanvasControlsProps {
   onClearLayout: () => void;
 }
 
+function ToolbarButton(props: {
+  label: string;
+  shortcut: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "primary" | "danger";
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`editor-toolbar-button${props.tone === "danger" ? " is-danger" : ""}`}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      title={props.title}
+    >
+      <span>{props.label}</span>
+      <em>{props.shortcut}</em>
+    </button>
+  );
+}
+
 export function EditorCanvasControls({
   canUndo,
   canRedo,
@@ -18,24 +40,17 @@ export function EditorCanvasControls({
   onClearLayout
 }: EditorCanvasControlsProps) {
   return (
-    <section className="panel-block panel-controls">
-      <div className="panel-heading">
-        <h2>Controls</h2>
-      </div>
-      <div className="controls-toolbar" aria-label="Controls toolbar">
-        <button type="button" className="icon-btn" onClick={onUndo} disabled={!canUndo} title="Undo">
-          U
-        </button>
-        <button type="button" className="icon-btn" onClick={onRedo} disabled={!canRedo} title="Redo">
-          R
-        </button>
-        <button type="button" className="icon-btn" onClick={onDeleteSelection} disabled={!canDeleteSelection} title="Delete Selected">
-          D
-        </button>
-        <button type="button" className="icon-btn" onClick={onClearLayout} title="Clear Layout">
-          C
-        </button>
-      </div>
-    </section>
+    <div className="editor-toolbar" aria-label="Canvas actions">
+      <ToolbarButton label="Undo" shortcut="Ctrl+Z" onClick={onUndo} disabled={!canUndo} title="Undo" />
+      <ToolbarButton label="Redo" shortcut="Ctrl+Y" onClick={onRedo} disabled={!canRedo} title="Redo" />
+      <ToolbarButton
+        label="Delete"
+        shortcut="Del"
+        onClick={onDeleteSelection}
+        disabled={!canDeleteSelection}
+        title="Delete Selected"
+      />
+      <ToolbarButton label="Clear" shortcut="Reset" onClick={onClearLayout} tone="danger" title="Clear Layout" />
+    </div>
   );
 }

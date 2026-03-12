@@ -11,16 +11,22 @@ export function EditorDocumentPanel({ workspace, onOpenDrawings, onStartNewDraft
   return (
     <section className="panel-block panel-document">
       <div className="panel-heading">
-        <h2>Drawing</h2>
+        <div>
+          <h2>Drawing</h2>
+          <p className="muted-line">Manage the current draft before you move back to the wider workspace.</p>
+        </div>
         <button type="button" className="ghost editor-link-btn" onClick={onOpenDrawings}>
           Library
         </button>
       </div>
       {workspace.session ? (
         <>
-          <p className="muted-line">
-            {workspace.session.company.name} · {workspace.session.user.displayName}
-          </p>
+          <div className="editor-document-meta">
+            <strong>{workspace.session.company.name}</strong>
+            <span>
+              {workspace.session.user.displayName} · {workspace.session.user.role}
+            </span>
+          </div>
           {workspace.errorMessage ? <p className="status-line status-error">{workspace.errorMessage}</p> : null}
           {workspace.noticeMessage ? <p className="status-line status-ok">{workspace.noticeMessage}</p> : null}
           <label>
@@ -36,7 +42,12 @@ export function EditorDocumentPanel({ workspace, onOpenDrawings, onStartNewDraft
             <button type="button" onClick={() => void workspace.saveDrawing()} disabled={workspace.isSavingDrawing}>
               {workspace.currentDrawingId ? "Save" : "Save New"}
             </button>
-            <button type="button" className="ghost" onClick={() => void workspace.saveDrawingAsNew()} disabled={workspace.isSavingDrawing}>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => void workspace.saveDrawingAsNew()}
+              disabled={workspace.isSavingDrawing}
+            >
               Save As
             </button>
           </div>

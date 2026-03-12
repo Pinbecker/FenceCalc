@@ -1,38 +1,44 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { LayoutModel } from "@fence-estimator/contracts";
+import type { DrawingCanvasViewport, DrawingRecord, LayoutModel } from "@fence-estimator/contracts";
 
 import { shouldLoadInitialDrawing } from "../initialDrawingLoad";
 import { useWorkspacePersistence } from "../useWorkspacePersistence";
 
 interface UseEditorWorkspaceBridgeOptions {
+  getSavedViewport: () => DrawingCanvasViewport | null;
   layout: LayoutModel;
   initialDrawingId: string | null;
   onResetLayout: (layout: LayoutModel) => void;
   onResetEditorState: () => void;
+  onRestoreViewport: (viewport: DrawingCanvasViewport | null) => void;
 }
 
 export function useEditorWorkspaceBridge({
+  getSavedViewport,
   layout,
   initialDrawingId,
   onResetLayout,
-  onResetEditorState
+  onResetEditorState,
+  onRestoreViewport
 }: UseEditorWorkspaceBridgeOptions) {
   const requestedInitialDrawingIdRef = useRef<string | null>(null);
 
-  const loadWorkspaceLayout = useCallback(
-    (nextLayout: LayoutModel) => {
+  const loadWorkspaceDrawing = useCallback(
+    (drawing: DrawingRecord) => {
       onResetLayout({
-        segments: nextLayout.segments,
-        gates: nextLayout.gates ?? []
+        segments: drawing.layout.segments,
+        gates: drawing.layout.gates ?? []
       });
       onResetEditorState();
+      onRestoreViewport(drawing.savedViewport ?? null);
     },
-    [onResetEditorState, onResetLayout],
+    [onResetEditorState, onResetLayout, onRestoreViewport],
   );
 
   const workspace = useWorkspacePersistence({
+    getSavedViewport,
     layout,
-    onLoadLayout: loadWorkspaceLayout
+    onLoadDrawing: loadWorkspaceDrawing
   });
 
   useEffect(() => {

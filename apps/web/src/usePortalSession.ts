@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AuditLogRecord,
@@ -58,6 +58,7 @@ export function usePortalSession(): PortalSessionState {
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const sessionRequestIdRef = useRef(0);
   const feedback = usePortalFeedbackState();
   const companyData = usePortalCompanyData({
     session,
@@ -87,8 +88,16 @@ export function usePortalSession(): PortalSessionState {
   } = companyData;
   const { clearMessages, errorMessage, noticeMessage, setErrorMessage, setNoticeMessage } = feedback;
 
+  const beginSessionRequest = useCallback(() => {
+    sessionRequestIdRef.current += 1;
+    return sessionRequestIdRef.current;
+  }, []);
+
+  const isActiveSessionRequest = useCallback((requestId: number) => sessionRequestIdRef.current === requestId, []);
+
   useEffect(() => {
     let cancelled = false;
+    const requestId = beginSessionRequest();
 
     void (async () => {
       try {
@@ -109,21 +118,28 @@ export function usePortalSession(): PortalSessionState {
 
       try {
         const authenticated = await getAuthenticatedUser();
-        if (cancelled) {
+        if (cancelled || !isActiveSessionRequest(requestId)) {
           return;
         }
 
         setSession(authenticated);
         writeStoredSession(authenticated);
-        await loadCompanyData(authenticated);
+        clearCompanyData();
+        try {
+          await loadCompanyData(authenticated);
+        } catch (error) {
+          if (!cancelled && isActiveSessionRequest(requestId)) {
+            setErrorMessage(extractApiErrorMessage(error));
+          }
+        }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && isActiveSessionRequest(requestId)) {
           setSession(null);
           clearCompanyData();
           writeStoredSession(null);
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && isActiveSessionRequest(requestId)) {
           setIsRestoringSession(false);
         }
       }
@@ -132,48 +148,93 @@ export function usePortalSession(): PortalSessionState {
     return () => {
       cancelled = true;
     };
-  }, [clearCompanyData, loadCompanyData, setErrorMessage]);
+  }, [beginSessionRequest, clearCompanyData, isActiveSessionRequest, loadCompanyData, setErrorMessage]);
 
   const bootstrap = useCallback(async (input: RegisterAccountInput) => {
+    const requestId = beginSessionRequest();
     setIsAuthenticating(true);
     clearMessages();
     try {
       const nextSession = await bootstrapOwner(input);
+      if (!isActiveSessionRequest(requestId)) {
+        return false;
+      }
+
       setSession(nextSession);
       writeStoredSession(nextSession);
+      clearCompanyData();
       setSetupStatus({ bootstrapRequired: false, bootstrapSecretRequired: false });
-      await loadCompanyData(nextSession);
       setNoticeMessage(`Workspace ready for ${nextSession.company.name}`);
+      void loadCompanyData(nextSession).catch((error) => {
+        if (isActiveSessionRequest(requestId)) {
+          setErrorMessage(extractApiErrorMessage(error));
+        }
+      });
       return true;
     } catch (error) {
-      setErrorMessage(extractApiErrorMessage(error));
+      if (isActiveSessionRequest(requestId)) {
+        setErrorMessage(extractApiErrorMessage(error));
+      }
       return false;
     } finally {
-      setIsAuthenticating(false);
-      setIsRestoringSession(false);
+      if (isActiveSessionRequest(requestId)) {
+        setIsAuthenticating(false);
+        setIsRestoringSession(false);
+      }
     }
-  }, [clearMessages, loadCompanyData, setErrorMessage, setNoticeMessage]);
+  }, [
+    beginSessionRequest,
+    clearCompanyData,
+    clearMessages,
+    isActiveSessionRequest,
+    loadCompanyData,
+    setErrorMessage,
+    setNoticeMessage
+  ]);
 
   const loginToPortal = useCallback(async (input: LoginInput) => {
+    const requestId = beginSessionRequest();
     setIsAuthenticating(true);
     clearMessages();
     try {
       const nextSession = await login(input);
+      if (!isActiveSessionRequest(requestId)) {
+        return false;
+      }
+
       setSession(nextSession);
       writeStoredSession(nextSession);
-      await loadCompanyData(nextSession);
+      clearCompanyData();
       setNoticeMessage(`Signed in as ${nextSession.user.displayName}`);
+      void loadCompanyData(nextSession).catch((error) => {
+        if (isActiveSessionRequest(requestId)) {
+          setErrorMessage(extractApiErrorMessage(error));
+        }
+      });
       return true;
     } catch (error) {
-      setErrorMessage(extractApiErrorMessage(error));
+      if (isActiveSessionRequest(requestId)) {
+        setErrorMessage(extractApiErrorMessage(error));
+      }
       return false;
     } finally {
-      setIsAuthenticating(false);
-      setIsRestoringSession(false);
+      if (isActiveSessionRequest(requestId)) {
+        setIsAuthenticating(false);
+        setIsRestoringSession(false);
+      }
     }
-  }, [clearMessages, loadCompanyData, setErrorMessage, setNoticeMessage]);
+  }, [
+    beginSessionRequest,
+    clearCompanyData,
+    clearMessages,
+    isActiveSessionRequest,
+    loadCompanyData,
+    setErrorMessage,
+    setNoticeMessage
+  ]);
 
   const logout = useCallback(() => {
+    beginSessionRequest();
     if (session) {
       void logoutSession();
     }
@@ -182,7 +243,7 @@ export function usePortalSession(): PortalSessionState {
     clearCompanyData();
     writeStoredSession(null);
     clearMessages();
-  }, [clearCompanyData, clearMessages, session]);
+  }, [beginSessionRequest, clearCompanyData, clearMessages, session]);
 
   return {
     session,

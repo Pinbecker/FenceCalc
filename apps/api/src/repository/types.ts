@@ -5,6 +5,7 @@ import type {
   CompanyRecord,
   CompanyUserRecord,
   CompanyUserRole,
+  DrawingCanvasViewport,
   DrawingRecord,
   DrawingSummary,
   DrawingVersionRecord,
@@ -64,6 +65,7 @@ export interface CreateDrawingInput {
   companyId: string;
   name: string;
   layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
   schemaVersion: number;
   rulesVersion: string;
@@ -78,6 +80,7 @@ export interface UpdateDrawingInput {
   companyId: string;
   name: string;
   layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
   estimate: EstimateResult;
   schemaVersion: number;
   rulesVersion: string;
