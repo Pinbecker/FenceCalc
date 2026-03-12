@@ -1,8 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "composite": true,
     "noEmit": true,
+    "paths": {
+      "@vitejs/plugin-react-swc": [
+        "./node_modules/@vitejs/plugin-react-swc"
+      ],
+      "vite": [
+        "./node_modules/vite"
+      ]
+    },
     "types": [
       "node"
     ]
