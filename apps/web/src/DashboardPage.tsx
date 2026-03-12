@@ -20,19 +20,43 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
   const activeDrawings = drawings.filter((drawing) => !drawing.isArchived);
   const archivedDrawings = drawings.filter((drawing) => drawing.isArchived);
   const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
-  const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 3);
-  const totalSegments = activeDrawings.reduce((sum, drawing) => sum + drawing.segmentCount, 0);
-  const totalGates = activeDrawings.reduce((sum, drawing) => sum + drawing.gateCount, 0);
+  const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
+  const activeCustomers = [...new Set(activeDrawings.map((drawing) => drawing.customerName.trim()).filter(Boolean))];
+  const topCustomers = [...activeCustomers]
+    .map((customerName) => {
+      const customerDrawings = activeDrawings
+        .filter((drawing) => drawing.customerName.trim() === customerName)
+        .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
+
+      return {
+        customerName,
+        drawingCount: customerDrawings.length,
+        latestDrawingName: customerDrawings[0]?.name ?? "",
+        updatedAtIso: customerDrawings[0]?.updatedAtIso ?? ""
+      };
+    })
+    .sort((left, right) => {
+      if (right.drawingCount !== left.drawingCount) {
+        return right.drawingCount - left.drawingCount;
+      }
+      return right.updatedAtIso.localeCompare(left.updatedAtIso);
+    })
+    .slice(0, 4);
 
   return (
     <section className="portal-page portal-dashboard-page">
-      <header className="portal-page-header">
-        <div>
+      <header className="portal-page-header portal-dashboard-header">
+        <div className="portal-dashboard-heading">
           <span className="portal-eyebrow">Company Dashboard</span>
           <h1>{session.company.name}</h1>
-          <p>Start from your recent customer work first, then branch into the wider company library when you need another team drawing.</p>
+          <p>Pick up active customer work quickly, then jump into the wider library only when you need to branch out.</p>
         </div>
-        <div className="portal-header-actions">
+        <div className="portal-header-actions portal-dashboard-actions">
+          <div className="portal-dashboard-user-chip">
+            <span className="portal-section-kicker">Signed in</span>
+            <strong>{session.user.displayName}</strong>
+            <span>{session.user.role.toLowerCase()}</span>
+          </div>
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("drawings")}>
             Open Library
           </button>
@@ -42,90 +66,129 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
         </div>
       </header>
 
-      <div className="portal-dashboard-grid">
-        <section className="portal-surface-card">
+      <div className="portal-dashboard-strip">
+        <article className="portal-dashboard-metric">
+          <span>Your Drawings</span>
+          <strong>{myDrawings.length}</strong>
+          <small>Active jobs you have touched</small>
+        </article>
+        <article className="portal-dashboard-metric">
+          <span>Active Library</span>
+          <strong>{activeDrawings.length}</strong>
+          <small>Current live drawings</small>
+        </article>
+        <article className="portal-dashboard-metric">
+          <span>Customers</span>
+          <strong>{activeCustomers.length}</strong>
+          <small>Clients with active work</small>
+        </article>
+        <article className="portal-dashboard-metric">
+          <span>Archived</span>
+          <strong>{archivedDrawings.length}</strong>
+          <small>Stored reference drawings</small>
+        </article>
+      </div>
+
+      <div className="portal-dashboard-layout">
+        <section className="portal-surface-card portal-dashboard-primary">
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Recent drawings</span>
-              <h2>{myDrawings.length > 0 ? "Your latest customer work" : "Continue where the team left off"}</h2>
+              <span className="portal-section-kicker">Continue work</span>
+              <h2>{myDrawings.length > 0 ? "Your latest drawings" : "Latest company drawings"}</h2>
             </div>
             <button type="button" className="portal-text-button" onClick={() => onNavigate("drawings")}>
               View all
             </button>
           </div>
           {recent.length === 0 ? <p className="portal-empty-copy">No drawings saved yet.</p> : null}
-          <div className="portal-recent-list">
+          <div className="portal-dashboard-list">
             {recent.map((drawing) => (
               <button
                 type="button"
                 key={drawing.id}
-                className="portal-recent-item"
+                className="portal-dashboard-row"
                 onClick={() => onNavigate("editor", { drawingId: drawing.id })}
               >
-                <div className="portal-recent-preview">
+                <div className="portal-dashboard-preview">
                   <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="inline" />
                 </div>
-                <div className="portal-recent-copy">
-                  <strong>{drawing.name}</strong>
-                  <span>{drawing.customerName}</span>
-                  <span>{formatTimestamp(drawing.updatedAtIso)}</span>
-                  <span>
-                    {drawing.segmentCount} segments · {drawing.gateCount} gates
-                  </span>
+                <div className="portal-dashboard-row-copy">
+                  <div className="portal-dashboard-row-head">
+                    <strong>{drawing.name}</strong>
+                    <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
+                  </div>
+                  <p>{drawing.customerName}</p>
+                  <div className="portal-dashboard-row-meta">
+                    <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
+                    <span>{drawing.segmentCount} segments</span>
+                    <span>{drawing.gateCount} gates</span>
+                  </div>
                 </div>
-                <span className="portal-recent-version">v{drawing.versionNumber}</span>
+                <span className="portal-dashboard-row-cta">Open</span>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="portal-surface-card portal-ops-card">
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">Operations</span>
-              <h2>Company workspace controls</h2>
+        <div className="portal-dashboard-side">
+          <section className="portal-surface-card portal-dashboard-customers">
+            <div className="portal-section-heading">
+              <div>
+                <span className="portal-section-kicker">Customer activity</span>
+                <h2>Where work is concentrated</h2>
+              </div>
             </div>
-          </div>
-          <div className="portal-action-list">
-            <button type="button" className="portal-action-card" onClick={() => onNavigate("drawings")}>
-              <strong>Drawing library</strong>
-              <span>Filter the library by customer or switch to just the drawings you have worked on.</span>
-            </button>
-            <button type="button" className="portal-action-card" onClick={() => onNavigate("editor")}>
-              <strong>Open editor</strong>
-              <span>Start a fresh layout with separate customer and drawing names captured from the beginning.</span>
-            </button>
-            {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
-              <button type="button" className="portal-action-card" onClick={() => onNavigate("admin")}>
-                <strong>User administration</strong>
-                <span>Add team members and control who gets into the company workspace.</span>
-              </button>
-            ) : null}
-          </div>
-        </section>
-      </div>
+            {topCustomers.length === 0 ? <p className="portal-empty-copy">No active customer work yet.</p> : null}
+            <div className="portal-dashboard-customer-list">
+              {topCustomers.map((customer) => (
+                <button
+                  type="button"
+                  key={customer.customerName}
+                  className="portal-dashboard-customer-row"
+                  onClick={() => onNavigate("drawings", { customer: customer.customerName, scope: "active" })}
+                >
+                  <div>
+                    <strong>{customer.customerName}</strong>
+                    <span>{customer.latestDrawingName}</span>
+                  </div>
+                  <div className="portal-dashboard-customer-meta">
+                    <strong>{customer.drawingCount}</strong>
+                    <span>{customer.updatedAtIso ? formatTimestamp(customer.updatedAtIso) : "No activity"}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
-      <div className="portal-stat-grid portal-stat-grid-secondary">
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Your Drawings</span>
-          <strong>{myDrawings.length}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Saved Drawings</span>
-          <strong>{activeDrawings.length}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Segments Tracked</span>
-          <strong>{totalSegments}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Gate Openings</span>
-          <strong>{totalGates}</strong>
-        </article>
-        <article className="portal-stat-card">
-          <span className="portal-stat-label">Archived</span>
-          <strong>{archivedDrawings.length}</strong>
-        </article>
+          <section className="portal-surface-card portal-dashboard-quick-actions">
+            <div className="portal-section-heading">
+              <div>
+                <span className="portal-section-kicker">Workspace actions</span>
+                <h2>Fast routes</h2>
+              </div>
+            </div>
+            <div className="portal-dashboard-action-grid">
+              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("drawings", { owner: "mine" })}>
+                <strong>My drawings</strong>
+                <span>Jump straight to the drawings you have contributed to.</span>
+              </button>
+              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("drawings")}>
+                <strong>Customer library</strong>
+                <span>Browse by client and reopen older company work quickly.</span>
+              </button>
+              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("editor")}>
+                <strong>Start new drawing</strong>
+                <span>Create a new layout with customer and drawing names captured separately.</span>
+              </button>
+              {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
+                <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("admin")}>
+                  <strong>User administration</strong>
+                  <span>Manage company access and reset user passwords.</span>
+                </button>
+              ) : null}
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   );
