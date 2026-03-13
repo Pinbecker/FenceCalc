@@ -27,8 +27,10 @@ export function EditorCanvasStage({
         ? props.drawStart
           ? "crosshair"
           : "cell"
-        : props.interactionMode === "RECESS" || props.interactionMode === "GATE"
-          ? props.recessPreview || props.gatePreview
+        : props.interactionMode === "RECESS" ||
+            props.interactionMode === "GATE" ||
+            props.interactionMode === "BASKETBALL_POST"
+          ? props.recessPreview || props.gatePreview || props.basketballPostPreview
             ? "crosshair"
             : "default"
           : props.hoveredGateId || props.hoveredSegmentId
@@ -85,6 +87,7 @@ export function EditorCanvasStage({
           selectedSegmentId={props.selectedSegmentId}
           selectedGateId={props.selectedGateId}
           gatesBySegmentId={props.gatesBySegmentId}
+          placedBasketballPostVisuals={props.placedBasketballPostVisuals}
           segmentLengthLabelsBySegmentId={props.segmentLengthLabelsBySegmentId}
           visibleSegmentLabelKeys={props.visibleSegmentLabelKeys}
           placedGateVisuals={props.placedGateVisuals}
@@ -100,6 +103,7 @@ export function EditorCanvasStage({
           view={view}
           visibleBounds={props.visibleBounds}
           interactionMode={props.interactionMode}
+          gateType={props.gateType}
           drawStart={props.drawStart}
           rectangleStart={props.rectangleStart}
           ghostEnd={props.ghostEnd}
@@ -109,6 +113,7 @@ export function EditorCanvasStage({
           rectanglePreviewEnd={props.rectanglePreviewEnd}
           recessPreview={props.recessPreview}
           gatePreview={props.gatePreview}
+          basketballPostPreview={props.basketballPostPreview}
           gatePreviewVisual={props.gatePreviewVisual}
           closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}
@@ -127,6 +132,7 @@ export function EditorCanvasStage({
         drawSnapLabel={props.drawSnapLabel}
         closeLoopPoint={props.closeLoopPoint}
         gatePreview={props.gatePreview}
+        basketballPostPreview={props.basketballPostPreview}
         recessPreview={props.recessPreview}
       />
     </main>

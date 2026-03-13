@@ -36,9 +36,19 @@ export interface GatePlacement {
   gateType: GateType;
 }
 
+export type InlineFeatureFacing = "LEFT" | "RIGHT";
+
+export interface BasketballPostPlacement {
+  id: string;
+  segmentId: string;
+  offsetMm: number;
+  facing: InlineFeatureFacing;
+}
+
 export interface LayoutModel {
   segments: LayoutSegment[];
   gates?: GatePlacement[];
+  basketballPosts?: BasketballPostPlacement[];
 }
 
 export interface DrawingCanvasViewport {

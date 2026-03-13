@@ -32,6 +32,7 @@ describe("useEditorDerivedState", () => {
       useEditorDerivedState({
         segments,
         gatePlacements,
+        basketballPostPlacements: [],
         selectedSegmentId: "s1",
         selectedPlanId: null,
         activeSpecSystem: "TWIN_BAR",
@@ -45,6 +46,7 @@ describe("useEditorDerivedState", () => {
       useEditorDerivedState({
         segments,
         gatePlacements,
+        basketballPostPlacements: [],
         selectedSegmentId: "s1",
         selectedPlanId,
         activeSpecSystem: "TWIN_BAR",
@@ -86,6 +88,7 @@ describe("useEditorDerivedState", () => {
           }
         ],
         gatePlacements: [],
+        basketballPostPlacements: [],
         selectedSegmentId: null,
         selectedPlanId: null,
         activeSpecSystem: "ROLL_FORM",

@@ -1,6 +1,8 @@
+import type { GateType } from "@fence-estimator/contracts";
 import { Circle, Group, Layer, Line } from "react-konva";
 
 import { formatLengthMm } from "../../formatters";
+import { renderBasketballPostSymbol } from "../basketballPostGeometry";
 import { GHOST_STROKE_PX, LABEL_FONT_SIZE_PX, MIN_SEGMENT_MM } from "../constants";
 import { renderGateSymbol } from "../gateGeometry";
 import { renderCanvasLabel } from "./canvasLabel";
@@ -9,8 +11,10 @@ import type { EditorCanvasStageProps } from "./types";
 type EditorCanvasPreviewLayerProps = Pick<
   EditorCanvasStageProps,
   | "axisGuide"
+  | "gateType"
   | "drawHoverSnap"
   | "drawStart"
+  | "basketballPostPreview"
   | "gatePreview"
   | "gatePreviewVisual"
   | "ghostEnd"
@@ -24,6 +28,38 @@ type EditorCanvasPreviewLayerProps = Pick<
   | "visibleBounds"
   | "closeLoopPoint"
 >;
+
+function getGatePreviewStyle(gateType: GateType) {
+  switch (gateType) {
+    case "DOUBLE_LEAF":
+      return {
+        highlight: "#94df8b",
+        frameStroke: "#d9ffd0",
+        leafStroke: "#f4ffd8",
+        swingStroke: "#98d94f",
+        markerFill: "#f6ffe9",
+        labelColor: "#f2ffd7"
+      };
+    case "CUSTOM":
+      return {
+        highlight: "#d2a0ff",
+        frameStroke: "#f5dbff",
+        leafStroke: "#ffe8ff",
+        swingStroke: "#df7ef2",
+        markerFill: "#fff0ff",
+        labelColor: "#ffe8ff"
+      };
+    default:
+      return {
+        highlight: "#8ee5ff",
+        frameStroke: "#d2f4fb",
+        leafStroke: "#fff3d7",
+        swingStroke: "#f0be6e",
+        markerFill: "#effdff",
+        labelColor: "#fff8e3"
+      };
+  }
+}
 
 function midpoint(start: { x: number; y: number }, end: { x: number; y: number }) {
   return {
@@ -130,7 +166,10 @@ function renderRunDistanceLabels({
   tangent,
   startNormal,
   endNormal,
-  scale
+  scale,
+  fill = "rgba(12, 40, 44, 0.9)",
+  textColor = "#dffcff",
+  stroke = "rgba(118, 231, 248, 0.34)"
 }: {
   keyPrefix: string;
   startPoint: { x: number; y: number };
@@ -143,6 +182,9 @@ function renderRunDistanceLabels({
   startNormal: { x: number; y: number };
   endNormal: { x: number; y: number };
   scale: number;
+  fill?: string;
+  textColor?: string;
+  stroke?: string;
 }) {
   return (
     <>
@@ -152,9 +194,9 @@ function renderRunDistanceLabels({
             ...offsetPoint(midpoint(startPoint, splitStartPoint), tangent, startNormal, scale, 20, -18),
             text: formatLengthMm(startDistanceMm),
             scale,
-            fill: "rgba(15, 23, 24, 0.74)",
-            textColor: "#dce7ea",
-            stroke: "rgba(227, 238, 241, 0.14)",
+            fill,
+            textColor,
+            stroke,
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 42
           })
@@ -165,9 +207,9 @@ function renderRunDistanceLabels({
             ...offsetPoint(midpoint(splitEndPoint, endPoint), tangent, endNormal, scale, 20, 18),
             text: formatLengthMm(endDistanceMm),
             scale,
-            fill: "rgba(15, 23, 24, 0.74)",
-            textColor: "#dce7ea",
-            stroke: "rgba(227, 238, 241, 0.14)",
+            fill,
+            textColor,
+            stroke,
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 42
           })
@@ -176,10 +218,40 @@ function renderRunDistanceLabels({
   );
 }
 
+function renderTargetSegmentHighlight(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  scale: number,
+  color: string
+) {
+  return (
+    <>
+      <Line
+        points={[start.x, start.y, end.x, end.y]}
+        stroke={color}
+        strokeWidth={12 / scale}
+        opacity={0.28}
+        lineCap="round"
+        listening={false}
+      />
+      <Line
+        points={[start.x, start.y, end.x, end.y]}
+        stroke={color}
+        strokeWidth={6 / scale}
+        opacity={0.88}
+        lineCap="round"
+        listening={false}
+      />
+    </>
+  );
+}
+
 export function EditorCanvasPreviewLayer({
   axisGuide,
+  gateType,
   drawHoverSnap,
   drawStart,
+  basketballPostPreview,
   gatePreview,
   gatePreviewVisual,
   ghostEnd,
@@ -206,11 +278,18 @@ export function EditorCanvasPreviewLayer({
   const ghostAxes = drawStart && ghostEnd ? deriveSegmentAxes(drawStart, ghostEnd) : null;
   const rectangleWidthDirection = rectangleStart && rectanglePreviewEnd ? Math.sign(rectanglePreviewEnd.y - rectangleStart.y) || 1 : 1;
   const rectangleHeightDirection = rectangleStart && rectanglePreviewEnd ? Math.sign(rectanglePreviewEnd.x - rectangleStart.x) || 1 : 1;
+  const gatePreviewStyle = getGatePreviewStyle(gateType);
 
   return (
     <Layer>
       {interactionMode === "RECESS" && recessPreview ? (
         <Group key={`recess-preview-${recessPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            recessPreview.segment.start,
+            recessPreview.segment.end,
+            view.scale,
+            "#7ee5d0"
+          )}
           {recessPreview.alignmentGuide
             ? renderPlacementGuide({
                 targetPoint: recessPreview.targetPoint,
@@ -298,9 +377,9 @@ export function EditorCanvasPreviewLayer({
             ),
             text: `${formatLengthMm(recessPreview.endOffsetMm - recessPreview.startOffsetMm)} x ${formatLengthMm(recessPreview.depthMm)}`,
             scale: view.scale,
-            fill: "rgba(28, 42, 39, 0.82)",
-            textColor: "#eef5f2",
-            stroke: "rgba(175, 198, 188, 0.2)",
+            fill: "rgba(12, 58, 55, 0.92)",
+            textColor: "#ddfffa",
+            stroke: "rgba(126, 229, 208, 0.38)",
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 92
           })}
@@ -308,6 +387,12 @@ export function EditorCanvasPreviewLayer({
       ) : null}
       {interactionMode === "GATE" && gatePreview ? (
         <Group key={`gate-preview-${gatePreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            gatePreview.segment.start,
+            gatePreview.segment.end,
+            view.scale,
+            gatePreviewStyle.highlight
+          )}
           {gatePreview.alignmentGuide
             ? renderPlacementGuide({
                 targetPoint: gatePreview.targetPoint,
@@ -331,7 +416,7 @@ export function EditorCanvasPreviewLayer({
               gatePreview.entryPoint.x,
               gatePreview.entryPoint.y
             ]}
-            stroke="#9db8c3"
+            stroke="#9fe7f8"
             strokeWidth={4 / view.scale}
             lineCap="round"
           />
@@ -340,11 +425,11 @@ export function EditorCanvasPreviewLayer({
                 gatePreviewVisual,
                 view.scale,
                 {
-                  frameStroke: "#bfd3d9",
-                  leafStroke: "#ece7da",
-                  swingStroke: "#c7b88f",
-                  markerFill: "#eef4f3",
-                  labelColor: "#f4efe2"
+                  frameStroke: gatePreviewStyle.frameStroke,
+                  leafStroke: gatePreviewStyle.leafStroke,
+                  swingStroke: gatePreviewStyle.swingStroke,
+                  markerFill: gatePreviewStyle.markerFill,
+                  labelColor: gatePreviewStyle.labelColor
                 },
                 `Gate ${formatLengthMm(gatePreview.widthMm)}`,
                 `gate-preview-symbol-${gatePreview.segment.id}`
@@ -370,10 +455,85 @@ export function EditorCanvasPreviewLayer({
               gatePreview.segment.end.x,
               gatePreview.segment.end.y
             ]}
-            stroke="#9db8c3"
+            stroke="#9fe7f8"
             strokeWidth={4 / view.scale}
             lineCap="round"
           />
+        </Group>
+      ) : null}
+      {interactionMode === "BASKETBALL_POST" && basketballPostPreview ? (
+        <Group key={`basketball-post-preview-${basketballPostPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            basketballPostPreview.segment.start,
+            basketballPostPreview.segment.end,
+            view.scale,
+            "#ffbc63"
+          )}
+          {basketballPostPreview.alignmentGuide
+            ? renderPlacementGuide({
+                targetPoint: basketballPostPreview.targetPoint,
+                guideDirection: basketballPostPreview.normal,
+                visibleBounds,
+                scale: view.scale,
+                anchorPoint: basketballPostPreview.alignmentGuide.anchorPoint
+              })
+            : basketballPostPreview.snapMeta.kind === "CENTERED"
+              ? renderPlacementGuide({
+                  targetPoint: basketballPostPreview.targetPoint,
+                  guideDirection: basketballPostPreview.normal,
+                  visibleBounds,
+                  scale: view.scale
+                })
+              : null}
+          {renderBasketballPostSymbol(
+            {
+              key: `preview-${basketballPostPreview.segment.id}`,
+              point: basketballPostPreview.point,
+              tangent: basketballPostPreview.tangent,
+              normal: basketballPostPreview.normal,
+              facing: basketballPostPreview.facing
+            },
+            view.scale,
+            {
+              stroke: "#4d2612",
+              accent: "#ffd18a",
+              fill: "#f58e3f"
+            }
+          )}
+          {renderRunDistanceLabels({
+            keyPrefix: `basketball-post-${basketballPostPreview.segment.id}`,
+            startPoint: basketballPostPreview.segment.start,
+            splitStartPoint: basketballPostPreview.point,
+            splitEndPoint: basketballPostPreview.point,
+            endPoint: basketballPostPreview.segment.end,
+            startDistanceMm: basketballPostPreview.offsetMm,
+            endDistanceMm: basketballPostPreview.segmentLengthMm - basketballPostPreview.offsetMm,
+            tangent: basketballPostPreview.tangent,
+            startNormal: { x: -basketballPostPreview.normal.x, y: -basketballPostPreview.normal.y },
+            endNormal: { x: -basketballPostPreview.normal.x, y: -basketballPostPreview.normal.y },
+            scale: view.scale,
+            fill: "rgba(67, 33, 14, 0.92)",
+            textColor: "#fff0d8",
+            stroke: "rgba(255, 187, 106, 0.42)"
+          })}
+          {renderCanvasLabel({
+            keyValue: `basketball-post-main-${basketballPostPreview.segment.id}`,
+            ...offsetPoint(
+              basketballPostPreview.point,
+              basketballPostPreview.tangent,
+              basketballPostPreview.normal,
+              view.scale,
+              76,
+              basketballPostPreview.facing === "LEFT" ? 18 : -18
+            ),
+            text: `BB Post - ${basketballPostPreview.facing === "LEFT" ? "Left" : "Right"}`,
+            scale: view.scale,
+            fill: "rgba(67, 33, 14, 0.92)",
+            textColor: "#fff0d8",
+            stroke: "rgba(255, 187, 106, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 84
+          })}
         </Group>
       ) : null}
       {oppositeGateGuides.map((guide) => (
@@ -390,19 +550,25 @@ export function EditorCanvasPreviewLayer({
       ))}
       {interactionMode === "DRAW" && drawHoverSnap ? (
         <Group listening={false}>
+          {renderTargetSegmentHighlight(
+            drawHoverSnap.segment.start,
+            drawHoverSnap.segment.end,
+            view.scale,
+            "#7fe6ff"
+          )}
           <Line
             points={[drawHoverSnap.segment.start.x, drawHoverSnap.segment.start.y, drawHoverSnap.point.x, drawHoverSnap.point.y]}
-            stroke="#9db8c3"
-            strokeWidth={1.8 / view.scale}
-            dash={[8 / view.scale, 6 / view.scale]}
+            stroke="#9fe7f8"
+            strokeWidth={2.6 / view.scale}
+            dash={[10 / view.scale, 7 / view.scale]}
           />
           <Line
             points={[drawHoverSnap.point.x, drawHoverSnap.point.y, drawHoverSnap.segment.end.x, drawHoverSnap.segment.end.y]}
-            stroke="#bda77d"
-            strokeWidth={1.8 / view.scale}
-            dash={[8 / view.scale, 6 / view.scale]}
+            stroke="#ffd28b"
+            strokeWidth={2.6 / view.scale}
+            dash={[10 / view.scale, 7 / view.scale]}
           />
-          <Circle x={drawHoverSnap.point.x} y={drawHoverSnap.point.y} radius={4 / view.scale} fill="#eef5f2" opacity={0.95} />
+          <Circle x={drawHoverSnap.point.x} y={drawHoverSnap.point.y} radius={5.2 / view.scale} fill="#eefcff" opacity={0.98} />
           {(() => {
             const hoverAxes = deriveSegmentAxes(drawHoverSnap.segment.start, drawHoverSnap.segment.end);
             return renderRunDistanceLabels({
@@ -510,14 +676,14 @@ export function EditorCanvasPreviewLayer({
               view.scale,
               18
             ),
-            text: formatLengthMm(ghostLengthMm),
-            scale: view.scale,
-            fill: "rgba(46, 38, 24, 0.84)",
-            textColor: "#f1dfbd",
-            stroke: "rgba(233, 205, 154, 0.2)",
-            fontSizePx: LABEL_FONT_SIZE_PX,
-            minWidthPx: 54
-          })}
+          text: formatLengthMm(ghostLengthMm),
+          scale: view.scale,
+          fill: "rgba(12, 48, 55, 0.92)",
+          textColor: "#dbfbff",
+          stroke: "rgba(127, 230, 255, 0.36)",
+          fontSizePx: LABEL_FONT_SIZE_PX,
+          minWidthPx: 54
+        })}
           {closeLoopPoint ? (
             <>
               <Circle

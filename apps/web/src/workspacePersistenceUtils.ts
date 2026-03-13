@@ -8,12 +8,17 @@ export function buildDefaultDrawingName(): string {
 }
 
 export function isEmptyLayout(layout: LayoutModel): boolean {
-  return layout.segments.length === 0 && (layout.gates?.length ?? 0) === 0;
+  return (
+    layout.segments.length === 0 &&
+    (layout.gates?.length ?? 0) === 0 &&
+    (layout.basketballPosts?.length ?? 0) === 0
+  );
 }
 
 export function normalizeLayout(layout: LayoutModel): LayoutModel {
   return {
     segments: layout.segments,
-    gates: layout.gates ?? []
+    gates: layout.gates ?? [],
+    basketballPosts: layout.basketballPosts ?? []
   };
 }

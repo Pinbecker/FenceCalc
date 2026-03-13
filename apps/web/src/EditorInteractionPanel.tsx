@@ -1,10 +1,9 @@
 import type { GateType } from "@fence-estimator/contracts";
 
 interface EditorInteractionPanelProps {
-  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
+  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
   recessWidthInputM: string;
   recessDepthInputM: string;
-  recessSide: "AUTO" | "LEFT" | "RIGHT";
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
@@ -34,13 +33,21 @@ interface EditorInteractionPanelProps {
         };
       }
     | null;
+  basketballPostPreview:
+    | {
+        offsetMm: number;
+        facing: "LEFT" | "RIGHT";
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
   formatLengthMm: (value: number) => string;
   formatMetersInputFromMm: (value: number) => string;
-  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE") => void;
+  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST") => void;
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
-  onSetRecessSide: (side: "AUTO" | "LEFT" | "RIGHT") => void;
   onSetGateType: (type: GateType) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;
@@ -50,7 +57,6 @@ export function EditorInteractionPanel({
   interactionMode,
   recessWidthInputM,
   recessDepthInputM,
-  recessSide,
   gateType,
   customGateWidthInputM,
   recessWidthOptionsMm,
@@ -58,13 +64,13 @@ export function EditorInteractionPanel({
   gateWidthOptionsMm,
   recessPreview,
   gatePreview,
+  basketballPostPreview,
   formatLengthMm,
   formatMetersInputFromMm,
   onSetInteractionMode,
   onRecessWidthInputChange,
   onRecessDepthInputChange,
   onNormalizeRecessInputs,
-  onSetRecessSide,
   onSetGateType,
   onCustomGateWidthInputChange,
   onNormalizeGateInputs
@@ -77,7 +83,7 @@ export function EditorInteractionPanel({
           <p className="muted-line">Choose the canvas task first, then adjust the mode-specific settings below.</p>
         </div>
       </div>
-      <div className="mode-toggle-row mode-toggle-row-5" role="tablist" aria-label="Interaction mode">
+      <div className="mode-toggle-row mode-toggle-row-6" role="tablist" aria-label="Interaction mode">
         <button type="button" className={`mode-toggle-btn${interactionMode === "DRAW" ? " active" : ""}`} onClick={() => onSetInteractionMode("DRAW")}>
           Draw
         </button>
@@ -96,6 +102,13 @@ export function EditorInteractionPanel({
         </button>
         <button type="button" className={`mode-toggle-btn${interactionMode === "GATE" ? " active" : ""}`} onClick={() => onSetInteractionMode("GATE")}>
           Gate
+        </button>
+        <button
+          type="button"
+          className={`mode-toggle-btn${interactionMode === "BASKETBALL_POST" ? " active" : ""}`}
+          onClick={() => onSetInteractionMode("BASKETBALL_POST")}
+        >
+          Basketball Post
         </button>
       </div>
       {interactionMode === "DRAW" ? (
@@ -140,29 +153,14 @@ export function EditorInteractionPanel({
               ))}
             </datalist>
           </label>
-          <label>
-            Recess Orientation
-            <div className="mode-toggle-row mode-toggle-row-3">
-              <button type="button" className={`mode-toggle-btn${recessSide === "AUTO" ? " active" : ""}`} onClick={() => onSetRecessSide("AUTO")}>
-                Auto
-              </button>
-              <button type="button" className={`mode-toggle-btn${recessSide === "LEFT" ? " active" : ""}`} onClick={() => onSetRecessSide("LEFT")}>
-                Left
-              </button>
-              <button type="button" className={`mode-toggle-btn${recessSide === "RIGHT" ? " active" : ""}`} onClick={() => onSetRecessSide("RIGHT")}>
-                Right
-              </button>
-            </div>
-          </label>
           {recessPreview ? (
             <>
               <p className="muted-line">
                 Opening {formatLengthMm(recessPreview.endOffsetMm - recessPreview.startOffsetMm)} x {formatLengthMm(recessPreview.depthMm)}
               </p>
-              <p className="muted-line">Move across the run to flip the preview in Auto mode.</p>
             </>
           ) : (
-            <p className="muted-line">Hover near a fence line and click to place recess. Auto mode follows the side you hover.</p>
+            <p className="muted-line">Hover near a fence line and click to place recess.</p>
           )}
         </>
       ) : null}
@@ -210,6 +208,18 @@ export function EditorInteractionPanel({
             <p className="muted-line">Hover near a fence line and click to insert gate object.</p>
           )}
         </>
+      ) : null}
+      {interactionMode === "BASKETBALL_POST" ? (
+        basketballPostPreview ? (
+          <>
+            <p className="muted-line">
+              Basketball post at {formatLengthMm(basketballPostPreview.offsetMm)} facing {basketballPostPreview.facing.toLowerCase()}.
+            </p>
+            <p className="muted-line">Snap {basketballPostPreview.snapMeta.label}. Hover either side of the run to flip the arm.</p>
+          </>
+        ) : (
+          <p className="muted-line">Hover either side of a fence line and click to place a basketball post with the arm facing that side.</p>
+        )
       ) : null}
     </section>
   );

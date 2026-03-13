@@ -8,6 +8,7 @@ type EditorCanvasHudProps = Pick<
   | "disableSnap"
   | "drawStart"
   | "drawSnapLabel"
+  | "basketballPostPreview"
   | "gatePreview"
   | "hoveredGateId"
   | "hoveredSegmentId"
@@ -22,6 +23,7 @@ export function EditorCanvasHud({
   closeLoopPoint,
   drawStart,
   drawSnapLabel,
+  basketballPostPreview,
   gatePreview,
   hoveredGateId,
   hoveredSegmentId,
@@ -30,7 +32,11 @@ export function EditorCanvasHud({
   recessPreview,
   scaleBar
 }: EditorCanvasHudProps) {
-  const guide = drawSnapLabel ?? gatePreview?.snapMeta.label ?? recessPreview?.snapMeta.label ?? null;
+  const guide = drawSnapLabel ?? basketballPostPreview?.snapMeta.label ?? gatePreview?.snapMeta.label ?? recessPreview?.snapMeta.label ?? null;
+  const modeLabel =
+    interactionMode === "BASKETBALL_POST"
+      ? "Basketball Post"
+      : interactionMode.charAt(0) + interactionMode.slice(1).toLowerCase();
 
   const action =
     interactionMode === "DRAW"
@@ -47,6 +53,10 @@ export function EditorCanvasHud({
           ? gatePreview
             ? "Click to place gate"
             : "Hover a run"
+          : interactionMode === "BASKETBALL_POST"
+            ? basketballPostPreview
+              ? `Click place post ${basketballPostPreview.facing.toLowerCase()}`
+              : "Hover a run side"
           : hoveredGateId
             ? "Click select, drag slide"
             : hoveredSegmentId
@@ -76,7 +86,7 @@ export function EditorCanvasHud({
       <div className="statusbar">
         <span className="statusbar-item">
           <strong>Mode</strong>
-          <em>{interactionMode}</em>
+          <em>{modeLabel}</em>
         </span>
         <span className="statusbar-item">
           <strong>Snap</strong>

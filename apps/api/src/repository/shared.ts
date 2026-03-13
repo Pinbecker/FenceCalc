@@ -152,7 +152,8 @@ function parseOptionalStoredJson<T>(raw: string | null | undefined, schema: ZodT
 function buildPreviewLayout(layout: LayoutModel): LayoutModel {
   return {
     segments: layout.segments.slice(0, 40),
-    gates: (layout.gates ?? []).slice(0, 12)
+    gates: (layout.gates ?? []).slice(0, 12),
+    basketballPosts: (layout.basketballPosts ?? []).slice(0, 20)
   };
 }
 
@@ -165,7 +166,8 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
   );
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
-    gates: parsedLayout.gates ?? []
+    gates: parsedLayout.gates ?? [],
+    basketballPosts: parsedLayout.basketballPosts ?? []
   };
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`);
 
@@ -232,7 +234,8 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
   );
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
-    gates: parsedLayout.gates ?? []
+    gates: parsedLayout.gates ?? [],
+    basketballPosts: parsedLayout.basketballPosts ?? []
   };
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`);
 

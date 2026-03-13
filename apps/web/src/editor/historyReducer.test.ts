@@ -16,7 +16,8 @@ describe("historyReducer", () => {
       past: [],
       present: {
         segments: [baseSegment],
-        gates: []
+        gates: [],
+        basketballPosts: []
       },
       future: []
     };
@@ -48,17 +49,56 @@ describe("historyReducer", () => {
     expect(redone.present.gates).toHaveLength(1);
   });
 
+  it("tracks basketball-post-only changes in undo and redo history", () => {
+    const initialState: HistoryState = {
+      past: [],
+      present: {
+        segments: [baseSegment],
+        gates: [],
+        basketballPosts: []
+      },
+      future: []
+    };
+
+    const withBasketballPost = historyReducer(initialState, {
+      type: "APPLY",
+      updater: (layout) => ({
+        ...layout,
+        basketballPosts: [
+          {
+            id: "post-1",
+            segmentId: "segment-1",
+            offsetMm: 350,
+            facing: "LEFT"
+          }
+        ]
+      })
+    });
+
+    expect(withBasketballPost.present.basketballPosts).toHaveLength(1);
+    expect(withBasketballPost.past).toHaveLength(1);
+
+    const undone = historyReducer(withBasketballPost, { type: "UNDO" });
+    expect(undone.present.basketballPosts).toEqual([]);
+    expect(undone.future).toHaveLength(1);
+
+    const redone = historyReducer(undone, { type: "REDO" });
+    expect(redone.present.basketballPosts).toHaveLength(1);
+  });
+
   it("resets history when loading a new document", () => {
     const dirtyState: HistoryState = {
       past: [
         {
           segments: [],
-          gates: []
+          gates: [],
+          basketballPosts: []
         }
       ],
       present: {
         segments: [baseSegment],
-        gates: []
+        gates: [],
+        basketballPosts: []
       },
       future: [
         {
@@ -80,12 +120,13 @@ describe("historyReducer", () => {
       type: "RESET",
       layout: {
         segments: [],
-        gates: []
+        gates: [],
+        basketballPosts: []
       }
     });
 
     expect(reset.past).toEqual([]);
     expect(reset.future).toEqual([]);
-    expect(reset.present).toEqual({ segments: [], gates: [] });
+    expect(reset.present).toEqual({ segments: [], gates: [], basketballPosts: [] });
   });
 });

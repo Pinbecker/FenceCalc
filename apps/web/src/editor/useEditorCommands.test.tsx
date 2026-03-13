@@ -9,7 +9,12 @@ import { buildGatePreview } from "./gateMath.js";
 import { buildRecessPreview } from "./recess.js";
 import { buildSegmentConnectivity, resolveGatePlacements } from "./segmentTopology.js";
 import { useEditorCommands } from "./useEditorCommands.js";
-import type { GateInsertionPreview, InteractionMode, RecessInsertionPreview } from "./types.js";
+import type {
+  BasketballPostInsertionPreview,
+  GateInsertionPreview,
+  InteractionMode,
+  RecessInsertionPreview
+} from "./types.js";
 import { renderHookServer } from "../test/renderHookServer.js";
 
 interface CommandHarnessState {
@@ -17,6 +22,7 @@ interface CommandHarnessState {
   activeSegmentDrag: { segmentId: string; lastPointer: PointMm } | null;
   customGateWidthInputM: string;
   customGateWidthMm: number;
+  basketballPostPreview: BasketballPostInsertionPreview | null;
   drawStart: PointMm | null;
   drawChainStart: PointMm | null;
   gatePreview: GateInsertionPreview | null;
@@ -69,6 +75,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
   const state: CommandHarnessState = {
     activeGateDrag: null,
     activeSegmentDrag: null,
+    basketballPostPreview: null,
     customGateWidthInputM: formatMetersInputFromMm(1200),
     customGateWidthMm: 1200,
     drawStart: null,
@@ -80,7 +87,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     isSpacePressed: false,
     layout: {
       segments: baseSegments,
-      gates: buildBaseGates()
+      gates: buildBaseGates(),
+      basketballPosts: []
     },
     pointerWorld: null,
     recessDepthInputM: formatMetersInputFromMm(1000),
@@ -109,6 +117,17 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     guide: null,
     snapMeta: null
   }));
+  const resolveBasketballPostPreview = vi.fn((point: PointMm) => ({
+    segment: state.layout.segments[0]!,
+    segmentLengthMm: distanceMm(state.layout.segments[0]!.start, state.layout.segments[0]!.end),
+    offsetMm: point.x,
+    point: { x: point.x, y: state.layout.segments[0]!.start.y },
+    tangent: { x: 1, y: 0 },
+    normal: { x: 0, y: -1 },
+    facing: "LEFT" as const,
+    targetPoint: { x: point.x, y: state.layout.segments[0]!.start.y },
+    snapMeta: { kind: "FREE" as const, label: "Free placement" }
+  }));
   let commands: ReturnType<typeof useEditorCommands>;
 
   const applyLayout = (updater: (previous: LayoutModel) => LayoutModel) => {
@@ -126,6 +145,14 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
       gates: updater(state.layout.gates ?? [])
     };
   };
+  const applyBasketballPostPlacements = (
+    updater: (previous: NonNullable<LayoutModel["basketballPosts"]>) => NonNullable<LayoutModel["basketballPosts"]>
+  ) => {
+    state.layout = {
+      ...state.layout,
+      basketballPosts: updater(state.layout.basketballPosts ?? [])
+    };
+  };
 
   function rerender() {
     const segmentsById = new Map(state.layout.segments.map((segment) => [segment.id, segment] as const));
@@ -139,6 +166,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         applyLayout,
         applySegments,
         applyGatePlacements,
+        applyBasketballPostPlacements,
         segmentsById,
         resolvedGateById,
         connectivity,
@@ -160,6 +188,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         customGateWidthMm: state.customGateWidthMm,
         recessPreview: state.recessPreview,
         gatePreview: state.gatePreview,
+        basketballPostPreview: state.basketballPostPreview,
+        resolveBasketballPostPreview,
         resolveDrawPoint,
         toWorld,
         beginPan,
@@ -265,11 +295,12 @@ describe("useEditorCommands", () => {
       .mockReturnValueOnce("33333333-3333-4333-8333-333333333333")
       .mockReturnValueOnce("44444444-4444-4444-8444-444444444444")
       .mockReturnValueOnce("55555555-5555-4555-8555-555555555555")
-      .mockReturnValueOnce("66666666-6666-4666-8666-666666666666");
+      .mockReturnValueOnce("66666666-6666-4666-8666-666666666666")
+      .mockReturnValueOnce("77777777-7777-4777-8777-777777777777");
 
     const harness = createCommandHarness({
       interactionMode: "DRAW",
-      layout: { segments: [], gates: [] },
+      layout: { segments: [], gates: [], basketballPosts: [] },
       gatePreview: null
     });
 
@@ -299,13 +330,30 @@ describe("useEditorCommands", () => {
     harness.state.interactionMode = "GATE";
     harness.state.layout = {
       segments: gateSegments,
-      gates: []
+      gates: [],
+      basketballPosts: []
     };
     harness.state.gatePreview = buildGatePreview(gateSegments[0]!, 1800, 1000);
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.layout.gates?.[0]?.id).toBe("66666666-6666-4666-8666-666666666666");
     expect(harness.state.drawChainStart).toBeNull();
+
+    harness.state.interactionMode = "BASKETBALL_POST";
+    harness.state.basketballPostPreview = {
+      segment: gateSegments[0]!,
+      segmentLengthMm: 5000,
+      offsetMm: 2000,
+      point: { x: 2000, y: 0 },
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: -1 },
+      facing: "LEFT",
+      targetPoint: { x: 2000, y: 0 },
+      snapMeta: { kind: "FREE", label: "Free placement" }
+    };
+    harness.rerender();
+    harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
+    expect(harness.state.layout.basketballPosts?.[0]?.id).toBe("77777777-7777-4777-8777-777777777777");
 
     harness.state.interactionMode = "RECESS";
     harness.state.recessPreview = buildRecessPreview(harness.state.layout.segments[0]!, 2500, 1500, 1000, "LEFT");

@@ -27,7 +27,8 @@ export function useEditorWorkspaceBridge({
     (drawing: DrawingRecord) => {
       onResetLayout({
         segments: drawing.layout.segments,
-        gates: drawing.layout.gates ?? []
+        gates: drawing.layout.gates ?? [],
+        basketballPosts: drawing.layout.basketballPosts ?? []
       });
       onResetEditorState();
       onRestoreViewport(drawing.savedViewport ?? null);

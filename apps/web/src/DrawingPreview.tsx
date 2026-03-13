@@ -139,6 +139,55 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
             </g>
           );
         })}
+        {layout.basketballPosts?.map((basketballPost) => {
+          const segment = layout.segments.find((entry) => entry.id === basketballPost.segmentId);
+          if (!segment) {
+            return null;
+          }
+
+          const segmentLengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y) || 1;
+          const ratio = basketballPost.offsetMm / segmentLengthMm;
+          const anchor = projectPoint({
+            x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
+            y: segment.start.y + (segment.end.y - segment.start.y) * ratio
+          });
+          const tangent = {
+            x: (segment.end.x - segment.start.x) / segmentLengthMm,
+            y: (segment.end.y - segment.start.y) / segmentLengthMm
+          };
+          const leftNormal = { x: -tangent.y, y: tangent.x };
+          const normal =
+            basketballPost.facing === "RIGHT"
+              ? { x: -leftNormal.x, y: -leftNormal.y }
+              : leftNormal;
+          const armEnd = {
+            x: anchor.x + normal.x * (variant === "inline" ? 10 : 14),
+            y: anchor.y + normal.y * (variant === "inline" ? 10 : 14)
+          };
+
+          return (
+            <g key={basketballPost.id}>
+              <rect
+                x={anchor.x - (variant === "inline" ? 3.4 : 4.2)}
+                y={anchor.y - (variant === "inline" ? 3.4 : 4.2)}
+                width={variant === "inline" ? 6.8 : 8.4}
+                height={variant === "inline" ? 6.8 : 8.4}
+                fill="#e77c2f"
+                stroke="#3b2414"
+                strokeWidth="1"
+              />
+              <line x1={anchor.x} y1={anchor.y} x2={armEnd.x} y2={armEnd.y} stroke="#ffb24d" strokeWidth="1.2" />
+              <circle
+                cx={armEnd.x}
+                cy={armEnd.y}
+                r={variant === "inline" ? "2.2" : "2.8"}
+                fill="none"
+                stroke="#ffcf85"
+                strokeWidth="1"
+              />
+            </g>
+          );
+        })}
       </g>
       <g>
         {Array.from(nodes.entries()).map(([key, point]) => (

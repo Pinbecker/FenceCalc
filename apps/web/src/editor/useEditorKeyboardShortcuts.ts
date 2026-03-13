@@ -5,7 +5,7 @@ export interface UseEditorKeyboardShortcutsOptions {
   redo(): void;
   deleteSelectedGate(): boolean;
   deleteSelectedSegment(): boolean;
-  setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE"): void;
+  setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST"): void;
   setIsSpacePressed(value: boolean): void;
   setDisableSnap(value: boolean): void;
   cancelActiveDrawing(): void;
@@ -70,6 +70,9 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
       }
       if (!isModifierPressed && event.code === "KeyG") {
         options.setInteractionMode("GATE");
+      }
+      if (!isModifierPressed && event.code === "KeyB") {
+        options.setInteractionMode("BASKETBALL_POST");
       }
       if (event.code === "Space") {
         event.preventDefault();

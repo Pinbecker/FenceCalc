@@ -103,6 +103,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       { coordinate: 500, major: false }
     ],
     interactionMode: "SELECT" as const,
+    gateType: "SINGLE_LEAF" as const,
     disableSnap: true,
     isPanning: false,
     drawStart: { x: 0, y: 0 },
@@ -126,6 +127,17 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     rectanglePreviewEnd: { x: 1600, y: 1400 },
     recessPreview: buildRecessPreview(segments[0]!, 2500, 1500, 1000, "LEFT"),
     gatePreview,
+    basketballPostPreview: {
+      segment: segments[0]!,
+      segmentLengthMm: 5000,
+      offsetMm: 2200,
+      point: { x: 2200, y: 0 },
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: -1 },
+      facing: "LEFT" as const,
+      targetPoint: { x: 2200, y: 0 },
+      snapMeta: { kind: "CENTERED" as const, label: "Centered" }
+    },
     gatePreviewVisual: gatePreview
       ? {
           key: "preview-s1",
@@ -179,6 +191,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       ["s2", []]
     ]),
     visibleSegmentLabelKeys: new Set(["label-s1"]),
+    placedBasketballPostVisuals: [],
     placedGateVisuals,
     oppositeGateGuides: [
       {
@@ -216,7 +229,7 @@ describe("EditorCanvasStage", () => {
     const registry = getKonvaMockRegistry();
 
     expect(html).toContain("Canvas scale bar");
-    expect(html).toContain("<strong>Mode</strong><em>SELECT</em>");
+    expect(html).toContain("<strong>Mode</strong><em>Select</em>");
     expect(html).toContain("Click select, drag slide");
     expect(registry.Stage).toHaveLength(1);
     expect(registry.Layer.length).toBeGreaterThanOrEqual(4);
@@ -328,6 +341,13 @@ describe("EditorCanvasStage", () => {
     renderToStaticMarkup(
       <EditorCanvasStage
         {...buildProps({
+          interactionMode: "BASKETBALL_POST"
+        })}
+      />
+    );
+    renderToStaticMarkup(
+      <EditorCanvasStage
+        {...buildProps({
           interactionMode: "DRAW"
         })}
       />
@@ -347,7 +367,30 @@ describe("EditorCanvasStage", () => {
 
     expect(previewLabels.some((text) => text.includes("1.5") && text.includes("1"))).toBe(true);
     expect(previewLabels.some((text) => text.includes("Gate"))).toBe(true);
+    expect(previewLabels).toContain("BB Post - Left");
     expect(previewLabels.some((text) => text.includes("2.4"))).toBe(true);
     expect(registry.Line.length).toBeGreaterThan(10);
+  });
+
+  it("disables selection hit targets while placing items", () => {
+    renderToStaticMarkup(
+      <EditorCanvasStage
+        {...buildProps({
+          interactionMode: "BASKETBALL_POST",
+          selectedSegmentId: null,
+          selectedGateId: null,
+          hoveredSegmentId: null,
+          hoveredGateId: null
+        })}
+      />
+    );
+
+    const registry = getKonvaMockRegistry();
+
+    expect(
+      registry.Line
+        .filter((entry) => typeof entry.hitStrokeWidth === "number")
+        .every((entry) => entry.listening === false)
+    ).toBe(true);
   });
 });

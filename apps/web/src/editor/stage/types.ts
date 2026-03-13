@@ -1,16 +1,18 @@
 import type { RefObject } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { GateType, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 
 import type { GridLine, Viewport, VisibleBounds } from "../canvasViewport";
 import type {
   AxisGuide,
+  BasketballPostInsertionPreview,
   GateInsertionPreview,
   GateVisual,
   InteractionMode,
   LineSnapPreview,
   RecessInsertionPreview,
+  ResolvedBasketballPostPlacement,
   ResolvedGatePlacement,
   ScaleBarState,
   SegmentLengthLabel,
@@ -27,6 +29,7 @@ export interface EditorCanvasStageProps {
   verticalLines: GridLine[];
   horizontalLines: GridLine[];
   interactionMode: InteractionMode;
+  gateType: GateType;
   disableSnap: boolean;
   isPanning: boolean;
   drawStart: PointMm | null;
@@ -39,6 +42,7 @@ export interface EditorCanvasStageProps {
   rectanglePreviewEnd: PointMm | null;
   recessPreview: RecessInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
+  basketballPostPreview: BasketballPostInsertionPreview | null;
   gatePreviewVisual: GateVisual | null;
   hoveredSegmentId: string | null;
   hoveredGateId: string | null;
@@ -48,6 +52,7 @@ export interface EditorCanvasStageProps {
   selectedSegmentId: string | null;
   selectedGateId: string | null;
   gatesBySegmentId: Map<string, ResolvedGatePlacement[]>;
+  placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   segmentLengthLabelsBySegmentId: Map<string, SegmentLengthLabel[]>;
   visibleSegmentLabelKeys: Set<string>;
   placedGateVisuals: ResolvedGatePlacement[];

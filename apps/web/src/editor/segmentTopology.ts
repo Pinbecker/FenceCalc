@@ -1,10 +1,10 @@
-import type { GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { BasketballPostPlacement, GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { MIN_SEGMENT_MM, quantize } from "./constants.js";
 import { clampGatePlacementToSegment, normalizeVector, pointCoordinateKey, resolveGatePreviewLeafCount } from "./editorMath.js";
 import { interpolateAlongSegment } from "./gateMath.js";
-import type { ResolvedGatePlacement, SegmentConnectivity } from "./types.js";
+import type { ResolvedBasketballPostPlacement, ResolvedGatePlacement, SegmentConnectivity } from "./types.js";
 
 export function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConnectivity {
   const segmentComponent = new Map<string, string>();
@@ -149,6 +149,57 @@ export function resolveGatePlacements(
       normal: { x: -tangent.y, y: tangent.x },
       leafCount: resolveGatePreviewLeafCount(placement.gateType, widthMm),
       spec: segment.spec
+    });
+  }
+
+  return resolved;
+}
+
+export function resolveBasketballPostPlacements(
+  segmentsById: Map<string, LayoutSegment>,
+  basketballPostPlacements: BasketballPostPlacement[],
+): ResolvedBasketballPostPlacement[] {
+  const sorted = [...basketballPostPlacements].sort((left, right) => left.id.localeCompare(right.id));
+  const resolved: ResolvedBasketballPostPlacement[] = [];
+
+  for (const placement of sorted) {
+    const segment = segmentsById.get(placement.segmentId);
+    if (!segment) {
+      continue;
+    }
+    const segmentLengthMm = distanceMm(segment.start, segment.end);
+    if (segmentLengthMm <= 0) {
+      continue;
+    }
+    const tangent = normalizeVector({
+      x: segment.end.x - segment.start.x,
+      y: segment.end.y - segment.start.y
+    });
+    if (!tangent) {
+      continue;
+    }
+    const offsetMm = Math.max(0, Math.min(segmentLengthMm, placement.offsetMm));
+    const point = interpolateAlongSegment(segment, offsetMm);
+    const leftNormal = { x: -tangent.y, y: tangent.x };
+    const normal =
+      placement.facing === "RIGHT"
+        ? { x: -leftNormal.x, y: -leftNormal.y }
+        : leftNormal;
+
+    resolved.push({
+      id: placement.id,
+      segmentId: placement.segmentId,
+      offsetMm,
+      key: placement.id,
+      point,
+      tangent,
+      normal,
+      facing: placement.facing,
+      spec: segment.spec,
+      placement: {
+        ...placement,
+        offsetMm
+      }
     });
   }
 

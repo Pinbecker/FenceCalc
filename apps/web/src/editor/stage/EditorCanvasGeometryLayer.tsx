@@ -11,6 +11,7 @@ import {
   getSegmentColor,
   quantize
 } from "../constants";
+import { renderBasketballPostSymbol } from "../basketballPostGeometry";
 import { renderGateSymbol } from "../gateGeometry";
 import { buildSegmentRuns } from "../segmentTopology";
 import type { VisualPost } from "../types";
@@ -27,6 +28,7 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "onStartGateDrag"
   | "onStartSegmentDrag"
   | "onUpdateSegmentEndpoint"
+  | "placedBasketballPostVisuals"
   | "placedGateVisuals"
   | "segmentLengthLabelsBySegmentId"
   | "segments"
@@ -39,6 +41,83 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "visibleSegmentLabelKeys"
   | "visualPosts"
 >;
+
+function getPlacedGateStyle(gateType: EditorCanvasGeometryLayerProps["placedGateVisuals"][number]["gateType"]) {
+  switch (gateType) {
+    case "DOUBLE_LEAF":
+      return {
+        default: {
+          frameStroke: "#9aca74",
+          leafStroke: "#e7ffd0",
+          swingStroke: "#7ab542",
+          markerFill: "#f2ffe4",
+          labelColor: "#edffd7"
+        },
+        hover: {
+          frameStroke: "#c7efaf",
+          leafStroke: "#f4ffe5",
+          swingStroke: "#a8dc6d",
+          markerFill: "#fbfff5",
+          labelColor: "#f6ffe7"
+        },
+        selected: {
+          frameStroke: "#e0ffc7",
+          leafStroke: "#fbffe8",
+          swingStroke: "#c3ef83",
+          markerFill: "#ffffff",
+          labelColor: "#fcffe9"
+        }
+      };
+    case "CUSTOM":
+      return {
+        default: {
+          frameStroke: "#c78fe8",
+          leafStroke: "#f8e6ff",
+          swingStroke: "#c169d5",
+          markerFill: "#fff1ff",
+          labelColor: "#ffeaff"
+        },
+        hover: {
+          frameStroke: "#dfb8f5",
+          leafStroke: "#fdf2ff",
+          swingStroke: "#d88ae8",
+          markerFill: "#fff9ff",
+          labelColor: "#fff2ff"
+        },
+        selected: {
+          frameStroke: "#f0d5ff",
+          leafStroke: "#fff5ff",
+          swingStroke: "#e8a8f3",
+          markerFill: "#ffffff",
+          labelColor: "#fff7ff"
+        }
+      };
+    default:
+      return {
+        default: {
+          frameStroke: "#7fcaf3",
+          leafStroke: "#fff0c6",
+          swingStroke: "#efaa54",
+          markerFill: "#effbff",
+          labelColor: "#fff4d6"
+        },
+        hover: {
+          frameStroke: "#b3e3fb",
+          leafStroke: "#fff7dd",
+          swingStroke: "#f4c173",
+          markerFill: "#f9feff",
+          labelColor: "#fff9e5"
+        },
+        selected: {
+          frameStroke: "#d7f1ff",
+          leafStroke: "#fffbe8",
+          swingStroke: "#ffd08a",
+          markerFill: "#ffffff",
+          labelColor: "#fffdf0"
+        }
+      };
+  }
+}
 
 function offsetSegmentLabel(
   start: { x: number; y: number },
@@ -169,6 +248,7 @@ export function EditorCanvasGeometryLayer({
   onStartGateDrag,
   onStartSegmentDrag,
   onUpdateSegmentEndpoint,
+  placedBasketballPostVisuals,
   placedGateVisuals,
   segmentLengthLabelsBySegmentId,
   segments,
@@ -194,15 +274,26 @@ export function EditorCanvasGeometryLayer({
         return (
           <Group key={segment.id}>
             {isHovered || isSelected ? (
-              <Line
-                points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
-                stroke={isSelected ? "rgba(241, 217, 169, 0.38)" : "rgba(198, 218, 224, 0.24)"}
-                opacity={0.3}
-                strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 10) / view.scale}
-                lineCap="round"
-                lineJoin="round"
-                listening={false}
-              />
+              <>
+                <Line
+                  points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
+                  stroke={isSelected ? "rgba(255, 218, 137, 0.58)" : "rgba(108, 225, 249, 0.52)"}
+                  opacity={0.9}
+                  strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 14) / view.scale}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+                <Line
+                  points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
+                  stroke={isSelected ? "#ffe1a1" : "#9fe7f8"}
+                  opacity={0.95}
+                  strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 5) / view.scale}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+              </>
             ) : null}
             {segmentRuns.map((run, runIndex) => (
               <Line
@@ -221,6 +312,7 @@ export function EditorCanvasGeometryLayer({
               points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
               stroke="#ffffff"
               opacity={0.001}
+              listening={interactionMode === "SELECT"}
               strokeWidth={Math.max(SEGMENT_STROKE_PX, SEGMENT_SELECTED_STROKE_PX) / view.scale}
               hitStrokeWidth={22 / view.scale}
               lineCap="round"
@@ -334,9 +426,24 @@ export function EditorCanvasGeometryLayer({
           </Group>
         );
       })}
+      {placedBasketballPostVisuals.map((basketballPost) =>
+        renderBasketballPostSymbol(
+          basketballPost,
+          view.scale,
+          {
+            stroke: "#3b2414",
+            accent: "#ffb24d",
+            fill: "#e77c2f",
+            opacity: selectedPlanVisual ? 0.88 : 1
+          },
+          `basketball-post-${basketballPost.key}`
+        )
+      )}
       {placedGateVisuals.map((gateVisual) => {
         const isGateSelected = interactionMode === "SELECT" && gateVisual.id === selectedGateId;
         const isGateHovered = interactionMode === "SELECT" && gateVisual.id === hoveredGateId;
+        const palette = getPlacedGateStyle(gateVisual.gateType);
+        const gateStyle = isGateSelected ? palette.selected : isGateHovered ? palette.hover : palette.default;
 
         return (
           <Group key={`gate-group-${gateVisual.id}`}>
@@ -344,11 +451,11 @@ export function EditorCanvasGeometryLayer({
               gateVisual,
               view.scale,
               {
-                frameStroke: isGateSelected ? "#f1e1bb" : isGateHovered ? "#d9ecf0" : "#bfd3d9",
-                leafStroke: isGateSelected ? "#e2c07a" : isGateHovered ? "#f3e1b8" : "#d9c18f",
-                swingStroke: isGateSelected ? "#dac088" : isGateHovered ? "#cfddd9" : "#bcc8c6",
-                markerFill: isGateSelected ? "#fdf5e4" : isGateHovered ? "#eef6f5" : "#e6efee",
-                labelColor: isGateSelected ? "#fff0ca" : isGateHovered ? "#f5fbfc" : "#edf3f4",
+                frameStroke: gateStyle.frameStroke,
+                leafStroke: gateStyle.leafStroke,
+                swingStroke: gateStyle.swingStroke,
+                markerFill: gateStyle.markerFill,
+                labelColor: gateStyle.labelColor,
                 opacity: selectedPlanVisual ? 0.88 : 1
               },
               `Gate ${formatLengthMm(gateVisual.widthMm)}`,
@@ -359,6 +466,7 @@ export function EditorCanvasGeometryLayer({
                 points={[gateVisual.startPoint.x, gateVisual.startPoint.y, gateVisual.endPoint.x, gateVisual.endPoint.y]}
                 stroke="#ffffff"
                 opacity={0.001}
+                listening={interactionMode === "SELECT"}
                 strokeWidth={6 / view.scale}
                 hitStrokeWidth={24 / view.scale}
                 lineCap="round"

@@ -15,7 +15,6 @@ function buildSidebarProps() {
     interactionMode: "GATE" as const,
     recessWidthInputM: "1.50",
     recessDepthInputM: "1.00",
-    recessSide: "AUTO" as const,
     gateType: "DOUBLE_LEAF" as const,
     customGateWidthInputM: "3.00",
     recessWidthOptionsMm: [500, 1000, 1500],
@@ -41,6 +40,7 @@ function buildSidebarProps() {
         label: "Centered"
       }
     },
+    basketballPostPreview: null,
     activeSpec: defaultFenceSpec(),
     activeHeightOptions,
     twinBarHeightOptions,
@@ -52,7 +52,6 @@ function buildSidebarProps() {
     onRecessWidthInputChange: vi.fn(),
     onRecessDepthInputChange: vi.fn(),
     onNormalizeRecessInputs: vi.fn(),
-    onSetRecessSide: vi.fn(),
     onSetGateType: vi.fn(),
     onCustomGateWidthInputChange: vi.fn(),
     onNormalizeGateInputs: vi.fn(),

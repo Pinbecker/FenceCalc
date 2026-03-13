@@ -4,10 +4,9 @@ import { EditorFencePalettePanel } from "./EditorFencePalettePanel";
 import { EditorInteractionPanel } from "./EditorInteractionPanel";
 
 interface EditorSidebarProps {
-  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
+  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
   recessWidthInputM: string;
   recessDepthInputM: string;
-  recessSide: "AUTO" | "LEFT" | "RIGHT";
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
@@ -37,6 +36,15 @@ interface EditorSidebarProps {
         };
       }
     | null;
+  basketballPostPreview:
+    | {
+        offsetMm: number;
+        facing: "LEFT" | "RIGHT";
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
   activeSpec: FenceSpec;
   activeHeightOptions: FenceHeightKey[];
   twinBarHeightOptions: FenceHeightKey[];
@@ -44,11 +52,10 @@ interface EditorSidebarProps {
   formatLengthMm: (value: number) => string;
   formatMetersInputFromMm: (value: number) => string;
   getSegmentColor: (spec: FenceSpec) => string;
-  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE") => void;
+  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST") => void;
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
-  onSetRecessSide: (side: "AUTO" | "LEFT" | "RIGHT") => void;
   onSetGateType: (type: GateType) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;
@@ -59,7 +66,6 @@ export function EditorSidebar({
   interactionMode,
   recessWidthInputM,
   recessDepthInputM,
-  recessSide,
   gateType,
   customGateWidthInputM,
   recessWidthOptionsMm,
@@ -67,6 +73,7 @@ export function EditorSidebar({
   gateWidthOptionsMm,
   recessPreview,
   gatePreview,
+  basketballPostPreview,
   activeSpec,
   activeHeightOptions,
   twinBarHeightOptions,
@@ -78,7 +85,6 @@ export function EditorSidebar({
   onRecessWidthInputChange,
   onRecessDepthInputChange,
   onNormalizeRecessInputs,
-  onSetRecessSide,
   onSetGateType,
   onCustomGateWidthInputChange,
   onNormalizeGateInputs,
@@ -91,7 +97,6 @@ export function EditorSidebar({
           interactionMode={interactionMode}
           recessWidthInputM={recessWidthInputM}
           recessDepthInputM={recessDepthInputM}
-          recessSide={recessSide}
           gateType={gateType}
           customGateWidthInputM={customGateWidthInputM}
           recessWidthOptionsMm={recessWidthOptionsMm}
@@ -99,13 +104,13 @@ export function EditorSidebar({
           gateWidthOptionsMm={gateWidthOptionsMm}
           recessPreview={recessPreview}
           gatePreview={gatePreview}
+          basketballPostPreview={basketballPostPreview}
           formatLengthMm={formatLengthMm}
           formatMetersInputFromMm={formatMetersInputFromMm}
           onSetInteractionMode={onSetInteractionMode}
           onRecessWidthInputChange={onRecessWidthInputChange}
           onRecessDepthInputChange={onRecessDepthInputChange}
           onNormalizeRecessInputs={onNormalizeRecessInputs}
-          onSetRecessSide={onSetRecessSide}
           onSetGateType={onSetGateType}
           onCustomGateWidthInputChange={onCustomGateWidthInputChange}
           onNormalizeGateInputs={onNormalizeGateInputs}

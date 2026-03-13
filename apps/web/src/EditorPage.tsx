@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useReducer, useRef } from "react";
 import type Konva from "konva";
 import {
+  type BasketballPostPlacement,
   type GatePlacement,
   type LayoutModel,
   type LayoutSegment
@@ -102,12 +103,36 @@ function reconcileGatePlacementsForSegments(
   return next;
 }
 
+function reconcileBasketballPostsForSegments(
+  previousBasketballPosts: BasketballPostPlacement[],
+  nextSegments: LayoutSegment[],
+): BasketballPostPlacement[] {
+  const nextSegmentsById = new Map(nextSegments.map((segment) => [segment.id, segment]));
+  const next: BasketballPostPlacement[] = [];
+
+  for (const basketballPost of previousBasketballPosts) {
+    const nextSegment = nextSegmentsById.get(basketballPost.segmentId);
+    if (!nextSegment) {
+      continue;
+    }
+
+    const segmentLengthMm = distanceMm(nextSegment.start, nextSegment.end);
+    next.push({
+      ...basketballPost,
+      offsetMm: Math.max(0, Math.min(segmentLengthMm, basketballPost.offsetMm))
+    });
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
 export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
   const [history, dispatchHistory] = useReducer(historyReducer, {
     past: [],
-    present: { segments: [], gates: [] },
+    present: { segments: [], gates: [], basketballPosts: [] },
     future: []
   } satisfies HistoryState);
   const shellState = useEditorShellState();
@@ -115,6 +140,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const currentLayout = history.present;
   const segments = currentLayout.segments;
   const gatePlacements = currentLayout.gates ?? [];
+  const basketballPostPlacements = currentLayout.basketballPosts ?? [];
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const canvasWidth = Math.max(Math.round(canvasFrameSize.width), 1);
@@ -156,7 +182,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         const nextSegments = updater(previous.segments);
         return {
           segments: nextSegments,
-          gates: reconcileGatePlacementsForSegments(previous.gates ?? [], previous.segments, nextSegments)
+          gates: reconcileGatePlacementsForSegments(previous.gates ?? [], previous.segments, nextSegments),
+          basketballPosts: reconcileBasketballPostsForSegments(previous.basketballPosts ?? [], nextSegments)
         };
       });
     },
@@ -168,6 +195,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       applyLayout((previous) => ({
         ...previous,
         gates: updater(previous.gates ?? [])
+      }));
+    },
+    [applyLayout],
+  );
+
+  const applyBasketballPostPlacements = useCallback(
+    (updater: (previous: BasketballPostPlacement[]) => BasketballPostPlacement[]) => {
+      applyLayout((previous) => ({
+        ...previous,
+        basketballPosts: updater(previous.basketballPosts ?? [])
       }));
     },
     [applyLayout],
@@ -210,6 +247,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     gatesBySegmentId,
     highlightableOptimizationPlans,
     oppositeGateGuides,
+    resolvedBasketballPostPlacements,
     placedGateVisuals,
     postTypeCounts,
     recessAlignmentAnchors,
@@ -226,6 +264,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   } = useEditorDerivedState({
     segments,
     gatePlacements,
+    basketballPostPlacements,
     selectedSegmentId: selectionState.selectedSegmentId,
     selectedPlanId: shellState.selectedPlanId,
     activeSpecSystem: shellState.activeSpec.system,
@@ -253,6 +292,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const {
     axisGuide,
     drawHoverSnap,
+    basketballPostPreview,
     drawSnapLabel,
     gatePreview,
     gatePreviewVisual,
@@ -262,6 +302,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     hoveredSegmentId,
     rectanglePreviewEnd,
     recessPreview,
+    resolveBasketballPostPreview,
     closeLoopPoint,
     resolveDrawPoint
   } = useEditorInteractionPreviews({
@@ -280,7 +321,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     recessSide: shellState.recessSide,
     gateType: shellState.gateType,
     customGateWidthMm: shellState.customGateWidthMm,
-    placedGateVisuals
+    placedGateVisuals,
+    placedBasketballPostVisuals: resolvedBasketballPostPlacements
   });
 
   const {
@@ -310,6 +352,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyLayout,
     applySegments,
     applyGatePlacements,
+    applyBasketballPostPlacements,
     segmentsById,
     resolvedGateById,
     connectivity,
@@ -331,6 +374,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     customGateWidthMm: shellState.customGateWidthMm,
     recessPreview,
     gatePreview,
+    basketballPostPreview,
+    resolveBasketballPostPreview,
     resolveDrawPoint,
     toWorld,
     beginPan,
@@ -385,16 +430,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isDirty: workspace.isDirty,
     onNavigate
   });
-  const zoomInAtCanvasCenter = useCallback(() => {
-    zoomAtPointer({ x: canvasWidth / 2, y: canvasHeight / 2 }, -120);
-  }, [canvasHeight, canvasWidth, zoomAtPointer]);
-  const zoomOutAtCanvasCenter = useCallback(() => {
-    zoomAtPointer({ x: canvasWidth / 2, y: canvasHeight / 2 }, 120);
-  }, [canvasHeight, canvasWidth, zoomAtPointer]);
   const session = workspace.session;
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
-  const hasActiveInteraction = selectionState.drawStart !== null || selectionState.rectangleStart !== null;
   const interactionLabel =
     shellState.interactionMode === "DRAW"
       ? "Draw"
@@ -404,7 +442,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           ? "Rectangle"
           : shellState.interactionMode === "RECESS"
             ? "Recess"
-            : "Gate";
+            : shellState.interactionMode === "GATE"
+              ? "Gate"
+              : "Basketball Post";
 
   function handleStartNewDraft(): void {
     if (!confirmDiscardChanges("Discard unsaved changes and start a new draft?")) {
@@ -517,7 +557,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           interactionMode={shellState.interactionMode}
           recessWidthInputM={shellState.recessWidthInputM}
           recessDepthInputM={shellState.recessDepthInputM}
-          recessSide={shellState.recessSide}
           gateType={shellState.gateType}
           customGateWidthInputM={shellState.customGateWidthInputM}
           recessWidthOptionsMm={RECESS_WIDTH_OPTIONS_MM}
@@ -525,6 +564,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           gateWidthOptionsMm={GATE_WIDTH_OPTIONS_MM}
           recessPreview={recessPreview}
           gatePreview={gatePreview}
+          basketballPostPreview={basketballPostPreview}
           activeSpec={shellState.activeSpec}
           activeHeightOptions={activeHeightOptions}
           twinBarHeightOptions={TWIN_BAR_HEIGHT_OPTIONS}
@@ -536,7 +576,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           onRecessWidthInputChange={onRecessWidthInputChange}
           onRecessDepthInputChange={onRecessDepthInputChange}
           onNormalizeRecessInputs={normalizeRecessInputs}
-          onSetRecessSide={shellState.setRecessSide}
           onSetGateType={shellState.setGateType}
           onCustomGateWidthInputChange={onCustomGateWidthInputChange}
           onNormalizeGateInputs={normalizeGateInputs}
@@ -556,13 +595,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 canDeleteSelection={
                   shellState.interactionMode === "SELECT" && (!!selectionState.selectedSegmentId || !!selectionState.selectedGateId)
                 }
-                canFinishInteraction={hasActiveInteraction}
                 onUndo={undoSegments}
                 onRedo={redoSegments}
-                onZoomIn={zoomInAtCanvasCenter}
-                onZoomOut={zoomOutAtCanvasCenter}
                 onResetView={resetView}
-                onFinishInteraction={cancelActiveDrawing}
                 onDeleteSelection={handleDeleteSelection}
                 onClearLayout={handleClearLayout}
               />
@@ -578,6 +613,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 verticalLines={verticalLines}
                 horizontalLines={horizontalLines}
                 interactionMode={shellState.interactionMode}
+                gateType={shellState.gateType}
                 disableSnap={shellState.disableSnap}
                 isPanning={isPanning}
                 drawStart={selectionState.drawStart}
@@ -590,6 +626,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 rectanglePreviewEnd={rectanglePreviewEnd}
                 recessPreview={recessPreview}
                 gatePreview={gatePreview}
+                basketballPostPreview={basketballPostPreview}
                 gatePreviewVisual={gatePreviewVisual}
                 hoveredSegmentId={hoveredSegmentId}
                 hoveredGateId={hoveredGateId}
@@ -601,6 +638,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 gatesBySegmentId={gatesBySegmentId}
                 segmentLengthLabelsBySegmentId={segmentLengthLabelsBySegmentId}
                 visibleSegmentLabelKeys={visibleSegmentLabelKeys}
+                placedBasketballPostVisuals={resolvedBasketballPostPlacements}
                 placedGateVisuals={placedGateVisuals}
                 oppositeGateGuides={oppositeGateGuides}
                 selectedPlanVisual={selectedPlanVisual}

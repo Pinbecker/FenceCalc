@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { GatePlacement, LayoutSegment } from "@fence-estimator/contracts";
+import type { BasketballPostPlacement, GatePlacement, LayoutSegment } from "@fence-estimator/contracts";
 import { estimateDrawingLayout } from "@fence-estimator/rules-engine";
 
 import { buildOptimizationPlanVisual } from "../optimizationVisual";
@@ -18,12 +18,18 @@ import { interpolateAlongSegment } from "./gateMath";
 import { ROLL_FORM_HEIGHT_OPTIONS, TWIN_BAR_HEIGHT_OPTIONS } from "./constants";
 import { buildOppositeGateGuides, buildScaleBar } from "./editorMath";
 import { buildRecessAlignmentAnchors } from "./recess";
-import { buildEstimateSegments, buildSegmentConnectivity, resolveGatePlacements } from "./segmentTopology";
+import {
+  buildEstimateSegments,
+  buildSegmentConnectivity,
+  resolveBasketballPostPlacements,
+  resolveGatePlacements
+} from "./segmentTopology";
 import { buildEditorSummaryData } from "./summaryData";
 
 interface EditorDerivedStateOptions {
   segments: LayoutSegment[];
   gatePlacements: GatePlacement[];
+  basketballPostPlacements: BasketballPostPlacement[];
   selectedSegmentId: string | null;
   selectedPlanId: string | null;
   activeSpecSystem: "TWIN_BAR" | "ROLL_FORM";
@@ -34,6 +40,7 @@ interface EditorDerivedStateOptions {
 export function useEditorDerivedState({
   segments,
   gatePlacements,
+  basketballPostPlacements,
   selectedSegmentId,
   selectedPlanId,
   activeSpecSystem,
@@ -44,6 +51,10 @@ export function useEditorDerivedState({
   const resolvedGatePlacements = useMemo(
     () => resolveGatePlacements(segmentsById, gatePlacements),
     [gatePlacements, segmentsById]
+  );
+  const resolvedBasketballPostPlacements = useMemo(
+    () => resolveBasketballPostPlacements(segmentsById, basketballPostPlacements),
+    [basketballPostPlacements, segmentsById]
   );
   const resolvedGateById = useMemo(
     () => buildResolvedGateMap(resolvedGatePlacements),
@@ -188,6 +199,7 @@ export function useEditorDerivedState({
     placedGateVisuals,
     postTypeCounts,
     recessAlignmentAnchors,
+    resolvedBasketballPostPlacements,
     resolvedGateById,
     resolvedGatePlacements,
     scaleBar,

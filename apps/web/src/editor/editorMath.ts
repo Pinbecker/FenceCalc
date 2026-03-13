@@ -1,4 +1,12 @@
-import type { FenceSpec, GatePlacement, GateType, LayoutModel, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type {
+  BasketballPostPlacement,
+  FenceSpec,
+  GatePlacement,
+  GateType,
+  LayoutModel,
+  LayoutSegment,
+  PointMm
+} from "@fence-estimator/contracts";
 import { areOpposite, distanceMm } from "@fence-estimator/geometry";
 
 import {
@@ -329,6 +337,39 @@ export function sameGatePlacementList(left: GatePlacement[], right: GatePlacemen
   return true;
 }
 
+export function sameBasketballPostPlacement(
+  left: BasketballPostPlacement,
+  right: BasketballPostPlacement
+): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.offsetMm === right.offsetMm &&
+    left.facing === right.facing
+  );
+}
+
+export function sameBasketballPostPlacementList(
+  left: BasketballPostPlacement[],
+  right: BasketballPostPlacement[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftBasketballPost = left[index];
+    const rightBasketballPost = right[index];
+    if (
+      !leftBasketballPost ||
+      !rightBasketballPost ||
+      !sameBasketballPostPlacement(leftBasketballPost, rightBasketballPost)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function samePointApprox(left: PointMm, right: PointMm, epsilon = 0.001): boolean {
   return Math.abs(left.x - right.x) <= epsilon && Math.abs(left.y - right.y) <= epsilon;
 }
@@ -359,7 +400,11 @@ export function sameSegmentList(left: LayoutSegment[], right: LayoutSegment[]): 
 }
 
 export function sameLayoutModel(left: LayoutModel, right: LayoutModel): boolean {
-  return sameSegmentList(left.segments, right.segments) && sameGatePlacementList(left.gates ?? [], right.gates ?? []);
+  return (
+    sameSegmentList(left.segments, right.segments) &&
+    sameGatePlacementList(left.gates ?? [], right.gates ?? []) &&
+    sameBasketballPostPlacementList(left.basketballPosts ?? [], right.basketballPosts ?? [])
+  );
 }
 
 export function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {

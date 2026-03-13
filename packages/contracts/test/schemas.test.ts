@@ -145,12 +145,30 @@ describe("contracts schemas", () => {
   it("defaults missing gate lists on drawing payloads", () => {
     const result = drawingCreateRequestSchema.parse({
       name: "Main yard",
+      customerName: "Cleveland Land Services",
       layout: {
         segments: []
       }
     });
 
     expect(result.layout.gates).toEqual([]);
+    expect(result.layout.basketballPosts).toEqual([]);
+  });
+
+  it("rejects basketball posts that reference missing segments", () => {
+    const result = layoutModelSchema.safeParse({
+      segments: [],
+      basketballPosts: [
+        {
+          id: "post-1",
+          segmentId: "missing",
+          offsetMm: 1000,
+          facing: "LEFT"
+        }
+      ]
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects owner role creation through the admin user schema", () => {

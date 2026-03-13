@@ -10,13 +10,9 @@ describe("EditorCanvasControls", () => {
         canUndo
         canRedo={false}
         canDeleteSelection
-        canFinishInteraction
         onUndo={vi.fn()}
         onRedo={vi.fn()}
-        onZoomIn={vi.fn()}
-        onZoomOut={vi.fn()}
         onResetView={vi.fn()}
-        onFinishInteraction={vi.fn()}
         onDeleteSelection={vi.fn()}
         onClearLayout={vi.fn()}
       />,
@@ -24,8 +20,7 @@ describe("EditorCanvasControls", () => {
 
     expect(html).toContain("Undo");
     expect(html).toContain("Ctrl+Z");
-    expect(html).toContain("Zoom In");
-    expect(html).toContain("Finish");
+    expect(html).toContain("Reset View");
     expect(html).toContain('title="Undo"');
     expect(html).toContain('title="Clear Layout"');
   });

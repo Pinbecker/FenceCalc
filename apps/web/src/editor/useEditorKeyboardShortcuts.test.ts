@@ -84,6 +84,7 @@ describe("useEditorKeyboardShortcuts", () => {
     listeners.keydown?.(createEvent("KeyX"));
     listeners.keydown?.(createEvent("KeyR"));
     listeners.keydown?.(createEvent("KeyG"));
+    listeners.keydown?.(createEvent("KeyB"));
     listeners.keydown?.(createEvent("Space"));
     listeners.keydown?.(createEvent("ShiftLeft"));
     listeners.keydown?.(createEvent("Delete"));
@@ -102,6 +103,7 @@ describe("useEditorKeyboardShortcuts", () => {
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(3, "RECTANGLE");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(4, "RECESS");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(5, "GATE");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(6, "BASKETBALL_POST");
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(true);
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(false);
     expect(options.setDisableSnap).toHaveBeenCalledWith(true);

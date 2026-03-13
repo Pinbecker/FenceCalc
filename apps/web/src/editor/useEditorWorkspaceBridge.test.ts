@@ -11,7 +11,8 @@ const baseLayout: LayoutModel = {
       spec: { system: "TWIN_BAR", height: "2m" }
     }
   ],
-  gates: []
+  gates: [],
+  basketballPosts: []
 };
 
 const sampleDrawing = {

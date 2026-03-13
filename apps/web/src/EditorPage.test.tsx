@@ -5,7 +5,7 @@ import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
 
 type Route = "dashboard" | "drawings" | "editor" | "admin" | "login";
 
-type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
+type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
 
 const mockSelectionState = {
   drawStart: null,
@@ -199,6 +199,7 @@ const mockDerivedState = {
   gatesBySegmentId: new Map(),
   highlightableOptimizationPlans: [],
   oppositeGateGuides: [],
+  resolvedBasketballPostPlacements: [],
   placedGateVisuals: [],
   postTypeCounts: {
     END: 0,
@@ -257,6 +258,7 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
   useEditorInteractionPreviews: () => ({
     axisGuide: null,
     drawHoverSnap: null,
+    basketballPostPreview: null,
     drawSnapLabel: null,
     gatePreview: null,
     gatePreviewVisual: null,
@@ -266,6 +268,7 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
     hoveredSegmentId: null,
     rectanglePreviewEnd: null,
     recessPreview: null,
+    resolveBasketballPostPreview: vi.fn(),
     closeLoopPoint: null,
     resolveDrawPoint: vi.fn()
   })

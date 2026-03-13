@@ -1,4 +1,4 @@
-import type { EstimateResult, GatePlacement, LayoutModel } from "@fence-estimator/contracts";
+import type { BasketballPostPlacement, EstimateResult, GatePlacement, LayoutModel } from "@fence-estimator/contracts";
 import { DRAWING_SCHEMA_VERSION } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION, estimateDrawingLayout } from "@fence-estimator/rules-engine";
 
@@ -13,6 +13,10 @@ export function normalizeLayout(layout: LayoutModel): LayoutModel {
       ...gate,
       startOffsetMm: Math.round(gate.startOffsetMm),
       endOffsetMm: Math.round(gate.endOffsetMm)
+    })),
+    basketballPosts: (layout.basketballPosts ?? []).map((basketballPost): BasketballPostPlacement => ({
+      ...basketballPost,
+      offsetMm: Math.round(basketballPost.offsetMm)
     }))
   };
 }

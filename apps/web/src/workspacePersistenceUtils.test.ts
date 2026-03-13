@@ -13,7 +13,7 @@ describe("workspacePersistenceUtils", () => {
   });
 
   it("detects whether a layout is empty", () => {
-    expect(isEmptyLayout({ segments: [], gates: [] })).toBe(true);
+    expect(isEmptyLayout({ segments: [], gates: [], basketballPosts: [] })).toBe(true);
     expect(
       isEmptyLayout({
         segments: [
@@ -28,7 +28,7 @@ describe("workspacePersistenceUtils", () => {
     ).toBe(false);
   });
 
-  it("normalizes missing gates to an empty list", () => {
+  it("normalizes missing optional layout collections to empty lists", () => {
     expect(
       normalizeLayout({
         segments: [
@@ -49,7 +49,8 @@ describe("workspacePersistenceUtils", () => {
           spec: { system: "TWIN_BAR", height: "2m" }
         }
       ],
-      gates: []
+      gates: [],
+      basketballPosts: []
     });
   });
 });

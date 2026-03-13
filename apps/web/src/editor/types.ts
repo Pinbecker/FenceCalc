@@ -1,4 +1,12 @@
-import type { FenceSpec, GateType, LayoutModel, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type {
+  BasketballPostPlacement,
+  FenceSpec,
+  GateType,
+  InlineFeatureFacing,
+  LayoutModel,
+  LayoutSegment,
+  PointMm
+} from "@fence-estimator/contracts";
 
 export type PostKind = "END" | "INTERMEDIATE" | "CORNER" | "JUNCTION" | "INLINE_JOIN" | "GATE";
 
@@ -64,7 +72,7 @@ export type HistoryAction =
   | { type: "RESET"; layout: LayoutModel }
   | { type: "SET"; layout: LayoutModel };
 
-export type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
+export type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
 
 export type RecessSide = "LEFT" | "RIGHT";
 export type RecessSidePreference = RecessSide | "AUTO";
@@ -135,6 +143,38 @@ export interface ResolvedGatePlacement extends GateVisual {
   endOffsetMm: number;
   gateType: GateType;
   spec: FenceSpec;
+}
+
+export interface BasketballPostInsertionPreview {
+  segment: LayoutSegment;
+  segmentLengthMm: number;
+  offsetMm: number;
+  point: PointMm;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  facing: InlineFeatureFacing;
+  targetPoint: PointMm;
+  snapMeta: PreviewSnapMeta;
+  alignmentGuide?: {
+    anchorPoint: PointMm;
+    targetPoint: PointMm;
+  };
+}
+
+export interface BasketballPostVisual {
+  key: string;
+  point: PointMm;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  facing: InlineFeatureFacing;
+}
+
+export interface ResolvedBasketballPostPlacement extends BasketballPostVisual {
+  id: string;
+  segmentId: string;
+  offsetMm: number;
+  spec: FenceSpec;
+  placement: BasketballPostPlacement;
 }
 
 export interface RecessAlignmentAnchor {

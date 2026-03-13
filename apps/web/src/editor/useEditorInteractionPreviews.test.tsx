@@ -15,6 +15,7 @@ const placedGateVisuals = resolveGatePlacements(
   new Map(segments.map((segment) => [segment.id, segment] as const)),
   [{ id: "g1", segmentId: "s1", startOffsetMm: 2000, endOffsetMm: 3200, gateType: "SINGLE_LEAF" }]
 );
+const placedBasketballPostVisuals: Array<never> = [];
 
 describe("useEditorInteractionPreviews", () => {
   it("resolves draw snapping, guides, hover preview, and rectangle previews", () => {
@@ -35,6 +36,7 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "SINGLE_LEAF",
         customGateWidthMm: 1200,
         placedGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: { x: 0, y: 0 }
       })
     );
@@ -64,6 +66,7 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "SINGLE_LEAF",
         customGateWidthMm: 1200,
         placedGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: null
       })
     );
@@ -95,6 +98,7 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "SINGLE_LEAF",
         customGateWidthMm: 1200,
         placedGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: null
       })
     );
@@ -123,6 +127,7 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "DOUBLE_LEAF",
         customGateWidthMm: 2400,
         placedGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: null
       })
     );
@@ -151,6 +156,7 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "SINGLE_LEAF",
         customGateWidthMm: 1200,
         placedGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: null
       })
     );
@@ -186,11 +192,39 @@ describe("useEditorInteractionPreviews", () => {
         gateType: "SINGLE_LEAF",
         customGateWidthMm: 1200,
         placedGateVisuals: parallelGateVisuals,
+        placedBasketballPostVisuals,
         drawChainStart: null
       })
     );
 
     expect(result.gatePreview?.snapMeta.label).toBe("Aligned gate");
     expect(result.gatePreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
+  });
+
+  it("builds basketball post previews and flips facing from hover side", () => {
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "BASKETBALL_POST",
+        pointerWorld: { x: 3020, y: -480 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(result.basketballPostPreview?.segment.id).toBe("s1");
+    expect(result.basketballPostPreview?.facing).toBe("RIGHT");
   });
 });

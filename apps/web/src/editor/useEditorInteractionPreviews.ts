@@ -21,6 +21,7 @@ import {
 import {
   buildGatePreview,
   findNearestSegmentSnap,
+  interpolateAlongSegment,
   projectPointOntoSegment,
   resolveGateWidthMm
 } from "./gateMath";
@@ -33,6 +34,7 @@ import {
   snapOffsetToAnchorAlongSegment
 } from "./recess";
 import type {
+  BasketballPostInsertionPreview,
   DrawResolveResult,
   GateVisual,
   InteractionMode,
@@ -40,6 +42,7 @@ import type {
   RecessAlignmentAnchor,
   RecessSide,
   RecessSidePreference,
+  ResolvedBasketballPostPlacement,
   ResolvedGatePlacement
 } from "./types";
 
@@ -59,6 +62,7 @@ interface EditorInteractionPreviewsOptions {
   gateType: GateType;
   customGateWidthMm: number;
   placedGateVisuals: ResolvedGatePlacement[];
+  placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   drawChainStart: PointMm | null;
 }
 
@@ -82,13 +86,15 @@ export function useEditorInteractionPreviews({
   gateType,
   customGateWidthMm,
   placedGateVisuals,
+  placedBasketballPostVisuals,
   drawChainStart
 }: EditorInteractionPreviewsOptions) {
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / viewScale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / viewScale);
   const drawLineSnapDistanceMm = Math.min(900, DRAW_LINE_SNAP_PX / viewScale);
-  const recessPointerSnapMm = RECESS_POINTER_SNAP_PX / viewScale;
-  const gatePointerSnapMm = GATE_POINTER_SNAP_PX / viewScale;
+  const recessPointerSnapMm = Math.max(500, RECESS_POINTER_SNAP_PX / viewScale);
+  const gatePointerSnapMm = Math.max(500, GATE_POINTER_SNAP_PX / viewScale);
+  const basketballPostPointerSnapMm = Math.max(650, 48 / viewScale);
   const hoverSegmentSnapMm = Math.max(180, 16 / viewScale);
   const hoverGateSnapMm = Math.max(180, 22 / viewScale);
   const requestedGateWidthMm = useMemo(
@@ -388,6 +394,131 @@ export function useEditorInteractionPreviews({
     } satisfies GateVisual;
   }, [gatePreview, gateType]);
 
+  const resolveBasketballPostPreview = useCallback(
+    (worldPoint: PointMm): BasketballPostInsertionPreview | null => {
+      let best:
+        | {
+            segment: LayoutSegment;
+            offsetMm: number;
+            distanceMm: number;
+            signedDistanceMm: number;
+          }
+        | null = null;
+      for (const segment of segments) {
+        const projection = projectPointOntoSegment(worldPoint, segment);
+        if (projection.distanceMm > basketballPostPointerSnapMm) {
+          continue;
+        }
+        if (!best || projection.distanceMm < best.distanceMm) {
+          best = {
+            segment,
+            offsetMm: projection.offsetMm,
+            distanceMm: projection.distanceMm,
+            signedDistanceMm: projection.signedDistanceMm
+          };
+        }
+      }
+
+      if (!best) {
+        return null;
+      }
+
+      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+      const midpointMm = segmentLengthMm / 2;
+      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+      let snappedOffsetMm = best.offsetMm;
+      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+      let snapMeta = buildSnapMeta("FREE", "Free placement");
+      let selectedAnchorPoint: PointMm | null = null;
+
+      const midpointDistanceMm = Math.abs(best.offsetMm - midpointMm);
+      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = midpointMm;
+        bestSnapDistanceMm = midpointDistanceMm;
+        snapMeta = buildSnapMeta("CENTERED", "Centered");
+      }
+
+      const segmentTangent = normalizeVector({
+        x: best.segment.end.x - best.segment.start.x,
+        y: best.segment.end.y - best.segment.start.y
+      });
+      const alignmentAnchors = !segmentTangent
+        ? []
+        : placedBasketballPostVisuals
+            .filter(
+              (post) => post.segmentId !== best.segment.id && Math.abs(dot(segmentTangent, post.tangent)) >= 0.9
+            )
+            .map((post) => post.point);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, best.offsetMm, alignmentAnchors, anchorWindowMm);
+      const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - best.offsetMm);
+      if (
+        anchorSnapResult.anchorPoint &&
+        anchorSnapDistanceMm <= anchorWindowMm &&
+        anchorSnapDistanceMm < bestSnapDistanceMm
+      ) {
+        snappedOffsetMm = anchorSnapResult.offsetMm;
+        selectedAnchorPoint = anchorSnapResult.anchorPoint;
+        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned post");
+      }
+
+      snappedOffsetMm = Math.max(
+        0,
+        Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+      );
+
+      const point = interpolateAlongSegment(best.segment, snappedOffsetMm);
+      const tangent =
+        segmentTangent ??
+        normalizeVector({
+          x: best.segment.end.x - best.segment.start.x,
+          y: best.segment.end.y - best.segment.start.y
+        });
+      if (!tangent) {
+        return null;
+      }
+
+      const facing = best.signedDistanceMm >= 0 ? "LEFT" : "RIGHT";
+      const leftNormal = { x: -tangent.y, y: tangent.x };
+      const normal =
+        facing === "RIGHT"
+          ? { x: -leftNormal.x, y: -leftNormal.y }
+          : leftNormal;
+
+      const preview: BasketballPostInsertionPreview = {
+        segment: best.segment,
+        segmentLengthMm,
+        offsetMm: snappedOffsetMm,
+        point,
+        tangent,
+        normal,
+        facing,
+        targetPoint: point,
+        snapMeta
+      };
+
+      if (!selectedAnchorPoint) {
+        return preview;
+      }
+
+      return {
+        ...preview,
+        alignmentGuide: {
+          anchorPoint: selectedAnchorPoint,
+          targetPoint: preview.targetPoint
+        }
+      };
+    },
+    [basketballPostPointerSnapMm, placedBasketballPostVisuals, segments]
+  );
+
+  const basketballPostPreview = useMemo(() => {
+    if (interactionMode !== "BASKETBALL_POST" || !pointerWorld) {
+      return null;
+    }
+    return resolveBasketballPostPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolveBasketballPostPreview]);
+
   const drawHoverSnap = useMemo(() => {
     if (interactionMode !== "DRAW" || !pointerWorld) {
       return null;
@@ -463,6 +594,7 @@ export function useEditorInteractionPreviews({
   return {
     axisGuide,
     drawHoverSnap,
+    basketballPostPreview,
     drawSnapLabel,
     gatePreview,
     gatePreviewVisual,
@@ -472,6 +604,7 @@ export function useEditorInteractionPreviews({
     hoveredSegmentId,
     rectanglePreviewEnd,
     recessPreview,
+    resolveBasketballPostPreview,
     closeLoopPoint,
     resolveDrawPoint
   };

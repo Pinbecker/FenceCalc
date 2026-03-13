@@ -3,6 +3,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type {
+  BasketballPostPlacement,
   FenceSpec,
   GatePlacement,
   GateType,
@@ -24,6 +25,7 @@ import {
 } from "./editorCommandUtils";
 import { buildRecessReplacementSegments } from "./recess";
 import type {
+  BasketballPostInsertionPreview,
   DrawResolveResult,
   GateInsertionPreview,
   InteractionMode,
@@ -59,6 +61,7 @@ interface UseEditorCommandsOptions {
   applyLayout: (updater: (previous: LayoutModel) => LayoutModel) => void;
   applySegments: (updater: (previous: LayoutSegment[]) => LayoutSegment[]) => void;
   applyGatePlacements: (updater: (previous: GatePlacement[]) => GatePlacement[]) => void;
+  applyBasketballPostPlacements: (updater: (previous: BasketballPostPlacement[]) => BasketballPostPlacement[]) => void;
   segmentsById: Map<string, LayoutSegment>;
   resolvedGateById: Map<string, ResolvedGatePlacement>;
   connectivity: SegmentConnectivity;
@@ -80,6 +83,8 @@ interface UseEditorCommandsOptions {
   customGateWidthMm: number;
   recessPreview: RecessInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
+  basketballPostPreview: BasketballPostInsertionPreview | null;
+  resolveBasketballPostPreview: (worldPoint: PointMm) => BasketballPostInsertionPreview | null;
   resolveDrawPoint: (worldPoint: PointMm) => DrawResolveResult;
   toWorld: (screenPoint: PointerScreenPoint) => PointMm;
   beginPan: (pointer: PointerScreenPoint) => void;
@@ -110,6 +115,7 @@ export function useEditorCommands({
   applyLayout,
   applySegments,
   applyGatePlacements,
+  applyBasketballPostPlacements,
   segmentsById,
   resolvedGateById,
   connectivity,
@@ -131,6 +137,8 @@ export function useEditorCommands({
   customGateWidthMm,
   recessPreview,
   gatePreview,
+  basketballPostPreview,
+  resolveBasketballPostPreview,
   resolveDrawPoint,
   toWorld,
   beginPan,
@@ -417,7 +425,8 @@ export function useEditorCommands({
         }
         return {
           segments: nextSegments,
-          gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById)
+          gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById),
+          basketballPosts: (previous.basketballPosts ?? []).filter((basketballPost) => basketballPost.segmentId !== preview.segment.id)
         };
       });
       setSelectedSegmentId(null);
@@ -464,6 +473,31 @@ export function useEditorCommands({
       setDrawChainStart(null);
     },
     [applyGatePlacements, gateType, setDrawChainStart, setDrawStart, setSelectedSegmentId]
+  );
+
+  const insertBasketballPost = useCallback(
+    (preview: BasketballPostInsertionPreview): void => {
+      applyBasketballPostPlacements((previous) => {
+        const nextBasketballPost: BasketballPostPlacement = {
+          id: crypto.randomUUID(),
+          segmentId: preview.segment.id,
+          offsetMm: preview.offsetMm,
+          facing: preview.facing
+        };
+        const next = previous.filter(
+          (placement) =>
+            placement.segmentId !== nextBasketballPost.segmentId ||
+            Math.abs(placement.offsetMm - nextBasketballPost.offsetMm) > DRAW_INCREMENT_MM * 0.5
+        );
+        next.push(nextBasketballPost);
+        next.sort((left, right) => left.id.localeCompare(right.id));
+        return next;
+      });
+      setSelectedSegmentId(null);
+      setDrawStart(null);
+      setDrawChainStart(null);
+    },
+    [applyBasketballPostPlacements, setDrawChainStart, setDrawStart, setSelectedSegmentId]
   );
 
   const onStageMouseDown = useCallback(
@@ -522,6 +556,14 @@ export function useEditorCommands({
         return;
       }
 
+      if (interactionMode === "BASKETBALL_POST") {
+        const resolvedPreview = basketballPostPreview ?? resolveBasketballPostPreview(world);
+        if (resolvedPreview) {
+          insertBasketballPost(resolvedPreview);
+        }
+        return;
+      }
+
       if (interactionMode === "RECTANGLE") {
         startOrCommitRectangle(world);
         return;
@@ -531,6 +573,8 @@ export function useEditorCommands({
     },
     [
       beginPan,
+      basketballPostPreview,
+      insertBasketballPost,
       gatePreview,
       insertGate,
       insertRecess,
@@ -539,6 +583,7 @@ export function useEditorCommands({
       recessPreview,
       setSelectedGateId,
       setSelectedSegmentId,
+      resolveBasketballPostPreview,
       stageRef,
       startOrCommitDrawing,
       startOrCommitRectangle,
@@ -683,7 +728,7 @@ export function useEditorCommands({
   }, [setDrawChainStart, setDrawStart, setRectangleStart]);
 
   const resetWorkspaceCanvas = useCallback((): void => {
-    applyLayout(() => ({ segments: [], gates: [] }));
+    applyLayout(() => ({ segments: [], gates: [], basketballPosts: [] }));
     setDrawStart(null);
     setDrawChainStart(null);
     setRectangleStart(null);
@@ -710,7 +755,7 @@ export function useEditorCommands({
   }, [deleteSelectedGate, deleteSelectedSegment]);
 
   const handleClearLayout = useCallback((): void => {
-    applyLayout(() => ({ segments: [], gates: [] }));
+    applyLayout(() => ({ segments: [], gates: [], basketballPosts: [] }));
     setDrawStart(null);
     setDrawChainStart(null);
     setSelectedSegmentId(null);

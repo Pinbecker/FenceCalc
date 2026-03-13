@@ -10,7 +10,6 @@ describe("EditorInteractionPanel", () => {
         interactionMode="GATE"
         recessWidthInputM="1.50"
         recessDepthInputM="1.00"
-        recessSide="AUTO"
         gateType="CUSTOM"
         customGateWidthInputM="2.40"
         recessWidthOptionsMm={[500, 1000]}
@@ -18,13 +17,13 @@ describe("EditorInteractionPanel", () => {
         gateWidthOptionsMm={[1200, 2400]}
         recessPreview={null}
         gatePreview={null}
+        basketballPostPreview={null}
         formatLengthMm={(value) => `${value}mm`}
         formatMetersInputFromMm={(value) => `${value / 1000}`}
         onSetInteractionMode={vi.fn()}
         onRecessWidthInputChange={vi.fn()}
         onRecessDepthInputChange={vi.fn()}
         onNormalizeRecessInputs={vi.fn()}
-        onSetRecessSide={vi.fn()}
         onSetGateType={vi.fn()}
         onCustomGateWidthInputChange={vi.fn()}
         onNormalizeGateInputs={vi.fn()}
@@ -34,5 +33,6 @@ describe("EditorInteractionPanel", () => {
     expect(html).toContain("Rectangle");
     expect(html).toContain("Custom Gate Width");
     expect(html).toContain("Single 1.2m");
+    expect(html).toContain("Basketball Post");
   });
 });

@@ -60,13 +60,23 @@ export const gatePlacementSchema = z.object({
   }
 });
 
+export const inlineFeatureFacingSchema = z.enum(["LEFT", "RIGHT"]);
+export const basketballPostPlacementSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  offsetMm: z.number().finite().nonnegative(),
+  facing: inlineFeatureFacingSchema
+});
+
 const MAX_LAYOUT_SEGMENTS = 2_000;
 const MAX_LAYOUT_GATES = 500;
+const MAX_LAYOUT_BASKETBALL_POSTS = 500;
 
 export const layoutModelSchema = z
   .object({
     segments: z.array(layoutSegmentSchema).max(MAX_LAYOUT_SEGMENTS),
-    gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([])
+    gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([]),
+    basketballPosts: z.array(basketballPostPlacementSchema).max(MAX_LAYOUT_BASKETBALL_POSTS).default([])
   })
   .superRefine((layout, context) => {
     const seenSegmentIds = new Set<string>();
@@ -138,6 +148,33 @@ export const layoutModelSchema = z
           });
         }
         previousEndMm = Math.max(previousEndMm, gate.endOffsetMm);
+      }
+    }
+
+    const seenBasketballPostIds = new Set<string>();
+    for (const basketballPost of layout.basketballPosts ?? []) {
+      if (seenBasketballPostIds.has(basketballPost.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate basketball post id: ${basketballPost.id}`
+        });
+      }
+      seenBasketballPostIds.add(basketballPost.id);
+
+      const segmentLengthMm = segmentLengthById.get(basketballPost.segmentId);
+      if (segmentLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Basketball post ${basketballPost.id} references missing segment ${basketballPost.segmentId}`
+        });
+        continue;
+      }
+
+      if (basketballPost.offsetMm > segmentLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Basketball post ${basketballPost.id} exceeds segment ${basketballPost.segmentId} length`
+        });
       }
     }
   });

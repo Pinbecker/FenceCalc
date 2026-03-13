@@ -88,8 +88,10 @@ export {
   buildEstimateSegments,
   buildSegmentConnectivity,
   buildSegmentRuns,
+  resolveBasketballPostPlacements,
   resolveGatePlacements
 } from "./segmentTopology.js";
+export { renderBasketballPostSymbol } from "./basketballPostGeometry.js";
 export {
   buildRecessAlignmentAnchors,
   buildRecessPreview,
@@ -104,6 +106,8 @@ export {
 export { buildEditorSummaryData } from "./summaryData.js";
 export type {
   AxisGuide,
+  BasketballPostInsertionPreview,
+  BasketballPostVisual,
   DraggablePanel,
   GateInsertionPreview,
   GateVisual,
@@ -114,6 +118,7 @@ export type {
   PostKind,
   RecessInsertionPreview,
   RecessSide,
+  ResolvedBasketballPostPlacement,
   ResolvedGatePlacement,
   ScaleBarState,
   ScreenRect,
