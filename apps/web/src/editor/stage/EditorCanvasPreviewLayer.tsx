@@ -1,7 +1,7 @@
 import { Circle, Group, Layer, Line } from "react-konva";
 
 import { formatLengthMm } from "../../formatters";
-import { GHOST_STROKE_PX, LABEL_FONT_SIZE_PX } from "../constants";
+import { GHOST_STROKE_PX, LABEL_FONT_SIZE_PX, MIN_SEGMENT_MM } from "../constants";
 import { renderGateSymbol } from "../gateGeometry";
 import { renderCanvasLabel } from "./canvasLabel";
 import type { EditorCanvasStageProps } from "./types";
@@ -57,6 +57,125 @@ function offsetPoint(
   };
 }
 
+function buildGuideEndpoints(
+  point: { x: number; y: number },
+  direction: { x: number; y: number },
+  visibleBounds: { left: number; top: number; right: number; bottom: number }
+) {
+  const extent =
+    Math.hypot(visibleBounds.right - visibleBounds.left, visibleBounds.bottom - visibleBounds.top) + 1200;
+
+  return {
+    start: {
+      x: point.x - direction.x * extent,
+      y: point.y - direction.y * extent
+    },
+    end: {
+      x: point.x + direction.x * extent,
+      y: point.y + direction.y * extent
+    }
+  };
+}
+
+function renderPlacementGuide({
+  targetPoint,
+  guideDirection,
+  visibleBounds,
+  scale,
+  anchorPoint
+}: {
+  targetPoint: { x: number; y: number };
+  guideDirection: { x: number; y: number };
+  visibleBounds: { left: number; top: number; right: number; bottom: number };
+  scale: number;
+  anchorPoint?: { x: number; y: number } | null;
+}) {
+  if (anchorPoint) {
+    return (
+      <>
+        <Line
+          points={[anchorPoint.x, anchorPoint.y, targetPoint.x, targetPoint.y]}
+          stroke="#b8c8d0"
+          strokeWidth={1.5 / scale}
+          dash={[7 / scale, 5 / scale]}
+          opacity={0.74}
+          listening={false}
+        />
+        <Circle x={anchorPoint.x} y={anchorPoint.y} radius={4.2 / scale} fill="#d9e6eb" listening={false} />
+      </>
+    );
+  }
+
+  const endpoints = buildGuideEndpoints(targetPoint, guideDirection, visibleBounds);
+  return (
+    <Line
+      points={[endpoints.start.x, endpoints.start.y, endpoints.end.x, endpoints.end.y]}
+      stroke="#b8c8d0"
+      strokeWidth={1.2 / scale}
+      dash={[7 / scale, 6 / scale]}
+      opacity={0.58}
+      listening={false}
+    />
+  );
+}
+
+function renderRunDistanceLabels({
+  keyPrefix,
+  startPoint,
+  splitStartPoint,
+  splitEndPoint,
+  endPoint,
+  startDistanceMm,
+  endDistanceMm,
+  tangent,
+  startNormal,
+  endNormal,
+  scale
+}: {
+  keyPrefix: string;
+  startPoint: { x: number; y: number };
+  splitStartPoint: { x: number; y: number };
+  splitEndPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
+  startDistanceMm: number;
+  endDistanceMm: number;
+  tangent: { x: number; y: number };
+  startNormal: { x: number; y: number };
+  endNormal: { x: number; y: number };
+  scale: number;
+}) {
+  return (
+    <>
+      {startDistanceMm > MIN_SEGMENT_MM
+        ? renderCanvasLabel({
+            keyValue: `${keyPrefix}-start-distance`,
+            ...offsetPoint(midpoint(startPoint, splitStartPoint), tangent, startNormal, scale, 20, -18),
+            text: formatLengthMm(startDistanceMm),
+            scale,
+            fill: "rgba(15, 23, 24, 0.74)",
+            textColor: "#dce7ea",
+            stroke: "rgba(227, 238, 241, 0.14)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 42
+          })
+        : null}
+      {endDistanceMm > MIN_SEGMENT_MM
+        ? renderCanvasLabel({
+            keyValue: `${keyPrefix}-end-distance`,
+            ...offsetPoint(midpoint(splitEndPoint, endPoint), tangent, endNormal, scale, 20, 18),
+            text: formatLengthMm(endDistanceMm),
+            scale,
+            fill: "rgba(15, 23, 24, 0.74)",
+            textColor: "#dce7ea",
+            stroke: "rgba(227, 238, 241, 0.14)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 42
+          })
+        : null}
+    </>
+  );
+}
+
 export function EditorCanvasPreviewLayer({
   axisGuide,
   drawHoverSnap,
@@ -92,6 +211,22 @@ export function EditorCanvasPreviewLayer({
     <Layer>
       {interactionMode === "RECESS" && recessPreview ? (
         <Group key={`recess-preview-${recessPreview.segment.id}`} listening={false}>
+          {recessPreview.alignmentGuide
+            ? renderPlacementGuide({
+                targetPoint: recessPreview.targetPoint,
+                guideDirection: recessNormal ?? { x: 0, y: -1 },
+                visibleBounds,
+                scale: view.scale,
+                anchorPoint: recessPreview.alignmentGuide.anchorPoint
+              })
+            : recessPreview.snapMeta.kind === "MIDPOINT" || recessPreview.snapMeta.kind === "FRACTION"
+              ? renderPlacementGuide({
+                  targetPoint: recessPreview.targetPoint,
+                  guideDirection: recessNormal ?? { x: 0, y: -1 },
+                  visibleBounds,
+                  scale: view.scale
+                })
+              : null}
           <Line
             points={[
               recessPreview.segment.start.x,
@@ -137,28 +272,21 @@ export function EditorCanvasPreviewLayer({
             radius={4 / view.scale}
             fill="#d8e4de"
           />
-          {recessPreview.alignmentGuide ? (
-            <>
-              <Line
-                points={[
-                  recessPreview.alignmentGuide.anchorPoint.x,
-                  recessPreview.alignmentGuide.anchorPoint.y,
-                  recessPreview.alignmentGuide.targetPoint.x,
-                  recessPreview.alignmentGuide.targetPoint.y
-                ]}
-                stroke="#b8c8d0"
-                strokeWidth={1.5 / view.scale}
-                dash={[7 / view.scale, 5 / view.scale]}
-                opacity={0.72}
-              />
-              <Circle
-                x={recessPreview.alignmentGuide.anchorPoint.x}
-                y={recessPreview.alignmentGuide.anchorPoint.y}
-                radius={4.2 / view.scale}
-                fill="#d9e6eb"
-              />
-            </>
-          ) : null}
+          {recessAxes && recessNormal
+            ? renderRunDistanceLabels({
+                keyPrefix: `recess-${recessPreview.segment.id}`,
+                startPoint: recessPreview.segment.start,
+                splitStartPoint: recessPreview.entryPoint,
+                splitEndPoint: recessPreview.exitPoint,
+                endPoint: recessPreview.segment.end,
+                startDistanceMm: recessPreview.startOffsetMm,
+                endDistanceMm: recessPreview.segmentLengthMm - recessPreview.endOffsetMm,
+                tangent: recessAxes.tangent,
+                startNormal: { x: -recessNormal.x, y: -recessNormal.y },
+                endNormal: { x: -recessNormal.x, y: -recessNormal.y },
+                scale: view.scale
+              })
+            : null}
           {renderCanvasLabel({
             keyValue: `recess-main-${recessPreview.segment.id}`,
             ...offsetPoint(
@@ -180,6 +308,22 @@ export function EditorCanvasPreviewLayer({
       ) : null}
       {interactionMode === "GATE" && gatePreview ? (
         <Group key={`gate-preview-${gatePreview.segment.id}`} listening={false}>
+          {gatePreview.alignmentGuide
+            ? renderPlacementGuide({
+                targetPoint: gatePreview.targetPoint,
+                guideDirection: gatePreview.normal,
+                visibleBounds,
+                scale: view.scale,
+                anchorPoint: gatePreview.alignmentGuide.anchorPoint
+              })
+            : gatePreview.snapMeta.kind === "CENTERED"
+              ? renderPlacementGuide({
+                  targetPoint: gatePreview.targetPoint,
+                  guideDirection: gatePreview.normal,
+                  visibleBounds,
+                  scale: view.scale
+                })
+              : null}
           <Line
             points={[
               gatePreview.segment.start.x,
@@ -206,6 +350,19 @@ export function EditorCanvasPreviewLayer({
                 `gate-preview-symbol-${gatePreview.segment.id}`
               )
             : null}
+          {renderRunDistanceLabels({
+            keyPrefix: `gate-${gatePreview.segment.id}`,
+            startPoint: gatePreview.segment.start,
+            splitStartPoint: gatePreview.entryPoint,
+            splitEndPoint: gatePreview.exitPoint,
+            endPoint: gatePreview.segment.end,
+            startDistanceMm: gatePreview.startOffsetMm,
+            endDistanceMm: gatePreview.segmentLengthMm - gatePreview.endOffsetMm,
+            tangent: gatePreview.tangent,
+            startNormal: { x: -gatePreview.normal.x, y: -gatePreview.normal.y },
+            endNormal: { x: -gatePreview.normal.x, y: -gatePreview.normal.y },
+            scale: view.scale
+          })}
           <Line
             points={[
               gatePreview.exitPoint.x,
@@ -246,6 +403,22 @@ export function EditorCanvasPreviewLayer({
             dash={[8 / view.scale, 6 / view.scale]}
           />
           <Circle x={drawHoverSnap.point.x} y={drawHoverSnap.point.y} radius={4 / view.scale} fill="#eef5f2" opacity={0.95} />
+          {(() => {
+            const hoverAxes = deriveSegmentAxes(drawHoverSnap.segment.start, drawHoverSnap.segment.end);
+            return renderRunDistanceLabels({
+              keyPrefix: `draw-hover-${drawHoverSnap.segment.id}`,
+              startPoint: drawHoverSnap.segment.start,
+              splitStartPoint: drawHoverSnap.point,
+              splitEndPoint: drawHoverSnap.point,
+              endPoint: drawHoverSnap.segment.end,
+              startDistanceMm: drawHoverSnap.startOffsetMm,
+              endDistanceMm: drawHoverSnap.endOffsetMm,
+              tangent: hoverAxes.tangent,
+              startNormal: hoverAxes.normal,
+              endNormal: { x: -hoverAxes.normal.x, y: -hoverAxes.normal.y },
+              scale: view.scale
+            });
+          })()}
         </Group>
       ) : null}
       {interactionMode === "RECTANGLE" && rectangleStart && rectanglePreviewEnd ? (

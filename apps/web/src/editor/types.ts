@@ -111,6 +111,10 @@ export interface GateInsertionPreview {
   normal: { x: number; y: number };
   targetPoint: PointMm;
   snapMeta: PreviewSnapMeta;
+  alignmentGuide?: {
+    anchorPoint: PointMm;
+    targetPoint: PointMm;
+  };
 }
 
 export interface GateVisual {

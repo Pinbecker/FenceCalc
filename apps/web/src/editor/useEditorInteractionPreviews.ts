@@ -304,21 +304,70 @@ export function useEditorInteractionPreviews({
     }
 
     const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+    const baseOffsetMm = best.offsetMm;
     const midpointMm = segmentLengthMm / 2;
-    const snapWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
-    const centeredOffsetMm = Math.abs(best.offsetMm - midpointMm) <= snapWindowMm ? midpointMm : best.offsetMm;
-    const preview = buildGatePreview(best.segment, centeredOffsetMm, requestedGateWidthMm);
+    const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+    const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+    let snappedOffsetMm = baseOffsetMm;
+    let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+    let snapMeta = buildSnapMeta("FREE", "Free placement");
+    let selectedAnchorPoint: PointMm | null = null;
+
+    const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+    if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+      snappedOffsetMm = midpointMm;
+      bestSnapDistanceMm = midpointDistanceMm;
+      snapMeta = buildSnapMeta("CENTERED", "Centered");
+    }
+
+    const segmentTangent = normalizeVector({
+      x: best.segment.end.x - best.segment.start.x,
+      y: best.segment.end.y - best.segment.start.y
+    });
+    const gateAlignmentAnchors = !segmentTangent
+      ? []
+      : placedGateVisuals
+          .filter(
+            (gate) => gate.segmentId !== best.segment.id && Math.abs(dot(segmentTangent, gate.tangent)) >= 0.9
+          )
+          .map((gate) => gate.centerPoint);
+    const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, gateAlignmentAnchors, anchorWindowMm);
+    const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - baseOffsetMm);
+    if (
+      anchorSnapResult.anchorPoint &&
+      anchorSnapDistanceMm <= anchorWindowMm &&
+      anchorSnapDistanceMm < bestSnapDistanceMm
+    ) {
+      snappedOffsetMm = anchorSnapResult.offsetMm;
+      bestSnapDistanceMm = anchorSnapDistanceMm;
+      selectedAnchorPoint = anchorSnapResult.anchorPoint;
+      snapMeta = buildSnapMeta("ALIGNMENT", "Aligned gate");
+    }
+
+    snappedOffsetMm = Math.max(
+      0,
+      Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+    );
+
+    const preview = buildGatePreview(best.segment, snappedOffsetMm, requestedGateWidthMm);
     if (!preview) {
       return null;
     }
-    return {
+    const previewWithSnap = {
       ...preview,
-      snapMeta:
-        centeredOffsetMm === midpointMm
-          ? buildSnapMeta("CENTERED", "Centered")
-          : buildSnapMeta("FREE", "Free placement")
+      snapMeta
     };
-  }, [gatePointerSnapMm, interactionMode, pointerWorld, requestedGateWidthMm, segments]);
+    if (!selectedAnchorPoint) {
+      return previewWithSnap;
+    }
+    return {
+      ...previewWithSnap,
+      alignmentGuide: {
+        anchorPoint: selectedAnchorPoint,
+        targetPoint: preview.targetPoint
+      }
+    };
+  }, [gatePointerSnapMm, interactionMode, placedGateVisuals, pointerWorld, requestedGateWidthMm, segments]);
 
   const gatePreviewVisual = useMemo(() => {
     if (!gatePreview) {

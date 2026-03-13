@@ -158,4 +158,39 @@ describe("useEditorInteractionPreviews", () => {
     expect(hoverResult.hoveredSegmentId).toBe("s1");
     expect(hoverResult.hoveredGateId).toBe("g1");
   });
+
+  it("aligns gate previews to existing parallel gates", () => {
+    const parallelSegments: LayoutSegment[] = [
+      { id: "top", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, spec },
+      { id: "bottom", start: { x: 0, y: 3000 }, end: { x: 6000, y: 3000 }, spec }
+    ];
+    const parallelGateVisuals = resolveGatePlacements(
+      new Map(parallelSegments.map((segment) => [segment.id, segment] as const)),
+      [{ id: "g-top", segmentId: "top", startOffsetMm: 2000, endOffsetMm: 3200, gateType: "SINGLE_LEAF" }]
+    );
+
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: parallelSegments,
+        interactionMode: "GATE",
+        pointerWorld: { x: 2620, y: 3010 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: parallelGateVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(result.gatePreview?.snapMeta.label).toBe("Aligned gate");
+    expect(result.gatePreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
+  });
 });
