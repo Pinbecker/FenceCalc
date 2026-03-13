@@ -7,7 +7,7 @@ import { defaultFenceSpec } from "./constants.js";
 import { buildResolvedGateMap } from "./editorDerivedStateUtils.js";
 import { buildGatePreview } from "./gateMath.js";
 import { buildRecessPreview } from "./recess.js";
-import { buildSegmentConnectivity, resolveGatePlacements } from "./segmentTopology.js";
+import { buildSegmentConnectivity, resolveBasketballPostPlacements, resolveGatePlacements } from "./segmentTopology.js";
 import { useEditorCommands } from "./useEditorCommands.js";
 import type {
   BasketballPostInsertionPreview,
@@ -18,6 +18,7 @@ import type {
 import { renderHookServer } from "../test/renderHookServer.js";
 
 interface CommandHarnessState {
+  activeBasketballPostDrag: { basketballPostId: string; lastPointer: PointMm } | null;
   activeGateDrag: { gateId: string; lastPointer: PointMm } | null;
   activeSegmentDrag: { segmentId: string; lastPointer: PointMm } | null;
   customGateWidthInputM: string;
@@ -38,6 +39,7 @@ interface CommandHarnessState {
   recessWidthInputM: string;
   recessWidthMm: number;
   rectangleStart: PointMm | null;
+  selectedBasketballPostId: string | null;
   selectedGateId: string | null;
   selectedLengthInputM: string;
   selectedPlanId: string | null;
@@ -73,6 +75,7 @@ function createStateSetter<TState, TKey extends keyof TState>(state: TState, key
 function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
   const baseSegments = buildBaseSegments();
   const state: CommandHarnessState = {
+    activeBasketballPostDrag: null,
     activeGateDrag: null,
     activeSegmentDrag: null,
     basketballPostPreview: null,
@@ -97,6 +100,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     recessWidthInputM: formatMetersInputFromMm(1500),
     recessWidthMm: 1500,
     rectangleStart: null,
+    selectedBasketballPostId: null,
     selectedGateId: null,
     selectedLengthInputM: "",
     selectedPlanId: null,
@@ -157,7 +161,11 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
   function rerender() {
     const segmentsById = new Map(state.layout.segments.map((segment) => [segment.id, segment] as const));
     const resolvedGatePlacements = resolveGatePlacements(segmentsById, state.layout.gates ?? []);
+    const resolvedBasketballPostPlacements = resolveBasketballPostPlacements(segmentsById, state.layout.basketballPosts ?? []);
     const resolvedGateById = buildResolvedGateMap(resolvedGatePlacements);
+    const resolvedBasketballPostById = new Map(
+      resolvedBasketballPostPlacements.map((basketballPost) => [basketballPost.id, basketballPost] as const)
+    );
     const connectivity = buildSegmentConnectivity(state.layout.segments);
 
     commands = renderHookServer(() =>
@@ -169,6 +177,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         applyBasketballPostPlacements,
         segmentsById,
         resolvedGateById,
+        resolvedBasketballPostById,
         connectivity,
         activeSpec: defaultFenceSpec(),
         interactionMode: state.interactionMode,
@@ -178,11 +187,13 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         rectangleStart: state.rectangleStart,
         selectedSegmentId: state.selectedSegmentId,
         selectedGateId: state.selectedGateId,
+        selectedBasketballPostId: state.selectedBasketballPostId,
         selectedLengthInputM: state.selectedLengthInputM,
         isSpacePressed: state.isSpacePressed,
         isPanning: state.isPanning,
         activeSegmentDrag: state.activeSegmentDrag,
         activeGateDrag: state.activeGateDrag,
+        activeBasketballPostDrag: state.activeBasketballPostDrag,
         recessWidthMm: state.recessWidthMm,
         recessDepthMm: state.recessDepthMm,
         customGateWidthMm: state.customGateWidthMm,
@@ -202,11 +213,13 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         setRectangleStart: createStateSetter(state, "rectangleStart"),
         setSelectedSegmentId: createStateSetter(state, "selectedSegmentId"),
         setSelectedGateId: createStateSetter(state, "selectedGateId"),
+        setSelectedBasketballPostId: createStateSetter(state, "selectedBasketballPostId"),
         setSelectedPlanId: createStateSetter(state, "selectedPlanId"),
         setSelectedLengthInputM: createStateSetter(state, "selectedLengthInputM"),
         setIsLengthEditorOpen: createStateSetter(state, "isLengthEditorOpen"),
         setActiveSegmentDrag: createStateSetter(state, "activeSegmentDrag"),
         setActiveGateDrag: createStateSetter(state, "activeGateDrag"),
+        setActiveBasketballPostDrag: createStateSetter(state, "activeBasketballPostDrag"),
         setRecessWidthMm: createStateSetter(state, "recessWidthMm"),
         setRecessDepthMm: createStateSetter(state, "recessDepthMm"),
         setRecessWidthInputM: createStateSetter(state, "recessWidthInputM"),
@@ -364,10 +377,12 @@ describe("useEditorCommands", () => {
     harness.state.interactionMode = "SELECT";
     harness.state.selectedSegmentId = "s1";
     harness.state.selectedGateId = "g1";
+    harness.state.selectedBasketballPostId = "post-1";
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.selectedSegmentId).toBeNull();
     expect(harness.state.selectedGateId).toBeNull();
+    expect(harness.state.selectedBasketballPostId).toBeNull();
 
     harness.state.isSpacePressed = true;
     harness.rerender();
@@ -389,6 +404,24 @@ describe("useEditorCommands", () => {
     expect(harness.state.activeSegmentDrag).toBeNull();
     expect(harness.state.activeGateDrag?.gateId).toBe("g1");
 
+    harness.state.layout.basketballPosts = [
+      { id: "bp-1", segmentId: "s1", offsetMm: 1500, facing: "LEFT" }
+    ];
+    harness.state.selectedBasketballPostId = "bp-1";
+    harness.rerender();
+    harness.commands.startSelectedBasketballPostDrag("bp-1");
+    expect(harness.state.activeBasketballPostDrag?.basketballPostId).toBe("bp-1");
+
+    harness.stage.pointer = { x: 1900, y: 0 };
+    harness.rerender();
+    harness.commands.onStageMouseMove();
+    expect(harness.state.layout.basketballPosts?.[0]?.offsetMm).toBeGreaterThan(1500);
+
+    harness.state.activeBasketballPostDrag = null;
+    harness.state.selectedBasketballPostId = null;
+    harness.stage.pointer = { x: 1200, y: 0 };
+    harness.rerender();
+    harness.commands.startSelectedGateDrag("g1");
     harness.stage.pointer = { x: 1700, y: 0 };
     harness.rerender();
     harness.commands.onStageMouseMove();
@@ -450,6 +483,17 @@ describe("useEditorCommands", () => {
     harness.rerender();
     harness.commands.handleDeleteSelection();
     expect(harness.state.layout.gates).toHaveLength(0);
+
+    harness.state.layout = {
+      segments: buildBaseSegments(),
+      gates: [],
+      basketballPosts: [{ id: "bp-1", segmentId: "s1", offsetMm: 1500, facing: "LEFT" }]
+    };
+    harness.state.selectedGateId = null;
+    harness.state.selectedBasketballPostId = "bp-1";
+    harness.rerender();
+    harness.commands.handleDeleteSelection();
+    expect(harness.state.layout.basketballPosts).toHaveLength(0);
 
     harness.state.layout = {
       segments: buildBaseSegments(),

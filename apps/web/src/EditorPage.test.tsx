@@ -13,19 +13,23 @@ const mockSelectionState = {
   rectangleStart: null,
   selectedSegmentId: null as string | null,
   selectedGateId: null as string | null,
+  selectedBasketballPostId: null as string | null,
   selectedLengthInputM: "",
   isLengthEditorOpen: false,
   activeSegmentDrag: null,
   activeGateDrag: null,
+  activeBasketballPostDrag: null,
   setDrawStart: vi.fn(),
   setDrawChainStart: vi.fn(),
   setRectangleStart: vi.fn(),
   setSelectedSegmentId: vi.fn(),
   setSelectedGateId: vi.fn(),
+  setSelectedBasketballPostId: vi.fn(),
   setSelectedLengthInputM: vi.fn(),
   setIsLengthEditorOpen: vi.fn(),
   setActiveSegmentDrag: vi.fn(),
   setActiveGateDrag: vi.fn(),
+  setActiveBasketballPostDrag: vi.fn(),
   resetLoadedWorkspaceState: vi.fn(),
   clearHistorySelection: vi.fn()
 };
@@ -117,6 +121,7 @@ const mockWorkspace = {
 const mockCommands = {
   applySelectedLengthEdit: vi.fn(),
   cancelActiveDrawing: vi.fn(),
+  deleteSelectedBasketballPost: vi.fn(() => false),
   deleteSelectedGate: vi.fn(() => false),
   deleteSelectedSegment: vi.fn(() => false),
   handleClearLayout: vi.fn(),
@@ -133,6 +138,7 @@ const mockCommands = {
   onStageWheel: vi.fn(),
   openLengthEditor: vi.fn(),
   resetWorkspaceCanvas: vi.fn(),
+  startSelectedBasketballPostDrag: vi.fn(),
   startSelectedGateDrag: vi.fn(),
   startSelectedSegmentDrag: vi.fn(),
   updateSegment: vi.fn()
@@ -168,6 +174,7 @@ const mockDerivedState = {
       custom: 0
     },
     gateCountsByHeight: [],
+    basketballPostCountsByHeight: [],
     twinBarFenceRows: []
   },
   estimate: {
@@ -264,6 +271,7 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
     gatePreviewVisual: null,
     ghostEnd: null,
     ghostLengthMm: null,
+    hoveredBasketballPostId: null,
     hoveredGateId: null,
     hoveredSegmentId: null,
     rectanglePreviewEnd: null,
@@ -352,6 +360,7 @@ describe("EditorPage", () => {
     mockWorkspace.isDirty = false;
     mockSelectionState.selectedSegmentId = null;
     mockSelectionState.selectedGateId = null;
+    mockSelectionState.selectedBasketballPostId = null;
     mockSelectionState.isLengthEditorOpen = false;
     mockDerivedState.selectedSegment = null;
   });

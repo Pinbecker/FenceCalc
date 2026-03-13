@@ -2,7 +2,7 @@ import type { LayoutSegment } from "@fence-estimator/contracts";
 import { describe, expect, it } from "vitest";
 
 import { defaultFenceSpec } from "./constants.js";
-import { resolveGatePlacements } from "./segmentTopology.js";
+import { resolveBasketballPostPlacements, resolveGatePlacements } from "./segmentTopology.js";
 import { useEditorInteractionPreviews } from "./useEditorInteractionPreviews.js";
 import { renderHookServer } from "../test/renderHookServer.js";
 
@@ -15,7 +15,10 @@ const placedGateVisuals = resolveGatePlacements(
   new Map(segments.map((segment) => [segment.id, segment] as const)),
   [{ id: "g1", segmentId: "s1", startOffsetMm: 2000, endOffsetMm: 3200, gateType: "SINGLE_LEAF" }]
 );
-const placedBasketballPostVisuals: Array<never> = [];
+const placedBasketballPostVisuals = resolveBasketballPostPlacements(
+  new Map(segments.map((segment) => [segment.id, segment] as const)),
+  [{ id: "bp1", segmentId: "s1", offsetMm: 2600, facing: "LEFT" }]
+);
 
 describe("useEditorInteractionPreviews", () => {
   it("resolves draw snapping, guides, hover preview, and rectangle previews", () => {
@@ -42,12 +45,70 @@ describe("useEditorInteractionPreviews", () => {
     );
 
     expect(result.ghostEnd).toEqual({ x: 6000, y: 0 });
-    expect(result.axisGuide?.orientation).toBe("VERTICAL");
-    expect(["s1", "s2"]).toContain(result.drawHoverSnap?.segment.id);
+    expect(result.axisGuide).toBeNull();
+    expect(result.drawHoverSnap).toBeNull();
     expect(result.ghostLengthMm).toBe(6000);
-    expect(result.resolveDrawPoint({ x: 5940, y: 200 }).guide?.orientation).toBe("VERTICAL");
+    expect(result.resolveDrawPoint({ x: 5940, y: 200 }).guide).toBeNull();
     expect(result.closeLoopPoint).toBeNull();
-    expect(result.drawSnapLabel).toBe("Axis aligned");
+    expect(result.drawSnapLabel).toBe("Endpoint");
+
+    const preDrawHover = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "DRAW",
+        pointerWorld: { x: 3020, y: 40 },
+        drawStart: null,
+        rectangleStart: { x: 0, y: 0 },
+        drawAnchorNodes: [{ x: 6000, y: 0 }],
+        disableSnap: false,
+        viewScale: 0.2,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1500,
+        recessDepthMm: 1000,
+        recessSide: "LEFT",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(preDrawHover.drawHoverSnap?.point).toEqual({ x: 3000, y: 0 });
+    expect(preDrawHover.drawHoverSnap?.startOffsetMm).toBe(3000);
+    expect(preDrawHover.drawHoverSnap?.endOffsetMm).toBe(3000);
+    expect(preDrawHover.drawSnapLabel).toBe("Centered");
+    expect(preDrawHover.resolveDrawPoint({ x: 3020, y: 40 }).point).toEqual({ x: 3000, y: 0 });
+    expect(preDrawHover.resolveDrawPoint({ x: 3020, y: 40 }).snapMeta?.label).toBe("Centered");
+
+    const preDrawLineSnap = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "DRAW",
+        pointerWorld: { x: 980, y: 40 },
+        drawStart: null,
+        rectangleStart: { x: 0, y: 0 },
+        drawAnchorNodes: [{ x: 6000, y: 0 }],
+        disableSnap: false,
+        viewScale: 0.2,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1500,
+        recessDepthMm: 1000,
+        recessSide: "LEFT",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(preDrawLineSnap.drawHoverSnap?.point).toEqual({ x: 1000, y: 0 });
+    expect(preDrawLineSnap.drawHoverSnap?.startOffsetMm).toBe(1000);
+    expect(preDrawLineSnap.drawHoverSnap?.endOffsetMm).toBe(5000);
+    expect(preDrawLineSnap.drawSnapLabel).toBe("Fence line");
+    expect(preDrawLineSnap.resolveDrawPoint({ x: 980, y: 40 }).point).toEqual({ x: 1000, y: 0 });
+    expect(preDrawLineSnap.resolveDrawPoint({ x: 980, y: 40 }).snapMeta?.label).toBe("Fence line");
 
     const rectangleResult = renderHookServer(() =>
       useEditorInteractionPreviews({
@@ -143,7 +204,7 @@ describe("useEditorInteractionPreviews", () => {
       useEditorInteractionPreviews({
         segments,
         interactionMode: "SELECT",
-        pointerWorld: { x: 2600, y: 20 },
+        pointerWorld: { x: 2100, y: 20 },
         drawStart: null,
         rectangleStart: null,
         drawAnchorNodes: [],
@@ -161,8 +222,35 @@ describe("useEditorInteractionPreviews", () => {
       })
     );
 
-    expect(hoverResult.hoveredSegmentId).toBe("s1");
+    expect(hoverResult.hoveredSegmentId).toBeNull();
     expect(hoverResult.hoveredGateId).toBe("g1");
+    expect(hoverResult.hoveredBasketballPostId).toBeNull();
+
+    const basketballHoverResult = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "SELECT",
+        pointerWorld: { x: 2605, y: 15 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(basketballHoverResult.hoveredBasketballPostId).toBe("bp1");
+    expect(basketballHoverResult.hoveredGateId).toBeNull();
+    expect(basketballHoverResult.hoveredSegmentId).toBeNull();
   });
 
   it("aligns gate previews to existing parallel gates", () => {

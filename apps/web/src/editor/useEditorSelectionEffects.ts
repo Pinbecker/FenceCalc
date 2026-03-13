@@ -3,16 +3,20 @@ import type { Dispatch, SetStateAction } from "react";
 import type { LayoutSegment } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
-import type { ActiveGateDragState } from "./useEditorSelectionState";
+import type { ActiveBasketballPostDragState, ActiveGateDragState } from "./useEditorSelectionState";
 
 interface UseEditorSelectionEffectsOptions {
   selectedSegment: LayoutSegment | null;
   selectedGateId: string | null;
+  selectedBasketballPostId: string | null;
   selectedPlanId: string | null;
   hasSelectedGate: boolean;
+  hasSelectedBasketballPost: boolean;
   highlightablePlanIds: string[];
   setSelectedGateId: Dispatch<SetStateAction<string | null>>;
+  setSelectedBasketballPostId: Dispatch<SetStateAction<string | null>>;
   setActiveGateDrag: Dispatch<SetStateAction<ActiveGateDragState | null>>;
+  setActiveBasketballPostDrag: Dispatch<SetStateAction<ActiveBasketballPostDragState | null>>;
   setIsLengthEditorOpen: Dispatch<SetStateAction<boolean>>;
   setSelectedLengthInputM: Dispatch<SetStateAction<string>>;
   setSelectedPlanId: Dispatch<SetStateAction<string | null>>;
@@ -21,11 +25,15 @@ interface UseEditorSelectionEffectsOptions {
 export function useEditorSelectionEffects({
   selectedSegment,
   selectedGateId,
+  selectedBasketballPostId,
   selectedPlanId,
   hasSelectedGate,
+  hasSelectedBasketballPost,
   highlightablePlanIds,
   setSelectedGateId,
+  setSelectedBasketballPostId,
   setActiveGateDrag,
+  setActiveBasketballPostDrag,
   setIsLengthEditorOpen,
   setSelectedLengthInputM,
   setSelectedPlanId
@@ -48,6 +56,20 @@ export function useEditorSelectionEffects({
     setSelectedGateId(null);
     setActiveGateDrag(null);
   }, [hasSelectedGate, selectedGateId, setActiveGateDrag, setSelectedGateId]);
+
+  useEffect(() => {
+    if (!selectedBasketballPostId || hasSelectedBasketballPost) {
+      return;
+    }
+
+    setSelectedBasketballPostId(null);
+    setActiveBasketballPostDrag(null);
+  }, [
+    hasSelectedBasketballPost,
+    selectedBasketballPostId,
+    setActiveBasketballPostDrag,
+    setSelectedBasketballPostId
+  ]);
 
   useEffect(() => {
     if (highlightablePlanIds.length === 0) {

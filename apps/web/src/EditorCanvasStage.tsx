@@ -7,6 +7,17 @@ import { EditorCanvasOptimizationLayer } from "./editor/stage/EditorCanvasOptimi
 import { EditorCanvasPreviewLayer } from "./editor/stage/EditorCanvasPreviewLayer";
 import type { EditorCanvasStageProps } from "./editor/stage/types";
 
+const DRAW_CURSOR = (() => {
+  const svg = encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="2.25" fill="#f5fbff" stroke="#0f2730" stroke-width="1.25"/>
+      <path d="M12 1.75v6.25M12 16v6.25M1.75 12H8M16 12h6.25" stroke="#0f2730" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M12 3v5M12 16v5M3 12h5M16 12h5" stroke="#9fe7f8" stroke-width="1" stroke-linecap="round"/>
+    </svg>`
+  );
+  return `url("data:image/svg+xml,${svg}") 12 12, crosshair`;
+})();
+
 export function EditorCanvasStage({
   stageRef,
   canvasWidth,
@@ -24,17 +35,17 @@ export function EditorCanvasStage({
     props.isPanning
       ? "grabbing"
       : props.interactionMode === "DRAW"
-        ? props.drawStart
-          ? "crosshair"
-          : "cell"
+        ? DRAW_CURSOR
         : props.interactionMode === "RECESS" ||
             props.interactionMode === "GATE" ||
             props.interactionMode === "BASKETBALL_POST"
           ? props.recessPreview || props.gatePreview || props.basketballPostPreview
             ? "crosshair"
             : "default"
-          : props.hoveredGateId || props.hoveredSegmentId
-            ? props.hoveredGateId === props.selectedGateId || props.hoveredSegmentId === props.selectedSegmentId
+          : props.hoveredBasketballPostId || props.hoveredGateId || props.hoveredSegmentId
+            ? props.hoveredBasketballPostId === props.selectedBasketballPostId ||
+              props.hoveredGateId === props.selectedGateId ||
+              props.hoveredSegmentId === props.selectedSegmentId
               ? "grab"
               : "pointer"
             : "default";
@@ -82,10 +93,12 @@ export function EditorCanvasStage({
           interactionMode={props.interactionMode}
           visualPosts={props.visualPosts}
           segments={props.segments}
+          hoveredBasketballPostId={props.hoveredBasketballPostId}
           hoveredSegmentId={props.hoveredSegmentId}
           hoveredGateId={props.hoveredGateId}
           selectedSegmentId={props.selectedSegmentId}
           selectedGateId={props.selectedGateId}
+          selectedBasketballPostId={props.selectedBasketballPostId}
           gatesBySegmentId={props.gatesBySegmentId}
           placedBasketballPostVisuals={props.placedBasketballPostVisuals}
           segmentLengthLabelsBySegmentId={props.segmentLengthLabelsBySegmentId}
@@ -98,6 +111,8 @@ export function EditorCanvasStage({
           onUpdateSegmentEndpoint={props.onUpdateSegmentEndpoint}
           onSelectGate={props.onSelectGate}
           onStartGateDrag={props.onStartGateDrag}
+          onSelectBasketballPost={props.onSelectBasketballPost}
+          onStartBasketballPostDrag={props.onStartBasketballPostDrag}
         />
         <EditorCanvasPreviewLayer
           view={view}
@@ -126,6 +141,7 @@ export function EditorCanvasStage({
         interactionMode={props.interactionMode}
         disableSnap={props.disableSnap}
         isPanning={props.isPanning}
+        hoveredBasketballPostId={props.hoveredBasketballPostId}
         hoveredSegmentId={props.hoveredSegmentId}
         hoveredGateId={props.hoveredGateId}
         drawStart={props.drawStart}

@@ -52,6 +52,7 @@ describe("useEditorKeyboardShortcuts", () => {
     const options = {
       undo: vi.fn(),
       redo: vi.fn(),
+      deleteSelectedBasketballPost: vi.fn(() => false),
       deleteSelectedGate: vi.fn(() => false),
       deleteSelectedSegment: vi.fn(() => true),
       setInteractionMode: vi.fn(),
@@ -109,6 +110,7 @@ describe("useEditorKeyboardShortcuts", () => {
     expect(options.setDisableSnap).toHaveBeenCalledWith(true);
     expect(options.setDisableSnap).toHaveBeenCalledWith(false);
     expect(options.deleteSelectedGate).toHaveBeenCalledTimes(1);
+    expect(options.deleteSelectedBasketballPost).toHaveBeenCalledTimes(1);
     expect(options.deleteSelectedSegment).toHaveBeenCalledTimes(1);
     expect(options.cancelActiveDrawing).toHaveBeenCalledTimes(1);
     expect(options.finishActiveInteraction).toHaveBeenCalledTimes(1);

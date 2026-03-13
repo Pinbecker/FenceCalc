@@ -2,8 +2,15 @@ import { Circle, Group, Line, Rect } from "react-konva";
 
 import type { BasketballPostVisual } from "./types.js";
 
-const BASKETBALL_POST_ARM_LENGTH_MM = 1800;
-const BASKETBALL_POST_HOOP_RADIUS_MM = 180;
+export const BASKETBALL_POST_ARM_LENGTH_MM = 1800;
+export const BASKETBALL_POST_HOOP_RADIUS_MM = 180;
+
+export function getBasketballPostArmEnd(basketballPost: BasketballPostVisual) {
+  return {
+    x: basketballPost.point.x + basketballPost.normal.x * BASKETBALL_POST_ARM_LENGTH_MM,
+    y: basketballPost.point.y + basketballPost.normal.y * BASKETBALL_POST_ARM_LENGTH_MM
+  };
+}
 
 export function renderBasketballPostSymbol(
   basketballPost: BasketballPostVisual,
@@ -20,10 +27,7 @@ export function renderBasketballPostSymbol(
   const halfSize = 7.5 / scale;
   const strokeWidth = 1.55 / scale;
   const detailWidth = 1.25 / scale;
-  const armEnd = {
-    x: basketballPost.point.x + basketballPost.normal.x * BASKETBALL_POST_ARM_LENGTH_MM,
-    y: basketballPost.point.y + basketballPost.normal.y * BASKETBALL_POST_ARM_LENGTH_MM
-  };
+  const armEnd = getBasketballPostArmEnd(basketballPost);
 
   return (
     <Group key={key} listening={false} opacity={style.opacity ?? 1}>

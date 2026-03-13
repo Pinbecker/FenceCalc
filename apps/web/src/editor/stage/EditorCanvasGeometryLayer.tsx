@@ -11,7 +11,7 @@ import {
   getSegmentColor,
   quantize
 } from "../constants";
-import { renderBasketballPostSymbol } from "../basketballPostGeometry";
+import { getBasketballPostArmEnd, renderBasketballPostSymbol } from "../basketballPostGeometry";
 import { renderGateSymbol } from "../gateGeometry";
 import { buildSegmentRuns } from "../segmentTopology";
 import type { VisualPost } from "../types";
@@ -23,8 +23,10 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "gatesBySegmentId"
   | "interactionMode"
   | "onOpenSegmentLengthEditor"
+  | "onSelectBasketballPost"
   | "onSelectGate"
   | "onSelectSegment"
+  | "onStartBasketballPostDrag"
   | "onStartGateDrag"
   | "onStartSegmentDrag"
   | "onUpdateSegmentEndpoint"
@@ -32,8 +34,10 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "placedGateVisuals"
   | "segmentLengthLabelsBySegmentId"
   | "segments"
+  | "hoveredBasketballPostId"
   | "hoveredGateId"
   | "hoveredSegmentId"
+  | "selectedBasketballPostId"
   | "selectedGateId"
   | "selectedPlanVisual"
   | "selectedSegmentId"
@@ -117,6 +121,31 @@ function getPlacedGateStyle(gateType: EditorCanvasGeometryLayerProps["placedGate
         }
       };
   }
+}
+
+function getPlacedBasketballPostStyle(state: "default" | "hover" | "selected") {
+  if (state === "selected") {
+    return {
+      stroke: "#fff3cb",
+      accent: "#ffd27a",
+      fill: "#ff9c48",
+      halo: "#ffe3a4"
+    };
+  }
+  if (state === "hover") {
+    return {
+      stroke: "#ffe0bc",
+      accent: "#ffc567",
+      fill: "#f08c3f",
+      halo: "#ffc987"
+    };
+  }
+  return {
+    stroke: "#3b2414",
+    accent: "#ffb24d",
+    fill: "#e77c2f",
+    halo: null
+  };
 }
 
 function offsetSegmentLabel(
@@ -243,8 +272,10 @@ export function EditorCanvasGeometryLayer({
   gatesBySegmentId,
   interactionMode,
   onOpenSegmentLengthEditor,
+  onSelectBasketballPost,
   onSelectGate,
   onSelectSegment,
+  onStartBasketballPostDrag,
   onStartGateDrag,
   onStartSegmentDrag,
   onUpdateSegmentEndpoint,
@@ -252,8 +283,10 @@ export function EditorCanvasGeometryLayer({
   placedGateVisuals,
   segmentLengthLabelsBySegmentId,
   segments,
+  hoveredBasketballPostId,
   hoveredGateId,
   hoveredSegmentId,
+  selectedBasketballPostId,
   selectedGateId,
   selectedPlanVisual,
   selectedSegmentId,
@@ -426,27 +459,123 @@ export function EditorCanvasGeometryLayer({
           </Group>
         );
       })}
-      {placedBasketballPostVisuals.map((basketballPost) =>
-        renderBasketballPostSymbol(
-          basketballPost,
-          view.scale,
-          {
-            stroke: "#3b2414",
-            accent: "#ffb24d",
-            fill: "#e77c2f",
-            opacity: selectedPlanVisual ? 0.88 : 1
-          },
-          `basketball-post-${basketballPost.key}`
-        )
-      )}
+      {placedBasketballPostVisuals.map((basketballPost) => {
+        const isBasketballPostSelected =
+          interactionMode === "SELECT" && basketballPost.id === selectedBasketballPostId;
+        const isBasketballPostHovered =
+          interactionMode === "SELECT" && basketballPost.id === hoveredBasketballPostId;
+        const basketballPostStyle = getPlacedBasketballPostStyle(
+          isBasketballPostSelected ? "selected" : isBasketballPostHovered ? "hover" : "default"
+        );
+        const armEnd = getBasketballPostArmEnd(basketballPost);
+
+        return (
+          <Group key={`basketball-post-group-${basketballPost.id}`}>
+            {basketballPostStyle.halo ? (
+              <Circle
+                x={basketballPost.point.x}
+                y={basketballPost.point.y}
+                radius={12 / view.scale}
+                stroke={basketballPostStyle.halo}
+                strokeWidth={2.2 / view.scale}
+                opacity={0.92}
+                listening={false}
+              />
+            ) : null}
+            {renderBasketballPostSymbol(
+              basketballPost,
+              view.scale,
+              {
+                stroke: basketballPostStyle.stroke,
+                accent: basketballPostStyle.accent,
+                fill: basketballPostStyle.fill,
+                opacity: selectedPlanVisual ? 0.88 : 1
+              },
+              `basketball-post-${basketballPost.key}`
+            )}
+            {interactionMode === "SELECT" ? (
+              <>
+                <Line
+                  points={[basketballPost.point.x, basketballPost.point.y, armEnd.x, armEnd.y]}
+                  stroke="#ffffff"
+                  opacity={0.001}
+                  listening
+                  strokeWidth={4 / view.scale}
+                  hitStrokeWidth={24 / view.scale}
+                  lineCap="round"
+                  onMouseDown={(event) => {
+                    if (event.evt.button !== 0) {
+                      return;
+                    }
+                    event.cancelBubble = true;
+                    onStartBasketballPostDrag(basketballPost.id);
+                  }}
+                  onTouchStart={(event) => {
+                    event.cancelBubble = true;
+                    onStartBasketballPostDrag(basketballPost.id);
+                  }}
+                  onClick={(event) => {
+                    event.cancelBubble = true;
+                    onSelectBasketballPost(basketballPost.id);
+                  }}
+                  onTap={(event) => {
+                    event.cancelBubble = true;
+                    onSelectBasketballPost(basketballPost.id);
+                  }}
+                />
+                <Circle
+                  x={basketballPost.point.x}
+                  y={basketballPost.point.y}
+                  radius={12 / view.scale}
+                  fill="#ffffff"
+                  opacity={0.001}
+                  listening
+                  onMouseDown={(event) => {
+                    if (event.evt.button !== 0) {
+                      return;
+                    }
+                    event.cancelBubble = true;
+                    onStartBasketballPostDrag(basketballPost.id);
+                  }}
+                  onTouchStart={(event) => {
+                    event.cancelBubble = true;
+                    onStartBasketballPostDrag(basketballPost.id);
+                  }}
+                  onClick={(event) => {
+                    event.cancelBubble = true;
+                    onSelectBasketballPost(basketballPost.id);
+                  }}
+                  onTap={(event) => {
+                    event.cancelBubble = true;
+                    onSelectBasketballPost(basketballPost.id);
+                  }}
+                />
+              </>
+            ) : null}
+          </Group>
+        );
+      })}
       {placedGateVisuals.map((gateVisual) => {
         const isGateSelected = interactionMode === "SELECT" && gateVisual.id === selectedGateId;
         const isGateHovered = interactionMode === "SELECT" && gateVisual.id === hoveredGateId;
         const palette = getPlacedGateStyle(gateVisual.gateType);
         const gateStyle = isGateSelected ? palette.selected : isGateHovered ? palette.hover : palette.default;
+        const gateHaloColor = isGateSelected ? "#ffe3a4" : isGateHovered ? "#bfeeff" : null;
+        const gateHaloRadius = Math.max(14, Math.min(22, gateVisual.widthMm * 0.01)) / view.scale;
 
         return (
           <Group key={`gate-group-${gateVisual.id}`}>
+            {gateHaloColor ? (
+              <Circle
+                x={gateVisual.centerPoint.x}
+                y={gateVisual.centerPoint.y}
+                radius={gateHaloRadius}
+                stroke={gateHaloColor}
+                strokeWidth={2.2 / view.scale}
+                opacity={0.92}
+                listening={false}
+              />
+            ) : null}
             {renderGateSymbol(
               gateVisual,
               view.scale,

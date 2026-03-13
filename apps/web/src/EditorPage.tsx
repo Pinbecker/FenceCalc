@@ -271,19 +271,29 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     viewScale: view.scale,
     canvasWidth
   });
-  const { postRowsByType, gateCounts, gateCountsByHeight, twinBarFenceRows } = editorSummary;
+  const { postRowsByType, gateCounts, gateCountsByHeight, basketballPostCountsByHeight, twinBarFenceRows } = editorSummary;
   const optimizationSummary = estimate.optimization;
   const panelCount = estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
   const fenceRunCount = estimateSegments.length;
+  const resolvedBasketballPostById = useMemo(
+    () => new Map(resolvedBasketballPostPlacements.map((basketballPost) => [basketballPost.id, basketballPost] as const)),
+    [resolvedBasketballPostPlacements]
+  );
 
   useEditorSelectionEffects({
     selectedSegment,
     selectedGateId: selectionState.selectedGateId,
+    selectedBasketballPostId: selectionState.selectedBasketballPostId,
     selectedPlanId: shellState.selectedPlanId,
     hasSelectedGate: selectionState.selectedGateId !== null && resolvedGateById.has(selectionState.selectedGateId),
+    hasSelectedBasketballPost:
+      selectionState.selectedBasketballPostId !== null &&
+      resolvedBasketballPostById.has(selectionState.selectedBasketballPostId),
     highlightablePlanIds: highlightableOptimizationPlans.map((plan) => plan.id),
     setSelectedGateId: selectionState.setSelectedGateId,
+    setSelectedBasketballPostId: selectionState.setSelectedBasketballPostId,
     setActiveGateDrag: selectionState.setActiveGateDrag,
+    setActiveBasketballPostDrag: selectionState.setActiveBasketballPostDrag,
     setIsLengthEditorOpen: selectionState.setIsLengthEditorOpen,
     setSelectedLengthInputM: selectionState.setSelectedLengthInputM,
     setSelectedPlanId: shellState.setSelectedPlanId
@@ -298,6 +308,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     gatePreviewVisual,
     ghostEnd,
     ghostLengthMm,
+    hoveredBasketballPostId,
     hoveredGateId,
     hoveredSegmentId,
     rectanglePreviewEnd,
@@ -328,6 +339,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const {
     applySelectedLengthEdit,
     cancelActiveDrawing,
+    deleteSelectedBasketballPost,
     deleteSelectedGate,
     deleteSelectedSegment,
     handleClearLayout,
@@ -344,6 +356,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onStageWheel,
     openLengthEditor,
     resetWorkspaceCanvas,
+    startSelectedBasketballPostDrag,
     startSelectedGateDrag,
     startSelectedSegmentDrag,
     updateSegment
@@ -355,6 +368,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyBasketballPostPlacements,
     segmentsById,
     resolvedGateById,
+    resolvedBasketballPostById,
     connectivity,
     activeSpec: shellState.activeSpec,
     interactionMode: shellState.interactionMode,
@@ -364,11 +378,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     rectangleStart: selectionState.rectangleStart,
     selectedSegmentId: selectionState.selectedSegmentId,
     selectedGateId: selectionState.selectedGateId,
+    selectedBasketballPostId: selectionState.selectedBasketballPostId,
     selectedLengthInputM: selectionState.selectedLengthInputM,
     isSpacePressed,
     isPanning,
     activeSegmentDrag: selectionState.activeSegmentDrag,
     activeGateDrag: selectionState.activeGateDrag,
+    activeBasketballPostDrag: selectionState.activeBasketballPostDrag,
     recessWidthMm: shellState.recessWidthMm,
     recessDepthMm: shellState.recessDepthMm,
     customGateWidthMm: shellState.customGateWidthMm,
@@ -388,11 +404,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setRectangleStart: selectionState.setRectangleStart,
     setSelectedSegmentId: selectionState.setSelectedSegmentId,
     setSelectedGateId: selectionState.setSelectedGateId,
+    setSelectedBasketballPostId: selectionState.setSelectedBasketballPostId,
     setSelectedPlanId: shellState.setSelectedPlanId,
     setSelectedLengthInputM: selectionState.setSelectedLengthInputM,
     setIsLengthEditorOpen: selectionState.setIsLengthEditorOpen,
     setActiveSegmentDrag: selectionState.setActiveSegmentDrag,
     setActiveGateDrag: selectionState.setActiveGateDrag,
+    setActiveBasketballPostDrag: selectionState.setActiveBasketballPostDrag,
     setRecessWidthMm: shellState.setRecessWidthMm,
     setRecessDepthMm: shellState.setRecessDepthMm,
     setRecessWidthInputM: shellState.setRecessWidthInputM,
@@ -405,6 +423,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     () => ({
       undo: undoSegments,
       redo: redoSegments,
+      deleteSelectedBasketballPost,
       deleteSelectedGate,
       deleteSelectedSegment,
       setInteractionMode: shellState.setInteractionMode,
@@ -415,6 +434,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     }),
     [
       cancelActiveDrawing,
+      deleteSelectedBasketballPost,
       deleteSelectedGate,
       deleteSelectedSegment,
       redoSegments,
@@ -593,7 +613,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 canUndo={canUndo}
                 canRedo={canRedo}
                 canDeleteSelection={
-                  shellState.interactionMode === "SELECT" && (!!selectionState.selectedSegmentId || !!selectionState.selectedGateId)
+                  shellState.interactionMode === "SELECT" &&
+                  (!!selectionState.selectedSegmentId ||
+                    !!selectionState.selectedGateId ||
+                    !!selectionState.selectedBasketballPostId)
                 }
                 onUndo={undoSegments}
                 onRedo={redoSegments}
@@ -628,6 +651,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 gatePreview={gatePreview}
                 basketballPostPreview={basketballPostPreview}
                 gatePreviewVisual={gatePreviewVisual}
+                hoveredBasketballPostId={hoveredBasketballPostId}
                 hoveredSegmentId={hoveredSegmentId}
                 hoveredGateId={hoveredGateId}
                 closeLoopPoint={closeLoopPoint}
@@ -635,6 +659,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 segments={segments}
                 selectedSegmentId={selectionState.selectedSegmentId}
                 selectedGateId={selectionState.selectedGateId}
+                selectedBasketballPostId={selectionState.selectedBasketballPostId}
                 gatesBySegmentId={gatesBySegmentId}
                 segmentLengthLabelsBySegmentId={segmentLengthLabelsBySegmentId}
                 visibleSegmentLabelKeys={visibleSegmentLabelKeys}
@@ -652,14 +677,17 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 onSelectSegment={(segmentId) => {
                   selectionState.setSelectedSegmentId(segmentId);
                   selectionState.setSelectedGateId(null);
+                  selectionState.setSelectedBasketballPostId(null);
                   selectionState.setDrawStart(null);
                 }}
                 onStartSegmentDrag={(segmentId) => {
                   selectionState.setSelectedGateId(null);
+                  selectionState.setSelectedBasketballPostId(null);
                   startSelectedSegmentDrag(segmentId);
                 }}
                 onOpenSegmentLengthEditor={(segmentId) => {
                   selectionState.setSelectedGateId(null);
+                  selectionState.setSelectedBasketballPostId(null);
                   openLengthEditor(segmentId);
                 }}
                 onUpdateSegmentEndpoint={(segmentId, endpoint, point) => {
@@ -668,13 +696,28 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 onSelectGate={(gateId) => {
                   selectionState.setSelectedSegmentId(null);
                   selectionState.setSelectedGateId(gateId);
+                  selectionState.setSelectedBasketballPostId(null);
                   selectionState.setIsLengthEditorOpen(false);
                 }}
                 onStartGateDrag={(gateId) => {
                   selectionState.setSelectedSegmentId(null);
                   selectionState.setSelectedGateId(gateId);
+                  selectionState.setSelectedBasketballPostId(null);
                   selectionState.setIsLengthEditorOpen(false);
                   startSelectedGateDrag(gateId);
+                }}
+                onSelectBasketballPost={(basketballPostId) => {
+                  selectionState.setSelectedSegmentId(null);
+                  selectionState.setSelectedGateId(null);
+                  selectionState.setSelectedBasketballPostId(basketballPostId);
+                  selectionState.setIsLengthEditorOpen(false);
+                }}
+                onStartBasketballPostDrag={(basketballPostId) => {
+                  selectionState.setSelectedSegmentId(null);
+                  selectionState.setSelectedGateId(null);
+                  selectionState.setSelectedBasketballPostId(basketballPostId);
+                  selectionState.setIsLengthEditorOpen(false);
+                  startSelectedBasketballPostDrag(basketballPostId);
                 }}
               />
             </div>
@@ -697,6 +740,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
               postRowsByType={postRowsByType}
               gateCounts={gateCounts}
               gateCountsByHeight={gateCountsByHeight}
+              basketballPostCountsByHeight={basketballPostCountsByHeight}
               twinBarFenceRows={twinBarFenceRows}
               postTypeCounts={postTypeCounts}
               panelCount={panelCount}

@@ -13,7 +13,9 @@ describe("useEditorSelectionEffects", () => {
 
     const { useEditorSelectionEffects } = await import("./useEditorSelectionEffects.js");
     const setSelectedGateId = vi.fn();
+    const setSelectedBasketballPostId = vi.fn();
     const setActiveGateDrag = vi.fn();
+    const setActiveBasketballPostDrag = vi.fn();
     const setIsLengthEditorOpen = vi.fn();
     const setSelectedLengthInputM = vi.fn();
     const setSelectedPlanId = vi.fn();
@@ -21,11 +23,15 @@ describe("useEditorSelectionEffects", () => {
     useEditorSelectionEffects({
       selectedSegment: null,
       selectedGateId: "gate-1",
+      selectedBasketballPostId: "post-1",
       selectedPlanId: "missing-plan",
       hasSelectedGate: false,
+      hasSelectedBasketballPost: false,
       highlightablePlanIds: ["plan-1", "plan-2"],
       setSelectedGateId,
+      setSelectedBasketballPostId,
       setActiveGateDrag,
+      setActiveBasketballPostDrag,
       setIsLengthEditorOpen,
       setSelectedLengthInputM,
       setSelectedPlanId
@@ -34,7 +40,9 @@ describe("useEditorSelectionEffects", () => {
     expect(setIsLengthEditorOpen).toHaveBeenCalledWith(false);
     expect(setSelectedLengthInputM).toHaveBeenCalledWith("");
     expect(setSelectedGateId).toHaveBeenCalledWith(null);
+    expect(setSelectedBasketballPostId).toHaveBeenCalledWith(null);
     expect(setActiveGateDrag).toHaveBeenCalledWith(null);
+    expect(setActiveBasketballPostDrag).toHaveBeenCalledWith(null);
     expect(setSelectedPlanId).toHaveBeenCalledWith("plan-1");
   });
 
@@ -45,7 +53,9 @@ describe("useEditorSelectionEffects", () => {
 
     const { useEditorSelectionEffects } = await import("./useEditorSelectionEffects.js");
     const setSelectedGateId = vi.fn();
+    const setSelectedBasketballPostId = vi.fn();
     const setActiveGateDrag = vi.fn();
+    const setActiveBasketballPostDrag = vi.fn();
     const setIsLengthEditorOpen = vi.fn();
     const setSelectedLengthInputM = vi.fn();
     const setSelectedPlanId = vi.fn();
@@ -58,11 +68,15 @@ describe("useEditorSelectionEffects", () => {
         spec: { system: "TWIN_BAR", height: "2m" }
       },
       selectedGateId: "gate-1",
+      selectedBasketballPostId: "post-1",
       selectedPlanId: "plan-1",
       hasSelectedGate: true,
+      hasSelectedBasketballPost: true,
       highlightablePlanIds: [],
       setSelectedGateId,
+      setSelectedBasketballPostId,
       setActiveGateDrag,
+      setActiveBasketballPostDrag,
       setIsLengthEditorOpen,
       setSelectedLengthInputM,
       setSelectedPlanId
@@ -71,7 +85,9 @@ describe("useEditorSelectionEffects", () => {
     expect(setSelectedLengthInputM).toHaveBeenCalledWith("5.00");
     expect(setSelectedPlanId).toHaveBeenCalledWith(null);
     expect(setSelectedGateId).not.toHaveBeenCalled();
+    expect(setSelectedBasketballPostId).not.toHaveBeenCalled();
     expect(setActiveGateDrag).not.toHaveBeenCalled();
+    expect(setActiveBasketballPostDrag).not.toHaveBeenCalled();
     expect(setIsLengthEditorOpen).not.toHaveBeenCalled();
   });
 });

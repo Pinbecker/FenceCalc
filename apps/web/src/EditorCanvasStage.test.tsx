@@ -153,6 +153,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
           leafCount: 1 as const
         }
       : null,
+    hoveredBasketballPostId: null,
     hoveredSegmentId: "s1",
     hoveredGateId: "g1",
     closeLoopPoint: { x: 0, y: 0 },
@@ -167,6 +168,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     segments,
     selectedSegmentId: "s1",
     selectedGateId: "g1",
+    selectedBasketballPostId: null,
     gatesBySegmentId: new Map(
       segments.map((segment) => [
         segment.id,
@@ -191,7 +193,20 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       ["s2", []]
     ]),
     visibleSegmentLabelKeys: new Set(["label-s1"]),
-    placedBasketballPostVisuals: [],
+    placedBasketballPostVisuals: [
+      {
+        id: "bp-1",
+        segmentId: "s1",
+        offsetMm: 2200,
+        key: "bp-1",
+        point: { x: 2200, y: 0 },
+        tangent: { x: 1, y: 0 },
+        normal: { x: 0, y: -1 },
+        facing: "LEFT" as const,
+        spec,
+        placement: { id: "bp-1", segmentId: "s1", offsetMm: 2200, facing: "LEFT" as const }
+      }
+    ],
     placedGateVisuals,
     oppositeGateGuides: [
       {
@@ -214,6 +229,8 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     onUpdateSegmentEndpoint: vi.fn(),
     onSelectGate: vi.fn(),
     onStartGateDrag: vi.fn(),
+    onSelectBasketballPost: vi.fn(),
+    onStartBasketballPostDrag: vi.fn(),
     ...overrides
   };
 }
@@ -321,6 +338,8 @@ describe("EditorCanvasStage", () => {
     expect(props.onUpdateSegmentEndpoint).toHaveBeenCalled();
     expect(props.onStartGateDrag).toHaveBeenCalled();
     expect(props.onSelectGate).toHaveBeenCalled();
+    expect(props.onStartBasketballPostDrag).toHaveBeenCalledWith("bp-1");
+    expect(props.onSelectBasketballPost).toHaveBeenCalledWith("bp-1");
   });
 
   it("renders each preview mode without relying on a browser canvas", () => {

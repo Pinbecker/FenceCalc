@@ -44,6 +44,7 @@ export interface EditorCanvasStageProps {
   gatePreview: GateInsertionPreview | null;
   basketballPostPreview: BasketballPostInsertionPreview | null;
   gatePreviewVisual: GateVisual | null;
+  hoveredBasketballPostId: string | null;
   hoveredSegmentId: string | null;
   hoveredGateId: string | null;
   closeLoopPoint: PointMm | null;
@@ -51,6 +52,7 @@ export interface EditorCanvasStageProps {
   segments: LayoutSegment[];
   selectedSegmentId: string | null;
   selectedGateId: string | null;
+  selectedBasketballPostId: string | null;
   gatesBySegmentId: Map<string, ResolvedGatePlacement[]>;
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   segmentLengthLabelsBySegmentId: Map<string, SegmentLengthLabel[]>;
@@ -71,4 +73,6 @@ export interface EditorCanvasStageProps {
   onUpdateSegmentEndpoint: (segmentId: string, endpoint: "start" | "end", point: PointMm) => void;
   onSelectGate: (gateId: string) => void;
   onStartGateDrag: (gateId: string) => void;
+  onSelectBasketballPost: (basketballPostId: string) => void;
+  onStartBasketballPostDrag: (basketballPostId: string) => void;
 }

@@ -150,9 +150,10 @@ export function useEditorDerivedState({
       buildEditorSummaryData({
         postHeightRows,
         resolvedGatePlacements,
+        resolvedBasketballPostPlacements,
         estimate
       }),
-    [estimate, postHeightRows, resolvedGatePlacements]
+    [estimate, postHeightRows, resolvedBasketballPostPlacements, resolvedGatePlacements]
   );
   const optimizationSummary = estimate.optimization;
   const highlightableOptimizationPlans = useMemo(

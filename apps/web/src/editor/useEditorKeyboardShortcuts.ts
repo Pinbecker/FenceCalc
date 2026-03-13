@@ -3,6 +3,7 @@ import { useEffect } from "react";
 export interface UseEditorKeyboardShortcutsOptions {
   undo(): void;
   redo(): void;
+  deleteSelectedBasketballPost(): boolean;
   deleteSelectedGate(): boolean;
   deleteSelectedSegment(): boolean;
   setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST"): void;
@@ -83,6 +84,9 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
       }
       if (event.code === "Delete" || event.code === "Backspace") {
         if (options.deleteSelectedGate()) {
+          return;
+        }
+        if (options.deleteSelectedBasketballPost()) {
           return;
         }
         options.deleteSelectedSegment();

@@ -38,6 +38,7 @@ import type {
   DrawResolveResult,
   GateVisual,
   InteractionMode,
+  LineSnapPreview,
   PreviewSnapMeta,
   RecessAlignmentAnchor,
   RecessSide,
@@ -68,6 +69,51 @@ interface EditorInteractionPreviewsOptions {
 
 function buildSnapMeta(kind: PreviewSnapMeta["kind"], label: string): PreviewSnapMeta {
   return { kind, label };
+}
+
+function findNearestPreDrawHoverSnap(
+  point: PointMm,
+  segments: LayoutSegment[],
+  maxDistanceMm: number
+): LineSnapPreview | null {
+  const nearestLine = findNearestSegmentSnap(point, segments, maxDistanceMm);
+  if (!nearestLine) {
+    return null;
+  }
+
+  const segmentLengthMm = distanceMm(nearestLine.segment.start, nearestLine.segment.end);
+  if (segmentLengthMm <= 0) {
+    return {
+      ...nearestLine,
+      snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+    };
+  }
+
+  const midpointMm = Math.max(
+    0,
+    Math.min(segmentLengthMm, Math.round((segmentLengthMm / 2) / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+  );
+  const projection = projectPointOntoSegment(point, nearestLine.segment);
+  const midpointWindowMm = Math.max(300, Math.min(900, segmentLengthMm * 0.1));
+  if (Math.abs(projection.offsetMm - midpointMm) <= midpointWindowMm) {
+    const midpointPoint = interpolateAlongSegment(nearestLine.segment, midpointMm);
+    const midpointDistanceMm = distanceMm(point, midpointPoint);
+    if (midpointDistanceMm <= maxDistanceMm) {
+      return {
+        segment: nearestLine.segment,
+        point: midpointPoint,
+        startOffsetMm: midpointMm,
+        endOffsetMm: Math.max(0, segmentLengthMm - midpointMm),
+        distanceMm: midpointDistanceMm,
+        snapMeta: buildSnapMeta("CENTERED", "Centered")
+      };
+    }
+  }
+
+  return {
+    ...nearestLine,
+    snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+  };
 }
 
 export function useEditorInteractionPreviews({
@@ -107,29 +153,39 @@ export function useEditorInteractionPreviews({
       const angleCandidate =
         disableSnap || !drawStart ? quantize(worldPoint) : snapPointToAngle(drawStart, worldPoint, 5);
       const nearestNode = findNearestNode(angleCandidate, drawAnchorNodes, nodeSnapDistanceMm);
-      const nearestLine = findNearestSegmentSnap(angleCandidate, segments, drawLineSnapDistanceMm);
-      const nodeDistanceMm = nearestNode ? distanceMm(angleCandidate, nearestNode) : Number.POSITIVE_INFINITY;
-      let basePoint = quantize(angleCandidate);
-      let snapMeta: PreviewSnapMeta | null = null;
-      if (nearestLine && nearestLine.distanceMm < nodeDistanceMm) {
-        basePoint = nearestLine.point;
-        snapMeta = buildSnapMeta("SEGMENT", "Fence line");
-      } else if (nearestNode) {
-        basePoint = quantize(nearestNode);
-        snapMeta = buildSnapMeta("NODE", "Endpoint");
+      if (nearestNode) {
+        return {
+          point: quantize(nearestNode),
+          guide: null,
+          snapMeta: buildSnapMeta("NODE", "Endpoint")
+        };
       }
+
+      if (!drawStart) {
+        const hoverSnap = findNearestPreDrawHoverSnap(angleCandidate, segments, drawLineSnapDistanceMm);
+        if (hoverSnap) {
+          return {
+            point: hoverSnap.point,
+            guide: null,
+            snapMeta: hoverSnap.snapMeta ?? buildSnapMeta("SEGMENT", "Fence line")
+          };
+        }
+      }
+
+      const basePoint = quantize(angleCandidate);
+      const snapMeta: PreviewSnapMeta | null = null;
 
       if (!drawStart) {
         return { point: basePoint, guide: null, snapMeta };
       }
 
       const guided = snapToAxisGuide(drawStart, basePoint, drawAnchorNodes, axisGuideSnapDistanceMm);
-      const guidedLineSnap = findNearestSegmentSnap(guided.point, segments, drawLineSnapDistanceMm);
-      if (guidedLineSnap) {
+      const guidedNearestNode = findNearestNode(guided.point, drawAnchorNodes, nodeSnapDistanceMm);
+      if (guidedNearestNode) {
         return {
-          point: guidedLineSnap.point,
+          point: quantize(guidedNearestNode),
           guide: guided.guide,
-          snapMeta: guided.guide ? buildSnapMeta("AXIS", "Axis aligned") : buildSnapMeta("SEGMENT", "Fence line")
+          snapMeta: buildSnapMeta("NODE", "Endpoint")
         };
       }
       return {
@@ -520,20 +576,39 @@ export function useEditorInteractionPreviews({
   }, [interactionMode, pointerWorld, resolveBasketballPostPreview]);
 
   const drawHoverSnap = useMemo(() => {
-    if (interactionMode !== "DRAW" || !pointerWorld) {
+    if (interactionMode !== "DRAW" || !pointerWorld || drawStart) {
       return null;
     }
-    const preview = findNearestSegmentSnap(pointerWorld, segments, drawLineSnapDistanceMm);
-    return preview
-      ? {
-          ...preview,
-          snapMeta: buildSnapMeta("SEGMENT", "Fence line")
-        }
-      : null;
-  }, [drawLineSnapDistanceMm, interactionMode, pointerWorld, segments]);
+    if (resolveDrawPoint(pointerWorld).snapMeta?.kind === "NODE") {
+      return null;
+    }
+    return findNearestPreDrawHoverSnap(quantize(pointerWorld), segments, drawLineSnapDistanceMm);
+  }, [drawLineSnapDistanceMm, drawStart, interactionMode, pointerWorld, resolveDrawPoint, segments]);
+  const effectiveDrawSnapLabel = drawStart ? drawSnapLabel : drawHoverSnap?.snapMeta?.label ?? null;
+
+  const hoveredBasketballPostId = useMemo(() => {
+    if (!pointerWorld || interactionMode !== "SELECT") {
+      return null;
+    }
+    let best: { id: string; distanceMm: number } | null = null;
+    for (const basketballPost of placedBasketballPostVisuals) {
+      const candidateDistanceMm = distanceMm(pointerWorld, basketballPost.point);
+      const maxDistanceMm = Math.max(240, 26 / viewScale);
+      if (candidateDistanceMm > maxDistanceMm) {
+        continue;
+      }
+      if (!best || candidateDistanceMm < best.distanceMm) {
+        best = {
+          id: basketballPost.id,
+          distanceMm: candidateDistanceMm
+        };
+      }
+    }
+    return best?.id ?? null;
+  }, [interactionMode, placedBasketballPostVisuals, pointerWorld, viewScale]);
 
   const hoveredGateId = useMemo(() => {
-    if (!pointerWorld || interactionMode !== "SELECT") {
+    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId) {
       return null;
     }
     let best: { id: string; distanceMm: number } | null = null;
@@ -555,10 +630,10 @@ export function useEditorInteractionPreviews({
       }
     }
     return best?.id ?? null;
-  }, [hoverGateSnapMm, interactionMode, placedGateVisuals, pointerWorld]);
+  }, [hoveredBasketballPostId, hoverGateSnapMm, interactionMode, placedGateVisuals, pointerWorld]);
 
   const hoveredSegmentId = useMemo(() => {
-    if (!pointerWorld || interactionMode !== "SELECT") {
+    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId || hoveredGateId) {
       return null;
     }
     let best: { id: string; distanceMm: number } | null = null;
@@ -575,7 +650,7 @@ export function useEditorInteractionPreviews({
       }
     }
     return best?.id ?? null;
-  }, [hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
+  }, [hoveredBasketballPostId, hoveredGateId, hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
 
   const rectanglePreviewEnd = useMemo(() => {
     if (interactionMode !== "RECTANGLE" || !rectangleStart || !pointerWorld) {
@@ -595,11 +670,12 @@ export function useEditorInteractionPreviews({
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,
-    drawSnapLabel,
+    drawSnapLabel: effectiveDrawSnapLabel,
     gatePreview,
     gatePreviewVisual,
     ghostEnd,
     ghostLengthMm,
+    hoveredBasketballPostId,
     hoveredGateId,
     hoveredSegmentId,
     rectanglePreviewEnd,

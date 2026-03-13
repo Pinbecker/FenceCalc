@@ -1,5 +1,7 @@
 import type { EstimateResult, GatePlacement } from "@fence-estimator/contracts";
 
+import type { HeightCountRow, HeightLabelCountRow, ResolvedBasketballPostPlacement } from "./types.js";
+
 interface PostHeightRow {
   heightMm: number;
   end: number;
@@ -20,11 +22,11 @@ interface ResolvedGateSummary {
 
 export interface EditorSummaryData {
   postRowsByType: {
-    end: Array<{ heightMm: number; count: number }>;
-    intermediate: Array<{ heightMm: number; count: number }>;
-    corner: Array<{ heightMm: number; count: number }>;
-    junction: Array<{ heightMm: number; count: number }>;
-    inlineJoin: Array<{ heightMm: number; count: number }>;
+    end: HeightCountRow[];
+    intermediate: HeightCountRow[];
+    corner: HeightCountRow[];
+    junction: HeightCountRow[];
+    inlineJoin: HeightCountRow[];
   };
   gateCounts: {
     total: number;
@@ -32,13 +34,15 @@ export interface EditorSummaryData {
     double: number;
     custom: number;
   };
-  gateCountsByHeight: Array<{ height: string; count: number }>;
+  gateCountsByHeight: HeightLabelCountRow[];
+  basketballPostCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: Array<{ height: string; standard: number; superRebound: number }>;
 }
 
 export function buildEditorSummaryData(input: {
   postHeightRows: PostHeightRow[];
   resolvedGatePlacements: ResolvedGateSummary[];
+  resolvedBasketballPostPlacements: ResolvedBasketballPostPlacement[];
   estimate: EstimateResult;
 }): EditorSummaryData {
   const rowsForType = (typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin") =>
@@ -68,6 +72,13 @@ export function buildEditorSummaryData(input: {
     .map(([height, count]) => ({ height, count }))
     .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
 
+  const basketballPostCountsByHeight = [...input.resolvedBasketballPostPlacements.reduce<Map<string, number>>((map, basketballPost) => {
+    map.set(basketballPost.spec.height, (map.get(basketballPost.spec.height) ?? 0) + 1);
+    return map;
+  }, new Map())]
+    .map(([height, count]) => ({ height, count }))
+    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+
   const twinBarFenceRows = Object.entries(input.estimate.materials.twinBarPanelsByFenceHeight)
     .map(([height, counts]) => ({ height, ...counts }))
     .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
@@ -87,6 +98,7 @@ export function buildEditorSummaryData(input: {
       custom
     },
     gateCountsByHeight,
+    basketballPostCountsByHeight,
     twinBarFenceRows
   };
 }

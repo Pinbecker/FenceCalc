@@ -11,6 +11,7 @@ describe("useEditorSelectionState", () => {
     expect(state.rectangleStart).toBeNull();
     expect(state.selectedSegmentId).toBeNull();
     expect(state.selectedGateId).toBeNull();
+    expect(state.selectedBasketballPostId).toBeNull();
     expect(state.isLengthEditorOpen).toBe(false);
     expect(state.selectedLengthInputM).toBe("");
   });

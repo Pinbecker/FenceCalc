@@ -13,14 +13,21 @@ export interface ActiveGateDragState {
   lastPointer: PointMm;
 }
 
+export interface ActiveBasketballPostDragState {
+  basketballPostId: string;
+  lastPointer: PointMm;
+}
+
 export function useEditorSelectionState(interactionMode: InteractionMode) {
   const [drawStart, setDrawStart] = useState<PointMm | null>(null);
   const [drawChainStart, setDrawChainStart] = useState<PointMm | null>(null);
   const [rectangleStart, setRectangleStart] = useState<PointMm | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
+  const [selectedBasketballPostId, setSelectedBasketballPostId] = useState<string | null>(null);
   const [activeSegmentDrag, setActiveSegmentDrag] = useState<ActiveSegmentDragState | null>(null);
   const [activeGateDrag, setActiveGateDrag] = useState<ActiveGateDragState | null>(null);
+  const [activeBasketballPostDrag, setActiveBasketballPostDrag] = useState<ActiveBasketballPostDragState | null>(null);
   const [isLengthEditorOpen, setIsLengthEditorOpen] = useState(false);
   const [selectedLengthInputM, setSelectedLengthInputM] = useState("");
 
@@ -28,9 +35,11 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     if (interactionMode !== "SELECT") {
       setSelectedSegmentId(null);
       setSelectedGateId(null);
+      setSelectedBasketballPostId(null);
       setIsLengthEditorOpen(false);
       setActiveSegmentDrag(null);
       setActiveGateDrag(null);
+      setActiveBasketballPostDrag(null);
     }
     if (interactionMode !== "DRAW") {
       setDrawStart(null);
@@ -47,8 +56,10 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setRectangleStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
+    setSelectedBasketballPostId(null);
     setActiveSegmentDrag(null);
     setActiveGateDrag(null);
+    setActiveBasketballPostDrag(null);
     setIsLengthEditorOpen(false);
     setSelectedLengthInputM("");
   }, []);
@@ -58,6 +69,7 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setDrawChainStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
+    setSelectedBasketballPostId(null);
   }, []);
 
   return {
@@ -66,8 +78,10 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     rectangleStart,
     selectedSegmentId,
     selectedGateId,
+    selectedBasketballPostId,
     activeSegmentDrag,
     activeGateDrag,
+    activeBasketballPostDrag,
     isLengthEditorOpen,
     selectedLengthInputM,
     setDrawStart,
@@ -75,8 +89,10 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setRectangleStart,
     setSelectedSegmentId,
     setSelectedGateId,
+    setSelectedBasketballPostId,
     setActiveSegmentDrag,
     setActiveGateDrag,
+    setActiveBasketballPostDrag,
     setIsLengthEditorOpen,
     setSelectedLengthInputM,
     resetLoadedWorkspaceState,

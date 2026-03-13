@@ -202,6 +202,16 @@ export interface DrawResolveResult {
   snapMeta: PreviewSnapMeta | null;
 }
 
+export interface HeightCountRow {
+  heightMm: number;
+  count: number;
+}
+
+export interface HeightLabelCountRow {
+  height: string;
+  count: number;
+}
+
 export interface SegmentLengthLabel {
   key: string;
   segmentId: string;

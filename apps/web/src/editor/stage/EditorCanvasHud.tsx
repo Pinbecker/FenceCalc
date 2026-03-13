@@ -9,6 +9,7 @@ type EditorCanvasHudProps = Pick<
   | "drawStart"
   | "drawSnapLabel"
   | "basketballPostPreview"
+  | "hoveredBasketballPostId"
   | "gatePreview"
   | "hoveredGateId"
   | "hoveredSegmentId"
@@ -24,6 +25,7 @@ export function EditorCanvasHud({
   drawStart,
   drawSnapLabel,
   basketballPostPreview,
+  hoveredBasketballPostId,
   gatePreview,
   hoveredGateId,
   hoveredSegmentId,
@@ -57,6 +59,8 @@ export function EditorCanvasHud({
             ? basketballPostPreview
               ? `Click place post ${basketballPostPreview.facing.toLowerCase()}`
               : "Hover a run side"
+          : hoveredBasketballPostId
+            ? "Click select, drag slide"
           : hoveredGateId
             ? "Click select, drag slide"
             : hoveredSegmentId
