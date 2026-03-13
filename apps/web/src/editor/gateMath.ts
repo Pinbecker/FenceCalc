@@ -22,7 +22,10 @@ export function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number
   };
 }
 
-export function projectPointOntoSegment(point: PointMm, segment: LayoutSegment): { projected: PointMm; offsetMm: number; distanceMm: number } {
+export function projectPointOntoSegment(
+  point: PointMm,
+  segment: LayoutSegment,
+): { projected: PointMm; offsetMm: number; distanceMm: number; signedDistanceMm: number } {
   const vx = segment.end.x - segment.start.x;
   const vy = segment.end.y - segment.start.y;
   const segmentLengthSquared = vx * vx + vy * vy;
@@ -30,7 +33,8 @@ export function projectPointOntoSegment(point: PointMm, segment: LayoutSegment):
     return {
       projected: segment.start,
       offsetMm: 0,
-      distanceMm: distanceMm(point, segment.start)
+      distanceMm: distanceMm(point, segment.start),
+      signedDistanceMm: 0
     };
   }
   const wx = point.x - segment.start.x;
@@ -43,7 +47,8 @@ export function projectPointOntoSegment(point: PointMm, segment: LayoutSegment):
   return {
     projected,
     offsetMm: distanceMm(segment.start, projected),
-    distanceMm: distanceMm(point, projected)
+    distanceMm: distanceMm(point, projected),
+    signedDistanceMm: (vx * (point.y - segment.start.y) - vy * (point.x - segment.start.x)) / Math.sqrt(segmentLengthSquared)
   };
 }
 
@@ -134,6 +139,7 @@ export function buildGatePreview(segment: LayoutSegment, centerOffsetMm: number,
     exitPoint,
     tangent,
     normal: { x: -tangent.y, y: tangent.x },
-    targetPoint: interpolateAlongSegment(segment, centerOffsetMm)
+    targetPoint: interpolateAlongSegment(segment, centerOffsetMm),
+    snapMeta: { kind: "FREE", label: "Free placement" }
   };
 }

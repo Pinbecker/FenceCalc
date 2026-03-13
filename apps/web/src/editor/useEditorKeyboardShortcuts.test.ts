@@ -57,7 +57,8 @@ describe("useEditorKeyboardShortcuts", () => {
       setInteractionMode: vi.fn(),
       setIsSpacePressed: vi.fn(),
       setDisableSnap: vi.fn(),
-      cancelActiveDrawing: vi.fn()
+      cancelActiveDrawing: vi.fn(),
+      finishActiveInteraction: vi.fn()
     };
 
     useEditorKeyboardShortcuts(options);
@@ -88,6 +89,7 @@ describe("useEditorKeyboardShortcuts", () => {
     listeners.keydown?.(createEvent("Delete"));
     listeners.keydown?.(createEvent("Backspace", { target: editableTarget }));
     listeners.keydown?.(createEvent("Escape"));
+    listeners.keydown?.(createEvent("Enter"));
     listeners.keyup?.(createEvent("Space"));
     listeners.keyup?.(createEvent("ShiftRight"));
 
@@ -107,6 +109,7 @@ describe("useEditorKeyboardShortcuts", () => {
     expect(options.deleteSelectedGate).toHaveBeenCalledTimes(1);
     expect(options.deleteSelectedSegment).toHaveBeenCalledTimes(1);
     expect(options.cancelActiveDrawing).toHaveBeenCalledTimes(1);
+    expect(options.finishActiveInteraction).toHaveBeenCalledTimes(1);
 
     cleanupFn?.();
     expect(windowMock.removeEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));

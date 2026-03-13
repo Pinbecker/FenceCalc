@@ -104,6 +104,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     ],
     interactionMode: "SELECT" as const,
     disableSnap: true,
+    isPanning: false,
     drawStart: { x: 0, y: 0 },
     rectangleStart: { x: 0, y: 0 },
     ghostEnd: { x: 2400, y: 0 },
@@ -118,8 +119,10 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       point: { x: 2400, y: 0 },
       startOffsetMm: 2400,
       endOffsetMm: 2600,
-      distanceMm: 0
+      distanceMm: 0,
+      snapMeta: { kind: "SEGMENT" as const, label: "Fence line" }
     },
+    drawSnapLabel: "Axis aligned",
     rectanglePreviewEnd: { x: 1600, y: 1400 },
     recessPreview: buildRecessPreview(segments[0]!, 2500, 1500, 1000, "LEFT"),
     gatePreview,
@@ -138,6 +141,9 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
           leafCount: 1 as const
         }
       : null,
+    hoveredSegmentId: "s1",
+    hoveredGateId: "g1",
+    closeLoopPoint: { x: 0, y: 0 },
     visualPosts: [
       { key: "post-end", point: { x: 0, y: 0 }, kind: "END" as const, heightMm: 2400 },
       { key: "post-intermediate", point: { x: 2500, y: 0 }, kind: "INTERMEDIATE" as const, heightMm: 2400 },
@@ -186,6 +192,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     onStageMouseDown: vi.fn(),
     onStageMouseMove: vi.fn(),
     onStageMouseUp: vi.fn(),
+    onStageDoubleClick: vi.fn(),
     onStageWheel: vi.fn(),
     onContextMenu: vi.fn(),
     onSelectSegment: vi.fn(),
@@ -210,6 +217,7 @@ describe("EditorCanvasStage", () => {
 
     expect(html).toContain("Canvas scale bar");
     expect(html).toContain("<strong>Mode</strong><em>SELECT</em>");
+    expect(html).toContain("Click select, drag slide");
     expect(registry.Stage).toHaveLength(1);
     expect(registry.Layer.length).toBeGreaterThanOrEqual(4);
     expect(registry.RegularPolygon.length).toBeGreaterThan(0);
@@ -263,6 +271,20 @@ describe("EditorCanvasStage", () => {
         });
       });
     registry.Text
+      .filter((entry) => typeof entry.onTap === "function")
+      .forEach((entry) => {
+        (entry.onTap as ((event: { cancelBubble: boolean }) => void) | undefined)?.({
+          cancelBubble: false
+        });
+      });
+    registry.Group
+      .filter((entry) => typeof entry.onClick === "function")
+      .forEach((entry) => {
+        (entry.onClick as ((event: { cancelBubble: boolean }) => void) | undefined)?.({
+          cancelBubble: false
+        });
+      });
+    registry.Group
       .filter((entry) => typeof entry.onTap === "function")
       .forEach((entry) => {
         (entry.onTap as ((event: { cancelBubble: boolean }) => void) | undefined)?.({
@@ -323,7 +345,7 @@ describe("EditorCanvasStage", () => {
       .map((entry) => entry.text)
       .filter((value): value is string => typeof value === "string");
 
-    expect(previewLabels.some((text) => text.includes("Recess"))).toBe(true);
+    expect(previewLabels.some((text) => text.includes("1.5") && text.includes("1"))).toBe(true);
     expect(previewLabels.some((text) => text.includes("Gate"))).toBe(true);
     expect(previewLabels.some((text) => text.includes("2.4"))).toBe(true);
     expect(registry.Line.length).toBeGreaterThan(10);

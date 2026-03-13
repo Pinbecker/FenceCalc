@@ -15,6 +15,7 @@ export interface ActiveGateDragState {
 
 export function useEditorSelectionState(interactionMode: InteractionMode) {
   const [drawStart, setDrawStart] = useState<PointMm | null>(null);
+  const [drawChainStart, setDrawChainStart] = useState<PointMm | null>(null);
   const [rectangleStart, setRectangleStart] = useState<PointMm | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     }
     if (interactionMode !== "DRAW") {
       setDrawStart(null);
+      setDrawChainStart(null);
     }
     if (interactionMode !== "RECTANGLE") {
       setRectangleStart(null);
@@ -41,6 +43,7 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
 
   const resetLoadedWorkspaceState = useCallback(() => {
     setDrawStart(null);
+    setDrawChainStart(null);
     setRectangleStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
@@ -52,12 +55,14 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
 
   const clearHistorySelection = useCallback(() => {
     setDrawStart(null);
+    setDrawChainStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
   }, []);
 
   return {
     drawStart,
+    drawChainStart,
     rectangleStart,
     selectedSegmentId,
     selectedGateId,
@@ -66,6 +71,7 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     isLengthEditorOpen,
     selectedLengthInputM,
     setDrawStart,
+    setDrawChainStart,
     setRectangleStart,
     setSelectedSegmentId,
     setSelectedGateId,

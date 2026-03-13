@@ -7,7 +7,7 @@ interface EditorSidebarProps {
   interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
   recessWidthInputM: string;
   recessDepthInputM: string;
-  recessSide: "LEFT" | "RIGHT";
+  recessSide: "AUTO" | "LEFT" | "RIGHT";
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
@@ -15,9 +15,15 @@ interface EditorSidebarProps {
   gateWidthOptionsMm: readonly number[];
   recessPreview:
     | {
+        depthMm: number;
         startOffsetMm: number;
         endOffsetMm: number;
         segmentLengthMm: number;
+        side: "LEFT" | "RIGHT";
+        sideSource: "AUTO" | "MANUAL";
+        snapMeta: {
+          label: string;
+        };
       }
     | null;
   gatePreview:
@@ -26,6 +32,9 @@ interface EditorSidebarProps {
         startOffsetMm: number;
         endOffsetMm: number;
         segmentLengthMm: number;
+        snapMeta: {
+          label: string;
+        };
       }
     | null;
   activeSpec: FenceSpec;
@@ -39,7 +48,7 @@ interface EditorSidebarProps {
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
-  onSetRecessSide: (side: "LEFT" | "RIGHT") => void;
+  onSetRecessSide: (side: "AUTO" | "LEFT" | "RIGHT") => void;
   onSetGateType: (type: GateType) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;

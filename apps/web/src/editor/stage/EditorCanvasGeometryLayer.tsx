@@ -1,4 +1,4 @@
-import { Circle, Group, Layer, Line, Rect, RegularPolygon, Text } from "react-konva";
+import { Circle, Group, Layer, Line, Rect, RegularPolygon } from "react-konva";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { formatLengthMm } from "../../formatters";
@@ -14,6 +14,7 @@ import {
 import { renderGateSymbol } from "../gateGeometry";
 import { buildSegmentRuns } from "../segmentTopology";
 import type { VisualPost } from "../types";
+import { renderCanvasLabel } from "./canvasLabel";
 import type { EditorCanvasStageProps } from "./types";
 
 type EditorCanvasGeometryLayerProps = Pick<
@@ -29,6 +30,8 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "placedGateVisuals"
   | "segmentLengthLabelsBySegmentId"
   | "segments"
+  | "hoveredGateId"
+  | "hoveredSegmentId"
   | "selectedGateId"
   | "selectedPlanVisual"
   | "selectedSegmentId"
@@ -36,6 +39,26 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "visibleSegmentLabelKeys"
   | "visualPosts"
 >;
+
+function offsetSegmentLabel(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  scale: number,
+  normalOffsetPx: number
+) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const center = {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2
+  };
+
+  return {
+    x: center.x + (-dy / length) * (normalOffsetPx / scale),
+    y: center.y + (dx / length) * (normalOffsetPx / scale)
+  };
+}
 
 function renderPostSymbol(post: VisualPost, scale: number) {
   const size = POST_SYMBOL_RADIUS_PX / scale;
@@ -49,8 +72,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         y={post.point.y - size}
         width={size * 2}
         height={size * 2}
-        fill="#46d3ff"
-        stroke="#061019"
+        fill="#94b8b4"
+        stroke="#14201e"
         strokeWidth={strokeWidth}
         listening={false}
       />
@@ -66,8 +89,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         sides={4}
         radius={size * 1.2}
         rotation={45}
-        fill="#ff9f5a"
-        stroke="#061019"
+        fill="#b78f6f"
+        stroke="#14201e"
         strokeWidth={strokeWidth}
         listening={false}
       />
@@ -83,8 +106,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         sides={3}
         radius={size * 1.35}
         rotation={180}
-        fill="#ff5d8f"
-        stroke="#061019"
+        fill="#8c9fb1"
+        stroke="#14201e"
         strokeWidth={strokeWidth}
         listening={false}
       />
@@ -99,8 +122,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         y={post.point.y}
         sides={6}
         radius={size * 1.1}
-        fill="#b9d3f0"
-        stroke="#061019"
+        fill="#a9b4bd"
+        stroke="#14201e"
         strokeWidth={strokeWidth}
         listening={false}
       />
@@ -115,8 +138,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         y={post.point.y}
         sides={4}
         radius={size * 1.25}
-        fill="#ffe08a"
-        stroke="#061019"
+        fill="#c4a66f"
+        stroke="#14201e"
         strokeWidth={strokeWidth}
         listening={false}
       />
@@ -129,8 +152,8 @@ function renderPostSymbol(post: VisualPost, scale: number) {
       x={post.point.x}
       y={post.point.y}
       radius={size * 1.1}
-      fill="#ffd166"
-      stroke="#061019"
+      fill="#d3c5aa"
+      stroke="#14201e"
       strokeWidth={strokeWidth}
       listening={false}
     />
@@ -149,6 +172,8 @@ export function EditorCanvasGeometryLayer({
   placedGateVisuals,
   segmentLengthLabelsBySegmentId,
   segments,
+  hoveredGateId,
+  hoveredSegmentId,
   selectedGateId,
   selectedPlanVisual,
   selectedSegmentId,
@@ -161,19 +186,31 @@ export function EditorCanvasGeometryLayer({
       {visualPosts.map((post) => renderPostSymbol(post, view.scale))}
       {segments.map((segment) => {
         const isSelected = segment.id === selectedSegmentId;
+        const isHovered = segment.id === hoveredSegmentId;
         const lengthLabels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
         const segmentRuns = buildSegmentRuns(segment, gatesBySegmentId.get(segment.id) ?? []);
         const color = getSegmentColor(segment.spec);
 
         return (
           <Group key={segment.id}>
+            {isHovered || isSelected ? (
+              <Line
+                points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
+                stroke={isSelected ? "rgba(241, 217, 169, 0.38)" : "rgba(198, 218, 224, 0.24)"}
+                opacity={0.3}
+                strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 10) / view.scale}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+              />
+            ) : null}
             {segmentRuns.map((run, runIndex) => (
               <Line
                 key={`${segment.id}-run-${runIndex}`}
                 points={[run.start.x, run.start.y, run.end.x, run.end.y]}
                 stroke={color}
                 opacity={selectedPlanVisual ? 0.75 : 1}
-                strokeWidth={(isSelected ? SEGMENT_SELECTED_STROKE_PX : SEGMENT_STROKE_PX) / view.scale}
+                strokeWidth={(isSelected || isHovered ? SEGMENT_SELECTED_STROKE_PX : SEGMENT_STROKE_PX) / view.scale}
                 {...(segment.spec.system === "ROLL_FORM" ? { dash: [12 / view.scale, 8 / view.scale] } : {})}
                 lineCap="round"
                 lineJoin="round"
@@ -218,15 +255,8 @@ export function EditorCanvasGeometryLayer({
             />
             {lengthLabels.map((label) =>
               visibleSegmentLabelKeys.has(label.key) ? (
-                <Text
+                <Group
                   key={`segment-label-${label.key}`}
-                  x={label.x}
-                  y={label.y}
-                  text={label.text}
-                  fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                  fill={isSelected ? "#ffd166" : "#d8e8f7"}
-                  offsetX={(label.text.length * 3.6) / view.scale}
-                  offsetY={8 / view.scale}
                   listening={interactionMode === "SELECT"}
                   onClick={(event) => {
                     event.cancelBubble = true;
@@ -236,28 +266,46 @@ export function EditorCanvasGeometryLayer({
                     event.cancelBubble = true;
                     onOpenSegmentLengthEditor(segment.id);
                   }}
-                />
+                >
+                  {renderCanvasLabel({
+                    keyValue: `segment-label-chip-${label.key}`,
+                    x: label.x,
+                    y: label.y,
+                    text: label.text,
+                    scale: view.scale,
+                    fill: isSelected ? "rgba(58, 48, 25, 0.84)" : "rgba(15, 23, 24, 0.74)",
+                    stroke: isSelected ? "rgba(255, 216, 134, 0.28)" : "rgba(227, 238, 241, 0.14)",
+                    textColor: isSelected ? "#ffe3ad" : isHovered ? "#f4fbfd" : "#dce7ea",
+                    fontSizePx: LABEL_FONT_SIZE_PX,
+                    minWidthPx: 48
+                  })}
+                </Group>
               ) : null
             )}
             {lengthLabels.length === 0 ? (
-              <Text
-                x={(segment.start.x + segment.end.x) / 2}
-                y={(segment.start.y + segment.end.y) / 2}
-                text={formatLengthMm(distanceMm(segment.start, segment.end))}
-                fontSize={LABEL_FONT_SIZE_PX / view.scale}
-                fill={isSelected ? "#ffd166" : "#d8e8f7"}
-                offsetX={22 / view.scale}
-                offsetY={8 / view.scale}
+              <Group
                 listening={interactionMode === "SELECT"}
                 onClick={(event) => {
                   event.cancelBubble = true;
                   onOpenSegmentLengthEditor(segment.id);
                 }}
                 onTap={(event) => {
-                  event.cancelBubble = true;
-                  onOpenSegmentLengthEditor(segment.id);
-                }}
-              />
+                    event.cancelBubble = true;
+                    onOpenSegmentLengthEditor(segment.id);
+                  }}
+              >
+                {renderCanvasLabel({
+                  keyValue: `segment-label-fallback-${segment.id}`,
+                  ...offsetSegmentLabel(segment.start, segment.end, view.scale, 18),
+                  text: formatLengthMm(distanceMm(segment.start, segment.end)),
+                  scale: view.scale,
+                  fill: isSelected ? "rgba(58, 48, 25, 0.84)" : "rgba(15, 23, 24, 0.74)",
+                  stroke: isSelected ? "rgba(255, 216, 134, 0.28)" : "rgba(227, 238, 241, 0.14)",
+                  textColor: isSelected ? "#ffe3ad" : isHovered ? "#f4fbfd" : "#dce7ea",
+                  fontSizePx: LABEL_FONT_SIZE_PX,
+                  minWidthPx: 44
+                })}
+              </Group>
             ) : null}
             {interactionMode === "SELECT" && isSelected ? (
               <>
@@ -265,7 +313,7 @@ export function EditorCanvasGeometryLayer({
                   x={segment.start.x}
                   y={segment.start.y}
                   radius={HANDLE_RADIUS_PX / view.scale}
-                  fill="#ffbe0b"
+                  fill="#f0d08b"
                   draggable
                   onDragMove={(event) => {
                     onUpdateSegmentEndpoint(segment.id, "start", quantize({ x: event.target.x(), y: event.target.y() }));
@@ -275,7 +323,7 @@ export function EditorCanvasGeometryLayer({
                   x={segment.end.x}
                   y={segment.end.y}
                   radius={HANDLE_RADIUS_PX / view.scale}
-                  fill="#ffbe0b"
+                  fill="#f0d08b"
                   draggable
                   onDragMove={(event) => {
                     onUpdateSegmentEndpoint(segment.id, "end", quantize({ x: event.target.x(), y: event.target.y() }));
@@ -288,6 +336,7 @@ export function EditorCanvasGeometryLayer({
       })}
       {placedGateVisuals.map((gateVisual) => {
         const isGateSelected = interactionMode === "SELECT" && gateVisual.id === selectedGateId;
+        const isGateHovered = interactionMode === "SELECT" && gateVisual.id === hoveredGateId;
 
         return (
           <Group key={`gate-group-${gateVisual.id}`}>
@@ -295,11 +344,11 @@ export function EditorCanvasGeometryLayer({
               gateVisual,
               view.scale,
               {
-                frameStroke: isGateSelected ? "#fff6d6" : "#d8f6ff",
-                leafStroke: isGateSelected ? "#ffbe0b" : "#ffd166",
-                swingStroke: isGateSelected ? "#ffd166" : "#ffe5a6",
-                markerFill: isGateSelected ? "#ffffff" : "#fff4cf",
-                labelColor: isGateSelected ? "#fff1c4" : "#ffe29a",
+                frameStroke: isGateSelected ? "#f1e1bb" : isGateHovered ? "#d9ecf0" : "#bfd3d9",
+                leafStroke: isGateSelected ? "#e2c07a" : isGateHovered ? "#f3e1b8" : "#d9c18f",
+                swingStroke: isGateSelected ? "#dac088" : isGateHovered ? "#cfddd9" : "#bcc8c6",
+                markerFill: isGateSelected ? "#fdf5e4" : isGateHovered ? "#eef6f5" : "#e6efee",
+                labelColor: isGateSelected ? "#fff0ca" : isGateHovered ? "#f5fbfc" : "#edf3f4",
                 opacity: selectedPlanVisual ? 0.88 : 1
               },
               `Gate ${formatLengthMm(gateVisual.widthMm)}`,

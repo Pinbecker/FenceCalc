@@ -4,7 +4,10 @@ import type { FenceSpec, GateType } from "@fence-estimator/contracts";
 import { formatMetersInputFromMm } from "../formatters";
 import { useDraggablePanels, type PanelOffset } from "../useDraggablePanels";
 import { defaultFenceSpec, SINGLE_GATE_WIDTH_MM } from "./constants";
-import type { DraggablePanel, InteractionMode, RecessSide } from "./types";
+import type { DraggablePanel, InteractionMode, RecessSidePreference } from "./types";
+
+const DEFAULT_RECESS_WIDTH_MM = 7500;
+const DEFAULT_RECESS_DEPTH_MM = 2500;
 
 const INITIAL_PANEL_OFFSETS: Record<DraggablePanel, PanelOffset> = {
   controls: { x: 0, y: 0 },
@@ -16,11 +19,11 @@ const INITIAL_PANEL_OFFSETS: Record<DraggablePanel, PanelOffset> = {
 export function useEditorShellState() {
   const [activeSpec, setActiveSpec] = useState<FenceSpec>(defaultFenceSpec());
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("DRAW");
-  const [recessWidthMm, setRecessWidthMm] = useState<number>(1500);
-  const [recessDepthMm, setRecessDepthMm] = useState<number>(1000);
-  const [recessWidthInputM, setRecessWidthInputM] = useState<string>(() => formatMetersInputFromMm(1500));
-  const [recessDepthInputM, setRecessDepthInputM] = useState<string>(() => formatMetersInputFromMm(1000));
-  const [recessSide, setRecessSide] = useState<RecessSide>("LEFT");
+  const [recessWidthMm, setRecessWidthMm] = useState<number>(DEFAULT_RECESS_WIDTH_MM);
+  const [recessDepthMm, setRecessDepthMm] = useState<number>(DEFAULT_RECESS_DEPTH_MM);
+  const [recessWidthInputM, setRecessWidthInputM] = useState<string>(() => formatMetersInputFromMm(DEFAULT_RECESS_WIDTH_MM));
+  const [recessDepthInputM, setRecessDepthInputM] = useState<string>(() => formatMetersInputFromMm(DEFAULT_RECESS_DEPTH_MM));
+  const [recessSide, setRecessSide] = useState<RecessSidePreference>("AUTO");
   const [gateType, setGateType] = useState<GateType>("SINGLE_LEAF");
   const [customGateWidthMm, setCustomGateWidthMm] = useState<number>(SINGLE_GATE_WIDTH_MM);
   const [customGateWidthInputM, setCustomGateWidthInputM] = useState<string>(() =>

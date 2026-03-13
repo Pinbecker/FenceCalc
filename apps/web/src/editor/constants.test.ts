@@ -14,9 +14,9 @@ function createTwinBarSpec(height: FenceSpec["height"], twinBarVariant: "STANDAR
 
 describe("editor constants", () => {
   it("uses pastel standard colors and stronger rebound colors for the same twin-bar heights", () => {
-    expect(getSegmentColor(createTwinBarSpec("1.2m", "STANDARD"))).toBe("#f6e58d");
-    expect(getSegmentColor(createTwinBarSpec("1.2m", "SUPER_REBOUND"))).toBe("#d4a700");
-    expect(getSegmentColor(createTwinBarSpec("2m", "STANDARD"))).toBe("#a9d6ff");
-    expect(getSegmentColor(createTwinBarSpec("2m", "SUPER_REBOUND"))).toBe("#1d6fd6");
+    expect(getSegmentColor(createTwinBarSpec("1.2m", "STANDARD"))).toBe("#c8c29b");
+    expect(getSegmentColor(createTwinBarSpec("1.2m", "SUPER_REBOUND"))).toBe("#9e8444");
+    expect(getSegmentColor(createTwinBarSpec("2m", "STANDARD"))).toBe("#86aabd");
+    expect(getSegmentColor(createTwinBarSpec("2m", "SUPER_REBOUND"))).toBe("#3d6e92");
   });
 });

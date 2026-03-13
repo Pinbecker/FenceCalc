@@ -27,7 +27,8 @@ describe("gateMath", () => {
     expect(projectPointOntoSegment({ x: 600, y: 300 }, segment)).toEqual({
       projected: { x: 600, y: 0 },
       offsetMm: 600,
-      distanceMm: 300
+      distanceMm: 300,
+      signedDistanceMm: 300
     });
   });
 

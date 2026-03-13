@@ -15,22 +15,31 @@ function buildSidebarProps() {
     interactionMode: "GATE" as const,
     recessWidthInputM: "1.50",
     recessDepthInputM: "1.00",
-    recessSide: "LEFT" as const,
+    recessSide: "AUTO" as const,
     gateType: "DOUBLE_LEAF" as const,
     customGateWidthInputM: "3.00",
     recessWidthOptionsMm: [500, 1000, 1500],
     recessDepthOptionsMm: [500, 1000],
     gateWidthOptionsMm: [1200, 1800, 3000],
     recessPreview: {
+      depthMm: 1000,
       startOffsetMm: 1200,
       endOffsetMm: 2700,
-      segmentLengthMm: 5000
+      segmentLengthMm: 5000,
+      side: "LEFT" as const,
+      sideSource: "AUTO" as const,
+      snapMeta: {
+        label: "Centered"
+      }
     },
     gatePreview: {
       widthMm: 3000,
       startOffsetMm: 1000,
       endOffsetMm: 4000,
-      segmentLengthMm: 5000
+      segmentLengthMm: 5000,
+      snapMeta: {
+        label: "Centered"
+      }
     },
     activeSpec: defaultFenceSpec(),
     activeHeightOptions,

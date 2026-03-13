@@ -9,6 +9,7 @@ type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
 
 const mockSelectionState = {
   drawStart: null,
+  drawChainStart: null,
   rectangleStart: null,
   selectedSegmentId: null as string | null,
   selectedGateId: null as string | null,
@@ -17,6 +18,7 @@ const mockSelectionState = {
   activeSegmentDrag: null,
   activeGateDrag: null,
   setDrawStart: vi.fn(),
+  setDrawChainStart: vi.fn(),
   setRectangleStart: vi.fn(),
   setSelectedSegmentId: vi.fn(),
   setSelectedGateId: vi.fn(),
@@ -32,7 +34,7 @@ const mockShellState = {
   interactionMode: "SELECT" as InteractionMode,
   recessWidthMm: 1500,
   recessDepthMm: 1000,
-  recessSide: "LEFT" as const,
+  recessSide: "AUTO" as const,
   gateType: "SINGLE_LEAF" as const,
   customGateWidthMm: 1200,
   customGateWidthInputM: "1.20",
@@ -255,12 +257,16 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
   useEditorInteractionPreviews: () => ({
     axisGuide: null,
     drawHoverSnap: null,
+    drawSnapLabel: null,
     gatePreview: null,
     gatePreviewVisual: null,
     ghostEnd: null,
     ghostLengthMm: null,
+    hoveredGateId: null,
+    hoveredSegmentId: null,
     rectanglePreviewEnd: null,
     recessPreview: null,
+    closeLoopPoint: null,
     resolveDrawPoint: vi.fn()
   })
 }));

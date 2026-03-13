@@ -1,4 +1,4 @@
-import { Circle, Group, Line, Text } from "react-konva";
+import { Circle, Group, Line } from "react-konva";
 
 import {
   GATE_LABEL_OFFSET_PX,
@@ -6,6 +6,7 @@ import {
   LABEL_FONT_SIZE_PX
 } from "./constants.js";
 import { normalizeVector, rotateVector } from "./editorMath.js";
+import { renderCanvasLabel } from "./stage/canvasLabel.js";
 import type { GateVisual } from "./types.js";
 
 export {
@@ -31,9 +32,9 @@ export function renderGateSymbol(
   keyOverride?: string,
 ) {
   const postTickHalfMm = Math.max(120, Math.min(260, gate.widthMm * 0.16));
-  const strokeWidth = 2.6 / scale;
-  const sweepStrokeWidth = 1.7 / scale;
-  const markerRadius = 3.2 / scale;
+  const strokeWidth = 2.2 / scale;
+  const sweepStrokeWidth = 1.35 / scale;
+  const markerRadius = 2.8 / scale;
   const labelOffsetMm = Math.max(220, Math.min(420, gate.widthMm * 0.18)) + GATE_LABEL_OFFSET_PX / scale;
   const labelY = gate.centerPoint.y + gate.normal.y * labelOffsetMm;
   const labelX = gate.centerPoint.x + gate.normal.x * labelOffsetMm;
@@ -108,17 +109,20 @@ export function renderGateSymbol(
           lineCap="round"
         />
         <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
-        {label ? (
-          <Text
-            x={labelX}
-            y={labelY}
-            text={label}
-            fontSize={LABEL_FONT_SIZE_PX / scale}
-            fill={style.labelColor}
-            offsetX={(label.length * 3.6) / scale}
-            offsetY={10 / scale}
-          />
-        ) : null}
+        {label
+          ? renderCanvasLabel({
+              keyValue: `${key}-label`,
+              x: labelX,
+              y: labelY,
+              text: label,
+              scale,
+              fill: "rgba(17, 25, 24, 0.78)",
+              stroke: "rgba(255, 255, 255, 0.12)",
+              textColor: style.labelColor,
+              fontSizePx: LABEL_FONT_SIZE_PX,
+              minWidthPx: 60
+            })
+          : null}
       </Group>
     );
   }
@@ -207,17 +211,20 @@ export function renderGateSymbol(
       />
       <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
       <Circle x={gate.endPoint.x} y={gate.endPoint.y} radius={markerRadius} fill={style.markerFill} />
-      {label ? (
-        <Text
-          x={labelX}
-          y={labelY}
-          text={label}
-          fontSize={LABEL_FONT_SIZE_PX / scale}
-          fill={style.labelColor}
-          offsetX={(label.length * 3.6) / scale}
-          offsetY={10 / scale}
-        />
-      ) : null}
+      {label
+        ? renderCanvasLabel({
+            keyValue: `${key}-label`,
+            x: labelX,
+            y: labelY,
+            text: label,
+            scale,
+            fill: "rgba(17, 25, 24, 0.78)",
+            stroke: "rgba(255, 255, 255, 0.12)",
+            textColor: style.labelColor,
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 60
+          })
+        : null}
     </Group>
   );
 }

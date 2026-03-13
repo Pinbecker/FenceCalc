@@ -8,8 +8,8 @@ describe("useEditorShellState", () => {
     const state = renderHookServer(() => useEditorShellState());
 
     expect(state.interactionMode).toBe("DRAW");
-    expect(state.recessWidthMm).toBe(1500);
-    expect(state.recessDepthMm).toBe(1000);
+    expect(state.recessWidthMm).toBe(7500);
+    expect(state.recessDepthMm).toBe(2500);
     expect(state.gateType).toBe("SINGLE_LEAF");
     expect(state.selectedPlanId).toBeNull();
     expect(state.isOptimizationInspectorOpen).toBe(false);

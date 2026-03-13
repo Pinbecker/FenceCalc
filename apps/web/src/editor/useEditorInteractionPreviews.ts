@@ -33,11 +33,14 @@ import {
   snapOffsetToAnchorAlongSegment
 } from "./recess";
 import type {
-  AxisGuide,
+  DrawResolveResult,
   GateVisual,
   InteractionMode,
+  PreviewSnapMeta,
   RecessAlignmentAnchor,
-  RecessSide
+  RecessSide,
+  RecessSidePreference,
+  ResolvedGatePlacement
 } from "./types";
 
 interface EditorInteractionPreviewsOptions {
@@ -52,9 +55,15 @@ interface EditorInteractionPreviewsOptions {
   recessAlignmentAnchors: RecessAlignmentAnchor[];
   recessWidthMm: number;
   recessDepthMm: number;
-  recessSide: RecessSide;
+  recessSide: RecessSidePreference;
   gateType: GateType;
   customGateWidthMm: number;
+  placedGateVisuals: ResolvedGatePlacement[];
+  drawChainStart: PointMm | null;
+}
+
+function buildSnapMeta(kind: PreviewSnapMeta["kind"], label: string): PreviewSnapMeta {
+  return { kind, label };
 }
 
 export function useEditorInteractionPreviews({
@@ -71,34 +80,41 @@ export function useEditorInteractionPreviews({
   recessDepthMm,
   recessSide,
   gateType,
-  customGateWidthMm
+  customGateWidthMm,
+  placedGateVisuals,
+  drawChainStart
 }: EditorInteractionPreviewsOptions) {
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / viewScale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / viewScale);
   const drawLineSnapDistanceMm = Math.min(900, DRAW_LINE_SNAP_PX / viewScale);
   const recessPointerSnapMm = RECESS_POINTER_SNAP_PX / viewScale;
   const gatePointerSnapMm = GATE_POINTER_SNAP_PX / viewScale;
+  const hoverSegmentSnapMm = Math.max(180, 16 / viewScale);
+  const hoverGateSnapMm = Math.max(180, 22 / viewScale);
   const requestedGateWidthMm = useMemo(
     () => resolveGateWidthMm(gateType, customGateWidthMm),
     [customGateWidthMm, gateType]
   );
 
   const resolveDrawPoint = useCallback(
-    (worldPoint: PointMm): { point: PointMm; guide: AxisGuide | null } => {
+    (worldPoint: PointMm): DrawResolveResult => {
       const angleCandidate =
         disableSnap || !drawStart ? quantize(worldPoint) : snapPointToAngle(drawStart, worldPoint, 5);
       const nearestNode = findNearestNode(angleCandidate, drawAnchorNodes, nodeSnapDistanceMm);
       const nearestLine = findNearestSegmentSnap(angleCandidate, segments, drawLineSnapDistanceMm);
       const nodeDistanceMm = nearestNode ? distanceMm(angleCandidate, nearestNode) : Number.POSITIVE_INFINITY;
       let basePoint = quantize(angleCandidate);
+      let snapMeta: PreviewSnapMeta | null = null;
       if (nearestLine && nearestLine.distanceMm < nodeDistanceMm) {
         basePoint = nearestLine.point;
+        snapMeta = buildSnapMeta("SEGMENT", "Fence line");
       } else if (nearestNode) {
         basePoint = quantize(nearestNode);
+        snapMeta = buildSnapMeta("NODE", "Endpoint");
       }
 
       if (!drawStart) {
-        return { point: basePoint, guide: null };
+        return { point: basePoint, guide: null, snapMeta };
       }
 
       const guided = snapToAxisGuide(drawStart, basePoint, drawAnchorNodes, axisGuideSnapDistanceMm);
@@ -106,10 +122,15 @@ export function useEditorInteractionPreviews({
       if (guidedLineSnap) {
         return {
           point: guidedLineSnap.point,
-          guide: guided.guide
+          guide: guided.guide,
+          snapMeta: guided.guide ? buildSnapMeta("AXIS", "Axis aligned") : buildSnapMeta("SEGMENT", "Fence line")
         };
       }
-      return guided;
+      return {
+        point: guided.point,
+        guide: guided.guide,
+        snapMeta: guided.guide ? buildSnapMeta("AXIS", "Axis aligned") : snapMeta
+      };
     },
     [
       axisGuideSnapDistanceMm,
@@ -130,13 +151,29 @@ export function useEditorInteractionPreviews({
   }, [drawStart, pointerWorld, resolveDrawPoint]);
   const ghostEnd = ghostSnap?.point ?? null;
   const axisGuide = ghostSnap?.guide ?? null;
+  const drawSnapLabel = ghostSnap?.snapMeta?.label ?? null;
+  const closeLoopPoint = useMemo(() => {
+    if (!drawStart || !drawChainStart || !ghostEnd) {
+      return null;
+    }
+    const closesLoop =
+      distanceMm(drawStart, drawChainStart) > 0.001 && distanceMm(ghostEnd, drawChainStart) <= DRAW_INCREMENT_MM * 0.5;
+    return closesLoop ? drawChainStart : null;
+  }, [drawChainStart, drawStart, ghostEnd]);
 
   const recessPreview = useMemo(() => {
     if (interactionMode !== "RECESS" || !pointerWorld) {
       return null;
     }
 
-    let best: { segment: LayoutSegment; offsetMm: number; distanceMm: number } | null = null;
+    let best:
+      | {
+          segment: LayoutSegment;
+          offsetMm: number;
+          distanceMm: number;
+          signedDistanceMm: number;
+        }
+      | null = null;
     for (const segment of segments) {
       const projection = projectPointOntoSegment(pointerWorld, segment);
       if (projection.distanceMm > recessPointerSnapMm) {
@@ -146,7 +183,8 @@ export function useEditorInteractionPreviews({
         best = {
           segment,
           offsetMm: projection.offsetMm,
-          distanceMm: projection.distanceMm
+          distanceMm: projection.distanceMm,
+          signedDistanceMm: projection.signedDistanceMm
         };
       }
     }
@@ -159,6 +197,7 @@ export function useEditorInteractionPreviews({
     const baseOffsetMm = best.offsetMm;
     let snappedOffsetMm = baseOffsetMm;
     let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+    let snapMeta = buildSnapMeta("FREE", "Free placement");
 
     const midpointMm = segmentLengthMm / 2;
     const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
@@ -166,6 +205,7 @@ export function useEditorInteractionPreviews({
     if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
       snappedOffsetMm = midpointMm;
       bestSnapDistanceMm = midpointDistanceMm;
+      snapMeta = buildSnapMeta("MIDPOINT", "Centered");
     }
 
     const fractionWindowMm = recessFractionSnapWindowMm(segmentLengthMm);
@@ -174,6 +214,7 @@ export function useEditorInteractionPreviews({
       if (distanceToTargetMm <= fractionWindowMm && distanceToTargetMm < bestSnapDistanceMm) {
         snappedOffsetMm = targetOffsetMm;
         bestSnapDistanceMm = distanceToTargetMm;
+        snapMeta = buildSnapMeta("FRACTION", "Run fraction");
       }
     }
 
@@ -197,6 +238,7 @@ export function useEditorInteractionPreviews({
     if (anchorSnapDistanceMm <= anchorWindowMm && anchorSnapDistanceMm < bestSnapDistanceMm) {
       snappedOffsetMm = anchorSnappedOffsetMm;
       selectedAnchorPoint = anchorSnapResult.anchorPoint;
+      snapMeta = buildSnapMeta("ALIGNMENT", "Aligned recess");
     }
 
     snappedOffsetMm = Math.max(
@@ -204,7 +246,17 @@ export function useEditorInteractionPreviews({
       Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
     );
 
-    const preview = buildRecessPreview(best.segment, snappedOffsetMm, recessWidthMm, recessDepthMm, recessSide);
+    const inferredSide: RecessSide = best.signedDistanceMm >= 0 ? "LEFT" : "RIGHT";
+    const previewSide = recessSide === "AUTO" ? inferredSide : recessSide;
+    const preview = buildRecessPreview(
+      best.segment,
+      snappedOffsetMm,
+      recessWidthMm,
+      recessDepthMm,
+      previewSide,
+      recessSide === "AUTO" ? "AUTO" : "MANUAL",
+      snapMeta
+    );
     if (!preview || !selectedAnchorPoint) {
       return preview;
     }
@@ -255,8 +307,17 @@ export function useEditorInteractionPreviews({
     const midpointMm = segmentLengthMm / 2;
     const snapWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
     const centeredOffsetMm = Math.abs(best.offsetMm - midpointMm) <= snapWindowMm ? midpointMm : best.offsetMm;
-
-    return buildGatePreview(best.segment, centeredOffsetMm, requestedGateWidthMm);
+    const preview = buildGatePreview(best.segment, centeredOffsetMm, requestedGateWidthMm);
+    if (!preview) {
+      return null;
+    }
+    return {
+      ...preview,
+      snapMeta:
+        centeredOffsetMm === midpointMm
+          ? buildSnapMeta("CENTERED", "Centered")
+          : buildSnapMeta("FREE", "Free placement")
+    };
   }, [gatePointerSnapMm, interactionMode, pointerWorld, requestedGateWidthMm, segments]);
 
   const gatePreviewVisual = useMemo(() => {
@@ -282,8 +343,59 @@ export function useEditorInteractionPreviews({
     if (interactionMode !== "DRAW" || !pointerWorld) {
       return null;
     }
-    return findNearestSegmentSnap(pointerWorld, segments, drawLineSnapDistanceMm);
+    const preview = findNearestSegmentSnap(pointerWorld, segments, drawLineSnapDistanceMm);
+    return preview
+      ? {
+          ...preview,
+          snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+        }
+      : null;
   }, [drawLineSnapDistanceMm, interactionMode, pointerWorld, segments]);
+
+  const hoveredGateId = useMemo(() => {
+    if (!pointerWorld || interactionMode !== "SELECT") {
+      return null;
+    }
+    let best: { id: string; distanceMm: number } | null = null;
+    for (const gate of placedGateVisuals) {
+      const projection = projectPointOntoSegment(pointerWorld, {
+        id: gate.id,
+        start: gate.startPoint,
+        end: gate.endPoint,
+        spec: gate.spec
+      });
+      if (projection.distanceMm > hoverGateSnapMm) {
+        continue;
+      }
+      if (!best || projection.distanceMm < best.distanceMm) {
+        best = {
+          id: gate.id,
+          distanceMm: projection.distanceMm
+        };
+      }
+    }
+    return best?.id ?? null;
+  }, [hoverGateSnapMm, interactionMode, placedGateVisuals, pointerWorld]);
+
+  const hoveredSegmentId = useMemo(() => {
+    if (!pointerWorld || interactionMode !== "SELECT") {
+      return null;
+    }
+    let best: { id: string; distanceMm: number } | null = null;
+    for (const segment of segments) {
+      const projection = projectPointOntoSegment(pointerWorld, segment);
+      if (projection.distanceMm > hoverSegmentSnapMm) {
+        continue;
+      }
+      if (!best || projection.distanceMm < best.distanceMm) {
+        best = {
+          id: segment.id,
+          distanceMm: projection.distanceMm
+        };
+      }
+    }
+    return best?.id ?? null;
+  }, [hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
 
   const rectanglePreviewEnd = useMemo(() => {
     if (interactionMode !== "RECTANGLE" || !rectangleStart || !pointerWorld) {
@@ -302,12 +414,16 @@ export function useEditorInteractionPreviews({
   return {
     axisGuide,
     drawHoverSnap,
+    drawSnapLabel,
     gatePreview,
     gatePreviewVisual,
     ghostEnd,
     ghostLengthMm,
+    hoveredGateId,
+    hoveredSegmentId,
     rectanglePreviewEnd,
     recessPreview,
+    closeLoopPoint,
     resolveDrawPoint
   };
 }

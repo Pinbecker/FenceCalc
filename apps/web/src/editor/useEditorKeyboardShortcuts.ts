@@ -9,6 +9,7 @@ export interface UseEditorKeyboardShortcutsOptions {
   setIsSpacePressed(value: boolean): void;
   setDisableSnap(value: boolean): void;
   cancelActiveDrawing(): void;
+  finishActiveInteraction(): void;
 }
 
 export function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -85,6 +86,9 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
       }
       if (event.code === "Escape") {
         options.cancelActiveDrawing();
+      }
+      if (event.code === "Enter") {
+        options.finishActiveInteraction();
       }
     }
 

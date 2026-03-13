@@ -11,7 +11,12 @@ import {
 } from "./constants.js";
 import { dot, normalizeVector, pointCoordinateKey, samePointApprox } from "./editorMath.js";
 import { interpolateAlongSegment } from "./gateMath.js";
-import type { RecessAlignmentAnchor, RecessInsertionPreview, RecessSide } from "./types.js";
+import type {
+  PreviewSnapMeta,
+  RecessAlignmentAnchor,
+  RecessInsertionPreview,
+  RecessSide
+} from "./types.js";
 
 export function buildRecessPreview(
   segment: LayoutSegment,
@@ -19,6 +24,8 @@ export function buildRecessPreview(
   requestedWidthMm: number,
   requestedDepthMm: number,
   side: RecessSide,
+  sideSource: "AUTO" | "MANUAL" = "MANUAL",
+  snapMeta: PreviewSnapMeta = { kind: "FREE", label: "Free placement" },
 ): RecessInsertionPreview | null {
   const segmentLengthMm = distanceMm(segment.start, segment.end);
   if (segmentLengthMm <= MIN_SEGMENT_MM) {
@@ -85,7 +92,9 @@ export function buildRecessPreview(
     exitPoint,
     recessEntryPoint,
     recessExitPoint,
-    targetPoint: interpolateAlongSegment(segment, centerOffsetMm)
+    targetPoint: interpolateAlongSegment(segment, centerOffsetMm),
+    sideSource,
+    snapMeta
   };
 }
 

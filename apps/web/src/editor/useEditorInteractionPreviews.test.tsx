@@ -2,6 +2,7 @@ import type { LayoutSegment } from "@fence-estimator/contracts";
 import { describe, expect, it } from "vitest";
 
 import { defaultFenceSpec } from "./constants.js";
+import { resolveGatePlacements } from "./segmentTopology.js";
 import { useEditorInteractionPreviews } from "./useEditorInteractionPreviews.js";
 import { renderHookServer } from "../test/renderHookServer.js";
 
@@ -10,6 +11,10 @@ const segments: LayoutSegment[] = [
   { id: "s1", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, spec },
   { id: "s2", start: { x: 6000, y: 0 }, end: { x: 6000, y: 3000 }, spec }
 ];
+const placedGateVisuals = resolveGatePlacements(
+  new Map(segments.map((segment) => [segment.id, segment] as const)),
+  [{ id: "g1", segmentId: "s1", startOffsetMm: 2000, endOffsetMm: 3200, gateType: "SINGLE_LEAF" }]
+);
 
 describe("useEditorInteractionPreviews", () => {
   it("resolves draw snapping, guides, hover preview, and rectangle previews", () => {
@@ -28,7 +33,9 @@ describe("useEditorInteractionPreviews", () => {
         recessDepthMm: 1000,
         recessSide: "LEFT",
         gateType: "SINGLE_LEAF",
-        customGateWidthMm: 1200
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        drawChainStart: { x: 0, y: 0 }
       })
     );
 
@@ -37,6 +44,8 @@ describe("useEditorInteractionPreviews", () => {
     expect(["s1", "s2"]).toContain(result.drawHoverSnap?.segment.id);
     expect(result.ghostLengthMm).toBe(6000);
     expect(result.resolveDrawPoint({ x: 5940, y: 200 }).guide?.orientation).toBe("VERTICAL");
+    expect(result.closeLoopPoint).toBeNull();
+    expect(result.drawSnapLabel).toBe("Axis aligned");
 
     const rectangleResult = renderHookServer(() =>
       useEditorInteractionPreviews({
@@ -53,7 +62,9 @@ describe("useEditorInteractionPreviews", () => {
         recessDepthMm: 1000,
         recessSide: "LEFT",
         gateType: "SINGLE_LEAF",
-        customGateWidthMm: 1200
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        drawChainStart: null
       })
     );
 
@@ -80,15 +91,20 @@ describe("useEditorInteractionPreviews", () => {
         ],
         recessWidthMm: 1600,
         recessDepthMm: 900,
-        recessSide: "LEFT",
+        recessSide: "AUTO",
         gateType: "SINGLE_LEAF",
-        customGateWidthMm: 1200
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        drawChainStart: null
       })
     );
 
     expect(recessResult.recessPreview?.segment.id).toBe("s1");
     expect(recessResult.recessPreview?.alignmentGuide?.anchorPoint).toEqual({ x: 3200, y: 0 });
+    expect(recessResult.recessPreview?.side).toBe("LEFT");
+    expect(recessResult.recessPreview?.sideSource).toBe("AUTO");
     expect(recessResult.gatePreview).toBeNull();
+    expect(recessResult.hoveredGateId).toBeNull();
 
     const gateResult = renderHookServer(() =>
       useEditorInteractionPreviews({
@@ -105,13 +121,41 @@ describe("useEditorInteractionPreviews", () => {
         recessDepthMm: 900,
         recessSide: "LEFT",
         gateType: "DOUBLE_LEAF",
-        customGateWidthMm: 2400
+        customGateWidthMm: 2400,
+        placedGateVisuals,
+        drawChainStart: null
       })
     );
 
     expect(gateResult.gatePreview?.segment.id).toBe("s1");
     expect(gateResult.gatePreview?.widthMm).toBe(3000);
+    expect(gateResult.gatePreview?.snapMeta.label).toBe("Centered");
     expect(gateResult.gatePreviewVisual?.leafCount).toBe(2);
     expect(gateResult.drawHoverSnap).toBeNull();
+    expect(gateResult.hoveredGateId).toBeNull();
+
+    const hoverResult = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "SELECT",
+        pointerWorld: { x: 2600, y: 20 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(hoverResult.hoveredSegmentId).toBe("s1");
+    expect(hoverResult.hoveredGateId).toBe("g1");
   });
 });

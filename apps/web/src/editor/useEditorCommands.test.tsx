@@ -18,6 +18,7 @@ interface CommandHarnessState {
   customGateWidthInputM: string;
   customGateWidthMm: number;
   drawStart: PointMm | null;
+  drawChainStart: PointMm | null;
   gatePreview: GateInsertionPreview | null;
   interactionMode: InteractionMode;
   isLengthEditorOpen: boolean;
@@ -71,6 +72,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     customGateWidthInputM: formatMetersInputFromMm(1200),
     customGateWidthMm: 1200,
     drawStart: null,
+    drawChainStart: null,
     gatePreview: buildGatePreview(baseSegments[0]!, 1700, 1000),
     interactionMode: "SELECT",
     isLengthEditorOpen: false,
@@ -104,7 +106,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
   const toWorld = vi.fn((point: { x: number; y: number }) => ({ x: point.x, y: point.y }));
   const resolveDrawPoint = vi.fn((point: PointMm) => ({
     point: { x: Math.round(point.x / 100) * 100, y: Math.round(point.y / 100) * 100 },
-    guide: null
+    guide: null,
+    snapMeta: null
   }));
   let commands: ReturnType<typeof useEditorCommands>;
 
@@ -143,6 +146,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         interactionMode: state.interactionMode,
         gateType: "SINGLE_LEAF",
         drawStart: state.drawStart,
+        drawChainStart: state.drawChainStart,
         rectangleStart: state.rectangleStart,
         selectedSegmentId: state.selectedSegmentId,
         selectedGateId: state.selectedGateId,
@@ -164,6 +168,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         zoomAtPointer,
         setPointerWorld: createStateSetter(state, "pointerWorld"),
         setDrawStart: createStateSetter(state, "drawStart"),
+        setDrawChainStart: createStateSetter(state, "drawChainStart"),
         setRectangleStart: createStateSetter(state, "rectangleStart"),
         setSelectedSegmentId: createStateSetter(state, "selectedSegmentId"),
         setSelectedGateId: createStateSetter(state, "selectedGateId"),
@@ -271,12 +276,14 @@ describe("useEditorCommands", () => {
     harness.stage.pointer = { x: 100, y: 100 };
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.drawStart).toEqual({ x: 100, y: 100 });
+    expect(harness.state.drawChainStart).toEqual({ x: 100, y: 100 });
 
     harness.stage.pointer = { x: 2100, y: 100 };
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.layout.segments).toHaveLength(1);
     expect(harness.state.layout.segments[0]?.id).toBe("11111111-1111-4111-8111-111111111111");
+    expect(harness.state.drawChainStart).toEqual({ x: 100, y: 100 });
 
     harness.state.interactionMode = "RECTANGLE";
     harness.state.drawStart = null;
@@ -298,6 +305,7 @@ describe("useEditorCommands", () => {
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.layout.gates?.[0]?.id).toBe("66666666-6666-4666-8666-666666666666");
+    expect(harness.state.drawChainStart).toBeNull();
 
     harness.state.interactionMode = "RECESS";
     harness.state.recessPreview = buildRecessPreview(harness.state.layout.segments[0]!, 2500, 1500, 1000, "LEFT");
@@ -379,6 +387,7 @@ describe("useEditorCommands", () => {
     harness.commands.onContextMenu(createMouseEvent(0, harness.stage));
     expect(harness.state.drawStart).toBeNull();
     expect(harness.state.rectangleStart).toBeNull();
+    expect(harness.state.drawChainStart).toBeNull();
 
     expect(harness.commands.deleteSelectedGate()).toBe(true);
     harness.state.selectedSegmentId = "s1";

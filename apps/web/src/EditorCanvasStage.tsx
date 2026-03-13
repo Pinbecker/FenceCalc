@@ -15,13 +15,32 @@ export function EditorCanvasStage({
   onStageMouseDown,
   onStageMouseMove,
   onStageMouseUp,
+  onStageDoubleClick,
   onStageWheel,
   onContextMenu,
   ...props
 }: EditorCanvasStageProps) {
+  const cursor =
+    props.isPanning
+      ? "grabbing"
+      : props.interactionMode === "DRAW"
+        ? props.drawStart
+          ? "crosshair"
+          : "cell"
+        : props.interactionMode === "RECESS" || props.interactionMode === "GATE"
+          ? props.recessPreview || props.gatePreview
+            ? "crosshair"
+            : "default"
+          : props.hoveredGateId || props.hoveredSegmentId
+            ? props.hoveredGateId === props.selectedGateId || props.hoveredSegmentId === props.selectedSegmentId
+              ? "grab"
+              : "pointer"
+            : "default";
+
   return (
     <main
       className="canvas-wrap"
+      style={{ cursor }}
       onMouseDownCapture={(event) => {
         if (event.button === 1) {
           event.preventDefault();
@@ -45,6 +64,8 @@ export function EditorCanvasStage({
         onTouchStart={onStageMouseDown}
         onTouchMove={onStageMouseMove}
         onTouchEnd={onStageMouseUp}
+        onDblClick={onStageDoubleClick}
+        onDblTap={onStageDoubleClick}
         onWheel={onStageWheel}
         onContextMenu={onContextMenu}
       >
@@ -59,6 +80,8 @@ export function EditorCanvasStage({
           interactionMode={props.interactionMode}
           visualPosts={props.visualPosts}
           segments={props.segments}
+          hoveredSegmentId={props.hoveredSegmentId}
+          hoveredGateId={props.hoveredGateId}
           selectedSegmentId={props.selectedSegmentId}
           selectedGateId={props.selectedGateId}
           gatesBySegmentId={props.gatesBySegmentId}
@@ -87,6 +110,7 @@ export function EditorCanvasStage({
           recessPreview={props.recessPreview}
           gatePreview={props.gatePreview}
           gatePreviewVisual={props.gatePreviewVisual}
+          closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}
         />
         <EditorCanvasOptimizationLayer view={view} selectedPlanVisual={props.selectedPlanVisual} />
@@ -96,7 +120,14 @@ export function EditorCanvasStage({
         scaleBar={props.scaleBar}
         interactionMode={props.interactionMode}
         disableSnap={props.disableSnap}
+        isPanning={props.isPanning}
+        hoveredSegmentId={props.hoveredSegmentId}
+        hoveredGateId={props.hoveredGateId}
         drawStart={props.drawStart}
+        drawSnapLabel={props.drawSnapLabel}
+        closeLoopPoint={props.closeLoopPoint}
+        gatePreview={props.gatePreview}
+        recessPreview={props.recessPreview}
       />
     </main>
   );

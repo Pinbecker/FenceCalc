@@ -4,7 +4,7 @@ interface EditorInteractionPanelProps {
   interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
   recessWidthInputM: string;
   recessDepthInputM: string;
-  recessSide: "LEFT" | "RIGHT";
+  recessSide: "AUTO" | "LEFT" | "RIGHT";
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
@@ -12,9 +12,15 @@ interface EditorInteractionPanelProps {
   gateWidthOptionsMm: readonly number[];
   recessPreview:
     | {
+        depthMm: number;
         startOffsetMm: number;
         endOffsetMm: number;
         segmentLengthMm: number;
+        side: "LEFT" | "RIGHT";
+        sideSource: "AUTO" | "MANUAL";
+        snapMeta: {
+          label: string;
+        };
       }
     | null;
   gatePreview:
@@ -23,6 +29,9 @@ interface EditorInteractionPanelProps {
         startOffsetMm: number;
         endOffsetMm: number;
         segmentLengthMm: number;
+        snapMeta: {
+          label: string;
+        };
       }
     | null;
   formatLengthMm: (value: number) => string;
@@ -31,7 +40,7 @@ interface EditorInteractionPanelProps {
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
-  onSetRecessSide: (side: "LEFT" | "RIGHT") => void;
+  onSetRecessSide: (side: "AUTO" | "LEFT" | "RIGHT") => void;
   onSetGateType: (type: GateType) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;
@@ -90,7 +99,7 @@ export function EditorInteractionPanel({
         </button>
       </div>
       {interactionMode === "DRAW" ? (
-        <p className="muted-line">Click to start a run and keep clicking to chain segments. Hold Shift to disable angle snapping.</p>
+        <p className="muted-line">Click to start a run and keep clicking to chain segments. Hold Shift to disable angle snapping. Press Enter or double-click to finish.</p>
       ) : null}
       {interactionMode === "RECTANGLE" ? (
         <p className="muted-line">Click first corner, then opposite corner to place a rectangle perimeter.</p>
@@ -132,22 +141,28 @@ export function EditorInteractionPanel({
             </datalist>
           </label>
           <label>
-            Recess Side
-            <select value={recessSide} onChange={(event) => onSetRecessSide(event.target.value as "LEFT" | "RIGHT")}>
-              <option value="LEFT">Left Of Run</option>
-              <option value="RIGHT">Right Of Run</option>
-            </select>
+            Recess Orientation
+            <div className="mode-toggle-row mode-toggle-row-3">
+              <button type="button" className={`mode-toggle-btn${recessSide === "AUTO" ? " active" : ""}`} onClick={() => onSetRecessSide("AUTO")}>
+                Auto
+              </button>
+              <button type="button" className={`mode-toggle-btn${recessSide === "LEFT" ? " active" : ""}`} onClick={() => onSetRecessSide("LEFT")}>
+                Left
+              </button>
+              <button type="button" className={`mode-toggle-btn${recessSide === "RIGHT" ? " active" : ""}`} onClick={() => onSetRecessSide("RIGHT")}>
+                Right
+              </button>
+            </div>
           </label>
           {recessPreview ? (
             <>
               <p className="muted-line">
-                Left run {formatLengthMm(recessPreview.startOffsetMm)} | Right run{" "}
-                {formatLengthMm(recessPreview.segmentLengthMm - recessPreview.endOffsetMm)}
+                Opening {formatLengthMm(recessPreview.endOffsetMm - recessPreview.startOffsetMm)} x {formatLengthMm(recessPreview.depthMm)}
               </p>
-              <p className="muted-line">Tip: center snaps automatically when you hover near midpoint.</p>
+              <p className="muted-line">Move across the run to flip the preview in Auto mode.</p>
             </>
           ) : (
-            <p className="muted-line">Hover near a fence line and click to place recess.</p>
+            <p className="muted-line">Hover near a fence line and click to place recess. Auto mode follows the side you hover.</p>
           )}
         </>
       ) : null}
@@ -184,10 +199,13 @@ export function EditorInteractionPanel({
             </label>
           ) : null}
           {gatePreview ? (
-            <p className="muted-line">
-              Gate {formatLengthMm(gatePreview.widthMm)} | left run {formatLengthMm(gatePreview.startOffsetMm)} | right run{" "}
-              {formatLengthMm(gatePreview.segmentLengthMm - gatePreview.endOffsetMm)}
-            </p>
+            <>
+              <p className="muted-line">
+                Gate {formatLengthMm(gatePreview.widthMm)} | left run {formatLengthMm(gatePreview.startOffsetMm)} | right run{" "}
+                {formatLengthMm(gatePreview.segmentLengthMm - gatePreview.endOffsetMm)}
+              </p>
+              <p className="muted-line">Snap {gatePreview.snapMeta.label}.</p>
+            </>
           ) : (
             <p className="muted-line">Hover near a fence line and click to insert gate object.</p>
           )}

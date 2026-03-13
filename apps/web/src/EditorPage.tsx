@@ -253,18 +253,23 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const {
     axisGuide,
     drawHoverSnap,
+    drawSnapLabel,
     gatePreview,
     gatePreviewVisual,
     ghostEnd,
     ghostLengthMm,
+    hoveredGateId,
+    hoveredSegmentId,
     rectanglePreviewEnd,
     recessPreview,
+    closeLoopPoint,
     resolveDrawPoint
   } = useEditorInteractionPreviews({
     segments,
     interactionMode: shellState.interactionMode,
     pointerWorld,
     drawStart: selectionState.drawStart,
+    drawChainStart: selectionState.drawChainStart,
     rectangleStart: selectionState.rectangleStart,
     drawAnchorNodes,
     disableSnap: shellState.disableSnap,
@@ -274,7 +279,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     recessDepthMm: shellState.recessDepthMm,
     recessSide: shellState.recessSide,
     gateType: shellState.gateType,
-    customGateWidthMm: shellState.customGateWidthMm
+    customGateWidthMm: shellState.customGateWidthMm,
+    placedGateVisuals
   });
 
   const {
@@ -311,6 +317,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     interactionMode: shellState.interactionMode,
     gateType: shellState.gateType,
     drawStart: selectionState.drawStart,
+    drawChainStart: selectionState.drawChainStart,
     rectangleStart: selectionState.rectangleStart,
     selectedSegmentId: selectionState.selectedSegmentId,
     selectedGateId: selectionState.selectedGateId,
@@ -332,6 +339,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     zoomAtPointer,
     setPointerWorld,
     setDrawStart: selectionState.setDrawStart,
+    setDrawChainStart: selectionState.setDrawChainStart,
     setRectangleStart: selectionState.setRectangleStart,
     setSelectedSegmentId: selectionState.setSelectedSegmentId,
     setSelectedGateId: selectionState.setSelectedGateId,
@@ -357,7 +365,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       setInteractionMode: shellState.setInteractionMode,
       setIsSpacePressed,
       setDisableSnap: shellState.setDisableSnap,
-      cancelActiveDrawing
+      cancelActiveDrawing,
+      finishActiveInteraction: cancelActiveDrawing
     }),
     [
       cancelActiveDrawing,
@@ -570,16 +579,21 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 horizontalLines={horizontalLines}
                 interactionMode={shellState.interactionMode}
                 disableSnap={shellState.disableSnap}
+                isPanning={isPanning}
                 drawStart={selectionState.drawStart}
                 rectangleStart={selectionState.rectangleStart}
                 ghostEnd={ghostEnd}
                 ghostLengthMm={ghostLengthMm}
                 axisGuide={axisGuide}
                 drawHoverSnap={drawHoverSnap}
+                drawSnapLabel={drawSnapLabel}
                 rectanglePreviewEnd={rectanglePreviewEnd}
                 recessPreview={recessPreview}
                 gatePreview={gatePreview}
                 gatePreviewVisual={gatePreviewVisual}
+                hoveredSegmentId={hoveredSegmentId}
+                hoveredGateId={hoveredGateId}
+                closeLoopPoint={closeLoopPoint}
                 visualPosts={visualPosts}
                 segments={segments}
                 selectedSegmentId={selectionState.selectedSegmentId}
@@ -594,6 +608,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 onStageMouseDown={onStageMouseDown}
                 onStageMouseMove={onStageMouseMove}
                 onStageMouseUp={onStageMouseUp}
+                onStageDoubleClick={cancelActiveDrawing}
                 onStageWheel={onStageWheel}
                 onContextMenu={onContextMenu}
                 onSelectSegment={(segmentId) => {

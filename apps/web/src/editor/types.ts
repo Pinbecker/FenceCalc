@@ -35,6 +35,20 @@ export interface AxisGuide {
   anchor: PointMm;
 }
 
+export interface PreviewSnapMeta {
+  kind:
+    | "NODE"
+    | "SEGMENT"
+    | "AXIS"
+    | "MIDPOINT"
+    | "FRACTION"
+    | "ALIGNMENT"
+    | "CENTERED"
+    | "FREE"
+    | "CLOSE_LOOP";
+  label: string;
+}
+
 export interface HistoryState {
   past: LayoutModel[];
   present: LayoutModel;
@@ -53,6 +67,7 @@ export type HistoryAction =
 export type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE";
 
 export type RecessSide = "LEFT" | "RIGHT";
+export type RecessSidePreference = RecessSide | "AUTO";
 
 export interface RecessInsertionPreview {
   segment: LayoutSegment;
@@ -67,6 +82,8 @@ export interface RecessInsertionPreview {
   recessEntryPoint: PointMm;
   recessExitPoint: PointMm;
   targetPoint: PointMm;
+  sideSource: "AUTO" | "MANUAL";
+  snapMeta: PreviewSnapMeta;
   alignmentGuide?: {
     anchorPoint: PointMm;
     targetPoint: PointMm;
@@ -79,6 +96,7 @@ export interface LineSnapPreview {
   startOffsetMm: number;
   endOffsetMm: number;
   distanceMm: number;
+  snapMeta?: PreviewSnapMeta;
 }
 
 export interface GateInsertionPreview {
@@ -92,6 +110,7 @@ export interface GateInsertionPreview {
   tangent: { x: number; y: number };
   normal: { x: number; y: number };
   targetPoint: PointMm;
+  snapMeta: PreviewSnapMeta;
 }
 
 export interface GateVisual {
@@ -131,6 +150,12 @@ export interface GateOppositeGuide {
   key: string;
   start: PointMm;
   end: PointMm;
+}
+
+export interface DrawResolveResult {
+  point: PointMm;
+  guide: AxisGuide | null;
+  snapMeta: PreviewSnapMeta | null;
 }
 
 export interface SegmentLengthLabel {

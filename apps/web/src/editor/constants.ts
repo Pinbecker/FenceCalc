@@ -28,8 +28,8 @@ export const DRAW_LINE_SNAP_PX = 18;
 export const RECESS_POINTER_SNAP_PX = 20;
 export const GATE_POINTER_SNAP_PX = 20;
 export const RECESS_CORNER_SNAP_MM = 250;
-export const RECESS_WIDTH_OPTIONS_MM = [500, 1000, 1500, 2000, 2500, 3000];
-export const RECESS_DEPTH_OPTIONS_MM = [500, 1000, 1500, 2000];
+export const RECESS_WIDTH_OPTIONS_MM = [1000, 1500, 2500, 4000, 6000, 7500, 9000];
+export const RECESS_DEPTH_OPTIONS_MM = [500, 1000, 1500, 2000, 2500, 3000];
 export const SINGLE_GATE_WIDTH_MM = 1200;
 export const DOUBLE_GATE_WIDTH_MM = 3000;
 export const GATE_WIDTH_OPTIONS_MM = [1000, 1200, 1500, 1800, 2400, 3000, 3600, 4000];
@@ -44,32 +44,32 @@ export const SCALE_BAR_CANDIDATES_MM = [
 ];
 
 const TWIN_BAR_STANDARD_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#f6e58d",
-  "1.8m": "#b8f2d0",
-  "2m": "#a9d6ff",
-  "2.4m": "#d7c6ff",
-  "3m": "#ffc3b0",
-  "4m": "#ffd6a5",
-  "4.5m": "#f7b2d9",
-  "5m": "#b8f2e6",
-  "6m": "#d9ed92"
+  "1.2m": "#c8c29b",
+  "1.8m": "#8eaf9d",
+  "2m": "#86aabd",
+  "2.4m": "#998fb5",
+  "3m": "#bf9a8a",
+  "4m": "#c0aa88",
+  "4.5m": "#b28aa2",
+  "5m": "#86b1a8",
+  "6m": "#a8b68b"
 };
 
 const TWIN_BAR_SUPER_REBOUND_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#d4a700",
-  "1.8m": "#18a558",
-  "2m": "#1d6fd6",
-  "2.4m": "#6e44c7",
-  "3m": "#e85d04",
-  "4m": "#f77f00",
-  "4.5m": "#d63384",
-  "5m": "#0f9d8a",
-  "6m": "#7cb518"
+  "1.2m": "#9e8444",
+  "1.8m": "#3d7f62",
+  "2m": "#3d6e92",
+  "2.4m": "#67558f",
+  "3m": "#a16649",
+  "4m": "#b07b3f",
+  "4.5m": "#925775",
+  "5m": "#3e8077",
+  "6m": "#6f8751"
 };
 
 const ROLL_FORM_COLORS: Record<(typeof ROLL_FORM_HEIGHT_KEYS)[number], string> = {
-  "2m": "#00a884",
-  "3m": "#ffd166"
+  "2m": "#4b8c78",
+  "3m": "#c1a063"
 };
 
 export const TWIN_BAR_HEIGHT_OPTIONS: FenceHeightKey[] = [...TWIN_BAR_HEIGHT_KEYS];

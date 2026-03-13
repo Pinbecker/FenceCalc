@@ -13,8 +13,8 @@ import type {
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { formatMetersInputFromMm } from "../formatters";
-import { MIN_SEGMENT_MM, parseMetersInputToMm, quantize } from "./constants";
-import { dot, rangesOverlap } from "./editorMath";
+import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, parseMetersInputToMm, quantize } from "./constants";
+import { dot, rangesOverlap, samePointApprox } from "./editorMath";
 import {
   buildRectangleSegments,
   moveGatePlacementCollection,
@@ -24,6 +24,7 @@ import {
 } from "./editorCommandUtils";
 import { buildRecessReplacementSegments } from "./recess";
 import type {
+  DrawResolveResult,
   GateInsertionPreview,
   InteractionMode,
   RecessInsertionPreview,
@@ -65,6 +66,7 @@ interface UseEditorCommandsOptions {
   interactionMode: InteractionMode;
   gateType: GateType;
   drawStart: PointMm | null;
+  drawChainStart: PointMm | null;
   rectangleStart: PointMm | null;
   selectedSegmentId: string | null;
   selectedGateId: string | null;
@@ -78,7 +80,7 @@ interface UseEditorCommandsOptions {
   customGateWidthMm: number;
   recessPreview: RecessInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
-  resolveDrawPoint: (worldPoint: PointMm) => { point: PointMm; guide: { coordinateMm: number; orientation: "VERTICAL" | "HORIZONTAL"; anchor: PointMm } | null };
+  resolveDrawPoint: (worldPoint: PointMm) => DrawResolveResult;
   toWorld: (screenPoint: PointerScreenPoint) => PointMm;
   beginPan: (pointer: PointerScreenPoint) => void;
   updatePan: (pointer: PointerScreenPoint) => boolean;
@@ -86,6 +88,7 @@ interface UseEditorCommandsOptions {
   zoomAtPointer: (pointer: PointerScreenPoint, deltaY: number) => void;
   setPointerWorld: (point: PointMm | null) => void;
   setDrawStart: Dispatch<SetStateAction<PointMm | null>>;
+  setDrawChainStart: Dispatch<SetStateAction<PointMm | null>>;
   setRectangleStart: Dispatch<SetStateAction<PointMm | null>>;
   setSelectedSegmentId: Dispatch<SetStateAction<string | null>>;
   setSelectedGateId: Dispatch<SetStateAction<string | null>>;
@@ -114,6 +117,7 @@ export function useEditorCommands({
   interactionMode,
   gateType,
   drawStart,
+  drawChainStart,
   rectangleStart,
   selectedSegmentId,
   selectedGateId,
@@ -135,6 +139,7 @@ export function useEditorCommands({
   zoomAtPointer,
   setPointerWorld,
   setDrawStart,
+  setDrawChainStart,
   setRectangleStart,
   setSelectedSegmentId,
   setSelectedGateId,
@@ -313,6 +318,7 @@ export function useEditorCommands({
 
       if (!drawStart) {
         setDrawStart(snappedPoint);
+        setDrawChainStart((previous) => previous ?? snappedPoint);
         setSelectedSegmentId(null);
         setSelectedGateId(null);
         return;
@@ -321,6 +327,11 @@ export function useEditorCommands({
       if (distanceMm(drawStart, snappedPoint) < MIN_SEGMENT_MM) {
         return;
       }
+
+      const closesLoop =
+        drawChainStart !== null &&
+        !samePointApprox(drawStart, drawChainStart) &&
+        samePointApprox(snappedPoint, drawChainStart, DRAW_INCREMENT_MM * 0.5);
 
       applySegments((previous) => [
         ...previous,
@@ -331,14 +342,21 @@ export function useEditorCommands({
           spec: activeSpec
         }
       ]);
-      setDrawStart(snappedPoint);
+      if (closesLoop) {
+        setDrawStart(null);
+        setDrawChainStart(null);
+      } else {
+        setDrawStart(snappedPoint);
+      }
       setSelectedGateId(null);
     },
     [
       activeSpec,
       applySegments,
+      drawChainStart,
       drawStart,
       resolveDrawPoint,
+      setDrawChainStart,
       setDrawStart,
       setSelectedGateId,
       setSelectedSegmentId
@@ -405,10 +423,12 @@ export function useEditorCommands({
       setSelectedSegmentId(null);
       setSelectedGateId(null);
       setDrawStart(null);
+      setDrawChainStart(null);
     },
     [
       applyLayout,
       resolvedGateById,
+      setDrawChainStart,
       setDrawStart,
       setSelectedGateId,
       setSelectedSegmentId
@@ -441,8 +461,9 @@ export function useEditorCommands({
       });
       setSelectedSegmentId(null);
       setDrawStart(null);
+      setDrawChainStart(null);
     },
-    [applyGatePlacements, gateType, setDrawStart, setSelectedSegmentId]
+    [applyGatePlacements, gateType, setDrawChainStart, setDrawStart, setSelectedSegmentId]
   );
 
   const onStageMouseDown = useCallback(
@@ -630,8 +651,9 @@ export function useEditorCommands({
       event.evt.preventDefault();
       setDrawStart(null);
       setRectangleStart(null);
+      setDrawChainStart(null);
     },
-    [setDrawStart, setRectangleStart]
+    [setDrawChainStart, setDrawStart, setRectangleStart]
   );
 
   const deleteSelectedGate = useCallback((): boolean => {
@@ -657,11 +679,13 @@ export function useEditorCommands({
   const cancelActiveDrawing = useCallback((): void => {
     setDrawStart(null);
     setRectangleStart(null);
-  }, [setDrawStart, setRectangleStart]);
+    setDrawChainStart(null);
+  }, [setDrawChainStart, setDrawStart, setRectangleStart]);
 
   const resetWorkspaceCanvas = useCallback((): void => {
     applyLayout(() => ({ segments: [], gates: [] }));
     setDrawStart(null);
+    setDrawChainStart(null);
     setRectangleStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
@@ -669,6 +693,7 @@ export function useEditorCommands({
     setIsLengthEditorOpen(false);
   }, [
     applyLayout,
+    setDrawChainStart,
     setDrawStart,
     setIsLengthEditorOpen,
     setRectangleStart,
@@ -687,10 +712,12 @@ export function useEditorCommands({
   const handleClearLayout = useCallback((): void => {
     applyLayout(() => ({ segments: [], gates: [] }));
     setDrawStart(null);
+    setDrawChainStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
   }, [
     applyLayout,
+    setDrawChainStart,
     setDrawStart,
     setSelectedGateId,
     setSelectedSegmentId
