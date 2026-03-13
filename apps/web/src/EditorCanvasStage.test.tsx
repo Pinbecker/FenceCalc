@@ -115,6 +115,10 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       coordinateMm: 2400,
       anchor: { x: 0, y: 0 }
     },
+    activeDrawNodeSnap: {
+      point: { x: 5000, y: 0 },
+      segments: [segments[0]!, segments[1]!]
+    },
     drawHoverSnap: {
       segment: segments[0]!,
       point: { x: 2400, y: 0 },

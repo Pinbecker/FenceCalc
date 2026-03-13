@@ -300,6 +300,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   });
 
   const {
+    activeDrawNodeSnap,
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,
@@ -644,6 +645,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 ghostEnd={ghostEnd}
                 ghostLengthMm={ghostLengthMm}
                 axisGuide={axisGuide}
+                activeDrawNodeSnap={activeDrawNodeSnap}
                 drawHoverSnap={drawHoverSnap}
                 drawSnapLabel={drawSnapLabel}
                 rectanglePreviewEnd={rectanglePreviewEnd}

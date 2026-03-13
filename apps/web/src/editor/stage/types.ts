@@ -7,6 +7,7 @@ import type { GridLine, Viewport, VisibleBounds } from "../canvasViewport";
 import type {
   AxisGuide,
   BasketballPostInsertionPreview,
+  DrawNodeSnapPreview,
   GateInsertionPreview,
   GateVisual,
   InteractionMode,
@@ -37,6 +38,7 @@ export interface EditorCanvasStageProps {
   ghostEnd: PointMm | null;
   ghostLengthMm: number;
   axisGuide: AxisGuide | null;
+  activeDrawNodeSnap: DrawNodeSnapPreview | null;
   drawHoverSnap: LineSnapPreview | null;
   drawSnapLabel: string | null;
   rectanglePreviewEnd: PointMm | null;

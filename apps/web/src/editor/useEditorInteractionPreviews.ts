@@ -35,6 +35,7 @@ import {
 } from "./recess";
 import type {
   BasketballPostInsertionPreview,
+  DrawNodeSnapPreview,
   DrawResolveResult,
   GateVisual,
   InteractionMode,
@@ -188,6 +189,14 @@ export function useEditorInteractionPreviews({
           snapMeta: buildSnapMeta("NODE", "Endpoint")
         };
       }
+      const guidedLineSnap = findNearestSegmentSnap(guided.point, segments, drawLineSnapDistanceMm);
+      if (guidedLineSnap) {
+        return {
+          point: guidedLineSnap.point,
+          guide: guided.guide,
+          snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+        };
+      }
       return {
         point: guided.point,
         guide: guided.guide,
@@ -214,6 +223,28 @@ export function useEditorInteractionPreviews({
   const ghostEnd = ghostSnap?.point ?? null;
   const axisGuide = ghostSnap?.guide ?? null;
   const drawSnapLabel = ghostSnap?.snapMeta?.label ?? null;
+  const activeDrawNodeSnap = useMemo<DrawNodeSnapPreview | null>(() => {
+    if (
+      interactionMode !== "DRAW" ||
+      !drawStart ||
+      !ghostEnd ||
+      (ghostSnap?.snapMeta?.kind !== "NODE" && ghostSnap?.snapMeta?.kind !== "SEGMENT")
+    ) {
+      return null;
+    }
+    const toleranceMm = DRAW_INCREMENT_MM * 0.6;
+    const connectedSegments = segments.filter((segment) =>
+      ghostSnap?.snapMeta?.kind === "NODE"
+        ? distanceMm(segment.start, ghostEnd) <= toleranceMm || distanceMm(segment.end, ghostEnd) <= toleranceMm
+        : projectPointOntoSegment(ghostEnd, segment).distanceMm <= toleranceMm
+    );
+    return connectedSegments.length > 0
+      ? {
+          point: ghostEnd,
+          segments: connectedSegments
+        }
+      : null;
+  }, [drawStart, ghostEnd, ghostSnap?.snapMeta?.kind, interactionMode, segments]);
   const closeLoopPoint = useMemo(() => {
     if (!drawStart || !drawChainStart || !ghostEnd) {
       return null;
@@ -667,6 +698,7 @@ export function useEditorInteractionPreviews({
   }, [drawStart, ghostEnd]);
 
   return {
+    activeDrawNodeSnap,
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,

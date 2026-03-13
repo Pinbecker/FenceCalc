@@ -263,6 +263,7 @@ vi.mock("./editor/useEditorDerivedState", () => ({
 
 vi.mock("./editor/useEditorInteractionPreviews", () => ({
   useEditorInteractionPreviews: () => ({
+    activeDrawNodeSnap: null,
     axisGuide: null,
     drawHoverSnap: null,
     basketballPostPreview: null,

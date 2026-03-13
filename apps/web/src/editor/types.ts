@@ -202,6 +202,11 @@ export interface DrawResolveResult {
   snapMeta: PreviewSnapMeta | null;
 }
 
+export interface DrawNodeSnapPreview {
+  point: PointMm;
+  segments: LayoutSegment[];
+}
+
 export interface HeightCountRow {
   heightMm: number;
   count: number;

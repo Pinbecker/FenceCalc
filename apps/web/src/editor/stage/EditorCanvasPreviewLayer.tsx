@@ -1,5 +1,6 @@
 import type { GateType } from "@fence-estimator/contracts";
 import { Circle, Group, Layer, Line } from "react-konva";
+import { distanceMm } from "@fence-estimator/geometry";
 
 import { formatLengthMm } from "../../formatters";
 import { renderBasketballPostSymbol } from "../basketballPostGeometry";
@@ -11,6 +12,7 @@ import type { EditorCanvasStageProps } from "./types";
 type EditorCanvasPreviewLayerProps = Pick<
   EditorCanvasStageProps,
   | "axisGuide"
+  | "activeDrawNodeSnap"
   | "gateType"
   | "drawHoverSnap"
   | "drawStart"
@@ -248,6 +250,7 @@ function renderTargetSegmentHighlight(
 
 export function EditorCanvasPreviewLayer({
   axisGuide,
+  activeDrawNodeSnap,
   gateType,
   drawHoverSnap,
   drawStart,
@@ -636,6 +639,114 @@ export function EditorCanvasPreviewLayer({
       ) : null}
       {drawStart && ghostEnd ? (
         <>
+          {activeDrawNodeSnap && !closeLoopPoint ? (
+            <Group listening={false}>
+              {activeDrawNodeSnap.segments.map((segment) => {
+                const segmentAxes = deriveSegmentAxes(segment.start, segment.end);
+                const startDistanceMm = Math.round(distanceMm(segment.start, activeDrawNodeSnap.point));
+                const endDistanceMm = Math.round(distanceMm(activeDrawNodeSnap.point, segment.end));
+
+                return (
+                  <Group key={`draw-node-snap-segment-${segment.id}`}>
+                    {renderTargetSegmentHighlight(segment.start, segment.end, view.scale, "#8ceaff")}
+                    {startDistanceMm > MIN_SEGMENT_MM ? (
+                      <Line
+                        points={[segment.start.x, segment.start.y, activeDrawNodeSnap.point.x, activeDrawNodeSnap.point.y]}
+                        stroke="#9fe7f8"
+                        strokeWidth={3.2 / view.scale}
+                        dash={[12 / view.scale, 8 / view.scale]}
+                        lineCap="round"
+                      />
+                    ) : null}
+                    {endDistanceMm > MIN_SEGMENT_MM ? (
+                      <Line
+                        points={[activeDrawNodeSnap.point.x, activeDrawNodeSnap.point.y, segment.end.x, segment.end.y]}
+                        stroke="#ffd28b"
+                        strokeWidth={3.2 / view.scale}
+                        dash={[12 / view.scale, 8 / view.scale]}
+                        lineCap="round"
+                      />
+                    ) : null}
+                    {renderRunDistanceLabels({
+                      keyPrefix: `draw-node-snap-${segment.id}`,
+                      startPoint: segment.start,
+                      splitStartPoint: activeDrawNodeSnap.point,
+                      splitEndPoint: activeDrawNodeSnap.point,
+                      endPoint: segment.end,
+                      startDistanceMm,
+                      endDistanceMm,
+                      tangent: segmentAxes.tangent,
+                      startNormal: segmentAxes.normal,
+                      endNormal: { x: -segmentAxes.normal.x, y: -segmentAxes.normal.y },
+                      scale: view.scale,
+                      fill: "rgba(12, 48, 55, 0.94)",
+                      textColor: "#effcff",
+                      stroke: "rgba(140, 234, 255, 0.42)"
+                    })}
+                  </Group>
+                );
+              })}
+              <Circle
+                x={activeDrawNodeSnap.point.x}
+                y={activeDrawNodeSnap.point.y}
+                radius={18 / view.scale}
+                stroke="#86e8ff"
+                strokeWidth={2.8 / view.scale}
+                opacity={0.34}
+              />
+              <Circle
+                x={activeDrawNodeSnap.point.x}
+                y={activeDrawNodeSnap.point.y}
+                radius={11 / view.scale}
+                stroke="#ffe2a1"
+                strokeWidth={2.2 / view.scale}
+                opacity={0.98}
+              />
+              <Circle
+                x={activeDrawNodeSnap.point.x}
+                y={activeDrawNodeSnap.point.y}
+                radius={5.8 / view.scale}
+                fill="#f7fdff"
+                stroke="#163741"
+                strokeWidth={1.1 / view.scale}
+                opacity={0.98}
+              />
+              <Line
+                points={[
+                  activeDrawNodeSnap.point.x - 12 / view.scale,
+                  activeDrawNodeSnap.point.y,
+                  activeDrawNodeSnap.point.x + 12 / view.scale,
+                  activeDrawNodeSnap.point.y
+                ]}
+                stroke="#fff1bf"
+                strokeWidth={1.7 / view.scale}
+                lineCap="round"
+              />
+              <Line
+                points={[
+                  activeDrawNodeSnap.point.x,
+                  activeDrawNodeSnap.point.y - 12 / view.scale,
+                  activeDrawNodeSnap.point.x,
+                  activeDrawNodeSnap.point.y + 12 / view.scale
+                ]}
+                stroke="#fff1bf"
+                strokeWidth={1.7 / view.scale}
+                lineCap="round"
+              />
+              {renderCanvasLabel({
+                keyValue: "draw-node-snap-label",
+                x: activeDrawNodeSnap.point.x,
+                y: activeDrawNodeSnap.point.y - 34 / view.scale,
+                text: "Fence snap",
+                scale: view.scale,
+                fill: "rgba(12, 48, 55, 0.94)",
+                textColor: "#effcff",
+                stroke: "rgba(140, 234, 255, 0.42)",
+                fontSizePx: LABEL_FONT_SIZE_PX,
+                minWidthPx: 70
+              })}
+            </Group>
+          ) : null}
           {axisGuide ? (
             <>
               <Line

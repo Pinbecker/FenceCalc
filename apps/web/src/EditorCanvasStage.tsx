@@ -124,6 +124,7 @@ export function EditorCanvasStage({
           ghostEnd={props.ghostEnd}
           ghostLengthMm={props.ghostLengthMm}
           axisGuide={props.axisGuide}
+          activeDrawNodeSnap={props.activeDrawNodeSnap}
           drawHoverSnap={props.drawHoverSnap}
           rectanglePreviewEnd={props.rectanglePreviewEnd}
           recessPreview={props.recessPreview}

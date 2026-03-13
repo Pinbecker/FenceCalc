@@ -48,9 +48,38 @@ describe("useEditorInteractionPreviews", () => {
     expect(result.axisGuide).toBeNull();
     expect(result.drawHoverSnap).toBeNull();
     expect(result.ghostLengthMm).toBe(6000);
+    expect(result.activeDrawNodeSnap?.point).toEqual({ x: 6000, y: 0 });
+    expect(result.activeDrawNodeSnap?.segments.map((segment) => segment.id)).toEqual(["s1", "s2"]);
     expect(result.resolveDrawPoint({ x: 5940, y: 200 }).guide).toBeNull();
     expect(result.closeLoopPoint).toBeNull();
     expect(result.drawSnapLabel).toBe("Endpoint");
+
+    const activeLineSnap = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "DRAW",
+        pointerWorld: { x: 980, y: 40 },
+        drawStart: { x: 0, y: 1000 },
+        rectangleStart: { x: 0, y: 0 },
+        drawAnchorNodes: [{ x: 6000, y: 0 }],
+        disableSnap: false,
+        viewScale: 0.2,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1500,
+        recessDepthMm: 1000,
+        recessSide: "LEFT",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        drawChainStart: { x: 0, y: 1000 }
+      })
+    );
+
+    expect(activeLineSnap.ghostEnd).toEqual({ x: 950, y: 0 });
+    expect(activeLineSnap.activeDrawNodeSnap?.point).toEqual({ x: 950, y: 0 });
+    expect(activeLineSnap.activeDrawNodeSnap?.segments.map((segment) => segment.id)).toEqual(["s1"]);
+    expect(activeLineSnap.drawSnapLabel).toBe("Fence line");
 
     const preDrawHover = renderHookServer(() =>
       useEditorInteractionPreviews({
@@ -77,6 +106,7 @@ describe("useEditorInteractionPreviews", () => {
     expect(preDrawHover.drawHoverSnap?.point).toEqual({ x: 3000, y: 0 });
     expect(preDrawHover.drawHoverSnap?.startOffsetMm).toBe(3000);
     expect(preDrawHover.drawHoverSnap?.endOffsetMm).toBe(3000);
+    expect(preDrawHover.activeDrawNodeSnap).toBeNull();
     expect(preDrawHover.drawSnapLabel).toBe("Centered");
     expect(preDrawHover.resolveDrawPoint({ x: 3020, y: 40 }).point).toEqual({ x: 3000, y: 0 });
     expect(preDrawHover.resolveDrawPoint({ x: 3020, y: 40 }).snapMeta?.label).toBe("Centered");
