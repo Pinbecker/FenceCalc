@@ -3,6 +3,7 @@ import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/co
 
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
 import { useElementSize } from "./editor/useElementSize.js";
+import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
 import type { Optimization3DCutOverlay, Optimization3DPanelSlice } from "./optimization3D.js";
 import { buildOptimization3DScene } from "./optimization3D.js";
 
@@ -10,6 +11,8 @@ interface Optimization3DViewProps {
   estimateSegments: LayoutSegment[];
   activePlan: TwinBarOptimizationPlan | null;
   segmentOrdinalById: Map<string, number>;
+  basketballPosts: ResolvedBasketballPostPlacement[];
+  floodlightColumns: ResolvedFloodlightColumnPlacement[];
 }
 
 interface Point3D {
@@ -253,7 +256,9 @@ function createOverlayBadge(
 export function Optimization3DView({
   estimateSegments,
   activePlan,
-  segmentOrdinalById
+  segmentOrdinalById,
+  basketballPosts,
+  floodlightColumns
 }: Optimization3DViewProps) {
   const { ref, size } = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -263,8 +268,8 @@ export function Optimization3DView({
   const pendingOrbitRef = useRef<OrbitState | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const scene = useMemo(
-    () => buildOptimization3DScene(estimateSegments, activePlan, segmentOrdinalById),
-    [activePlan, estimateSegments, segmentOrdinalById]
+    () => buildOptimization3DScene(estimateSegments, activePlan, segmentOrdinalById, basketballPosts, floodlightColumns),
+    [activePlan, basketballPosts, estimateSegments, floodlightColumns, segmentOrdinalById]
   );
 
   const setOrbit = (updater: OrbitUpdater) => {
@@ -504,6 +509,146 @@ export function Optimization3DView({
           opacity: 1,
           depth: getFaceDepth(face.points)
         });
+      });
+    }
+
+    for (const basketballPost of scene.basketballPosts) {
+      const halfWidthMm = 36;
+      const groundX = basketballPost.point.x;
+      const groundZ = -basketballPost.point.y;
+      const topY = basketballPost.heightMm;
+      const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
+      const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
+      const frontTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm });
+      const frontTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm });
+      const sideBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
+      const sideTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm });
+      const sideTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm });
+      const columnFaces = [
+        {
+          key: `${basketballPost.key}-front`,
+          points: [frontBottomLeft, frontBottomRight, frontTopRight, frontTopLeft],
+          fill: "rgba(42, 70, 154, 0.88)"
+        },
+        {
+          key: `${basketballPost.key}-side`,
+          points: [frontBottomRight, sideBottomRight, sideTopRight, frontTopRight],
+          fill: "rgba(29, 53, 127, 0.92)"
+        },
+        {
+          key: `${basketballPost.key}-top`,
+          points: [frontTopLeft, frontTopRight, sideTopRight, sideTopLeft],
+          fill: "rgba(132, 165, 255, 0.96)"
+        }
+      ];
+      columnFaces.forEach((face) => {
+        faces.push({
+          key: face.key,
+          points: formatPolygonPoints(face.points),
+          fill: face.fill,
+          stroke: "rgba(16, 29, 75, 0.84)",
+          strokeWidth: 0.84,
+          opacity: 1,
+          depth: getFaceDepth(face.points)
+        });
+      });
+
+      const armEnd = {
+        x: basketballPost.point.x + basketballPost.normal.x * basketballPost.armLengthMm,
+        y: basketballPost.point.y + basketballPost.normal.y * basketballPost.armLengthMm
+      };
+      const armStartProjected = project({ x: basketballPost.point.x, y: topY - 180, z: -basketballPost.point.y });
+      const armEndProjected = project({ x: armEnd.x, y: topY - 180, z: -armEnd.y });
+      strokes.push({
+        key: `${basketballPost.key}-arm`,
+        kind: "polyline",
+        value: `${armStartProjected.x},${armStartProjected.y} ${armEndProjected.x},${armEndProjected.y}`,
+        stroke: "rgba(255, 156, 79, 0.94)",
+        strokeWidth: 2.2,
+        opacity: 1,
+        depth: (armStartProjected.depth + armEndProjected.depth) / 2 + 0.2
+      });
+
+      const hoopCenter = armEndProjected;
+      const hoopRadius = Math.max(4, basketballPost.hoopRadiusMm * scale);
+      const ringPoints = Array.from({ length: 18 }, (_, index) => {
+        const angle = (Math.PI * 2 * index) / 18;
+        return `${hoopCenter.x + Math.cos(angle) * hoopRadius},${hoopCenter.y + Math.sin(angle) * hoopRadius}`;
+      }).join(" ");
+      strokes.push({
+        key: `${basketballPost.key}-hoop`,
+        kind: "polyline",
+        value: `${ringPoints} ${ringPoints.split(" ")[0] ?? ""}`.trim(),
+        stroke: "rgba(255, 113, 41, 0.98)",
+        strokeWidth: 1.8,
+        opacity: 1,
+        depth: hoopCenter.depth + 0.22
+      });
+    }
+
+    for (const floodlightColumn of scene.floodlightColumns) {
+      const halfWidthMm = 54;
+      const groundX = floodlightColumn.point.x;
+      const groundZ = -floodlightColumn.point.y;
+      const topY = floodlightColumn.heightMm;
+      const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
+      const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
+      const frontTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm });
+      const frontTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm });
+      const sideBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
+      const sideTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm });
+      const sideTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm });
+      const columnFaces = [
+        {
+          key: `${floodlightColumn.key}-front`,
+          points: [frontBottomLeft, frontBottomRight, frontTopRight, frontTopLeft],
+          fill: "rgba(147, 147, 157, 0.9)"
+        },
+        {
+          key: `${floodlightColumn.key}-side`,
+          points: [frontBottomRight, sideBottomRight, sideTopRight, frontTopRight],
+          fill: "rgba(104, 106, 117, 0.94)"
+        },
+        {
+          key: `${floodlightColumn.key}-top`,
+          points: [frontTopLeft, frontTopRight, sideTopRight, sideTopLeft],
+          fill: "rgba(220, 223, 232, 0.98)"
+        }
+      ];
+      columnFaces.forEach((face) => {
+        faces.push({
+          key: face.key,
+          points: formatPolygonPoints(face.points),
+          fill: face.fill,
+          stroke: "rgba(56, 60, 72, 0.82)",
+          strokeWidth: 0.9,
+          opacity: 1,
+          depth: getFaceDepth(face.points)
+        });
+      });
+
+      const forward = floodlightColumn.normal;
+      const across = { x: -forward.y, y: forward.x };
+      const barHalfWidth = floodlightColumn.barWidthMm / 2;
+      const barCenterHeightMm = topY - 220;
+      const barStart = project({
+        x: floodlightColumn.point.x - across.x * barHalfWidth,
+        y: barCenterHeightMm,
+        z: -(floodlightColumn.point.y - across.y * barHalfWidth)
+      });
+      const barEnd = project({
+        x: floodlightColumn.point.x + across.x * barHalfWidth,
+        y: barCenterHeightMm,
+        z: -(floodlightColumn.point.y + across.y * barHalfWidth)
+      });
+      strokes.push({
+        key: `${floodlightColumn.key}-bar`,
+        kind: "polyline",
+        value: `${barStart.x},${barStart.y} ${barEnd.x},${barEnd.y}`,
+        stroke: "rgba(255, 243, 177, 0.96)",
+        strokeWidth: 2.4,
+        opacity: 1,
+        depth: (barStart.depth + barEnd.depth) / 2 + 0.2
       });
     }
 
@@ -824,7 +969,7 @@ export function Optimization3DView({
           event.stopPropagation();
           setOrbit((current) => ({
             ...current,
-            zoom: clamp(current.zoom * Math.exp(-event.deltaY * 0.0026), 0.18, 5.2)
+            zoom: clamp(current.zoom * Math.exp(-event.deltaY * 0.0028), 0.1, 8.5)
           }));
         }}
         onDoubleClick={() => setOrbit(DEFAULT_ORBIT)}
@@ -893,6 +1038,14 @@ export function Optimization3DView({
         <span>
           <i className="is-link" />
           Offcut path
+        </span>
+        <span>
+          <i className="is-basketball-post" />
+          Basketball post
+        </span>
+        <span>
+          <i className="is-floodlight" />
+          Floodlight column
         </span>
       </div>
 

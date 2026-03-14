@@ -9,10 +9,13 @@ import type {
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
 import { Optimization3DView } from "./Optimization3DView";
 import { getVisibleOptimizationBuckets } from "./optimizationDisplay";
+import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
 
 interface OptimizationPlannerProps {
   summary: OptimizationSummary;
   estimateSegments: LayoutSegment[];
+  basketballPosts: ResolvedBasketballPostPlacement[];
+  floodlightColumns: ResolvedFloodlightColumnPlacement[];
   canInspect: boolean;
   isOpen: boolean;
   selectedPlanId: string | null;
@@ -87,6 +90,8 @@ function findPlanIndex(bucket: TwinBarOptimizationBucket, plan: TwinBarOptimizat
 export function OptimizationPlanner({
   summary,
   estimateSegments,
+  basketballPosts,
+  floodlightColumns,
   canInspect,
   isOpen,
   selectedPlanId,
@@ -147,6 +152,8 @@ export function OptimizationPlanner({
               estimateSegments={estimateSegments}
               activePlan={activePlan}
               segmentOrdinalById={segmentOrdinalById}
+              basketballPosts={basketballPosts}
+              floodlightColumns={floodlightColumns}
             />
 
             {!hasCutDemand ? (

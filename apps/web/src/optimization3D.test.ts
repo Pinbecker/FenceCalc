@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/contracts";
+import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
 
 import { buildOptimization3DScene } from "./optimization3D.js";
 
@@ -56,5 +57,44 @@ describe("buildOptimization3DScene", () => {
     expect(reboundSlices.length).toBeGreaterThan(0);
     expect(reboundSlices[0]?.apertureHeightMm).toBe(66);
     expect(reboundSlices[0]?.heightMm).toBe(1200);
+  });
+
+  it("includes basketball posts and floodlight columns in the 3D scene", () => {
+    const segment: LayoutSegment = {
+      id: "seg-features",
+      start: { x: 0, y: 0 },
+      end: { x: 2525, y: 0 },
+      spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+    };
+    const basketballPost: ResolvedBasketballPostPlacement = {
+      id: "bb-1",
+      key: "bb-1",
+      segmentId: "seg-features",
+      offsetMm: 1200,
+      point: { x: 1200, y: 0 },
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: 1 },
+      facing: "LEFT",
+      spec: segment.spec,
+      placement: { id: "bb-1", segmentId: "seg-features", offsetMm: 1200, facing: "LEFT" }
+    };
+    const floodlightColumn: ResolvedFloodlightColumnPlacement = {
+      id: "fc-1",
+      key: "fc-1",
+      segmentId: "seg-features",
+      offsetMm: 2200,
+      point: { x: 2200, y: 0 },
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: -1 },
+      facing: "RIGHT",
+      spec: segment.spec,
+      placement: { id: "fc-1", segmentId: "seg-features", offsetMm: 2200, facing: "RIGHT" }
+    };
+
+    const scene = buildOptimization3DScene([segment], null, new Map(), [basketballPost], [floodlightColumn]);
+
+    expect(scene.basketballPosts).toHaveLength(1);
+    expect(scene.floodlightColumns).toHaveLength(1);
+    expect(scene.bounds.maxHeightMm).toBeGreaterThan(5000);
   });
 });

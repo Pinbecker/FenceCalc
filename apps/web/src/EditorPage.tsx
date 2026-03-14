@@ -839,6 +839,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
             <OptimizationPlanner
               summary={optimizationSummary}
               estimateSegments={estimateSegments}
+              basketballPosts={resolvedBasketballPostPlacements}
+              floodlightColumns={resolvedFloodlightColumnPlacements}
               canInspect={segments.length > 0}
               isOpen={shellState.isOptimizationInspectorOpen}
               selectedPlanId={shellState.selectedPlanId}

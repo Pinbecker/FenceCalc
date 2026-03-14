@@ -1328,6 +1328,14 @@ h1 {
   border-left: 6px solid rgba(233, 240, 246, 0.96);
 }
 
+.optimization-3d-legend .is-basketball-post {
+  background: #345bc8;
+}
+
+.optimization-3d-legend .is-floodlight {
+  background: #f8e58d;
+}
+
 .optimization-3d-steps {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

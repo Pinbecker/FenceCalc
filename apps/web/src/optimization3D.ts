@@ -1,6 +1,7 @@
 import type { LayoutSegment, PointMm, TwinBarOptimizationPlan, TwinBarVariant } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 import { getSpecConfig } from "@fence-estimator/rules-engine";
+import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
 
 export interface Optimization3DPanelSlice {
   key: string;
@@ -19,6 +20,23 @@ export interface Optimization3DPost {
   key: string;
   point: PointMm;
   heightMm: number;
+}
+
+export interface Optimization3DBasketballPost {
+  key: string;
+  point: PointMm;
+  normal: { x: number; y: number };
+  heightMm: number;
+  armLengthMm: number;
+  hoopRadiusMm: number;
+}
+
+export interface Optimization3DFloodlightColumn {
+  key: string;
+  point: PointMm;
+  normal: { x: number; y: number };
+  heightMm: number;
+  barWidthMm: number;
 }
 
 export interface Optimization3DCutOverlay {
@@ -45,6 +63,8 @@ export interface Optimization3DReuseLink {
 export interface Optimization3DScene {
   panelSlices: Optimization3DPanelSlice[];
   posts: Optimization3DPost[];
+  basketballPosts: Optimization3DBasketballPost[];
+  floodlightColumns: Optimization3DFloodlightColumn[];
   cutOverlays: Optimization3DCutOverlay[];
   reuseLinks: Optimization3DReuseLink[];
   bounds: {
@@ -62,6 +82,12 @@ interface VisualLayer {
   stockHeightMm: number;
   tone: "PRIMARY" | "SECOND_LIFT";
 }
+
+const BASKETBALL_POST_HEIGHT_MM = 3250;
+const BASKETBALL_POST_ARM_LENGTH_MM = 1800;
+const BASKETBALL_POST_HOOP_RADIUS_MM = 180;
+const FLOODLIGHT_COLUMN_HEIGHT_MM = 6000;
+const FLOODLIGHT_BAR_WIDTH_MM = 840;
 
 function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): PointMm {
   const lengthMm = distanceMm(segment.start, segment.end);
@@ -216,6 +242,31 @@ function buildPosts(estimateSegments: LayoutSegment[]): Optimization3DPost[] {
   return [...postsByKey.values()];
 }
 
+function buildBasketballPosts(
+  placements: ResolvedBasketballPostPlacement[]
+): Optimization3DBasketballPost[] {
+  return placements.map((placement) => ({
+    key: placement.key,
+    point: placement.point,
+    normal: placement.normal,
+    heightMm: BASKETBALL_POST_HEIGHT_MM,
+    armLengthMm: BASKETBALL_POST_ARM_LENGTH_MM,
+    hoopRadiusMm: BASKETBALL_POST_HOOP_RADIUS_MM
+  }));
+}
+
+function buildFloodlightColumns(
+  placements: ResolvedFloodlightColumnPlacement[]
+): Optimization3DFloodlightColumn[] {
+  return placements.map((placement) => ({
+    key: placement.key,
+    point: placement.point,
+    normal: placement.normal,
+    heightMm: FLOODLIGHT_COLUMN_HEIGHT_MM,
+    barWidthMm: FLOODLIGHT_BAR_WIDTH_MM
+  }));
+}
+
 function resolveOverlayLayer(segment: LayoutSegment, stockPanelHeightMm: number) {
   const layers = buildVisualLayers(segment);
   return (
@@ -290,17 +341,23 @@ function buildReuseLinks(cutOverlays: Optimization3DCutOverlay[]): Optimization3
 export function buildOptimization3DScene(
   estimateSegments: LayoutSegment[],
   activePlan: TwinBarOptimizationPlan | null,
-  segmentOrdinalById: Map<string, number>
+  segmentOrdinalById: Map<string, number>,
+  basketballPostPlacements: ResolvedBasketballPostPlacement[] = [],
+  floodlightColumnPlacements: ResolvedFloodlightColumnPlacement[] = []
 ): Optimization3DScene {
   const panelSlices = buildPanelSlices(estimateSegments);
   const posts = buildPosts(estimateSegments);
+  const basketballPosts = buildBasketballPosts(basketballPostPlacements);
+  const floodlightColumns = buildFloodlightColumns(floodlightColumnPlacements);
   const estimateSegmentsById = new Map(estimateSegments.map((segment) => [segment.id, segment] as const));
   const cutOverlays = buildCutOverlays(activePlan, estimateSegmentsById, segmentOrdinalById);
   const reuseLinks = buildReuseLinks(cutOverlays);
 
   const allGroundPoints = [
     ...estimateSegments.flatMap((segment) => [segment.start, segment.end]),
-    ...posts.map((post) => post.point)
+    ...posts.map((post) => post.point),
+    ...basketballPosts.map((post) => post.point),
+    ...floodlightColumns.map((column) => column.point)
   ];
   const bounds = {
     minX: allGroundPoints.length > 0 ? Math.min(...allGroundPoints.map((point) => point.x)) : -2000,
@@ -310,6 +367,8 @@ export function buildOptimization3DScene(
     maxHeightMm: Math.max(
       2200,
       ...posts.map((post) => post.heightMm),
+      ...basketballPosts.map((post) => post.heightMm),
+      ...floodlightColumns.map((column) => column.heightMm),
       ...panelSlices.map((slice) => slice.baseHeightMm + slice.heightMm),
       ...cutOverlays.map((overlay) => overlay.baseHeightMm + overlay.heightMm + 520)
     )
@@ -318,6 +377,8 @@ export function buildOptimization3DScene(
   return {
     panelSlices,
     posts,
+    basketballPosts,
+    floodlightColumns,
     cutOverlays,
     reuseLinks,
     bounds

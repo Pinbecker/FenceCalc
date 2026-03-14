@@ -147,6 +147,8 @@ describe("OptimizationPlanner", () => {
       <OptimizationPlanner
         summary={buildSummary()}
         estimateSegments={buildEstimateSegments()}
+        basketballPosts={[]}
+        floodlightColumns={[]}
         canInspect
         isOpen
         selectedPlanId="save-plan"
@@ -182,6 +184,8 @@ describe("OptimizationPlanner", () => {
       <OptimizationPlanner
         summary={summary}
         estimateSegments={buildEstimateSegments()}
+        basketballPosts={[]}
+        floodlightColumns={[]}
         canInspect
         isOpen
         selectedPlanId={null}
@@ -202,6 +206,8 @@ describe("OptimizationPlanner", () => {
       <OptimizationPlanner
         summary={buildSummary()}
         estimateSegments={buildEstimateSegments()}
+        basketballPosts={[]}
+        floodlightColumns={[]}
         canInspect
         isOpen
         selectedPlanId={null}
