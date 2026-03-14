@@ -5,7 +5,7 @@ import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
 
 type Route = "dashboard" | "drawings" | "editor" | "admin" | "login";
 
-type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
+type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
 
 const mockSelectionState = {
   drawStart: null,
@@ -14,22 +14,26 @@ const mockSelectionState = {
   selectedSegmentId: null as string | null,
   selectedGateId: null as string | null,
   selectedBasketballPostId: null as string | null,
+  selectedFloodlightColumnId: null as string | null,
   selectedLengthInputM: "",
   isLengthEditorOpen: false,
   activeSegmentDrag: null,
   activeGateDrag: null,
   activeBasketballPostDrag: null,
+  activeFloodlightColumnDrag: null,
   setDrawStart: vi.fn(),
   setDrawChainStart: vi.fn(),
   setRectangleStart: vi.fn(),
   setSelectedSegmentId: vi.fn(),
   setSelectedGateId: vi.fn(),
   setSelectedBasketballPostId: vi.fn(),
+  setSelectedFloodlightColumnId: vi.fn(),
   setSelectedLengthInputM: vi.fn(),
   setIsLengthEditorOpen: vi.fn(),
   setActiveSegmentDrag: vi.fn(),
   setActiveGateDrag: vi.fn(),
   setActiveBasketballPostDrag: vi.fn(),
+  setActiveFloodlightColumnDrag: vi.fn(),
   resetLoadedWorkspaceState: vi.fn(),
   clearHistorySelection: vi.fn()
 };
@@ -122,6 +126,7 @@ const mockCommands = {
   applySelectedLengthEdit: vi.fn(),
   cancelActiveDrawing: vi.fn(),
   deleteSelectedBasketballPost: vi.fn(() => false),
+  deleteSelectedFloodlightColumn: vi.fn(() => false),
   deleteSelectedGate: vi.fn(() => false),
   deleteSelectedSegment: vi.fn(() => false),
   handleClearLayout: vi.fn(),
@@ -139,6 +144,7 @@ const mockCommands = {
   openLengthEditor: vi.fn(),
   resetWorkspaceCanvas: vi.fn(),
   startSelectedBasketballPostDrag: vi.fn(),
+  startSelectedFloodlightColumnDrag: vi.fn(),
   startSelectedGateDrag: vi.fn(),
   startSelectedSegmentDrag: vi.fn(),
   updateSegment: vi.fn()
@@ -207,6 +213,7 @@ const mockDerivedState = {
   highlightableOptimizationPlans: [],
   oppositeGateGuides: [],
   resolvedBasketballPostPlacements: [],
+  resolvedFloodlightColumnPlacements: [],
   placedGateVisuals: [],
   postTypeCounts: {
     END: 0,
@@ -267,17 +274,20 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
     axisGuide: null,
     drawHoverSnap: null,
     basketballPostPreview: null,
+    floodlightColumnPreview: null,
     drawSnapLabel: null,
     gatePreview: null,
     gatePreviewVisual: null,
     ghostEnd: null,
     ghostLengthMm: null,
     hoveredBasketballPostId: null,
+    hoveredFloodlightColumnId: null,
     hoveredGateId: null,
     hoveredSegmentId: null,
     rectanglePreviewEnd: null,
     recessPreview: null,
     resolveBasketballPostPreview: vi.fn(),
+    resolveFloodlightColumnPreview: vi.fn(),
     closeLoopPoint: null,
     resolveDrawPoint: vi.fn()
   })
@@ -362,6 +372,7 @@ describe("EditorPage", () => {
     mockSelectionState.selectedSegmentId = null;
     mockSelectionState.selectedGateId = null;
     mockSelectionState.selectedBasketballPostId = null;
+    mockSelectionState.selectedFloodlightColumnId = null;
     mockSelectionState.isLengthEditorOpen = false;
     mockDerivedState.selectedSegment = null;
   });

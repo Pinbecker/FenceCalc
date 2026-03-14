@@ -838,6 +838,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           <div className="editor-rail-scroll">
             <OptimizationPlanner
               summary={optimizationSummary}
+              estimateSegments={estimateSegments}
               canInspect={segments.length > 0}
               isOpen={shellState.isOptimizationInspectorOpen}
               selectedPlanId={shellState.selectedPlanId}

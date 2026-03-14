@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { OptimizationSummary } from "@fence-estimator/contracts";
+import type { LayoutSegment, OptimizationSummary } from "@fence-estimator/contracts";
 
 import { OptimizationPlanner } from "./OptimizationPlanner.js";
 
@@ -112,11 +112,41 @@ function buildSummary(): OptimizationSummary {
   };
 }
 
+function buildEstimateSegments(): LayoutSegment[] {
+  return [
+    {
+      id: "seg-save-a",
+      start: { x: 0, y: 0 },
+      end: { x: 2525, y: 0 },
+      spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+    },
+    {
+      id: "seg-save-b",
+      start: { x: 2525, y: 0 },
+      end: { x: 5050, y: 0 },
+      spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+    },
+    {
+      id: "seg-save-c",
+      start: { x: 5050, y: 0 },
+      end: { x: 7575, y: 0 },
+      spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+    },
+    {
+      id: "seg-hidden",
+      start: { x: 7575, y: 0 },
+      end: { x: 10100, y: 0 },
+      spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+    }
+  ];
+}
+
 describe("OptimizationPlanner", () => {
   it("renders only panel-saving plans", () => {
     const html = renderToStaticMarkup(
       <OptimizationPlanner
         summary={buildSummary()}
+        estimateSegments={buildEstimateSegments()}
         canInspect
         isOpen
         selectedPlanId="save-plan"
@@ -134,9 +164,11 @@ describe("OptimizationPlanner", () => {
       />,
     );
 
+    expect(html).toContain("3D Reuse View");
     expect(html).toContain("Only plans that actually save a panel are shown.");
     expect(html).toContain("Open panel on segment #1");
     expect(html).toContain("Reuse offcut on segment #2");
+    expect(html).toContain("Shown above and on canvas");
     expect(html).not.toContain("segment #99");
   });
 
@@ -149,6 +181,7 @@ describe("OptimizationPlanner", () => {
     const html = renderToStaticMarkup(
       <OptimizationPlanner
         summary={summary}
+        estimateSegments={buildEstimateSegments()}
         canInspect
         isOpen
         selectedPlanId={null}
@@ -161,5 +194,30 @@ describe("OptimizationPlanner", () => {
 
     expect(html).toContain("No panel-saving reuse found");
     expect(html).toContain("Non-saving single cuts are hidden here on purpose.");
+  });
+
+  it("defaults the first visible saving plan into the 3D view when none is selected", () => {
+    const html = renderToStaticMarkup(
+      <OptimizationPlanner
+        summary={buildSummary()}
+        estimateSegments={buildEstimateSegments()}
+        canInspect
+        isOpen
+        selectedPlanId={null}
+        segmentOrdinalById={
+          new Map([
+            ["seg-save-a", 1],
+            ["seg-save-b", 2],
+            ["seg-save-c", 3]
+          ])
+        }
+        onOpen={() => undefined}
+        onClose={() => undefined}
+        onSelectPlan={() => undefined}
+      />
+    );
+
+    expect(html).toContain("Shown above");
+    expect(html).not.toContain("Shown above and on canvas");
   });
 });

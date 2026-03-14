@@ -1,10 +1,18 @@
-import type { OptimizationSummary, TwinBarOptimizationBucket, TwinBarOptimizationPlan, TwinBarVariant } from "@fence-estimator/contracts";
+import type {
+  LayoutSegment,
+  OptimizationSummary,
+  TwinBarOptimizationBucket,
+  TwinBarOptimizationPlan,
+  TwinBarVariant
+} from "@fence-estimator/contracts";
 
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
+import { Optimization3DView } from "./Optimization3DView";
 import { getVisibleOptimizationBuckets } from "./optimizationDisplay";
 
 interface OptimizationPlannerProps {
   summary: OptimizationSummary;
+  estimateSegments: LayoutSegment[];
   canInspect: boolean;
   isOpen: boolean;
   selectedPlanId: string | null;
@@ -78,6 +86,7 @@ function findPlanIndex(bucket: TwinBarOptimizationBucket, plan: TwinBarOptimizat
 
 export function OptimizationPlanner({
   summary,
+  estimateSegments,
   canInspect,
   isOpen,
   selectedPlanId,
@@ -90,10 +99,19 @@ export function OptimizationPlanner({
   const hasCutDemand = twinBar.totalCutDemands > 0;
   const visibleBuckets = getVisibleOptimizationBuckets(summary);
   const visiblePlans = visibleBuckets.flatMap((bucket) => bucket.plans);
+  const activePlan = visiblePlans.find((plan) => plan.id === selectedPlanId) ?? visiblePlans[0] ?? null;
+  const activePlanId = activePlan?.id ?? null;
   const hasVisibleSavings = visiblePlans.length > 0;
   const visiblePanelsSaved = visiblePlans.reduce((sum, plan) => sum + plan.panelsSaved, 0);
   const visibleReusedCuts = visiblePlans.reduce((sum, plan) => sum + plan.reusedCuts, 0);
   const visibleLeftoverMm = visiblePlans.reduce((sum, plan) => sum + plan.leftoverMm, 0);
+  const handleOpenPlanner = () => {
+    const firstVisiblePlan = visiblePlans[0] ?? null;
+    if ((selectedPlanId === null || !visiblePlans.some((plan) => plan.id === selectedPlanId)) && firstVisiblePlan) {
+      onSelectPlan(firstVisiblePlan.id);
+    }
+    onOpen();
+  };
 
   return (
     <>
@@ -103,7 +121,7 @@ export function OptimizationPlanner({
           <p className="optimization-mini-subline">{buildDockCopy(summary, canInspect)}</p>
         </div>
         <div className="optimization-mini-actions">
-          <button type="button" className="optimization-dock-btn" onClick={onOpen} disabled={!canInspect}>
+          <button type="button" className="optimization-dock-btn" onClick={handleOpenPlanner} disabled={!canInspect}>
             Open Planner
           </button>
         </div>
@@ -143,6 +161,12 @@ export function OptimizationPlanner({
               </div>
             ) : (
               <>
+                <Optimization3DView
+                  estimateSegments={estimateSegments}
+                  activePlan={activePlan}
+                  segmentOrdinalById={segmentOrdinalById}
+                />
+
                 <div className="optimization-metrics">
                   <article className="optimization-metric">
                     <span>Panels Saved</span>
@@ -201,7 +225,8 @@ export function OptimizationPlanner({
                       <div className="optimization-plan-grid">
                         {bucket.plans.map((plan) => {
                           const planIndex = findPlanIndex(bucket, plan);
-                          const isSelected = plan.id === selectedPlanId;
+                          const isSelected = plan.id === activePlanId;
+                          const isCanvasHighlighted = plan.id === selectedPlanId;
                           return (
                             <button
                               key={plan.id}
@@ -261,7 +286,11 @@ export function OptimizationPlanner({
                                 })}
                               </div>
 
-                              {isSelected ? <span className="optimization-plan-selection">Canvas highlight active</span> : null}
+                              {isSelected ? (
+                                <span className="optimization-plan-selection">
+                                  {isCanvasHighlighted ? "Shown above and on canvas" : "Shown above"}
+                                </span>
+                              ) : null}
                             </button>
                           );
                         })}
