@@ -33,12 +33,15 @@ interface OrbitState {
   yaw: number;
   pitch: number;
   zoom: number;
+  panX: number;
+  panY: number;
 }
 
 interface PointerDragState {
   pointerId: number;
   x: number;
   y: number;
+  mode: "rotate" | "pan";
 }
 
 type OrbitUpdater = OrbitState | ((current: OrbitState) => OrbitState);
@@ -79,7 +82,9 @@ interface RenderBadge {
 const DEFAULT_ORBIT: OrbitState = {
   yaw: -0.82,
   pitch: 0.62,
-  zoom: 0.98
+  zoom: 0.98,
+  panX: 0,
+  panY: 0
 };
 
 const PANEL_PALETTE = {
@@ -325,12 +330,12 @@ export function Optimization3DView({
       const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
 
       return {
-        x: viewportWidth / 2 + yawX * scale,
-        y: viewportHeight * 0.68 - pitchY * scale,
+        x: viewportWidth / 2 + yawX * scale + orbit.panX,
+        y: viewportHeight * 0.68 - pitchY * scale + orbit.panY,
         depth: pitchZ
       };
     };
-  }, [center.x, center.y, center.z, orbit.pitch, orbit.yaw, scale, viewportHeight, viewportWidth]);
+  }, [center.x, center.y, center.z, orbit.panX, orbit.panY, orbit.pitch, orbit.yaw, scale, viewportHeight, viewportWidth]);
 
   const renderData = useMemo(() => {
     const faces: RenderFace[] = [];
@@ -737,7 +742,7 @@ export function Optimization3DView({
         <div>
           <h3>3D Reuse View</h3>
           <p className="muted-line">
-            Drag to orbit and scroll to zoom. Orange opens a fresh panel, teal shows where the offcut is reused next.
+            Drag to orbit, hold Shift and drag to pan, and scroll to zoom. Orange opens a fresh panel, teal shows where the offcut is reused next.
           </p>
         </div>
         <button type="button" className="optimization-3d-reset" onClick={() => setOrbit(DEFAULT_ORBIT)}>
@@ -760,10 +765,12 @@ export function Optimization3DView({
         className="optimization-3d-stage"
         tabIndex={0}
         onPointerDown={(event) => {
+          event.preventDefault();
           dragStateRef.current = {
             pointerId: event.pointerId,
             x: event.clientX,
-            y: event.clientY
+            y: event.clientY,
+            mode: event.shiftKey || event.button === 1 || event.button === 2 ? "pan" : "rotate"
           };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
@@ -778,8 +785,18 @@ export function Optimization3DView({
           dragStateRef.current = {
             pointerId: event.pointerId,
             x: event.clientX,
-            y: event.clientY
+            y: event.clientY,
+            mode: dragState.mode
           };
+          if (dragState.mode === "pan") {
+            setOrbit((current) => ({
+              ...current,
+              panX: current.panX + deltaX,
+              panY: current.panY + deltaY
+            }));
+            return;
+          }
+
           setOrbit((current) => ({
             ...current,
             yaw: current.yaw + deltaX * 0.0052,
@@ -811,6 +828,9 @@ export function Optimization3DView({
           }));
         }}
         onDoubleClick={() => setOrbit(DEFAULT_ORBIT)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft") {
             event.preventDefault();
@@ -835,6 +855,26 @@ export function Optimization3DView({
           if (event.key === "0") {
             event.preventDefault();
             setOrbit(DEFAULT_ORBIT);
+            return;
+          }
+          if (event.key === "w" || event.key === "W") {
+            event.preventDefault();
+            setOrbit((current) => ({ ...current, panY: current.panY - 24 }));
+            return;
+          }
+          if (event.key === "s" || event.key === "S") {
+            event.preventDefault();
+            setOrbit((current) => ({ ...current, panY: current.panY + 24 }));
+            return;
+          }
+          if (event.key === "a" || event.key === "A") {
+            event.preventDefault();
+            setOrbit((current) => ({ ...current, panX: current.panX - 24 }));
+            return;
+          }
+          if (event.key === "d" || event.key === "D") {
+            event.preventDefault();
+            setOrbit((current) => ({ ...current, panX: current.panX + 24 }));
           }
         }}
       >

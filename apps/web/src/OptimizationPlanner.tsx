@@ -143,6 +143,12 @@ export function OptimizationPlanner({
               </button>
             </div>
 
+            <Optimization3DView
+              estimateSegments={estimateSegments}
+              activePlan={activePlan}
+              segmentOrdinalById={segmentOrdinalById}
+            />
+
             {!hasCutDemand ? (
               <div className="optimization-empty">
                 <h3>No cut planning needed</h3>
@@ -161,12 +167,6 @@ export function OptimizationPlanner({
               </div>
             ) : (
               <>
-                <Optimization3DView
-                  estimateSegments={estimateSegments}
-                  activePlan={activePlan}
-                  segmentOrdinalById={segmentOrdinalById}
-                />
-
                 <div className="optimization-metrics">
                   <article className="optimization-metric">
                     <span>Panels Saved</span>

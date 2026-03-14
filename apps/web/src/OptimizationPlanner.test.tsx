@@ -192,6 +192,7 @@ describe("OptimizationPlanner", () => {
       />,
     );
 
+    expect(html).toContain("3D Reuse View");
     expect(html).toContain("No panel-saving reuse found");
     expect(html).toContain("Non-saving single cuts are hidden here on purpose.");
   });
