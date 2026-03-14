@@ -1,4 +1,4 @@
-import type { FenceSpec, GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { BasketballPostPlacement, FenceSpec, GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, quantize } from "./constants";
@@ -11,6 +11,83 @@ import {
 } from "./editorMath";
 import { buildRecessReplacementSegments } from "./recess";
 import type { RecessInsertionPreview, ResolvedGatePlacement, SegmentConnectivity } from "./types";
+
+interface RecessReplacementPathSegment {
+  segment: LayoutSegment;
+  lengthMm: number;
+  pathStartMm: number;
+  pathEndMm: number;
+}
+
+function buildRecessReplacementPath(replacement: LayoutSegment[]): RecessReplacementPathSegment[] {
+  const path: RecessReplacementPathSegment[] = [];
+  let cursorMm = 0;
+
+  for (const segment of replacement) {
+    const lengthMm = distanceMm(segment.start, segment.end);
+    if (lengthMm <= 0) {
+      continue;
+    }
+    path.push({
+      segment,
+      lengthMm,
+      pathStartMm: cursorMm,
+      pathEndMm: cursorMm + lengthMm
+    });
+    cursorMm += lengthMm;
+  }
+
+  return path;
+}
+
+function mapOffsetToRecessPath(offsetMm: number, preview: RecessInsertionPreview): number {
+  const replacedSpanMm = preview.endOffsetMm - preview.startOffsetMm;
+  if (replacedSpanMm <= 0) {
+    return offsetMm;
+  }
+
+  const insertedSpanMm = replacedSpanMm + preview.depthMm * 2;
+  if (offsetMm <= preview.startOffsetMm) {
+    return offsetMm;
+  }
+  if (offsetMm >= preview.endOffsetMm) {
+    return offsetMm + insertedSpanMm - replacedSpanMm;
+  }
+
+  const fraction = (offsetMm - preview.startOffsetMm) / replacedSpanMm;
+  return preview.startOffsetMm + insertedSpanMm * fraction;
+}
+
+function distanceToPathSegment(pathSegment: RecessReplacementPathSegment, pathOffsetMm: number): number {
+  if (pathOffsetMm < pathSegment.pathStartMm) {
+    return pathSegment.pathStartMm - pathOffsetMm;
+  }
+  if (pathOffsetMm > pathSegment.pathEndMm) {
+    return pathOffsetMm - pathSegment.pathEndMm;
+  }
+  return 0;
+}
+
+function findPathSegmentForOffset(
+  pathSegments: RecessReplacementPathSegment[],
+  pathOffsetMm: number
+): RecessReplacementPathSegment | null {
+  const epsilon = 0.001;
+  for (let index = 0; index < pathSegments.length; index += 1) {
+    const pathSegment = pathSegments[index];
+    if (!pathSegment) {
+      continue;
+    }
+    const isLast = index === pathSegments.length - 1;
+    if (
+      pathOffsetMm >= pathSegment.pathStartMm - epsilon &&
+      (pathOffsetMm < pathSegment.pathEndMm - epsilon || isLast || Math.abs(pathOffsetMm - pathSegment.pathEndMm) <= epsilon)
+    ) {
+      return pathSegment;
+    }
+  }
+  return null;
+}
 
 export function resizeSegmentCollection(
   previous: LayoutSegment[],
@@ -310,27 +387,13 @@ export function buildRectangleSegments(
 export function remapGatePlacementsForRecess(
   previous: GatePlacement[],
   preview: RecessInsertionPreview,
-  resolvedGateById: Map<string, ResolvedGatePlacement>
+  resolvedGateById: Map<string, ResolvedGatePlacement>,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
 ): GatePlacement[] {
-  const replacement = buildRecessReplacementSegments(preview);
-  if (replacement.length === 0) {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
     return previous;
   }
-
-  const originalStart = quantize(preview.segment.start);
-  const entryPoint = quantize(preview.entryPoint);
-  const exitPoint = quantize(preview.exitPoint);
-  const originalEnd = quantize(preview.segment.end);
-  const leftReplacementSegment = replacement.find(
-    (segment) =>
-      samePointApprox(segment.start, originalStart, 0.1) &&
-      samePointApprox(segment.end, entryPoint, 0.1)
-  );
-  const rightReplacementSegment = replacement.find(
-    (segment) =>
-      samePointApprox(segment.start, exitPoint, 0.1) &&
-      samePointApprox(segment.end, originalEnd, 0.1)
-  );
 
   const next: GatePlacement[] = [];
   for (const placement of previous) {
@@ -342,49 +405,102 @@ export function remapGatePlacementsForRecess(
     const resolved = resolvedGateById.get(placement.id);
     const sourceStartOffsetMm = resolved?.startOffsetMm ?? placement.startOffsetMm;
     const sourceEndOffsetMm = resolved?.endOffsetMm ?? placement.endOffsetMm;
+    const mappedStartPathOffsetMm = mapOffsetToRecessPath(sourceStartOffsetMm, preview);
+    const mappedEndPathOffsetMm = mapOffsetToRecessPath(sourceEndOffsetMm, preview);
+    const exactPathSegment = pathSegments.find(
+      (pathSegment) =>
+        mappedStartPathOffsetMm >= pathSegment.pathStartMm - 0.001 &&
+        mappedEndPathOffsetMm <= pathSegment.pathEndMm + 0.001
+    );
 
-    if (sourceEndOffsetMm <= preview.startOffsetMm && leftReplacementSegment) {
-      const leftLengthMm = distanceMm(leftReplacementSegment.start, leftReplacementSegment.end);
+    if (exactPathSegment) {
       const normalized = clampGatePlacementToSegment(
         {
           ...placement,
-          segmentId: leftReplacementSegment.id,
-          startOffsetMm: sourceStartOffsetMm,
-          endOffsetMm: sourceEndOffsetMm
+          segmentId: exactPathSegment.segment.id,
+          startOffsetMm: mappedStartPathOffsetMm - exactPathSegment.pathStartMm,
+          endOffsetMm: mappedEndPathOffsetMm - exactPathSegment.pathStartMm
         },
-        leftLengthMm
+        exactPathSegment.lengthMm
       );
       if (normalized) {
         next.push({
           ...placement,
-          segmentId: leftReplacementSegment.id,
+          segmentId: exactPathSegment.segment.id,
           startOffsetMm: normalized.startOffsetMm,
           endOffsetMm: normalized.endOffsetMm
         });
+        continue;
       }
+    }
+
+    const sourceWidthMm = sourceEndOffsetMm - sourceStartOffsetMm;
+    const mappedMidpointPathOffsetMm = mapOffsetToRecessPath((sourceStartOffsetMm + sourceEndOffsetMm) / 2, preview);
+    const fallbackSegments = [...pathSegments].sort((left, right) => {
+      const leftDistance = distanceToPathSegment(left, mappedMidpointPathOffsetMm);
+      const rightDistance = distanceToPathSegment(right, mappedMidpointPathOffsetMm);
+      if (Math.abs(leftDistance - rightDistance) > 0.001) {
+        return leftDistance - rightDistance;
+      }
+      return right.lengthMm - left.lengthMm;
+    });
+
+    for (const fallbackSegment of fallbackSegments) {
+      const midpointOffsetMm = mappedMidpointPathOffsetMm - fallbackSegment.pathStartMm;
+      const normalized = clampGatePlacementToSegment(
+        {
+          ...placement,
+          segmentId: fallbackSegment.segment.id,
+          startOffsetMm: midpointOffsetMm - sourceWidthMm / 2,
+          endOffsetMm: midpointOffsetMm + sourceWidthMm / 2
+        },
+        fallbackSegment.lengthMm
+      );
+      if (!normalized) {
+        continue;
+      }
+      next.push({
+        ...placement,
+        segmentId: fallbackSegment.segment.id,
+        startOffsetMm: normalized.startOffsetMm,
+        endOffsetMm: normalized.endOffsetMm
+      });
+      break;
+    }
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapBasketballPostPlacementsForRecess(
+  previous: BasketballPostPlacement[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): BasketballPostPlacement[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const next: BasketballPostPlacement[] = [];
+  for (const placement of previous) {
+    if (placement.segmentId !== preview.segment.id) {
+      next.push(placement);
       continue;
     }
 
-    if (sourceStartOffsetMm >= preview.endOffsetMm && rightReplacementSegment) {
-      const rightLengthMm = distanceMm(rightReplacementSegment.start, rightReplacementSegment.end);
-      const normalized = clampGatePlacementToSegment(
-        {
-          ...placement,
-          segmentId: rightReplacementSegment.id,
-          startOffsetMm: sourceStartOffsetMm - preview.endOffsetMm,
-          endOffsetMm: sourceEndOffsetMm - preview.endOffsetMm
-        },
-        rightLengthMm
-      );
-      if (normalized) {
-        next.push({
-          ...placement,
-          segmentId: rightReplacementSegment.id,
-          startOffsetMm: normalized.startOffsetMm,
-          endOffsetMm: normalized.endOffsetMm
-        });
-      }
+    const mappedPathOffsetMm = mapOffsetToRecessPath(placement.offsetMm, preview);
+    const pathSegment = findPathSegmentForOffset(pathSegments, mappedPathOffsetMm);
+    if (!pathSegment) {
+      continue;
     }
+
+    next.push({
+      ...placement,
+      segmentId: pathSegment.segment.id,
+      offsetMm: Math.max(0, Math.min(pathSegment.lengthMm, mappedPathOffsetMm - pathSegment.pathStartMm))
+    });
   }
 
   next.sort((left, right) => left.id.localeCompare(right.id));

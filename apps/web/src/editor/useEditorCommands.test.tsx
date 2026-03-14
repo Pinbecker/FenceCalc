@@ -373,6 +373,11 @@ describe("useEditorCommands", () => {
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.layout.segments.length).toBeGreaterThan(2);
+    const currentSegmentIds = new Set(harness.state.layout.segments.map((segment) => segment.id));
+    expect(harness.state.layout.gates).toHaveLength(1);
+    expect(harness.state.layout.basketballPosts).toHaveLength(1);
+    expect(currentSegmentIds.has(harness.state.layout.gates?.[0]?.segmentId ?? "")).toBe(true);
+    expect(currentSegmentIds.has(harness.state.layout.basketballPosts?.[0]?.segmentId ?? "")).toBe(true);
 
     harness.state.interactionMode = "SELECT";
     harness.state.selectedSegmentId = "s1";

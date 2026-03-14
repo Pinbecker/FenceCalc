@@ -20,6 +20,7 @@ import {
   buildRectangleSegments,
   moveGatePlacementCollection,
   offsetSegmentCollection,
+  remapBasketballPostPlacementsForRecess,
   remapGatePlacementsForRecess,
   resizeSegmentCollection
 } from "./editorCommandUtils";
@@ -498,8 +499,8 @@ export function useEditorCommands({
         }
         return {
           segments: nextSegments,
-          gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById),
-          basketballPosts: (previous.basketballPosts ?? []).filter((basketballPost) => basketballPost.segmentId !== preview.segment.id)
+          gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById, replacement),
+          basketballPosts: remapBasketballPostPlacementsForRecess(previous.basketballPosts ?? [], preview, replacement)
         };
       });
       setSelectedSegmentId(null);
