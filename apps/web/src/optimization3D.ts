@@ -1,7 +1,11 @@
 import type { LayoutSegment, PointMm, TwinBarOptimizationPlan, TwinBarVariant } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 import { getSpecConfig } from "@fence-estimator/rules-engine";
-import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
+import type {
+  ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
+  ResolvedGatePlacement
+} from "./editor/types.js";
 
 export interface Optimization3DPanelSlice {
   key: string;
@@ -20,6 +24,16 @@ export interface Optimization3DPost {
   key: string;
   point: PointMm;
   heightMm: number;
+}
+
+export interface Optimization3DGate {
+  key: string;
+  start: PointMm;
+  end: PointMm;
+  center: PointMm;
+  normal: { x: number; y: number };
+  heightMm: number;
+  leafCount: 1 | 2;
 }
 
 export interface Optimization3DBasketballPost {
@@ -42,6 +56,8 @@ export interface Optimization3DFloodlightColumn {
 export interface Optimization3DCutOverlay {
   key: string;
   cutId: string;
+  planId: string;
+  planIndex: number;
   step: number;
   mode: "OPEN_STOCK_PANEL" | "REUSE_OFFCUT";
   segmentId: string;
@@ -56,6 +72,8 @@ export interface Optimization3DCutOverlay {
 
 export interface Optimization3DReuseLink {
   key: string;
+  planId: string;
+  planIndex: number;
   start: { x: number; y: number; z: number };
   end: { x: number; y: number; z: number };
 }
@@ -63,6 +81,7 @@ export interface Optimization3DReuseLink {
 export interface Optimization3DScene {
   panelSlices: Optimization3DPanelSlice[];
   posts: Optimization3DPost[];
+  gates: Optimization3DGate[];
   basketballPosts: Optimization3DBasketballPost[];
   floodlightColumns: Optimization3DFloodlightColumn[];
   cutOverlays: Optimization3DCutOverlay[];
@@ -242,6 +261,18 @@ function buildPosts(estimateSegments: LayoutSegment[]): Optimization3DPost[] {
   return [...postsByKey.values()];
 }
 
+function buildGates(placements: ResolvedGatePlacement[]): Optimization3DGate[] {
+  return placements.map((placement) => ({
+    key: placement.key,
+    start: placement.startPoint,
+    end: placement.endPoint,
+    center: placement.centerPoint,
+    normal: placement.normal,
+    heightMm: getSpecConfig(placement.spec).assembledHeightMm,
+    leafCount: placement.leafCount
+  }));
+}
+
 function buildBasketballPosts(
   placements: ResolvedBasketballPostPlacement[]
 ): Optimization3DBasketballPost[] {
@@ -281,81 +312,98 @@ function resolveOverlayLayer(segment: LayoutSegment, stockPanelHeightMm: number)
 }
 
 function buildCutOverlays(
-  activePlan: TwinBarOptimizationPlan | null,
+  plans: TwinBarOptimizationPlan[],
   estimateSegmentsById: Map<string, LayoutSegment>,
   segmentOrdinalById: Map<string, number>
 ): Optimization3DCutOverlay[] {
-  if (!activePlan) {
-    return [];
-  }
-
-  return activePlan.cuts
-    .map((cut) => {
-      const segment = estimateSegmentsById.get(cut.demand.segmentId);
-      if (!segment) {
-        return null;
-      }
-      const start = interpolateAlongSegment(segment, cut.demand.startOffsetMm);
-      const end = interpolateAlongSegment(segment, cut.demand.endOffsetMm);
-      const layer = resolveOverlayLayer(segment, activePlan.stockPanelHeightMm);
-      return {
-        key: cut.id,
-        cutId: cut.id,
-        step: cut.step,
-        mode: cut.mode,
-        segmentId: segment.id,
-        segmentOrdinal: segmentOrdinalById.get(segment.id) ?? null,
-        start,
-        end,
-        center: {
-          x: (start.x + end.x) / 2,
-          y: (start.y + end.y) / 2
-        },
-        baseHeightMm: layer.baseHeightMm,
-        heightMm: layer.visualHeightMm,
-        lengthMm: cut.demand.lengthMm
-      } satisfies Optimization3DCutOverlay;
-    })
-    .filter((overlay): overlay is Optimization3DCutOverlay => overlay !== null);
+  return plans.flatMap((plan, planIndex) =>
+    plan.cuts
+      .map((cut) => {
+        const segment = estimateSegmentsById.get(cut.demand.segmentId);
+        if (!segment) {
+          return null;
+        }
+        const start = interpolateAlongSegment(segment, cut.demand.startOffsetMm);
+        const end = interpolateAlongSegment(segment, cut.demand.endOffsetMm);
+        const layer = resolveOverlayLayer(segment, plan.stockPanelHeightMm);
+        return {
+          key: `${plan.id}-${cut.id}`,
+          cutId: cut.id,
+          planId: plan.id,
+          planIndex,
+          step: cut.step,
+          mode: cut.mode,
+          segmentId: segment.id,
+          segmentOrdinal: segmentOrdinalById.get(segment.id) ?? null,
+          start,
+          end,
+          center: {
+            x: (start.x + end.x) / 2,
+            y: (start.y + end.y) / 2
+          },
+          baseHeightMm: layer.baseHeightMm,
+          heightMm: layer.visualHeightMm,
+          lengthMm: cut.demand.lengthMm
+        } satisfies Optimization3DCutOverlay;
+      })
+      .filter((overlay): overlay is Optimization3DCutOverlay => overlay !== null)
+  );
 }
 
 function buildReuseLinks(cutOverlays: Optimization3DCutOverlay[]): Optimization3DReuseLink[] {
-  return cutOverlays.slice(1).map((overlay, index) => {
-    const previous = cutOverlays[index];
-    return {
-      key: `${previous?.cutId ?? "start"}-${overlay.cutId}`,
-      start: {
-        x: previous?.center.x ?? overlay.center.x,
-        y: (previous?.baseHeightMm ?? overlay.baseHeightMm) + (previous?.heightMm ?? overlay.heightMm) + 520,
-        z: -(previous?.center.y ?? overlay.center.y)
-      },
-      end: {
-        x: overlay.center.x,
-        y: overlay.baseHeightMm + overlay.heightMm + 520,
-        z: -overlay.center.y
-      }
-    };
+  const overlaysByPlan = new Map<string, Optimization3DCutOverlay[]>();
+  cutOverlays.forEach((overlay) => {
+    const existing = overlaysByPlan.get(overlay.planId);
+    if (existing) {
+      existing.push(overlay);
+      return;
+    }
+    overlaysByPlan.set(overlay.planId, [overlay]);
   });
+
+  return [...overlaysByPlan.values()].flatMap((planOverlays) =>
+    planOverlays.slice(1).map((overlay, index) => {
+      const previous = planOverlays[index];
+      return {
+        key: `${previous?.key ?? "start"}-${overlay.key}`,
+        planId: overlay.planId,
+        planIndex: overlay.planIndex,
+        start: {
+          x: previous?.center.x ?? overlay.center.x,
+          y: (previous?.baseHeightMm ?? overlay.baseHeightMm) + (previous?.heightMm ?? overlay.heightMm) + 520,
+          z: -(previous?.center.y ?? overlay.center.y)
+        },
+        end: {
+          x: overlay.center.x,
+          y: overlay.baseHeightMm + overlay.heightMm + 520,
+          z: -overlay.center.y
+        }
+      };
+    })
+  );
 }
 
 export function buildOptimization3DScene(
   estimateSegments: LayoutSegment[],
-  activePlan: TwinBarOptimizationPlan | null,
+  plans: TwinBarOptimizationPlan[],
   segmentOrdinalById: Map<string, number>,
+  gatePlacements: ResolvedGatePlacement[] = [],
   basketballPostPlacements: ResolvedBasketballPostPlacement[] = [],
   floodlightColumnPlacements: ResolvedFloodlightColumnPlacement[] = []
 ): Optimization3DScene {
   const panelSlices = buildPanelSlices(estimateSegments);
   const posts = buildPosts(estimateSegments);
+  const gates = buildGates(gatePlacements);
   const basketballPosts = buildBasketballPosts(basketballPostPlacements);
   const floodlightColumns = buildFloodlightColumns(floodlightColumnPlacements);
   const estimateSegmentsById = new Map(estimateSegments.map((segment) => [segment.id, segment] as const));
-  const cutOverlays = buildCutOverlays(activePlan, estimateSegmentsById, segmentOrdinalById);
+  const cutOverlays = buildCutOverlays(plans, estimateSegmentsById, segmentOrdinalById);
   const reuseLinks = buildReuseLinks(cutOverlays);
 
   const allGroundPoints = [
     ...estimateSegments.flatMap((segment) => [segment.start, segment.end]),
     ...posts.map((post) => post.point),
+    ...gates.flatMap((gate) => [gate.start, gate.end, gate.center]),
     ...basketballPosts.map((post) => post.point),
     ...floodlightColumns.map((column) => column.point)
   ];
@@ -367,6 +415,7 @@ export function buildOptimization3DScene(
     maxHeightMm: Math.max(
       2200,
       ...posts.map((post) => post.heightMm),
+      ...gates.map((gate) => gate.heightMm),
       ...basketballPosts.map((post) => post.heightMm),
       ...floodlightColumns.map((column) => column.heightMm),
       ...panelSlices.map((slice) => slice.baseHeightMm + slice.heightMm),
@@ -377,6 +426,7 @@ export function buildOptimization3DScene(
   return {
     panelSlices,
     posts,
+    gates,
     basketballPosts,
     floodlightColumns,
     cutOverlays,

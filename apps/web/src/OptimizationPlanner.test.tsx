@@ -142,11 +142,12 @@ function buildEstimateSegments(): LayoutSegment[] {
 }
 
 describe("OptimizationPlanner", () => {
-  it("renders only panel-saving plans", () => {
+  it("renders all generated stock-panel plans", () => {
     const html = renderToStaticMarkup(
       <OptimizationPlanner
         summary={buildSummary()}
         estimateSegments={buildEstimateSegments()}
+        gates={[]}
         basketballPosts={[]}
         floodlightColumns={[]}
         canInspect
@@ -167,14 +168,16 @@ describe("OptimizationPlanner", () => {
     );
 
     expect(html).toContain("3D Reuse View");
-    expect(html).toContain("Only plans that actually save a panel are shown.");
+    expect(html).toContain("The 3D picker only shows opened panels that actually get reused");
     expect(html).toContain("Open panel on segment #1");
     expect(html).toContain("Reuse offcut on segment #2");
-    expect(html).toContain("Shown above and on canvas");
-    expect(html).not.toContain("segment #99");
+    expect(html).toContain("Open panel on segment #99");
+    expect(html).toContain("Shown in 3D view");
+    expect(html).toContain("Opened panel 1");
+    expect(html).not.toContain("Opened panel 2</span>");
   });
 
-  it("shows a dedicated empty state when no panel-saving reuse exists", () => {
+  it("shows all plans even when none save a panel", () => {
     const summary = buildSummary();
     summary.twinBar.buckets[0]!.plans = summary.twinBar.buckets[0]!.plans.filter((plan) => plan.panelsSaved === 0);
     summary.twinBar.panelsSaved = 0;
@@ -184,6 +187,7 @@ describe("OptimizationPlanner", () => {
       <OptimizationPlanner
         summary={summary}
         estimateSegments={buildEstimateSegments()}
+        gates={[]}
         basketballPosts={[]}
         floodlightColumns={[]}
         canInspect
@@ -197,8 +201,8 @@ describe("OptimizationPlanner", () => {
     );
 
     expect(html).toContain("3D Reuse View");
-    expect(html).toContain("No panel-saving reuse found");
-    expect(html).toContain("Non-saving single cuts are hidden here on purpose.");
+    expect(html).toContain("The 3D picker only shows opened panels that actually get reused");
+    expect(html).not.toContain("No stock-panel plans available");
   });
 
   it("defaults the first visible saving plan into the 3D view when none is selected", () => {
@@ -206,6 +210,7 @@ describe("OptimizationPlanner", () => {
       <OptimizationPlanner
         summary={buildSummary()}
         estimateSegments={buildEstimateSegments()}
+        gates={[]}
         basketballPosts={[]}
         floodlightColumns={[]}
         canInspect
@@ -224,7 +229,6 @@ describe("OptimizationPlanner", () => {
       />
     );
 
-    expect(html).toContain("Shown above");
-    expect(html).not.toContain("Shown above and on canvas");
+    expect(html).toContain("Shown in 3D view");
   });
 });

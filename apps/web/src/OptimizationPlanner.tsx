@@ -9,11 +9,16 @@ import type {
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
 import { Optimization3DView } from "./Optimization3DView";
 import { getVisibleOptimizationBuckets } from "./optimizationDisplay";
-import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
+import type {
+  ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
+  ResolvedGatePlacement
+} from "./editor/types.js";
 
 interface OptimizationPlannerProps {
   summary: OptimizationSummary;
   estimateSegments: LayoutSegment[];
+  gates: ResolvedGatePlacement[];
   basketballPosts: ResolvedBasketballPostPlacement[];
   floodlightColumns: ResolvedFloodlightColumnPlacement[];
   canInspect: boolean;
@@ -46,8 +51,8 @@ function formatSolverLabel(bucket: TwinBarOptimizationBucket): string {
 }
 
 function buildDockHeadline(summary: OptimizationSummary, canInspect: boolean): string {
-  const savingPlans = summary.twinBar.buckets.reduce(
-    (sum, bucket) => sum + bucket.plans.filter((plan) => plan.panelsSaved > 0).length,
+  const plannedPanels = summary.twinBar.buckets.reduce(
+    (sum, bucket) => sum + bucket.plans.length,
     0,
   );
   if (!canInspect) {
@@ -56,15 +61,12 @@ function buildDockHeadline(summary: OptimizationSummary, canInspect: boolean): s
   if (summary.twinBar.totalCutDemands === 0) {
     return "No cut pieces need planning";
   }
-  if (savingPlans === 0) {
-    return "No panel-saving reuse found";
-  }
-  return `${summary.twinBar.panelsSaved} panels saved in live cut plan`;
+  return `${plannedPanels} stock-panel plans in live cut layout`;
 }
 
 function buildDockCopy(summary: OptimizationSummary, canInspect: boolean): string {
-  const savingPlans = summary.twinBar.buckets.reduce(
-    (sum, bucket) => sum + bucket.plans.filter((plan) => plan.panelsSaved > 0).length,
+  const plannedPanels = summary.twinBar.buckets.reduce(
+    (sum, bucket) => sum + bucket.plans.length,
     0,
   );
   if (!canInspect) {
@@ -73,10 +75,7 @@ function buildDockCopy(summary: OptimizationSummary, canInspect: boolean): strin
   if (summary.twinBar.totalCutDemands === 0) {
     return `${summary.twinBar.fixedFullPanels} full panels already land cleanly.`;
   }
-  if (savingPlans === 0) {
-    return `${summary.twinBar.totalCutDemands} cut pieces exist, but none combine into a saved panel.`;
-  }
-  return `${summary.twinBar.totalCutDemands} cut pieces packed into ${summary.twinBar.stockPanelsOpened} stock panels.`;
+  return `${summary.twinBar.totalCutDemands} cut pieces laid across ${plannedPanels} opened stock panels.`;
 }
 
 function buildGroupTitle(bucket: TwinBarOptimizationBucket): string {
@@ -90,6 +89,7 @@ function findPlanIndex(bucket: TwinBarOptimizationBucket, plan: TwinBarOptimizat
 export function OptimizationPlanner({
   summary,
   estimateSegments,
+  gates,
   basketballPosts,
   floodlightColumns,
   canInspect,
@@ -104,9 +104,18 @@ export function OptimizationPlanner({
   const hasCutDemand = twinBar.totalCutDemands > 0;
   const visibleBuckets = getVisibleOptimizationBuckets(summary);
   const visiblePlans = visibleBuckets.flatMap((bucket) => bucket.plans);
-  const activePlan = visiblePlans.find((plan) => plan.id === selectedPlanId) ?? visiblePlans[0] ?? null;
+  const reusablePlans = visiblePlans.filter(
+    (plan) => plan.reusedCuts > 0 || plan.cuts.some((cut) => cut.mode === "REUSE_OFFCUT")
+  );
+  const activePlan =
+    reusablePlans.find((plan) => plan.id === selectedPlanId) ??
+    reusablePlans[0] ??
+    visiblePlans.find((plan) => plan.id === selectedPlanId) ??
+    visiblePlans[0] ??
+    null;
   const activePlanId = activePlan?.id ?? null;
-  const hasVisibleSavings = visiblePlans.length > 0;
+  const activePlanIndex = activePlan ? reusablePlans.findIndex((plan) => plan.id === activePlan.id) : -1;
+  const hasVisiblePlans = visiblePlans.length > 0;
   const visiblePanelsSaved = visiblePlans.reduce((sum, plan) => sum + plan.panelsSaved, 0);
   const visibleReusedCuts = visiblePlans.reduce((sum, plan) => sum + plan.reusedCuts, 0);
   const visibleLeftoverMm = visiblePlans.reduce((sum, plan) => sum + plan.leftoverMm, 0);
@@ -151,9 +160,14 @@ export function OptimizationPlanner({
             <Optimization3DView
               estimateSegments={estimateSegments}
               activePlan={activePlan}
+              activePlanIndex={activePlanIndex >= 0 ? activePlanIndex : null}
+              planCount={reusablePlans.length}
+              plans={reusablePlans}
               segmentOrdinalById={segmentOrdinalById}
+              gates={gates}
               basketballPosts={basketballPosts}
               floodlightColumns={floodlightColumns}
+              onSelectPlan={onSelectPlan}
             />
 
             {!hasCutDemand ? (
@@ -164,12 +178,12 @@ export function OptimizationPlanner({
                   offcut plan to optimise.
                 </p>
               </div>
-            ) : !hasVisibleSavings ? (
+            ) : !hasVisiblePlans ? (
               <div className="optimization-empty">
-                <h3>No panel-saving reuse found</h3>
+                <h3>No stock-panel plans available</h3>
                 <p className="muted-line">
-                  This layout has {twinBar.totalCutDemands} remainder cuts, but none of them chain together into a saved
-                  stock panel. Non-saving single cuts are hidden here on purpose.
+                  This layout has {twinBar.totalCutDemands} remainder cuts, but no stock-panel plans were generated for
+                  review.
                 </p>
               </div>
             ) : (
@@ -184,7 +198,7 @@ export function OptimizationPlanner({
                     <strong>{formatPercent(visibleReusedCuts / twinBar.totalCutDemands)}</strong>
                   </article>
                   <article className="optimization-metric">
-                    <span>Saving Plans</span>
+                    <span>Plans Shown</span>
                     <strong>{visiblePlans.length}</strong>
                   </article>
                   <article className="optimization-metric">
@@ -194,9 +208,9 @@ export function OptimizationPlanner({
                 </div>
 
                 <div className="optimization-story">
-                  Only plans that actually save a panel are shown. Step 1 opens a fresh stock panel, later steps reuse the
-                  remaining offcut, and their consumed width already includes the {formatLengthMm(twinBar.reuseAllowanceMm)}{" "}
-                  reuse allowance.
+                  The 3D picker only shows opened panels that actually get reused. Choose one to see where the first cut
+                  comes from, then every place the remaining offcut gets reused. Consumed width already includes the{" "}
+                  {formatLengthMm(twinBar.reuseAllowanceMm)} reuse allowance.
                 </div>
 
                 <div className="optimization-bucket-strip">
@@ -219,8 +233,8 @@ export function OptimizationPlanner({
                         <div>
                           <h3>{buildGroupTitle(bucket)}</h3>
                           <p className="muted-line">
-                            Showing {bucket.plans.length} panel-saving plans from {bucket.cutDemands} cut pieces. {bucket.fullPanels}{" "}
-                            untouched full panels stay hidden.
+                            Showing all {bucket.plans.length} stock-panel plans from {bucket.cutDemands} cut pieces.{" "}
+                            {bucket.fullPanels} untouched full panels still do not need planning.
                           </p>
                         </div>
                         <div className="optimization-group-meta">
@@ -233,7 +247,6 @@ export function OptimizationPlanner({
                         {bucket.plans.map((plan) => {
                           const planIndex = findPlanIndex(bucket, plan);
                           const isSelected = plan.id === activePlanId;
-                          const isCanvasHighlighted = plan.id === selectedPlanId;
                           return (
                             <button
                               key={plan.id}
@@ -243,7 +256,7 @@ export function OptimizationPlanner({
                             >
                               <div className="optimization-plan-card-head">
                                 <div>
-                                  <span className="optimization-plan-kicker">Panel Plan {planIndex}</span>
+                                  <span className="optimization-plan-kicker">Opened Panel {planIndex}</span>
                                   <strong>
                                     saves {plan.panelsSaved} | {plan.cuts.length} cuts
                                   </strong>
@@ -294,9 +307,7 @@ export function OptimizationPlanner({
                               </div>
 
                               {isSelected ? (
-                                <span className="optimization-plan-selection">
-                                  {isCanvasHighlighted ? "Shown above and on canvas" : "Shown above"}
-                                </span>
+                                <span className="optimization-plan-selection">Shown in 3D view</span>
                               ) : null}
                             </button>
                           );

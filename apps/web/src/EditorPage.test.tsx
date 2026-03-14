@@ -214,6 +214,7 @@ const mockDerivedState = {
   oppositeGateGuides: [],
   resolvedBasketballPostPlacements: [],
   resolvedFloodlightColumnPlacements: [],
+  resolvedGatePlacements: [],
   placedGateVisuals: [],
   postTypeCounts: {
     END: 0,

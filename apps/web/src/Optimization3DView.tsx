@@ -3,16 +3,25 @@ import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/co
 
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
 import { useElementSize } from "./editor/useElementSize.js";
-import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
+import type {
+  ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
+  ResolvedGatePlacement
+} from "./editor/types.js";
 import type { Optimization3DCutOverlay, Optimization3DPanelSlice } from "./optimization3D.js";
 import { buildOptimization3DScene } from "./optimization3D.js";
 
 interface Optimization3DViewProps {
   estimateSegments: LayoutSegment[];
   activePlan: TwinBarOptimizationPlan | null;
+  activePlanIndex: number | null;
+  planCount: number;
+  plans: TwinBarOptimizationPlan[];
   segmentOrdinalById: Map<string, number>;
+  gates: ResolvedGatePlacement[];
   basketballPosts: ResolvedBasketballPostPlacement[];
   floodlightColumns: ResolvedFloodlightColumnPlacement[];
+  onSelectPlan: (planId: string) => void;
 }
 
 interface Point3D {
@@ -113,6 +122,9 @@ const PANEL_PALETTE = {
     mesh: "rgba(240, 255, 241, 0.28)"
   }
 } as const;
+
+const OVERLAY_TRACK_BASE_OFFSET_MM = 74;
+const OVERLAY_TRACK_LIFT_MM = 18;
 
 const OVERLAY_PALETTE = {
   OPEN_STOCK_PANEL: {
@@ -240,7 +252,8 @@ function createOverlayBadge(
   project: (point: Point3D) => ProjectedPoint
 ): RenderBadge {
   const palette = OVERLAY_PALETTE[overlay.mode];
-  const projected = project(toWorldPoint(overlay.center, overlay.baseHeightMm + overlay.heightMm + 280));
+  const badgeHeightMm = overlay.baseHeightMm + overlay.heightMm + 280;
+  const projected = project(toWorldPoint(overlay.center, badgeHeightMm));
   return {
     key: `${overlay.key}-badge`,
     cx: projected.x,
@@ -253,12 +266,25 @@ function createOverlayBadge(
   };
 }
 
+function getOverlayTrackOffsetMm(_overlay: Optimization3DCutOverlay): number {
+  return OVERLAY_TRACK_BASE_OFFSET_MM;
+}
+
+function getOverlayLiftMm(_overlay: Optimization3DCutOverlay): number {
+  return OVERLAY_TRACK_LIFT_MM;
+}
+
 export function Optimization3DView({
   estimateSegments,
   activePlan,
+  activePlanIndex,
+  planCount,
+  plans,
   segmentOrdinalById,
+  gates,
   basketballPosts,
-  floodlightColumns
+  floodlightColumns,
+  onSelectPlan
 }: Optimization3DViewProps) {
   const { ref, size } = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -268,8 +294,16 @@ export function Optimization3DView({
   const pendingOrbitRef = useRef<OrbitState | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const scene = useMemo(
-    () => buildOptimization3DScene(estimateSegments, activePlan, segmentOrdinalById, basketballPosts, floodlightColumns),
-    [activePlan, basketballPosts, estimateSegments, floodlightColumns, segmentOrdinalById]
+    () =>
+      buildOptimization3DScene(
+        estimateSegments,
+        activePlan ? [activePlan] : [],
+        segmentOrdinalById,
+        gates,
+        basketballPosts,
+        floodlightColumns
+      ),
+    [activePlan, basketballPosts, estimateSegments, floodlightColumns, gates, segmentOrdinalById]
   );
 
   const setOrbit = (updater: OrbitUpdater) => {
@@ -512,6 +546,79 @@ export function Optimization3DView({
       });
     }
 
+    for (const gate of scene.gates) {
+      const gateWidthMm = Math.hypot(gate.end.x - gate.start.x, gate.end.y - gate.start.y);
+      const leafSpanMm = gate.leafCount === 2 ? gateWidthMm / 2 : gateWidthMm;
+      const leafCount = gate.leafCount === 2 ? 2 : 1;
+      const tangent = {
+        x: gateWidthMm <= 0.001 ? 1 : (gate.end.x - gate.start.x) / gateWidthMm,
+        y: gateWidthMm <= 0.001 ? 0 : (gate.end.y - gate.start.y) / gateWidthMm
+      };
+      for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
+        const startOffset = leafIndex * leafSpanMm;
+        const endOffset = (leafIndex + 1) * leafSpanMm;
+        const leafStart = {
+          x: gate.start.x + tangent.x * startOffset,
+          y: gate.start.y + tangent.y * startOffset
+        };
+        const leafEnd = {
+          x: gate.start.x + tangent.x * endOffset,
+          y: gate.start.y + tangent.y * endOffset
+        };
+        const frontEdge = {
+          start: toGroundPoint(leafStart),
+          end: toGroundPoint(leafEnd)
+        };
+        const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, 48);
+        const bottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
+        const bottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
+        const topEnd = project({ x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z });
+        const topStart = project({ x: frontEdge.start.x, y: gate.heightMm, z: frontEdge.start.z });
+        const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
+        const outerTopEnd = project({ x: outerEdge.end.x, y: gate.heightMm, z: outerEdge.end.z });
+        const outerTopStart = project({ x: outerEdge.start.x, y: gate.heightMm, z: outerEdge.start.z });
+
+        const gateFaces = [
+          {
+            key: `${gate.key}-leaf-${leafIndex}-front`,
+            points: [bottomStart, bottomEnd, topEnd, topStart],
+            fill: "rgba(170, 125, 59, 0.66)"
+          },
+          {
+            key: `${gate.key}-leaf-${leafIndex}-top`,
+            points: [topStart, topEnd, outerTopEnd, outerTopStart],
+            fill: "rgba(231, 205, 160, 0.9)"
+          },
+          {
+            key: `${gate.key}-leaf-${leafIndex}-side`,
+            points: [bottomEnd, outerBottomEnd, outerTopEnd, topEnd],
+            fill: "rgba(122, 88, 36, 0.82)"
+          }
+        ];
+        gateFaces.forEach((face) => {
+          faces.push({
+            key: face.key,
+            points: formatPolygonPoints(face.points),
+            fill: face.fill,
+            stroke: "rgba(93, 63, 20, 0.88)",
+            strokeWidth: 1,
+            opacity: 1,
+            depth: getFaceDepth(face.points) + 0.12
+          });
+        });
+
+        strokes.push({
+          key: `${gate.key}-leaf-${leafIndex}-brace`,
+          kind: "polyline",
+          value: `${bottomStart.x},${bottomStart.y} ${topEnd.x},${topEnd.y}`,
+          stroke: "rgba(246, 235, 208, 0.82)",
+          strokeWidth: 1.3,
+          opacity: 1,
+          depth: (bottomStart.depth + topEnd.depth) / 2 + 0.2
+        });
+      }
+    }
+
     for (const basketballPost of scene.basketballPosts) {
       const halfWidthMm = 36;
       const groundX = basketballPost.point.x;
@@ -658,8 +765,8 @@ export function Optimization3DView({
         start: toGroundPoint(overlay.start),
         end: toGroundPoint(overlay.end)
       };
-      const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, 74);
-      const liftMm = 22;
+      const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, getOverlayTrackOffsetMm(overlay));
+      const liftMm = getOverlayLiftMm(overlay);
       const frontBottomStart = project({ x: frontEdge.start.x, y: overlay.baseHeightMm + liftMm, z: frontEdge.start.z });
       const frontBottomEnd = project({ x: frontEdge.end.x, y: overlay.baseHeightMm + liftMm, z: frontEdge.end.z });
       const frontTopEnd = project({
@@ -709,7 +816,7 @@ export function Optimization3DView({
           fill: face.fill,
           stroke: palette.stroke,
           strokeWidth: 1.16,
-          opacity: 1,
+          opacity: 0.98,
           depth: getFaceDepth(face.points) + 0.08
         });
       });
@@ -887,7 +994,7 @@ export function Optimization3DView({
         <div>
           <h3>3D Reuse View</h3>
           <p className="muted-line">
-            Drag to orbit, hold Shift and drag to pan, and scroll to zoom. Orange opens a fresh panel, teal shows where the offcut is reused next.
+            Drag to orbit, hold Shift and drag to pan, and scroll to zoom. The picker only includes opened panels that actually get reused, and the view shows one full reuse chain at a time.
           </p>
         </div>
         <button type="button" className="optimization-3d-reset" onClick={() => setOrbit(DEFAULT_ORBIT)}>
@@ -895,8 +1002,81 @@ export function Optimization3DView({
         </button>
       </div>
 
+      {plans.length > 0 ? (
+        <div className="optimization-3d-selector" aria-label="Opened panel view selector">
+          <div className="optimization-3d-selector-head">
+            <strong>Opened panel view</strong>
+            {activePlanIndex !== null && planCount > 1 ? (
+              <span>
+                Showing {activePlanIndex + 1} of {planCount}
+              </span>
+            ) : (
+              <span>Showing the full reuse chain for the selected reusable panel</span>
+            )}
+          </div>
+
+          <div className="optimization-3d-selector-controls">
+            <button
+              type="button"
+              className="optimization-3d-selector-nav"
+              onClick={() => {
+                if (activePlanIndex === null || plans.length <= 1) {
+                  return;
+                }
+                const nextIndex = activePlanIndex <= 0 ? plans.length - 1 : activePlanIndex - 1;
+                const nextPlan = plans[nextIndex];
+                if (nextPlan) {
+                  onSelectPlan(nextPlan.id);
+                }
+              }}
+              disabled={plans.length <= 1}
+            >
+              Prev
+            </button>
+
+            <div className="optimization-plan-strip-top optimization-plan-strip-inline">
+              {plans.map((plan, index) => {
+                const isActive = plan.id === activePlan?.id;
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    className={`optimization-plan-pill${isActive ? " is-active" : ""}`}
+                    onClick={() => onSelectPlan(plan.id)}
+                  >
+                    <span>Opened panel {index + 1}</span>
+                    <strong>
+                      {plan.cuts.length} uses | {formatLengthMm(plan.leftoverMm)} left
+                    </strong>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="optimization-3d-selector-nav"
+              onClick={() => {
+                if (activePlanIndex === null || plans.length <= 1) {
+                  return;
+                }
+                const nextIndex = activePlanIndex >= plans.length - 1 ? 0 : activePlanIndex + 1;
+                const nextPlan = plans[nextIndex];
+                if (nextPlan) {
+                  onSelectPlan(nextPlan.id);
+                }
+              }}
+              disabled={plans.length <= 1}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {activePlan ? (
         <div className="optimization-3d-meta">
+          {activePlanIndex !== null && planCount > 1 ? <span>Opened panel {activePlanIndex + 1} of {planCount}</span> : null}
           <span>{formatVariantLabel(activePlan.variant)}</span>
           <span>{formatHeightLabelFromMm(activePlan.stockPanelHeightMm)} stock</span>
           <span>{freshCutCount} fresh</span>
@@ -1038,6 +1218,10 @@ export function Optimization3DView({
         <span>
           <i className="is-link" />
           Offcut path
+        </span>
+        <span>
+          <i className="is-gate" />
+          Gate
         </span>
         <span>
           <i className="is-basketball-post" />

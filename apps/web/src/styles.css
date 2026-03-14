@@ -1240,6 +1240,56 @@ h1 {
   white-space: nowrap;
 }
 
+.optimization-3d-selector {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(103, 115, 103, 0.14);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.optimization-3d-selector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.optimization-3d-selector-head strong {
+  color: #22302a;
+  font-size: 0.82rem;
+}
+
+.optimization-3d-selector-head span {
+  color: #5d6a62;
+  font-size: 0.72rem;
+}
+
+.optimization-3d-selector-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.optimization-3d-selector-nav {
+  min-width: 64px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(103, 115, 103, 0.16);
+  background: rgba(248, 250, 248, 0.95);
+  color: #22302a;
+  font: inherit;
+}
+
+.optimization-3d-selector-nav:disabled {
+  opacity: 0.46;
+  cursor: default;
+}
+
 .optimization-3d-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1329,6 +1379,10 @@ h1 {
   border-left: 6px solid rgba(233, 240, 246, 0.96);
 }
 
+.optimization-3d-legend .is-gate {
+  background: #a87433;
+}
+
 .optimization-3d-legend .is-basketball-post {
   background: #345bc8;
 }
@@ -1394,6 +1448,47 @@ h1 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.optimization-plan-strip-top {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.optimization-plan-strip-inline {
+  min-width: 0;
+}
+
+.optimization-plan-pill {
+  min-width: 150px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(103, 115, 103, 0.14);
+  background: rgba(255, 251, 245, 0.82);
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.optimization-plan-pill span {
+  color: #69766a;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.optimization-plan-pill strong {
+  color: #22302a;
+  font-size: 0.78rem;
+}
+
+.optimization-plan-pill.is-active {
+  border-color: rgba(179, 92, 60, 0.32);
+  box-shadow: 0 0 0 1px rgba(179, 92, 60, 0.14);
+  background: rgba(255, 246, 236, 0.94);
 }
 
 .optimization-metric {
@@ -2369,6 +2464,14 @@ button:disabled {
   .optimization-3d-copy {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .optimization-3d-selector-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .optimization-3d-selector-nav {
+    display: none;
   }
 
   .optimization-3d-reset {

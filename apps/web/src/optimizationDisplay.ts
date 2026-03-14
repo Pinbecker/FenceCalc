@@ -8,7 +8,7 @@ export function getVisibleOptimizationBuckets(summary: OptimizationSummary): Vis
   return summary.twinBar.buckets
     .map((bucket) => ({
       ...bucket,
-      plans: bucket.plans.filter((plan) => plan.panelsSaved > 0)
+      plans: bucket.plans
     }))
     .filter((bucket) => bucket.plans.length > 0);
 }

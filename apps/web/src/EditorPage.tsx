@@ -293,6 +293,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     oppositeGateGuides,
     resolvedBasketballPostPlacements,
     resolvedFloodlightColumnPlacements,
+    resolvedGatePlacements,
     placedGateVisuals,
     postTypeCounts,
     recessAlignmentAnchors,
@@ -839,6 +840,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
             <OptimizationPlanner
               summary={optimizationSummary}
               estimateSegments={estimateSegments}
+              gates={resolvedGatePlacements}
               basketballPosts={resolvedBasketballPostPlacements}
               floodlightColumns={resolvedFloodlightColumnPlacements}
               canInspect={segments.length > 0}
