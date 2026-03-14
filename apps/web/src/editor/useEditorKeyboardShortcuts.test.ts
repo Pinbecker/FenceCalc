@@ -53,6 +53,7 @@ describe("useEditorKeyboardShortcuts", () => {
       undo: vi.fn(),
       redo: vi.fn(),
       deleteSelectedBasketballPost: vi.fn(() => false),
+      deleteSelectedFloodlightColumn: vi.fn(() => false),
       deleteSelectedGate: vi.fn(() => false),
       deleteSelectedSegment: vi.fn(() => true),
       setInteractionMode: vi.fn(),
@@ -86,6 +87,7 @@ describe("useEditorKeyboardShortcuts", () => {
     listeners.keydown?.(createEvent("KeyR"));
     listeners.keydown?.(createEvent("KeyG"));
     listeners.keydown?.(createEvent("KeyB"));
+    listeners.keydown?.(createEvent("KeyF"));
     listeners.keydown?.(createEvent("Space"));
     listeners.keydown?.(createEvent("ShiftLeft"));
     listeners.keydown?.(createEvent("Delete"));
@@ -105,12 +107,14 @@ describe("useEditorKeyboardShortcuts", () => {
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(4, "RECESS");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(5, "GATE");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(6, "BASKETBALL_POST");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(7, "FLOODLIGHT_COLUMN");
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(true);
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(false);
     expect(options.setDisableSnap).toHaveBeenCalledWith(true);
     expect(options.setDisableSnap).toHaveBeenCalledWith(false);
     expect(options.deleteSelectedGate).toHaveBeenCalledTimes(1);
     expect(options.deleteSelectedBasketballPost).toHaveBeenCalledTimes(1);
+    expect(options.deleteSelectedFloodlightColumn).toHaveBeenCalledTimes(1);
     expect(options.deleteSelectedSegment).toHaveBeenCalledTimes(1);
     expect(options.cancelActiveDrawing).toHaveBeenCalledTimes(1);
     expect(options.finishActiveInteraction).toHaveBeenCalledTimes(1);

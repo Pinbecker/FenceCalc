@@ -1,6 +1,7 @@
 import type {
   BasketballPostPlacement,
   FenceSpec,
+  FloodlightColumnPlacement,
   GateType,
   InlineFeatureFacing,
   LayoutModel,
@@ -72,7 +73,14 @@ export type HistoryAction =
   | { type: "RESET"; layout: LayoutModel }
   | { type: "SET"; layout: LayoutModel };
 
-export type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
+export type InteractionMode =
+  | "DRAW"
+  | "SELECT"
+  | "RECTANGLE"
+  | "RECESS"
+  | "GATE"
+  | "BASKETBALL_POST"
+  | "FLOODLIGHT_COLUMN";
 
 export type RecessSide = "LEFT" | "RIGHT";
 export type RecessSidePreference = RecessSide | "AUTO";
@@ -175,6 +183,38 @@ export interface ResolvedBasketballPostPlacement extends BasketballPostVisual {
   offsetMm: number;
   spec: FenceSpec;
   placement: BasketballPostPlacement;
+}
+
+export interface FloodlightColumnInsertionPreview {
+  segment: LayoutSegment;
+  segmentLengthMm: number;
+  offsetMm: number;
+  point: PointMm;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  facing: InlineFeatureFacing;
+  targetPoint: PointMm;
+  snapMeta: PreviewSnapMeta;
+  alignmentGuide?: {
+    anchorPoint: PointMm;
+    targetPoint: PointMm;
+  };
+}
+
+export interface FloodlightColumnVisual {
+  key: string;
+  point: PointMm;
+  tangent: { x: number; y: number };
+  normal: { x: number; y: number };
+  facing: InlineFeatureFacing;
+}
+
+export interface ResolvedFloodlightColumnPlacement extends FloodlightColumnVisual {
+  id: string;
+  segmentId: string;
+  offsetMm: number;
+  spec: FenceSpec;
+  placement: FloodlightColumnPlacement;
 }
 
 export interface RecessAlignmentAnchor {

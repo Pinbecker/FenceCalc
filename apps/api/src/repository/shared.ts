@@ -153,7 +153,8 @@ function buildPreviewLayout(layout: LayoutModel): LayoutModel {
   return {
     segments: layout.segments.slice(0, 40),
     gates: (layout.gates ?? []).slice(0, 12),
-    basketballPosts: (layout.basketballPosts ?? []).slice(0, 20)
+    basketballPosts: (layout.basketballPosts ?? []).slice(0, 20),
+    floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20)
   };
 }
 
@@ -167,7 +168,8 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
     gates: parsedLayout.gates ?? [],
-    basketballPosts: parsedLayout.basketballPosts ?? []
+    basketballPosts: parsedLayout.basketballPosts ?? [],
+    floodlightColumns: parsedLayout.floodlightColumns ?? []
   };
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`);
 
@@ -235,7 +237,8 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
   const layout: LayoutModel = {
     segments: parsedLayout.segments,
     gates: parsedLayout.gates ?? [],
-    basketballPosts: parsedLayout.basketballPosts ?? []
+    basketballPosts: parsedLayout.basketballPosts ?? [],
+    floodlightColumns: parsedLayout.floodlightColumns ?? []
   };
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`);
 

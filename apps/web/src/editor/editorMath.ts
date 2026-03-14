@@ -1,6 +1,7 @@
 import type {
   BasketballPostPlacement,
   FenceSpec,
+  FloodlightColumnPlacement,
   GatePlacement,
   GateType,
   LayoutModel,
@@ -370,6 +371,39 @@ export function sameBasketballPostPlacementList(
   return true;
 }
 
+export function sameFloodlightColumnPlacement(
+  left: FloodlightColumnPlacement,
+  right: FloodlightColumnPlacement
+): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.offsetMm === right.offsetMm &&
+    left.facing === right.facing
+  );
+}
+
+export function sameFloodlightColumnPlacementList(
+  left: FloodlightColumnPlacement[],
+  right: FloodlightColumnPlacement[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftFloodlightColumn = left[index];
+    const rightFloodlightColumn = right[index];
+    if (
+      !leftFloodlightColumn ||
+      !rightFloodlightColumn ||
+      !sameFloodlightColumnPlacement(leftFloodlightColumn, rightFloodlightColumn)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function samePointApprox(left: PointMm, right: PointMm, epsilon = 0.001): boolean {
   return Math.abs(left.x - right.x) <= epsilon && Math.abs(left.y - right.y) <= epsilon;
 }
@@ -403,7 +437,8 @@ export function sameLayoutModel(left: LayoutModel, right: LayoutModel): boolean 
   return (
     sameSegmentList(left.segments, right.segments) &&
     sameGatePlacementList(left.gates ?? [], right.gates ?? []) &&
-    sameBasketballPostPlacementList(left.basketballPosts ?? [], right.basketballPosts ?? [])
+    sameBasketballPostPlacementList(left.basketballPosts ?? [], right.basketballPosts ?? []) &&
+    sameFloodlightColumnPlacementList(left.floodlightColumns ?? [], right.floodlightColumns ?? [])
   );
 }
 

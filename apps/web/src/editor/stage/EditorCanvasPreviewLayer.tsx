@@ -5,6 +5,7 @@ import { distanceMm } from "@fence-estimator/geometry";
 import { formatLengthMm } from "../../formatters";
 import { renderBasketballPostSymbol } from "../basketballPostGeometry";
 import { GHOST_STROKE_PX, LABEL_FONT_SIZE_PX, MIN_SEGMENT_MM } from "../constants";
+import { renderFloodlightColumnSymbol } from "../floodlightColumnGeometry";
 import { renderGateSymbol } from "../gateGeometry";
 import { renderCanvasLabel } from "./canvasLabel";
 import type { EditorCanvasStageProps } from "./types";
@@ -17,6 +18,7 @@ type EditorCanvasPreviewLayerProps = Pick<
   | "drawHoverSnap"
   | "drawStart"
   | "basketballPostPreview"
+  | "floodlightColumnPreview"
   | "gatePreview"
   | "gatePreviewVisual"
   | "ghostEnd"
@@ -255,6 +257,7 @@ export function EditorCanvasPreviewLayer({
   drawHoverSnap,
   drawStart,
   basketballPostPreview,
+  floodlightColumnPreview = null,
   gatePreview,
   gatePreviewVisual,
   ghostEnd,
@@ -536,6 +539,73 @@ export function EditorCanvasPreviewLayer({
             stroke: "rgba(255, 187, 106, 0.42)",
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 84
+          })}
+        </Group>
+      ) : null}
+      {floodlightColumnPreview ? (
+        <Group key={`floodlight-column-preview-${floodlightColumnPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            floodlightColumnPreview.segment.start,
+            floodlightColumnPreview.segment.end,
+            view.scale,
+            "#ffe27a"
+          )}
+          {floodlightColumnPreview.alignmentGuide
+            ? renderPlacementGuide({
+                targetPoint: floodlightColumnPreview.targetPoint,
+                guideDirection: floodlightColumnPreview.normal,
+                visibleBounds,
+                scale: view.scale,
+                anchorPoint: floodlightColumnPreview.alignmentGuide.anchorPoint
+              })
+            : null}
+          {renderFloodlightColumnSymbol(
+            {
+              key: `preview-${floodlightColumnPreview.segment.id}`,
+              point: floodlightColumnPreview.point,
+              tangent: floodlightColumnPreview.tangent,
+              normal: floodlightColumnPreview.normal,
+              facing: floodlightColumnPreview.facing
+            },
+            view.scale,
+            {
+              stroke: "#7a4c00",
+              fill: "#f0bb2d",
+              accent: "#fff0a8"
+            }
+          )}
+          {renderRunDistanceLabels({
+            keyPrefix: `floodlight-column-${floodlightColumnPreview.segment.id}`,
+            startPoint: floodlightColumnPreview.segment.start,
+            splitStartPoint: floodlightColumnPreview.point,
+            splitEndPoint: floodlightColumnPreview.point,
+            endPoint: floodlightColumnPreview.segment.end,
+            startDistanceMm: floodlightColumnPreview.offsetMm,
+            endDistanceMm: floodlightColumnPreview.segmentLengthMm - floodlightColumnPreview.offsetMm,
+            tangent: floodlightColumnPreview.tangent,
+            startNormal: { x: -floodlightColumnPreview.normal.x, y: -floodlightColumnPreview.normal.y },
+            endNormal: { x: -floodlightColumnPreview.normal.x, y: -floodlightColumnPreview.normal.y },
+            scale: view.scale,
+            fill: "rgba(92, 58, 4, 0.92)",
+            textColor: "#fff7d6",
+            stroke: "rgba(255, 226, 122, 0.42)"
+          })}
+          {renderCanvasLabel({
+            keyValue: `floodlight-column-main-${floodlightColumnPreview.segment.id}`,
+            ...offsetPoint(
+              floodlightColumnPreview.point,
+              floodlightColumnPreview.tangent,
+              floodlightColumnPreview.normal,
+              view.scale,
+              82
+            ),
+            text: "Floodlight Column",
+            scale: view.scale,
+            fill: "rgba(92, 58, 4, 0.92)",
+            textColor: "#fff7d6",
+            stroke: "rgba(255, 226, 122, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 102
           })}
         </Group>
       ) : null}

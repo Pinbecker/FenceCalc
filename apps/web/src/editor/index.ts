@@ -89,9 +89,11 @@ export {
   buildSegmentConnectivity,
   buildSegmentRuns,
   resolveBasketballPostPlacements,
+  resolveFloodlightColumnPlacements,
   resolveGatePlacements
 } from "./segmentTopology.js";
 export { renderBasketballPostSymbol } from "./basketballPostGeometry.js";
+export { renderFloodlightColumnSymbol } from "./floodlightColumnGeometry.js";
 export {
   buildRecessAlignmentAnchors,
   buildRecessPreview,
@@ -109,6 +111,8 @@ export type {
   BasketballPostInsertionPreview,
   BasketballPostVisual,
   DraggablePanel,
+  FloodlightColumnInsertionPreview,
+  FloodlightColumnVisual,
   GateInsertionPreview,
   GateVisual,
   HistoryState,
@@ -119,6 +123,7 @@ export type {
   RecessInsertionPreview,
   RecessSide,
   ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
   ScaleBarState,
   ScreenRect,

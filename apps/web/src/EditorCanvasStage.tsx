@@ -38,12 +38,14 @@ export function EditorCanvasStage({
         ? DRAW_CURSOR
         : props.interactionMode === "RECESS" ||
             props.interactionMode === "GATE" ||
-            props.interactionMode === "BASKETBALL_POST"
-          ? props.recessPreview || props.gatePreview || props.basketballPostPreview
+            props.interactionMode === "BASKETBALL_POST" ||
+            props.interactionMode === "FLOODLIGHT_COLUMN"
+          ? props.recessPreview || props.gatePreview || props.basketballPostPreview || props.floodlightColumnPreview
             ? "crosshair"
             : "default"
-          : props.hoveredBasketballPostId || props.hoveredGateId || props.hoveredSegmentId
+          : props.hoveredBasketballPostId || props.hoveredFloodlightColumnId || props.hoveredGateId || props.hoveredSegmentId
             ? props.hoveredBasketballPostId === props.selectedBasketballPostId ||
+              props.hoveredFloodlightColumnId === props.selectedFloodlightColumnId ||
               props.hoveredGateId === props.selectedGateId ||
               props.hoveredSegmentId === props.selectedSegmentId
               ? "grab"
@@ -94,13 +96,16 @@ export function EditorCanvasStage({
           visualPosts={props.visualPosts}
           segments={props.segments}
           hoveredBasketballPostId={props.hoveredBasketballPostId}
+          hoveredFloodlightColumnId={props.hoveredFloodlightColumnId ?? null}
           hoveredSegmentId={props.hoveredSegmentId}
           hoveredGateId={props.hoveredGateId}
           selectedSegmentId={props.selectedSegmentId}
           selectedGateId={props.selectedGateId}
           selectedBasketballPostId={props.selectedBasketballPostId}
+          selectedFloodlightColumnId={props.selectedFloodlightColumnId ?? null}
           gatesBySegmentId={props.gatesBySegmentId}
           placedBasketballPostVisuals={props.placedBasketballPostVisuals}
+          placedFloodlightColumnVisuals={props.placedFloodlightColumnVisuals ?? []}
           segmentLengthLabelsBySegmentId={props.segmentLengthLabelsBySegmentId}
           visibleSegmentLabelKeys={props.visibleSegmentLabelKeys}
           placedGateVisuals={props.placedGateVisuals}
@@ -115,6 +120,8 @@ export function EditorCanvasStage({
           onStartGateDrag={props.onStartGateDrag}
           onSelectBasketballPost={props.onSelectBasketballPost}
           onStartBasketballPostDrag={props.onStartBasketballPostDrag}
+          onSelectFloodlightColumn={props.onSelectFloodlightColumn ?? (() => undefined)}
+          onStartFloodlightColumnDrag={props.onStartFloodlightColumnDrag ?? (() => undefined)}
         />
         <EditorCanvasPreviewLayer
           view={view}
@@ -132,6 +139,7 @@ export function EditorCanvasStage({
           recessPreview={props.recessPreview}
           gatePreview={props.gatePreview}
           basketballPostPreview={props.basketballPostPreview}
+          floodlightColumnPreview={props.floodlightColumnPreview ?? null}
           gatePreviewVisual={props.gatePreviewVisual}
           closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}
@@ -145,6 +153,7 @@ export function EditorCanvasStage({
         disableSnap={props.disableSnap}
         isPanning={props.isPanning}
         hoveredBasketballPostId={props.hoveredBasketballPostId}
+        hoveredFloodlightColumnId={props.hoveredFloodlightColumnId ?? null}
         hoveredSegmentId={props.hoveredSegmentId}
         hoveredGateId={props.hoveredGateId}
         drawStart={props.drawStart}
@@ -152,6 +161,7 @@ export function EditorCanvasStage({
         closeLoopPoint={props.closeLoopPoint}
         gatePreview={props.gatePreview}
         basketballPostPreview={props.basketballPostPreview}
+        floodlightColumnPreview={props.floodlightColumnPreview ?? null}
         recessPreview={props.recessPreview}
       />
     </main>

@@ -8,12 +8,14 @@ import type {
   AxisGuide,
   BasketballPostInsertionPreview,
   DrawNodeSnapPreview,
+  FloodlightColumnInsertionPreview,
   GateInsertionPreview,
   GateVisual,
   InteractionMode,
   LineSnapPreview,
   RecessInsertionPreview,
   ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
   ScaleBarState,
   SegmentLengthLabel,
@@ -45,8 +47,10 @@ export interface EditorCanvasStageProps {
   recessPreview: RecessInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
   basketballPostPreview: BasketballPostInsertionPreview | null;
+  floodlightColumnPreview?: FloodlightColumnInsertionPreview | null;
   gatePreviewVisual: GateVisual | null;
   hoveredBasketballPostId: string | null;
+  hoveredFloodlightColumnId?: string | null;
   hoveredSegmentId: string | null;
   hoveredGateId: string | null;
   closeLoopPoint: PointMm | null;
@@ -55,8 +59,10 @@ export interface EditorCanvasStageProps {
   selectedSegmentId: string | null;
   selectedGateId: string | null;
   selectedBasketballPostId: string | null;
+  selectedFloodlightColumnId?: string | null;
   gatesBySegmentId: Map<string, ResolvedGatePlacement[]>;
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
+  placedFloodlightColumnVisuals?: ResolvedFloodlightColumnPlacement[];
   segmentLengthLabelsBySegmentId: Map<string, SegmentLengthLabel[]>;
   visibleSegmentLabelKeys: Set<string>;
   placedGateVisuals: ResolvedGatePlacement[];
@@ -79,4 +85,6 @@ export interface EditorCanvasStageProps {
   onStartGateDrag: (gateId: string) => void;
   onSelectBasketballPost: (basketballPostId: string) => void;
   onStartBasketballPostDrag: (basketballPostId: string) => void;
+  onSelectFloodlightColumn?: (floodlightColumnId: string) => void;
+  onStartFloodlightColumnDrag?: (floodlightColumnId: string) => void;
 }

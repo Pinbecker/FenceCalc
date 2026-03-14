@@ -9,7 +9,9 @@ type EditorCanvasHudProps = Pick<
   | "drawStart"
   | "drawSnapLabel"
   | "basketballPostPreview"
+  | "floodlightColumnPreview"
   | "hoveredBasketballPostId"
+  | "hoveredFloodlightColumnId"
   | "gatePreview"
   | "hoveredGateId"
   | "hoveredSegmentId"
@@ -25,7 +27,9 @@ export function EditorCanvasHud({
   drawStart,
   drawSnapLabel,
   basketballPostPreview,
+  floodlightColumnPreview = null,
   hoveredBasketballPostId,
+  hoveredFloodlightColumnId = null,
   gatePreview,
   hoveredGateId,
   hoveredSegmentId,
@@ -34,10 +38,18 @@ export function EditorCanvasHud({
   recessPreview,
   scaleBar
 }: EditorCanvasHudProps) {
-  const guide = drawSnapLabel ?? basketballPostPreview?.snapMeta.label ?? gatePreview?.snapMeta.label ?? recessPreview?.snapMeta.label ?? null;
+  const guide =
+    drawSnapLabel ??
+    basketballPostPreview?.snapMeta.label ??
+    floodlightColumnPreview?.snapMeta.label ??
+    gatePreview?.snapMeta.label ??
+    recessPreview?.snapMeta.label ??
+    null;
   const modeLabel =
     interactionMode === "BASKETBALL_POST"
       ? "Basketball Post"
+      : interactionMode === "FLOODLIGHT_COLUMN"
+        ? "Floodlight Column"
       : interactionMode.charAt(0) + interactionMode.slice(1).toLowerCase();
 
   const action =
@@ -55,21 +67,27 @@ export function EditorCanvasHud({
           ? `Drag post ${basketballPostPreview.facing.toLowerCase()}`
           : interactionMode === "SELECT" && gatePreview
             ? "Drag to slide gate"
-        : interactionMode === "GATE"
-          ? gatePreview
-            ? "Click to place gate"
-            : "Hover a run"
-          : interactionMode === "BASKETBALL_POST"
-            ? basketballPostPreview
-              ? `Click place post ${basketballPostPreview.facing.toLowerCase()}`
-              : "Hover a run side"
-          : hoveredBasketballPostId
-            ? "Click select, drag slide"
-          : hoveredGateId
-            ? "Click select, drag slide"
-            : hoveredSegmentId
-              ? "Click select, drag move, click tag edit"
-              : "Hover a line or gate";
+            : interactionMode === "GATE"
+              ? gatePreview
+                ? "Click to place gate"
+                : "Hover a run"
+              : interactionMode === "BASKETBALL_POST"
+                ? basketballPostPreview
+                  ? `Click place post ${basketballPostPreview.facing.toLowerCase()}`
+                  : "Hover a run side"
+                : interactionMode === "FLOODLIGHT_COLUMN"
+                  ? floodlightColumnPreview
+                    ? "Click place floodlight column"
+                    : "Hover a run or corner"
+                  : hoveredBasketballPostId
+                    ? "Click select, drag slide"
+                    : hoveredFloodlightColumnId
+                      ? "Click select, drag slide"
+                      : hoveredGateId
+                        ? "Click select, drag slide"
+                        : hoveredSegmentId
+                          ? "Click select, drag move, click tag edit"
+                          : "Hover a line or gate";
 
   const controls =
     interactionMode === "DRAW"

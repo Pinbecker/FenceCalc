@@ -45,10 +45,18 @@ export interface BasketballPostPlacement {
   facing: InlineFeatureFacing;
 }
 
+export interface FloodlightColumnPlacement {
+  id: string;
+  segmentId: string;
+  offsetMm: number;
+  facing: InlineFeatureFacing;
+}
+
 export interface LayoutModel {
   segments: LayoutSegment[];
   gates?: GatePlacement[];
   basketballPosts?: BasketballPostPlacement[];
+  floodlightColumns?: FloodlightColumnPlacement[];
 }
 
 export interface DrawingCanvasViewport {

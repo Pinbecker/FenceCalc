@@ -1,4 +1,11 @@
-import type { BasketballPostPlacement, FenceSpec, GatePlacement, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type {
+  BasketballPostPlacement,
+  FenceSpec,
+  FloodlightColumnPlacement,
+  GatePlacement,
+  LayoutSegment,
+  PointMm
+} from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, quantize } from "./constants";
@@ -142,6 +149,48 @@ function resolveNearestGateStartOffsetMm(
 function resolveNearestBasketballPostOffsetMm(
   previous: BasketballPostPlacement[],
   target: BasketballPostPlacement,
+  proposedOffsetMm: number,
+  segmentLengthMm: number
+): number {
+  const clampedProposalMm = Math.max(0, Math.min(segmentLengthMm, proposedOffsetMm));
+  const roundedProposalMm = Math.round(clampedProposalMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  const occupiedOffsets = new Set(
+    previous
+      .filter((placement) => placement.segmentId === target.segmentId && placement.id !== target.id)
+      .map((placement) => Math.round(placement.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+  );
+
+  if (!occupiedOffsets.has(roundedProposalMm)) {
+    return roundedProposalMm;
+  }
+
+  const direction = Math.sign(proposedOffsetMm - target.offsetMm);
+  const maxSteps = Math.ceil(segmentLengthMm / DRAW_INCREMENT_MM);
+  for (let step = 1; step <= maxSteps; step += 1) {
+    const lowerCandidateMm = roundedProposalMm - step * DRAW_INCREMENT_MM;
+    const upperCandidateMm = roundedProposalMm + step * DRAW_INCREMENT_MM;
+    const orderedCandidates =
+      direction >= 0
+        ? [upperCandidateMm, lowerCandidateMm]
+        : [lowerCandidateMm, upperCandidateMm];
+
+    for (const candidateMm of orderedCandidates) {
+      if (candidateMm < 0 || candidateMm > segmentLengthMm) {
+        continue;
+      }
+      if (occupiedOffsets.has(candidateMm)) {
+        continue;
+      }
+      return candidateMm;
+    }
+  }
+
+  return Math.round(target.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+}
+
+function resolveNearestFloodlightColumnOffsetMm(
+  previous: FloodlightColumnPlacement[],
+  target: FloodlightColumnPlacement,
   proposedOffsetMm: number,
   segmentLengthMm: number
 ): number {
@@ -571,6 +620,76 @@ export function moveBasketballPostPlacementCollectionToOffset(
   );
 }
 
+export function moveFloodlightColumnPlacementCollection(
+  previous: FloodlightColumnPlacement[],
+  floodlightColumnId: string,
+  deltaAlongMm: number,
+  segmentsById: Map<string, LayoutSegment>
+): FloodlightColumnPlacement[] {
+  const target = previous.find((placement) => placement.id === floodlightColumnId);
+  if (!target) {
+    return previous;
+  }
+  const segment = segmentsById.get(target.segmentId);
+  if (!segment) {
+    return previous;
+  }
+
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const nextOffsetMm = resolveNearestFloodlightColumnOffsetMm(
+    previous,
+    target,
+    target.offsetMm + deltaAlongMm,
+    segmentLengthMm
+  );
+  if (Math.abs(nextOffsetMm - target.offsetMm) < 0.001) {
+    return previous;
+  }
+
+  return previous.map((placement) =>
+    placement.id === floodlightColumnId
+      ? {
+          ...placement,
+          offsetMm: nextOffsetMm
+        }
+      : placement
+  );
+}
+
+export function moveFloodlightColumnPlacementCollectionToOffset(
+  previous: FloodlightColumnPlacement[],
+  floodlightColumnId: string,
+  nextOffsetMm: number,
+  segmentsById: Map<string, LayoutSegment>
+): FloodlightColumnPlacement[] {
+  const target = previous.find((placement) => placement.id === floodlightColumnId);
+  if (!target) {
+    return previous;
+  }
+  const segment = segmentsById.get(target.segmentId);
+  if (!segment) {
+    return previous;
+  }
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const resolvedOffsetMm = resolveNearestFloodlightColumnOffsetMm(
+    previous,
+    target,
+    nextOffsetMm,
+    segmentLengthMm
+  );
+  if (Math.abs(resolvedOffsetMm - target.offsetMm) < 0.001) {
+    return previous;
+  }
+  return previous.map((placement) =>
+    placement.id === floodlightColumnId
+      ? {
+          ...placement,
+          offsetMm: resolvedOffsetMm
+        }
+      : placement
+  );
+}
+
 export function buildRectangleSegments(
   start: PointMm,
   end: PointMm,
@@ -689,6 +808,40 @@ export function remapBasketballPostPlacementsForRecess(
   }
 
   const next: BasketballPostPlacement[] = [];
+  for (const placement of previous) {
+    if (placement.segmentId !== preview.segment.id) {
+      next.push(placement);
+      continue;
+    }
+
+    const mappedPathOffsetMm = mapOffsetToRecessPath(placement.offsetMm, preview);
+    const pathSegment = findPathSegmentForOffset(pathSegments, mappedPathOffsetMm);
+    if (!pathSegment) {
+      continue;
+    }
+
+    next.push({
+      ...placement,
+      segmentId: pathSegment.segment.id,
+      offsetMm: Math.max(0, Math.min(pathSegment.lengthMm, mappedPathOffsetMm - pathSegment.pathStartMm))
+    });
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapFloodlightColumnPlacementsForRecess(
+  previous: FloodlightColumnPlacement[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): FloodlightColumnPlacement[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const next: FloodlightColumnPlacement[] = [];
   for (const placement of previous) {
     if (placement.segmentId !== preview.segment.id) {
       next.push(placement);

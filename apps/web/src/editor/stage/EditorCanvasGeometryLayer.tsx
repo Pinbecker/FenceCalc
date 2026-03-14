@@ -12,6 +12,7 @@ import {
   quantize
 } from "../constants";
 import { getBasketballPostArmEnd, renderBasketballPostSymbol } from "../basketballPostGeometry";
+import { renderFloodlightColumnSymbol } from "../floodlightColumnGeometry";
 import { renderGateSymbol } from "../gateGeometry";
 import { buildSegmentRuns } from "../segmentTopology";
 import type { VisualPost } from "../types";
@@ -24,22 +25,27 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "interactionMode"
   | "onOpenSegmentLengthEditor"
   | "onSelectBasketballPost"
+  | "onSelectFloodlightColumn"
   | "onSelectGate"
   | "onSelectSegment"
   | "onStartBasketballPostDrag"
+  | "onStartFloodlightColumnDrag"
   | "onStartGateDrag"
   | "onStartSegmentDrag"
   | "onStartSegmentEndpointDrag"
   | "onEndSegmentEndpointDrag"
   | "onUpdateSegmentEndpoint"
   | "placedBasketballPostVisuals"
+  | "placedFloodlightColumnVisuals"
   | "placedGateVisuals"
   | "segmentLengthLabelsBySegmentId"
   | "segments"
   | "hoveredBasketballPostId"
+  | "hoveredFloodlightColumnId"
   | "hoveredGateId"
   | "hoveredSegmentId"
   | "selectedBasketballPostId"
+  | "selectedFloodlightColumnId"
   | "selectedGateId"
   | "selectedPlanVisual"
   | "selectedSegmentId"
@@ -146,6 +152,31 @@ function getPlacedBasketballPostStyle(state: "default" | "hover" | "selected") {
     stroke: "#3b2414",
     accent: "#ffb24d",
     fill: "#e77c2f",
+    halo: null
+  };
+}
+
+function getPlacedFloodlightColumnStyle(state: "default" | "hover" | "selected") {
+  if (state === "selected") {
+    return {
+      stroke: "#fff7d6",
+      fill: "#f3c94d",
+      accent: "#fff6bf",
+      halo: "#ffe89a"
+    };
+  }
+  if (state === "hover") {
+    return {
+      stroke: "#fff2b8",
+      fill: "#eeb63b",
+      accent: "#fff2a0",
+      halo: "#ffd86e"
+    };
+  }
+  return {
+    stroke: "#7a4c00",
+    fill: "#d89a00",
+    accent: "#ffe36c",
     halo: null
   };
 }
@@ -275,22 +306,27 @@ export function EditorCanvasGeometryLayer({
   interactionMode,
   onOpenSegmentLengthEditor,
   onSelectBasketballPost,
+  onSelectFloodlightColumn = () => undefined,
   onSelectGate,
   onSelectSegment,
   onStartBasketballPostDrag,
+  onStartFloodlightColumnDrag = () => undefined,
   onStartGateDrag,
   onStartSegmentDrag,
   onStartSegmentEndpointDrag,
   onEndSegmentEndpointDrag,
   onUpdateSegmentEndpoint,
   placedBasketballPostVisuals,
+  placedFloodlightColumnVisuals = [],
   placedGateVisuals,
   segmentLengthLabelsBySegmentId,
   segments,
   hoveredBasketballPostId,
+  hoveredFloodlightColumnId = null,
   hoveredGateId,
   hoveredSegmentId,
   selectedBasketballPostId,
+  selectedFloodlightColumnId = null,
   selectedGateId,
   selectedPlanVisual,
   selectedSegmentId,
@@ -559,6 +595,71 @@ export function EditorCanvasGeometryLayer({
                   }}
                 />
               </>
+            ) : null}
+          </Group>
+        );
+      })}
+      {placedFloodlightColumnVisuals.map((floodlightColumn) => {
+        const isFloodlightColumnSelected =
+          interactionMode === "SELECT" && floodlightColumn.id === selectedFloodlightColumnId;
+        const isFloodlightColumnHovered =
+          interactionMode === "SELECT" && floodlightColumn.id === hoveredFloodlightColumnId;
+        const floodlightColumnStyle = getPlacedFloodlightColumnStyle(
+          isFloodlightColumnSelected ? "selected" : isFloodlightColumnHovered ? "hover" : "default"
+        );
+
+        return (
+          <Group key={`floodlight-column-group-${floodlightColumn.id}`}>
+            {floodlightColumnStyle.halo ? (
+              <Circle
+                x={floodlightColumn.point.x}
+                y={floodlightColumn.point.y}
+                radius={14 / view.scale}
+                stroke={floodlightColumnStyle.halo}
+                strokeWidth={2.2 / view.scale}
+                opacity={0.92}
+                listening={false}
+              />
+            ) : null}
+            {renderFloodlightColumnSymbol(
+              floodlightColumn,
+              view.scale,
+              {
+                stroke: floodlightColumnStyle.stroke,
+                fill: floodlightColumnStyle.fill,
+                accent: floodlightColumnStyle.accent,
+                opacity: selectedPlanVisual ? 0.88 : 1
+              },
+              `floodlight-column-${floodlightColumn.key}`
+            )}
+            {interactionMode === "SELECT" ? (
+              <Circle
+                x={floodlightColumn.point.x}
+                y={floodlightColumn.point.y}
+                radius={14 / view.scale}
+                fill="#ffffff"
+                opacity={0.001}
+                listening
+                onMouseDown={(event) => {
+                  if (event.evt.button !== 0) {
+                    return;
+                  }
+                  event.cancelBubble = true;
+                  onStartFloodlightColumnDrag(floodlightColumn.id);
+                }}
+                onTouchStart={(event) => {
+                  event.cancelBubble = true;
+                  onStartFloodlightColumnDrag(floodlightColumn.id);
+                }}
+                onClick={(event) => {
+                  event.cancelBubble = true;
+                  onSelectFloodlightColumn(floodlightColumn.id);
+                }}
+                onTap={(event) => {
+                  event.cancelBubble = true;
+                  onSelectFloodlightColumn(floodlightColumn.id);
+                }}
+              />
             ) : null}
           </Group>
         );

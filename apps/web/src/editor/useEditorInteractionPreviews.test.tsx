@@ -2,7 +2,7 @@ import type { LayoutSegment } from "@fence-estimator/contracts";
 import { describe, expect, it } from "vitest";
 
 import { defaultFenceSpec } from "./constants.js";
-import { resolveBasketballPostPlacements, resolveGatePlacements } from "./segmentTopology.js";
+import { resolveBasketballPostPlacements, resolveFloodlightColumnPlacements, resolveGatePlacements } from "./segmentTopology.js";
 import { useEditorInteractionPreviews } from "./useEditorInteractionPreviews.js";
 import { renderHookServer } from "../test/renderHookServer.js";
 
@@ -18,6 +18,10 @@ const placedGateVisuals = resolveGatePlacements(
 const placedBasketballPostVisuals = resolveBasketballPostPlacements(
   new Map(segments.map((segment) => [segment.id, segment] as const)),
   [{ id: "bp1", segmentId: "s1", offsetMm: 2600, facing: "LEFT" }]
+);
+const placedFloodlightColumnVisuals = resolveFloodlightColumnPlacements(
+  new Map(segments.map((segment) => [segment.id, segment] as const)),
+  [{ id: "fc1", segmentId: "s1", offsetMm: 1800, facing: "LEFT" }]
 );
 
 describe("useEditorInteractionPreviews", () => {
@@ -422,5 +426,66 @@ describe("useEditorInteractionPreviews", () => {
     expect(basketballResult.basketballPostPreview?.segment.id).toBe("bottom");
     expect(basketballResult.basketballPostPreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
     expect(basketballResult.basketballPostPreview?.facing).toBe("RIGHT");
+  });
+
+  it("snaps floodlight column previews to nearby corners", () => {
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "FLOODLIGHT_COLUMN",
+        pointerWorld: { x: 5960, y: 20 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        placedFloodlightColumnVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(result.floodlightColumnPreview?.segment.id).toBe("s1");
+    expect(result.floodlightColumnPreview?.offsetMm).toBe(6000);
+    expect(result.floodlightColumnPreview?.facing).toBe("LEFT");
+    expect(result.floodlightColumnPreview?.snapMeta.label).toBe("Corner");
+    expect(result.floodlightColumnPreview?.normal.x).toBeCloseTo(-Math.SQRT1_2, 4);
+    expect(result.floodlightColumnPreview?.normal.y).toBeCloseTo(Math.SQRT1_2, 4);
+  });
+
+  it("faces floodlight column previews toward the hovered side of the run", () => {
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments,
+        interactionMode: "FLOODLIGHT_COLUMN",
+        pointerWorld: { x: 2500, y: -320 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals,
+        placedBasketballPostVisuals,
+        placedFloodlightColumnVisuals,
+        drawChainStart: null
+      })
+    );
+
+    expect(result.floodlightColumnPreview?.offsetMm).toBe(2500);
+    expect(result.floodlightColumnPreview?.facing).toBe("RIGHT");
+    expect(result.floodlightColumnPreview?.normal).toEqual({ x: 0, y: -1 });
   });
 });

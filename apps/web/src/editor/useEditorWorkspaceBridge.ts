@@ -28,7 +28,8 @@ export function useEditorWorkspaceBridge({
       onResetLayout({
         segments: drawing.layout.segments,
         gates: drawing.layout.gates ?? [],
-        basketballPosts: drawing.layout.basketballPosts ?? []
+        basketballPosts: drawing.layout.basketballPosts ?? [],
+        floodlightColumns: drawing.layout.floodlightColumns ?? []
       });
       onResetEditorState();
       onRestoreViewport(drawing.savedViewport ?? null);

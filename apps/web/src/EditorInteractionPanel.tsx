@@ -1,7 +1,7 @@
 import type { GateType } from "@fence-estimator/contracts";
 
 interface EditorInteractionPanelProps {
-  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
+  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
   recessWidthInputM: string;
   recessDepthInputM: string;
   gateType: GateType;
@@ -42,9 +42,17 @@ interface EditorInteractionPanelProps {
         };
       }
     | null;
+  floodlightColumnPreview?:
+    | {
+        offsetMm: number;
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
   formatLengthMm: (value: number) => string;
   formatMetersInputFromMm: (value: number) => string;
-  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST") => void;
+  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN") => void;
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
@@ -65,6 +73,7 @@ export function EditorInteractionPanel({
   recessPreview,
   gatePreview,
   basketballPostPreview,
+  floodlightColumnPreview = null,
   formatLengthMm,
   formatMetersInputFromMm,
   onSetInteractionMode,
@@ -109,6 +118,13 @@ export function EditorInteractionPanel({
           onClick={() => onSetInteractionMode("BASKETBALL_POST")}
         >
           Basketball Post
+        </button>
+        <button
+          type="button"
+          className={`mode-toggle-btn${interactionMode === "FLOODLIGHT_COLUMN" ? " active" : ""}`}
+          onClick={() => onSetInteractionMode("FLOODLIGHT_COLUMN")}
+        >
+          Floodlight
         </button>
       </div>
       {interactionMode === "DRAW" ? (
@@ -219,6 +235,18 @@ export function EditorInteractionPanel({
           </>
         ) : (
           <p className="muted-line">Hover either side of a fence line and click to place a basketball post with the arm facing that side.</p>
+        )
+      ) : null}
+      {interactionMode === "FLOODLIGHT_COLUMN" ? (
+        floodlightColumnPreview ? (
+          <>
+            <p className="muted-line">
+              Floodlight column at {formatLengthMm(floodlightColumnPreview.offsetMm)}.
+            </p>
+            <p className="muted-line">Snap {floodlightColumnPreview.snapMeta.label}. Corners snap when you hover near them.</p>
+          </>
+        ) : (
+          <p className="muted-line">Hover a fence line and click to place a floodlight column. Nearby corners snap automatically.</p>
         )
       ) : null}
     </section>

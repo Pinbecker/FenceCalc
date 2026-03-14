@@ -1,4 +1,10 @@
-import type { BasketballPostPlacement, EstimateResult, GatePlacement, LayoutModel } from "@fence-estimator/contracts";
+import type {
+  BasketballPostPlacement,
+  EstimateResult,
+  FloodlightColumnPlacement,
+  GatePlacement,
+  LayoutModel
+} from "@fence-estimator/contracts";
 import { DRAWING_SCHEMA_VERSION } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION, estimateDrawingLayout } from "@fence-estimator/rules-engine";
 
@@ -17,6 +23,10 @@ export function normalizeLayout(layout: LayoutModel): LayoutModel {
     basketballPosts: (layout.basketballPosts ?? []).map((basketballPost): BasketballPostPlacement => ({
       ...basketballPost,
       offsetMm: Math.round(basketballPost.offsetMm)
+    })),
+    floodlightColumns: (layout.floodlightColumns ?? []).map((floodlightColumn): FloodlightColumnPlacement => ({
+      ...floodlightColumn,
+      offsetMm: Math.round(floodlightColumn.offsetMm)
     }))
   };
 }

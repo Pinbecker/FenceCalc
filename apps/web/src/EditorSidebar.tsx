@@ -4,7 +4,7 @@ import { EditorFencePalettePanel } from "./EditorFencePalettePanel";
 import { EditorInteractionPanel } from "./EditorInteractionPanel";
 
 interface EditorSidebarProps {
-  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST";
+  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
   recessWidthInputM: string;
   recessDepthInputM: string;
   gateType: GateType;
@@ -45,6 +45,14 @@ interface EditorSidebarProps {
         };
       }
     | null;
+  floodlightColumnPreview?:
+    | {
+        offsetMm: number;
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
   activeSpec: FenceSpec;
   activeHeightOptions: FenceHeightKey[];
   twinBarHeightOptions: FenceHeightKey[];
@@ -52,7 +60,7 @@ interface EditorSidebarProps {
   formatLengthMm: (value: number) => string;
   formatMetersInputFromMm: (value: number) => string;
   getSegmentColor: (spec: FenceSpec) => string;
-  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST") => void;
+  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN") => void;
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
@@ -74,6 +82,7 @@ export function EditorSidebar({
   recessPreview,
   gatePreview,
   basketballPostPreview,
+  floodlightColumnPreview = null,
   activeSpec,
   activeHeightOptions,
   twinBarHeightOptions,
@@ -105,6 +114,7 @@ export function EditorSidebar({
           recessPreview={recessPreview}
           gatePreview={gatePreview}
           basketballPostPreview={basketballPostPreview}
+          floodlightColumnPreview={floodlightColumnPreview}
           formatLengthMm={formatLengthMm}
           formatMetersInputFromMm={formatMetersInputFromMm}
           onSetInteractionMode={onSetInteractionMode}

@@ -4,9 +4,10 @@ export interface UseEditorKeyboardShortcutsOptions {
   undo(): void;
   redo(): void;
   deleteSelectedBasketballPost(): boolean;
+  deleteSelectedFloodlightColumn?(): boolean;
   deleteSelectedGate(): boolean;
   deleteSelectedSegment(): boolean;
-  setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST"): void;
+  setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN"): void;
   setIsSpacePressed(value: boolean): void;
   setDisableSnap(value: boolean): void;
   cancelActiveDrawing(): void;
@@ -37,6 +38,8 @@ export function isEditableShortcutTarget(target: EventTarget | null): boolean {
 
 export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOptions): void {
   useEffect(() => {
+    const deleteSelectedFloodlightColumn = options.deleteSelectedFloodlightColumn ?? (() => false);
+
     function onKeyDown(event: KeyboardEvent): void {
       if (isEditableShortcutTarget(event.target)) {
         return;
@@ -75,6 +78,9 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
       if (!isModifierPressed && event.code === "KeyB") {
         options.setInteractionMode("BASKETBALL_POST");
       }
+      if (!isModifierPressed && event.code === "KeyF") {
+        options.setInteractionMode("FLOODLIGHT_COLUMN");
+      }
       if (event.code === "Space") {
         event.preventDefault();
         options.setIsSpacePressed(true);
@@ -87,6 +93,9 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
           return;
         }
         if (options.deleteSelectedBasketballPost()) {
+          return;
+        }
+        if (deleteSelectedFloodlightColumn()) {
           return;
         }
         options.deleteSelectedSegment();

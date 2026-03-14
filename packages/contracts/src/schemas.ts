@@ -67,16 +67,24 @@ export const basketballPostPlacementSchema = z.object({
   offsetMm: z.number().finite().nonnegative(),
   facing: inlineFeatureFacingSchema
 });
+export const floodlightColumnPlacementSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  offsetMm: z.number().finite().nonnegative(),
+  facing: inlineFeatureFacingSchema
+});
 
 const MAX_LAYOUT_SEGMENTS = 2_000;
 const MAX_LAYOUT_GATES = 500;
 const MAX_LAYOUT_BASKETBALL_POSTS = 500;
+const MAX_LAYOUT_FLOODLIGHT_COLUMNS = 500;
 
 export const layoutModelSchema = z
   .object({
     segments: z.array(layoutSegmentSchema).max(MAX_LAYOUT_SEGMENTS),
     gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([]),
-    basketballPosts: z.array(basketballPostPlacementSchema).max(MAX_LAYOUT_BASKETBALL_POSTS).default([])
+    basketballPosts: z.array(basketballPostPlacementSchema).max(MAX_LAYOUT_BASKETBALL_POSTS).default([]),
+    floodlightColumns: z.array(floodlightColumnPlacementSchema).max(MAX_LAYOUT_FLOODLIGHT_COLUMNS).default([])
   })
   .superRefine((layout, context) => {
     const seenSegmentIds = new Set<string>();
@@ -174,6 +182,33 @@ export const layoutModelSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Basketball post ${basketballPost.id} exceeds segment ${basketballPost.segmentId} length`
+        });
+      }
+    }
+
+    const seenFloodlightColumnIds = new Set<string>();
+    for (const floodlightColumn of layout.floodlightColumns ?? []) {
+      if (seenFloodlightColumnIds.has(floodlightColumn.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate floodlight column id: ${floodlightColumn.id}`
+        });
+      }
+      seenFloodlightColumnIds.add(floodlightColumn.id);
+
+      const segmentLengthMm = segmentLengthById.get(floodlightColumn.segmentId);
+      if (segmentLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Floodlight column ${floodlightColumn.id} references missing segment ${floodlightColumn.segmentId}`
+        });
+        continue;
+      }
+
+      if (floodlightColumn.offsetMm > segmentLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Floodlight column ${floodlightColumn.id} exceeds segment ${floodlightColumn.segmentId} length`
         });
       }
     }

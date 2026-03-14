@@ -18,6 +18,7 @@ describe("EditorInteractionPanel", () => {
         recessPreview={null}
         gatePreview={null}
         basketballPostPreview={null}
+        floodlightColumnPreview={null}
         formatLengthMm={(value) => `${value}mm`}
         formatMetersInputFromMm={(value) => `${value / 1000}`}
         onSetInteractionMode={vi.fn()}
@@ -34,5 +35,6 @@ describe("EditorInteractionPanel", () => {
     expect(html).toContain("Custom Gate Width");
     expect(html).toContain("Single 1.2m");
     expect(html).toContain("Basketball Post");
+    expect(html).toContain("Floodlight");
   });
 });

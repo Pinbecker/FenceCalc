@@ -41,6 +41,7 @@ function buildSidebarProps() {
       }
     },
     basketballPostPreview: null,
+    floodlightColumnPreview: null,
     activeSpec: defaultFenceSpec(),
     activeHeightOptions,
     twinBarHeightOptions,
@@ -64,6 +65,7 @@ describe("EditorSidebar", () => {
     const html = renderToStaticMarkup(<EditorSidebar {...buildSidebarProps()} />);
 
     expect(html).toContain("Gate");
+    expect(html).toContain("Floodlight");
     expect(html).toContain("Fence Palette");
     expect(html).toContain("Choose the canvas task first");
   });

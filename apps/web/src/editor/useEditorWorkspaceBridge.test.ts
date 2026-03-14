@@ -12,7 +12,8 @@ const baseLayout: LayoutModel = {
     }
   ],
   gates: [],
-  basketballPosts: []
+  basketballPosts: [],
+  floodlightColumns: []
 };
 
 const sampleDrawing = {

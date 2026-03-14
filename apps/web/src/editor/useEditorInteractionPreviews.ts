@@ -12,9 +12,11 @@ import {
   quantize
 } from "./constants";
 import {
+  classifyIncidentNode,
   dot,
   findNearestNode,
   normalizeVector,
+  pointCoordinateKey,
   resolveGatePreviewLeafCount,
   snapToAxisGuide
 } from "./editorMath";
@@ -33,10 +35,12 @@ import {
   recessSnapTargetsMm,
   snapOffsetToAnchorAlongSegment
 } from "./recess";
+import { resolveFloodlightColumnNormal } from "./segmentTopology";
 import type {
   BasketballPostInsertionPreview,
   DrawNodeSnapPreview,
   DrawResolveResult,
+  FloodlightColumnInsertionPreview,
   GateVisual,
   InteractionMode,
   LineSnapPreview,
@@ -45,6 +49,7 @@ import type {
   RecessSide,
   RecessSidePreference,
   ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement
 } from "./types";
 
@@ -65,9 +70,11 @@ interface EditorInteractionPreviewsOptions {
   customGateWidthMm: number;
   placedGateVisuals: ResolvedGatePlacement[];
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
+  placedFloodlightColumnVisuals?: ResolvedFloodlightColumnPlacement[];
   drawChainStart: PointMm | null;
   activeGateDragId?: string | null;
   activeBasketballPostDragId?: string | null;
+  activeFloodlightColumnDragId?: string | null;
 }
 
 function buildSnapMeta(kind: PreviewSnapMeta["kind"], label: string): PreviewSnapMeta {
@@ -136,9 +143,11 @@ export function useEditorInteractionPreviews({
   customGateWidthMm,
   placedGateVisuals,
   placedBasketballPostVisuals,
+  placedFloodlightColumnVisuals = [],
   drawChainStart,
   activeGateDragId = null,
-  activeBasketballPostDragId = null
+  activeBasketballPostDragId = null,
+  activeFloodlightColumnDragId = null
 }: EditorInteractionPreviewsOptions) {
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / viewScale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / viewScale);
@@ -146,6 +155,7 @@ export function useEditorInteractionPreviews({
   const recessPointerSnapMm = Math.max(500, RECESS_POINTER_SNAP_PX / viewScale);
   const gatePointerSnapMm = Math.max(500, GATE_POINTER_SNAP_PX / viewScale);
   const basketballPostPointerSnapMm = Math.max(650, 48 / viewScale);
+  const floodlightColumnPointerSnapMm = Math.max(650, 48 / viewScale);
   const hoverSegmentSnapMm = Math.max(180, 16 / viewScale);
   const hoverGateSnapMm = Math.max(180, 22 / viewScale);
   const requestedGateWidthMm = useMemo(
@@ -327,6 +337,141 @@ export function useEditorInteractionPreviews({
       };
     },
     [placedBasketballPostVisuals]
+  );
+
+  const cornerNodeKeys = useMemo(() => {
+    const vectorsByNode = new Map<string, Array<{ x: number; y: number }>>();
+
+    function addVector(point: PointMm, vector: { x: number; y: number }) {
+      const key = pointCoordinateKey(point);
+      const bucket = vectorsByNode.get(key);
+      if (bucket) {
+        bucket.push(vector);
+        return;
+      }
+      vectorsByNode.set(key, [vector]);
+    }
+
+    for (const segment of segments) {
+      addVector(segment.start, { x: segment.end.x - segment.start.x, y: segment.end.y - segment.start.y });
+      addVector(segment.end, { x: segment.start.x - segment.end.x, y: segment.start.y - segment.end.y });
+    }
+
+    return new Set(
+      [...vectorsByNode.entries()]
+        .filter(([, vectors]) => classifyIncidentNode(vectors) === "CORNER")
+        .map(([key]) => key)
+    );
+  }, [segments]);
+
+  const buildSnappedFloodlightColumnPreview = useCallback(
+    (
+      segment: LayoutSegment,
+      baseOffsetMm: number,
+      signedDistanceMm: number,
+      excludedFloodlightColumnId: string | null = null,
+      facingOverride: InlineFeatureFacing | null = null
+    ): FloodlightColumnInsertionPreview | null => {
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      const midpointMm = segmentLengthMm / 2;
+      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+      const cornerWindowMm = Math.max(250, Math.min(900, segmentLengthMm * 0.1));
+      let snappedOffsetMm = baseOffsetMm;
+      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+      let snapMeta = buildSnapMeta("FREE", "Free placement");
+      let selectedAnchorPoint: PointMm | null = null;
+
+      const segmentTangent = normalizeVector({
+        x: segment.end.x - segment.start.x,
+        y: segment.end.y - segment.start.y
+      });
+      if (!segmentTangent) {
+        return null;
+      }
+
+      const startKey = pointCoordinateKey(segment.start);
+      const endKey = pointCoordinateKey(segment.end);
+      if (cornerNodeKeys.has(startKey) && baseOffsetMm <= cornerWindowMm) {
+        snappedOffsetMm = 0;
+        bestSnapDistanceMm = baseOffsetMm;
+        snapMeta = buildSnapMeta("NODE", "Corner");
+      }
+      const endDistanceMm = Math.abs(segmentLengthMm - baseOffsetMm);
+      if (cornerNodeKeys.has(endKey) && endDistanceMm <= cornerWindowMm && endDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = segmentLengthMm;
+        bestSnapDistanceMm = endDistanceMm;
+        snapMeta = buildSnapMeta("NODE", "Corner");
+      }
+
+      const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = midpointMm;
+        bestSnapDistanceMm = midpointDistanceMm;
+        snapMeta = buildSnapMeta("CENTERED", "Centered");
+      }
+
+      const alignmentAnchors = placedFloodlightColumnVisuals
+        .filter(
+          (column) =>
+            column.id !== excludedFloodlightColumnId &&
+            column.segmentId !== segment.id &&
+            Math.abs(dot(segmentTangent, column.tangent)) >= 0.9
+        )
+        .map((column) => column.point);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
+      const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - baseOffsetMm);
+      if (
+        anchorSnapResult.anchorPoint &&
+        anchorSnapDistanceMm <= anchorWindowMm &&
+        anchorSnapDistanceMm < bestSnapDistanceMm
+      ) {
+        snappedOffsetMm = anchorSnapResult.offsetMm;
+        selectedAnchorPoint = anchorSnapResult.anchorPoint;
+        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned column");
+      }
+
+      snappedOffsetMm = Math.max(
+        0,
+        Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+      );
+
+      const point = interpolateAlongSegment(segment, snappedOffsetMm);
+      const facing =
+        Math.abs(signedDistanceMm) <= 0.001
+          ? (facingOverride ?? "LEFT")
+          : signedDistanceMm >= 0
+            ? "LEFT"
+            : "RIGHT";
+      const normal = resolveFloodlightColumnNormal(segment, segmentLengthMm, snappedOffsetMm, facing, segments);
+      if (!normal) {
+        return null;
+      }
+      const preview: FloodlightColumnInsertionPreview = {
+        segment,
+        segmentLengthMm,
+        offsetMm: snappedOffsetMm,
+        point,
+        tangent: segmentTangent,
+        normal,
+        facing,
+        targetPoint: point,
+        snapMeta
+      };
+
+      if (!selectedAnchorPoint) {
+        return preview;
+      }
+
+      return {
+        ...preview,
+        alignmentGuide: {
+          anchorPoint: selectedAnchorPoint,
+          targetPoint: preview.targetPoint
+        }
+      };
+    },
+    [cornerNodeKeys, placedFloodlightColumnVisuals, segments]
   );
 
   const resolveDrawPoint = useCallback(
@@ -560,6 +705,10 @@ export function useEditorInteractionPreviews({
     () => new Map(placedBasketballPostVisuals.map((post) => [post.id, post] as const)),
     [placedBasketballPostVisuals]
   );
+  const placedFloodlightColumnVisualById = useMemo(
+    () => new Map(placedFloodlightColumnVisuals.map((column) => [column.id, column] as const)),
+    [placedFloodlightColumnVisuals]
+  );
 
   const placementGatePreview = useMemo(() => {
     if (interactionMode !== "GATE" || !pointerWorld) {
@@ -694,6 +843,70 @@ export function useEditorInteractionPreviews({
 
   const basketballPostPreview = selectDragBasketballPostPreview ?? placementBasketballPostPreview;
 
+  const resolveFloodlightColumnPreview = useCallback(
+    (worldPoint: PointMm): FloodlightColumnInsertionPreview | null => {
+      let best: { segment: LayoutSegment; offsetMm: number; distanceMm: number; signedDistanceMm: number } | null = null;
+      for (const segment of segments) {
+        const projection = projectPointOntoSegment(worldPoint, segment);
+        if (projection.distanceMm > floodlightColumnPointerSnapMm) {
+          continue;
+        }
+        if (!best || projection.distanceMm < best.distanceMm) {
+          best = {
+            segment,
+            offsetMm: projection.offsetMm,
+            distanceMm: projection.distanceMm,
+            signedDistanceMm: projection.signedDistanceMm
+          };
+        }
+      }
+
+      if (!best) {
+        return null;
+      }
+
+      return buildSnappedFloodlightColumnPreview(best.segment, best.offsetMm, best.signedDistanceMm);
+    },
+    [buildSnappedFloodlightColumnPreview, floodlightColumnPointerSnapMm, segments]
+  );
+
+  const placementFloodlightColumnPreview = useMemo(() => {
+    if (interactionMode !== "FLOODLIGHT_COLUMN" || !pointerWorld) {
+      return null;
+    }
+    return resolveFloodlightColumnPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolveFloodlightColumnPreview]);
+
+  const selectDragFloodlightColumnPreview = useMemo(() => {
+    if (interactionMode !== "SELECT" || !pointerWorld || !activeFloodlightColumnDragId) {
+      return null;
+    }
+    const activeFloodlightColumn = placedFloodlightColumnVisualById.get(activeFloodlightColumnDragId);
+    const activeSegment = activeFloodlightColumn
+      ? segments.find((segment) => segment.id === activeFloodlightColumn.segmentId)
+      : null;
+    if (!activeFloodlightColumn || !activeSegment) {
+      return null;
+    }
+    const projection = projectPointOntoSegment(pointerWorld, activeSegment);
+    return buildSnappedFloodlightColumnPreview(
+      activeSegment,
+      projection.offsetMm,
+      projection.signedDistanceMm,
+      activeFloodlightColumn.id,
+      activeFloodlightColumn.facing
+    );
+  }, [
+    activeFloodlightColumnDragId,
+    buildSnappedFloodlightColumnPreview,
+    interactionMode,
+    placedFloodlightColumnVisualById,
+    pointerWorld,
+    segments
+  ]);
+
+  const floodlightColumnPreview = selectDragFloodlightColumnPreview ?? placementFloodlightColumnPreview;
+
   const drawHoverSnap = useMemo(() => {
     if (interactionMode !== "DRAW" || !pointerWorld || drawStart) {
       return null;
@@ -726,8 +939,29 @@ export function useEditorInteractionPreviews({
     return best?.id ?? null;
   }, [interactionMode, placedBasketballPostVisuals, pointerWorld, viewScale]);
 
+  const hoveredFloodlightColumnId = useMemo(() => {
+    if (!pointerWorld || interactionMode !== "SELECT") {
+      return null;
+    }
+    let best: { id: string; distanceMm: number } | null = null;
+    for (const floodlightColumn of placedFloodlightColumnVisuals) {
+      const candidateDistanceMm = distanceMm(pointerWorld, floodlightColumn.point);
+      const maxDistanceMm = Math.max(240, 26 / viewScale);
+      if (candidateDistanceMm > maxDistanceMm) {
+        continue;
+      }
+      if (!best || candidateDistanceMm < best.distanceMm) {
+        best = {
+          id: floodlightColumn.id,
+          distanceMm: candidateDistanceMm
+        };
+      }
+    }
+    return best?.id ?? null;
+  }, [interactionMode, placedFloodlightColumnVisuals, pointerWorld, viewScale]);
+
   const hoveredGateId = useMemo(() => {
-    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId) {
+    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId || hoveredFloodlightColumnId) {
       return null;
     }
     let best: { id: string; distanceMm: number } | null = null;
@@ -749,10 +983,10 @@ export function useEditorInteractionPreviews({
       }
     }
     return best?.id ?? null;
-  }, [hoveredBasketballPostId, hoverGateSnapMm, interactionMode, placedGateVisuals, pointerWorld]);
+  }, [hoveredBasketballPostId, hoveredFloodlightColumnId, hoverGateSnapMm, interactionMode, placedGateVisuals, pointerWorld]);
 
   const hoveredSegmentId = useMemo(() => {
-    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId || hoveredGateId) {
+    if (!pointerWorld || interactionMode !== "SELECT" || hoveredBasketballPostId || hoveredFloodlightColumnId || hoveredGateId) {
       return null;
     }
     let best: { id: string; distanceMm: number } | null = null;
@@ -769,7 +1003,7 @@ export function useEditorInteractionPreviews({
       }
     }
     return best?.id ?? null;
-  }, [hoveredBasketballPostId, hoveredGateId, hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
+  }, [hoveredBasketballPostId, hoveredFloodlightColumnId, hoveredGateId, hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
 
   const rectanglePreviewEnd = useMemo(() => {
     if (interactionMode !== "RECTANGLE" || !rectangleStart || !pointerWorld) {
@@ -790,17 +1024,20 @@ export function useEditorInteractionPreviews({
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,
+    floodlightColumnPreview,
     drawSnapLabel: effectiveDrawSnapLabel,
     gatePreview,
     gatePreviewVisual,
     ghostEnd,
     ghostLengthMm,
     hoveredBasketballPostId,
+    hoveredFloodlightColumnId,
     hoveredGateId,
     hoveredSegmentId,
     rectanglePreviewEnd,
     recessPreview,
     resolveBasketballPostPreview,
+    resolveFloodlightColumnPreview,
     closeLoopPoint,
     resolveDrawPoint
   };

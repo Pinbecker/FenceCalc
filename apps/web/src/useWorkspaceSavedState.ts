@@ -9,7 +9,9 @@ export function useWorkspaceSavedState(
   currentDrawingName: string,
   currentCustomerName: string,
 ) {
-  const savedLayoutSnapshotRef = useRef<string>(JSON.stringify({ segments: [], gates: [], basketballPosts: [] }));
+  const savedLayoutSnapshotRef = useRef<string>(
+    JSON.stringify({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] })
+  );
   const savedNameRef = useRef("");
   const savedCustomerNameRef = useRef("");
 
@@ -20,7 +22,7 @@ export function useWorkspaceSavedState(
   }, []);
 
   const resetSavedState = useCallback(() => {
-    rememberSavedState({ segments: [], gates: [], basketballPosts: [] }, "", "");
+    rememberSavedState({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] }, "", "");
   }, [rememberSavedState]);
 
   const isDirty = useMemo(() => {

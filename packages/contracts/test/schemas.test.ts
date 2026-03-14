@@ -153,6 +153,7 @@ describe("contracts schemas", () => {
 
     expect(result.layout.gates).toEqual([]);
     expect(result.layout.basketballPosts).toEqual([]);
+    expect(result.layout.floodlightColumns).toEqual([]);
   });
 
   it("rejects basketball posts that reference missing segments", () => {
@@ -161,6 +162,22 @@ describe("contracts schemas", () => {
       basketballPosts: [
         {
           id: "post-1",
+          segmentId: "missing",
+          offsetMm: 1000,
+          facing: "LEFT"
+        }
+      ]
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects floodlight columns that reference missing segments", () => {
+    const result = layoutModelSchema.safeParse({
+      segments: [],
+      floodlightColumns: [
+        {
+          id: "column-1",
           segmentId: "missing",
           offsetMm: 1000,
           facing: "LEFT"
