@@ -89,6 +89,98 @@ function findPathSegmentForOffset(
   return null;
 }
 
+function resolveNearestGateStartOffsetMm(
+  previous: GatePlacement[],
+  target: GatePlacement,
+  proposedStartOffsetMm: number,
+  segmentLengthMm: number
+): number | null {
+  const widthMm = target.endOffsetMm - target.startOffsetMm;
+  if (widthMm < DRAW_INCREMENT_MM) {
+    return null;
+  }
+
+  const minStartMm = MIN_SEGMENT_MM;
+  const maxStartMm = Math.max(MIN_SEGMENT_MM, segmentLengthMm - MIN_SEGMENT_MM - widthMm);
+  if (maxStartMm < minStartMm) {
+    return null;
+  }
+
+  const peers = previous
+    .filter((placement) => placement.segmentId === target.segmentId && placement.id !== target.id)
+    .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+
+  const roundedProposalMm = Math.round(proposedStartOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  let bestStartMm: number | null = null;
+  let bestDistanceMm = Number.POSITIVE_INFINITY;
+  let cursorMm = minStartMm;
+
+  function considerInterval(intervalStartMm: number, intervalEndMm: number): void {
+    if (intervalEndMm < intervalStartMm) {
+      return;
+    }
+    const candidateStartMm = Math.max(intervalStartMm, Math.min(intervalEndMm, roundedProposalMm));
+    const distanceFromProposalMm = Math.abs(candidateStartMm - roundedProposalMm);
+    if (
+      distanceFromProposalMm < bestDistanceMm ||
+      (Math.abs(distanceFromProposalMm - bestDistanceMm) <= 0.001 && (bestStartMm === null || candidateStartMm < bestStartMm))
+    ) {
+      bestStartMm = candidateStartMm;
+      bestDistanceMm = distanceFromProposalMm;
+    }
+  }
+
+  for (const peer of peers) {
+    considerInterval(cursorMm, Math.min(maxStartMm, peer.startOffsetMm - widthMm));
+    cursorMm = Math.max(cursorMm, peer.endOffsetMm);
+  }
+  considerInterval(cursorMm, maxStartMm);
+
+  return bestStartMm;
+}
+
+function resolveNearestBasketballPostOffsetMm(
+  previous: BasketballPostPlacement[],
+  target: BasketballPostPlacement,
+  proposedOffsetMm: number,
+  segmentLengthMm: number
+): number {
+  const clampedProposalMm = Math.max(0, Math.min(segmentLengthMm, proposedOffsetMm));
+  const roundedProposalMm = Math.round(clampedProposalMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  const occupiedOffsets = new Set(
+    previous
+      .filter((placement) => placement.segmentId === target.segmentId && placement.id !== target.id)
+      .map((placement) => Math.round(placement.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+  );
+
+  if (!occupiedOffsets.has(roundedProposalMm)) {
+    return roundedProposalMm;
+  }
+
+  const direction = Math.sign(proposedOffsetMm - target.offsetMm);
+  const maxSteps = Math.ceil(segmentLengthMm / DRAW_INCREMENT_MM);
+  for (let step = 1; step <= maxSteps; step += 1) {
+    const lowerCandidateMm = roundedProposalMm - step * DRAW_INCREMENT_MM;
+    const upperCandidateMm = roundedProposalMm + step * DRAW_INCREMENT_MM;
+    const orderedCandidates =
+      direction >= 0
+        ? [upperCandidateMm, lowerCandidateMm]
+        : [lowerCandidateMm, upperCandidateMm];
+
+    for (const candidateMm of orderedCandidates) {
+      if (candidateMm < 0 || candidateMm > segmentLengthMm) {
+        continue;
+      }
+      if (occupiedOffsets.has(candidateMm)) {
+        continue;
+      }
+      return candidateMm;
+    }
+  }
+
+  return Math.round(target.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+}
+
 export function resizeSegmentCollection(
   previous: LayoutSegment[],
   segmentId: string,
@@ -312,30 +404,10 @@ export function moveGatePlacementCollection(
 
   const segmentLengthMm = distanceMm(segment.start, segment.end);
   const widthMm = target.endOffsetMm - target.startOffsetMm;
-  if (widthMm < DRAW_INCREMENT_MM) {
+  const nextStartMm = resolveNearestGateStartOffsetMm(previous, target, target.startOffsetMm + deltaAlongMm, segmentLengthMm);
+  if (nextStartMm === null) {
     return previous;
   }
-
-  let minStartMm = MIN_SEGMENT_MM;
-  let maxStartMm = Math.max(MIN_SEGMENT_MM, segmentLengthMm - MIN_SEGMENT_MM - widthMm);
-  const peers = previous
-    .filter((placement) => placement.segmentId === target.segmentId && placement.id !== gateId)
-    .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
-
-  for (const peer of peers) {
-    if (peer.endOffsetMm <= target.startOffsetMm) {
-      minStartMm = Math.max(minStartMm, peer.endOffsetMm);
-      continue;
-    }
-    if (peer.startOffsetMm >= target.endOffsetMm) {
-      maxStartMm = Math.min(maxStartMm, peer.startOffsetMm - widthMm);
-      break;
-    }
-  }
-
-  const unclampedStartMm = target.startOffsetMm + deltaAlongMm;
-  let nextStartMm = Math.round(unclampedStartMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
-  nextStartMm = Math.max(minStartMm, Math.min(maxStartMm, nextStartMm));
   const nextEndMm = nextStartMm + widthMm;
 
   const normalized = clampGatePlacementToSegment(
@@ -364,6 +436,139 @@ export function moveGatePlacementCollection(
   };
   next.sort((left, right) => left.id.localeCompare(right.id));
   return next;
+}
+
+export function moveGatePlacementCollectionToOffsets(
+  previous: GatePlacement[],
+  gateId: string,
+  nextStartOffsetMm: number,
+  nextEndOffsetMm: number,
+  segmentsById: Map<string, LayoutSegment>
+): GatePlacement[] {
+  const gateIndex = previous.findIndex((placement) => placement.id === gateId);
+  if (gateIndex < 0) {
+    return previous;
+  }
+  const target = previous[gateIndex];
+  if (!target) {
+    return previous;
+  }
+  const segment = segmentsById.get(target.segmentId);
+  if (!segment) {
+    return previous;
+  }
+
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const widthMm = target.endOffsetMm - target.startOffsetMm;
+  if (widthMm < DRAW_INCREMENT_MM) {
+    return previous;
+  }
+  const proposedCenterOffsetMm = (nextStartOffsetMm + nextEndOffsetMm) / 2;
+  const clampedStartMm = resolveNearestGateStartOffsetMm(
+    previous,
+    target,
+    proposedCenterOffsetMm - widthMm / 2,
+    segmentLengthMm
+  );
+  if (clampedStartMm === null) {
+    return previous;
+  }
+  const normalized = clampGatePlacementToSegment(
+    {
+      ...target,
+      startOffsetMm: clampedStartMm,
+      endOffsetMm: clampedStartMm + widthMm
+    },
+    segmentLengthMm
+  );
+  if (!normalized) {
+    return previous;
+  }
+  if (
+    Math.abs(normalized.startOffsetMm - target.startOffsetMm) < 0.001 &&
+    Math.abs(normalized.endOffsetMm - target.endOffsetMm) < 0.001
+  ) {
+    return previous;
+  }
+
+  const next = [...previous];
+  next[gateIndex] = {
+    ...target,
+    startOffsetMm: normalized.startOffsetMm,
+    endOffsetMm: normalized.endOffsetMm
+  };
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function moveBasketballPostPlacementCollection(
+  previous: BasketballPostPlacement[],
+  basketballPostId: string,
+  deltaAlongMm: number,
+  segmentsById: Map<string, LayoutSegment>
+): BasketballPostPlacement[] {
+  const target = previous.find((placement) => placement.id === basketballPostId);
+  if (!target) {
+    return previous;
+  }
+  const segment = segmentsById.get(target.segmentId);
+  if (!segment) {
+    return previous;
+  }
+
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const nextOffsetMm = resolveNearestBasketballPostOffsetMm(
+    previous,
+    target,
+    target.offsetMm + deltaAlongMm,
+    segmentLengthMm
+  );
+  if (Math.abs(nextOffsetMm - target.offsetMm) < 0.001) {
+    return previous;
+  }
+
+  return previous.map((placement) =>
+    placement.id === basketballPostId
+      ? {
+          ...placement,
+          offsetMm: nextOffsetMm
+        }
+      : placement
+  );
+}
+
+export function moveBasketballPostPlacementCollectionToOffset(
+  previous: BasketballPostPlacement[],
+  basketballPostId: string,
+  nextOffsetMm: number,
+  segmentsById: Map<string, LayoutSegment>
+): BasketballPostPlacement[] {
+  const target = previous.find((placement) => placement.id === basketballPostId);
+  if (!target) {
+    return previous;
+  }
+  const segment = segmentsById.get(target.segmentId);
+  if (!segment) {
+    return previous;
+  }
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const resolvedOffsetMm = resolveNearestBasketballPostOffsetMm(
+    previous,
+    target,
+    nextOffsetMm,
+    segmentLengthMm
+  );
+  if (Math.abs(resolvedOffsetMm - target.offsetMm) < 0.001) {
+    return previous;
+  }
+  return previous.map((placement) =>
+    placement.id === basketballPostId
+      ? {
+          ...placement,
+          offsetMm: resolvedOffsetMm
+        }
+      : placement
+  );
 }
 
 export function buildRectangleSegments(

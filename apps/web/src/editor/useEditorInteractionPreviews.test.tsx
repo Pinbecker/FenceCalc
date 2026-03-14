@@ -345,4 +345,82 @@ describe("useEditorInteractionPreviews", () => {
     expect(result.basketballPostPreview?.segment.id).toBe("s1");
     expect(result.basketballPostPreview?.facing).toBe("RIGHT");
   });
+
+  it("shows gate and basketball post alignment previews while dragging in select mode", () => {
+    const parallelSegments: LayoutSegment[] = [
+      { id: "top", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, spec },
+      { id: "bottom", start: { x: 0, y: 3000 }, end: { x: 6000, y: 3000 }, spec }
+    ];
+    const dragGateVisuals = resolveGatePlacements(
+      new Map(parallelSegments.map((segment) => [segment.id, segment] as const)),
+      [
+        { id: "g-top", segmentId: "top", startOffsetMm: 2000, endOffsetMm: 3200, gateType: "SINGLE_LEAF" },
+        { id: "g-bottom", segmentId: "bottom", startOffsetMm: 800, endOffsetMm: 2000, gateType: "SINGLE_LEAF" }
+      ]
+    );
+    const dragPostVisuals = resolveBasketballPostPlacements(
+      new Map(parallelSegments.map((segment) => [segment.id, segment] as const)),
+      [
+        { id: "bp-top", segmentId: "top", offsetMm: 2600, facing: "LEFT" },
+        { id: "bp-bottom", segmentId: "bottom", offsetMm: 1200, facing: "RIGHT" }
+      ]
+    );
+
+    const gateResult = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: parallelSegments,
+        interactionMode: "SELECT",
+        pointerWorld: { x: 2620, y: 3010 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "DOUBLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: dragGateVisuals,
+        placedBasketballPostVisuals: dragPostVisuals,
+        drawChainStart: null,
+        activeGateDragId: "g-bottom"
+      })
+    );
+
+    expect(gateResult.gatePreview?.snapMeta.label).toBe("Aligned gate");
+    expect(gateResult.gatePreview?.segment.id).toBe("bottom");
+    expect(gateResult.gatePreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
+    expect(gateResult.gatePreview?.widthMm).toBe(1200);
+    expect(gateResult.gatePreviewVisual?.leafCount).toBe(1);
+
+    const basketballResult = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: parallelSegments,
+        interactionMode: "SELECT",
+        pointerWorld: { x: 2620, y: 3010 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: dragGateVisuals,
+        placedBasketballPostVisuals: dragPostVisuals,
+        drawChainStart: null,
+        activeBasketballPostDragId: "bp-bottom"
+      })
+    );
+
+    expect(basketballResult.basketballPostPreview?.snapMeta.label).toBe("Aligned post");
+    expect(basketballResult.basketballPostPreview?.segment.id).toBe("bottom");
+    expect(basketballResult.basketballPostPreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
+    expect(basketballResult.basketballPostPreview?.facing).toBe("RIGHT");
+  });
 });

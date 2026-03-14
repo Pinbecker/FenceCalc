@@ -2,7 +2,10 @@ import type { FenceSpec, GatePlacement, LayoutSegment } from "@fence-estimator/c
 import { describe, expect, it } from "vitest";
 
 import {
+  moveBasketballPostPlacementCollection,
+  moveBasketballPostPlacementCollectionToOffset,
   moveGatePlacementCollection,
+  moveGatePlacementCollectionToOffsets,
   offsetSegmentCollection,
   remapBasketballPostPlacementsForRecess,
   remapGatePlacementsForRecess,
@@ -65,7 +68,7 @@ describe("editorCommandUtils", () => {
     expect(offset[1]?.end).toEqual({ x: 1000, y: 1000 });
   });
 
-  it("moves gates along a segment without crossing peers", () => {
+  it("moves gates to the nearest valid gap without overlapping peers", () => {
     const segment = createSegment("segment-1", { x: 0, y: 0 }, { x: 5000, y: 0 });
     const placements: GatePlacement[] = [
       { id: "gate-a", segmentId: "segment-1", startOffsetMm: 1000, endOffsetMm: 1500, gateType: "CUSTOM" },
@@ -76,9 +79,55 @@ describe("editorCommandUtils", () => {
 
     expect(moved[0]).toMatchObject({
       id: "gate-a",
-      startOffsetMm: 2000,
-      endOffsetMm: 2500
+      startOffsetMm: 3000,
+      endOffsetMm: 3500
     });
+  });
+
+  it("hops a dragged gate across peers without changing its width", () => {
+    const segment = createSegment("segment-1", { x: 0, y: 0 }, { x: 7000, y: 0 });
+    const placements: GatePlacement[] = [
+      { id: "gate-a", segmentId: "segment-1", startOffsetMm: 1000, endOffsetMm: 2200, gateType: "SINGLE_LEAF" },
+      { id: "gate-b", segmentId: "segment-1", startOffsetMm: 2800, endOffsetMm: 4000, gateType: "DOUBLE_LEAF" }
+    ];
+
+    const moved = moveGatePlacementCollectionToOffsets(
+      placements,
+      "gate-a",
+      3200,
+      6200,
+      new Map([[segment.id, segment]])
+    );
+
+    expect(moved.find((placement) => placement.id === "gate-a")).toMatchObject({
+      startOffsetMm: 4100,
+      endOffsetMm: 5300,
+      gateType: "SINGLE_LEAF"
+    });
+  });
+
+  it("hops basketball posts over occupied offsets on the same segment", () => {
+    const segment = createSegment("segment-1", { x: 0, y: 0 }, { x: 5000, y: 0 });
+    const placements = [
+      { id: "post-a", segmentId: "segment-1", offsetMm: 1000, facing: "LEFT" as const },
+      { id: "post-b", segmentId: "segment-1", offsetMm: 1500, facing: "RIGHT" as const }
+    ];
+
+    const movedByPreview = moveBasketballPostPlacementCollectionToOffset(
+      placements,
+      "post-a",
+      1500,
+      new Map([[segment.id, segment]])
+    );
+    const movedByDelta = moveBasketballPostPlacementCollection(
+      placements,
+      "post-a",
+      500,
+      new Map([[segment.id, segment]])
+    );
+
+    expect(movedByPreview.find((placement) => placement.id === "post-a")?.offsetMm).toBe(1550);
+    expect(movedByDelta.find((placement) => placement.id === "post-a")?.offsetMm).toBe(1550);
   });
 
   it("remaps gates onto recess replacement segments without dropping the original gate", () => {

@@ -73,6 +73,8 @@ export interface EditorCanvasStageProps {
   onStartSegmentDrag: (segmentId: string) => void;
   onOpenSegmentLengthEditor: (segmentId: string) => void;
   onUpdateSegmentEndpoint: (segmentId: string, endpoint: "start" | "end", point: PointMm) => void;
+  onStartSegmentEndpointDrag: () => void;
+  onEndSegmentEndpointDrag: () => void;
   onSelectGate: (gateId: string) => void;
   onStartGateDrag: (gateId: string) => void;
   onSelectBasketballPost: (basketballPostId: string) => void;

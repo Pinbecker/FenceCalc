@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import type Konva from "konva";
 import {
   type BasketballPostPlacement,
@@ -130,6 +130,7 @@ function reconcileBasketballPostsForSegments(
 export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
+  const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
   const [history, dispatchHistory] = useReducer(historyReducer, {
     past: [],
     present: { segments: [], gates: [], basketballPosts: [] },
@@ -143,6 +144,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const basketballPostPlacements = currentLayout.basketballPosts ?? [];
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  const isOptimizationFrozen =
+    isEndpointDragActive ||
+    selectionState.activeSegmentDrag !== null ||
+    selectionState.activeGateDrag !== null ||
+    selectionState.activeBasketballPostDrag !== null;
   const canvasWidth = Math.max(Math.round(canvasFrameSize.width), 1);
   const canvasHeight = Math.max(Math.round(canvasFrameSize.height), 1);
 
@@ -269,7 +275,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     selectedPlanId: shellState.selectedPlanId,
     activeSpecSystem: shellState.activeSpec.system,
     viewScale: view.scale,
-    canvasWidth
+    canvasWidth,
+    freezeOptimization: isOptimizationFrozen
   });
   const { postRowsByType, gateCounts, gateCountsByHeight, basketballPostCountsByHeight, twinBarFenceRows } = editorSummary;
   const optimizationSummary = estimate.optimization;
@@ -334,7 +341,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     gateType: shellState.gateType,
     customGateWidthMm: shellState.customGateWidthMm,
     placedGateVisuals,
-    placedBasketballPostVisuals: resolvedBasketballPostPlacements
+    placedBasketballPostVisuals: resolvedBasketballPostPlacements,
+    activeGateDragId: selectionState.activeGateDrag?.gateId ?? null,
+    activeBasketballPostDragId: selectionState.activeBasketballPostDrag?.basketballPostId ?? null
   });
 
   const {
@@ -695,6 +704,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 onUpdateSegmentEndpoint={(segmentId, endpoint, point) => {
                   updateSegment(segmentId, (current) => ({ ...current, [endpoint]: point }));
                 }}
+                onStartSegmentEndpointDrag={() => setIsEndpointDragActive(true)}
+                onEndSegmentEndpointDrag={() => setIsEndpointDragActive(false)}
                 onSelectGate={(gateId) => {
                   selectionState.setSelectedSegmentId(null);
                   selectionState.setSelectedGateId(gateId);

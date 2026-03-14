@@ -29,6 +29,8 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "onStartBasketballPostDrag"
   | "onStartGateDrag"
   | "onStartSegmentDrag"
+  | "onStartSegmentEndpointDrag"
+  | "onEndSegmentEndpointDrag"
   | "onUpdateSegmentEndpoint"
   | "placedBasketballPostVisuals"
   | "placedGateVisuals"
@@ -278,6 +280,8 @@ export function EditorCanvasGeometryLayer({
   onStartBasketballPostDrag,
   onStartGateDrag,
   onStartSegmentDrag,
+  onStartSegmentEndpointDrag,
+  onEndSegmentEndpointDrag,
   onUpdateSegmentEndpoint,
   placedBasketballPostVisuals,
   placedGateVisuals,
@@ -440,9 +444,11 @@ export function EditorCanvasGeometryLayer({
                   radius={HANDLE_RADIUS_PX / view.scale}
                   fill="#f0d08b"
                   draggable
+                  onDragStart={onStartSegmentEndpointDrag}
                   onDragMove={(event) => {
                     onUpdateSegmentEndpoint(segment.id, "start", quantize({ x: event.target.x(), y: event.target.y() }));
                   }}
+                  onDragEnd={onEndSegmentEndpointDrag}
                 />
                 <Circle
                   x={segment.end.x}
@@ -450,9 +456,11 @@ export function EditorCanvasGeometryLayer({
                   radius={HANDLE_RADIUS_PX / view.scale}
                   fill="#f0d08b"
                   draggable
+                  onDragStart={onStartSegmentEndpointDrag}
                   onDragMove={(event) => {
                     onUpdateSegmentEndpoint(segment.id, "end", quantize({ x: event.target.x(), y: event.target.y() }));
                   }}
+                  onDragEnd={onEndSegmentEndpointDrag}
                 />
               </>
             ) : null}

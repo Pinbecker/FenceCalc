@@ -51,6 +51,10 @@ export function EditorCanvasHud({
         ? recessPreview
           ? `Place recess on ${recessPreview.side === "LEFT" ? "left" : "right"}`
           : "Hover a run"
+        : interactionMode === "SELECT" && basketballPostPreview
+          ? `Drag post ${basketballPostPreview.facing.toLowerCase()}`
+          : interactionMode === "SELECT" && gatePreview
+            ? "Drag to slide gate"
         : interactionMode === "GATE"
           ? gatePreview
             ? "Click to place gate"

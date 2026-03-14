@@ -22,6 +22,7 @@ function buildSegments(): LayoutSegment[] {
 }
 
 function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> = {}) {
+  const interactionMode = overrides.interactionMode ?? "SELECT";
   const segments = overrides.segments ?? buildSegments();
   const gates: GatePlacement[] = [
     {
@@ -102,7 +103,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
       { coordinate: 0, major: true },
       { coordinate: 500, major: false }
     ],
-    interactionMode: "SELECT" as const,
+    interactionMode,
     gateType: "SINGLE_LEAF" as const,
     disableSnap: true,
     isPanning: false,
@@ -130,18 +131,21 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     drawSnapLabel: "Axis aligned",
     rectanglePreviewEnd: { x: 1600, y: 1400 },
     recessPreview: buildRecessPreview(segments[0]!, 2500, 1500, 1000, "LEFT"),
-    gatePreview,
-    basketballPostPreview: {
-      segment: segments[0]!,
-      segmentLengthMm: 5000,
-      offsetMm: 2200,
-      point: { x: 2200, y: 0 },
-      tangent: { x: 1, y: 0 },
-      normal: { x: 0, y: -1 },
-      facing: "LEFT" as const,
-      targetPoint: { x: 2200, y: 0 },
-      snapMeta: { kind: "CENTERED" as const, label: "Centered" }
-    },
+    gatePreview: interactionMode === "SELECT" ? null : gatePreview,
+    basketballPostPreview:
+      interactionMode === "SELECT"
+        ? null
+        : {
+            segment: segments[0]!,
+            segmentLengthMm: 5000,
+            offsetMm: 2200,
+            point: { x: 2200, y: 0 },
+            tangent: { x: 1, y: 0 },
+            normal: { x: 0, y: -1 },
+            facing: "LEFT" as const,
+            targetPoint: { x: 2200, y: 0 },
+            snapMeta: { kind: "CENTERED" as const, label: "Centered" }
+          },
     gatePreviewVisual: gatePreview
       ? {
           key: "preview-s1",
@@ -231,6 +235,8 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     onStartSegmentDrag: vi.fn(),
     onOpenSegmentLengthEditor: vi.fn(),
     onUpdateSegmentEndpoint: vi.fn(),
+    onStartSegmentEndpointDrag: vi.fn(),
+    onEndSegmentEndpointDrag: vi.fn(),
     onSelectGate: vi.fn(),
     onStartGateDrag: vi.fn(),
     onSelectBasketballPost: vi.fn(),

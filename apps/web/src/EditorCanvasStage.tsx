@@ -109,6 +109,8 @@ export function EditorCanvasStage({
           onStartSegmentDrag={props.onStartSegmentDrag}
           onOpenSegmentLengthEditor={props.onOpenSegmentLengthEditor}
           onUpdateSegmentEndpoint={props.onUpdateSegmentEndpoint}
+          onStartSegmentEndpointDrag={props.onStartSegmentEndpointDrag}
+          onEndSegmentEndpointDrag={props.onEndSegmentEndpointDrag}
           onSelectGate={props.onSelectGate}
           onStartGateDrag={props.onStartGateDrag}
           onSelectBasketballPost={props.onSelectBasketballPost}

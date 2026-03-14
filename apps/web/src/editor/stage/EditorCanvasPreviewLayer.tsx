@@ -388,7 +388,7 @@ export function EditorCanvasPreviewLayer({
           })}
         </Group>
       ) : null}
-      {interactionMode === "GATE" && gatePreview ? (
+      {gatePreview ? (
         <Group key={`gate-preview-${gatePreview.segment.id}`} listening={false}>
           {renderTargetSegmentHighlight(
             gatePreview.segment.start,
@@ -464,7 +464,7 @@ export function EditorCanvasPreviewLayer({
           />
         </Group>
       ) : null}
-      {interactionMode === "BASKETBALL_POST" && basketballPostPreview ? (
+      {basketballPostPreview ? (
         <Group key={`basketball-post-preview-${basketballPostPreview.segment.id}`} listening={false}>
           {renderTargetSegmentHighlight(
             basketballPostPreview.segment.start,

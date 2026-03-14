@@ -18,6 +18,9 @@ import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, parseMetersInputToMm, quantize } fro
 import { dot, rangesOverlap, samePointApprox } from "./editorMath";
 import {
   buildRectangleSegments,
+  moveBasketballPostPlacementCollection,
+  moveBasketballPostPlacementCollectionToOffset,
+  moveGatePlacementCollectionToOffsets,
   moveGatePlacementCollection,
   offsetSegmentCollection,
   remapBasketballPostPlacementsForRecess,
@@ -317,6 +320,21 @@ export function useEditorCommands({
     [applyGatePlacements, segmentsById]
   );
 
+  const moveGateToPreview = useCallback(
+    (gateId: string, preview: GateInsertionPreview): void => {
+      applyGatePlacements((previous) =>
+        moveGatePlacementCollectionToOffsets(
+          previous,
+          gateId,
+          preview.startOffsetMm,
+          preview.endOffsetMm,
+          segmentsById
+        )
+      );
+    },
+    [applyGatePlacements, segmentsById]
+  );
+
   const startSelectedGateDrag = useCallback(
     (gateId: string): void => {
       if (interactionMode !== "SELECT") {
@@ -346,20 +364,29 @@ export function useEditorCommands({
         return;
       }
       applyBasketballPostPlacements((previous) =>
-        previous.map((basketballPost) => {
-          if (basketballPost.id !== basketballPostId) {
-            return basketballPost;
-          }
-          const segment = segmentsById.get(basketballPost.segmentId);
-          if (!segment) {
-            return basketballPost;
-          }
-          const segmentLengthMm = distanceMm(segment.start, segment.end);
-          return {
-            ...basketballPost,
-            offsetMm: Math.max(0, Math.min(segmentLengthMm, basketballPost.offsetMm + deltaAlongMm))
-          };
-        })
+        moveBasketballPostPlacementCollection(previous, basketballPostId, deltaAlongMm, segmentsById)
+      );
+    },
+    [applyBasketballPostPlacements, segmentsById]
+  );
+
+  const moveBasketballPostToPreview = useCallback(
+    (basketballPostId: string, preview: BasketballPostInsertionPreview): void => {
+      applyBasketballPostPlacements((previous) =>
+        moveBasketballPostPlacementCollectionToOffset(
+          previous.map((basketballPost) =>
+            basketballPost.id === basketballPostId
+              ? {
+                  ...basketballPost,
+                  segmentId: preview.segment.id,
+                  facing: preview.facing
+                }
+              : basketballPost
+          ),
+          basketballPostId,
+          preview.offsetMm,
+          segmentsById
+        )
       );
     },
     [applyBasketballPostPlacements, segmentsById]
@@ -691,6 +718,19 @@ export function useEditorCommands({
         setPointerWorld(world);
         return;
       }
+      if (basketballPostPreview && basketballPostPreview.segment.id === basketballPost.segmentId) {
+        moveBasketballPostToPreview(basketballPost.id, basketballPostPreview);
+        setActiveBasketballPostDrag((previous) =>
+          previous
+            ? {
+                ...previous,
+                lastPointer: world
+              }
+            : previous
+        );
+        setPointerWorld(world);
+        return;
+      }
       const pointerDelta = {
         x: world.x - activeBasketballPostDrag.lastPointer.x,
         y: world.y - activeBasketballPostDrag.lastPointer.y
@@ -712,6 +752,19 @@ export function useEditorCommands({
       const gate = resolvedGateById.get(activeGateDrag.gateId);
       if (!gate) {
         setActiveGateDrag(null);
+        setPointerWorld(world);
+        return;
+      }
+      if (gatePreview && gatePreview.segment.id === gate.segmentId) {
+        moveGateToPreview(gate.id, gatePreview);
+        setActiveGateDrag((previous) =>
+          previous
+            ? {
+                ...previous,
+                lastPointer: world
+              }
+            : previous
+        );
         setPointerWorld(world);
         return;
       }
@@ -761,9 +814,13 @@ export function useEditorCommands({
     activeBasketballPostDrag,
     activeGateDrag,
     activeSegmentDrag,
+    basketballPostPreview,
+    gatePreview,
     isPanning,
     moveBasketballPostAlongSegment,
+    moveBasketballPostToPreview,
     moveGateAlongSegment,
+    moveGateToPreview,
     offsetSegmentPerpendicular,
     resolvedBasketballPostById,
     resolvedGateById,

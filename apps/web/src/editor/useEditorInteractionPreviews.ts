@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import type { GateType, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type { GateType, InlineFeatureFacing, LayoutSegment, PointMm } from "@fence-estimator/contracts";
 import { distanceMm, snapPointToAngle } from "@fence-estimator/geometry";
 
 import {
@@ -66,6 +66,8 @@ interface EditorInteractionPreviewsOptions {
   placedGateVisuals: ResolvedGatePlacement[];
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   drawChainStart: PointMm | null;
+  activeGateDragId?: string | null;
+  activeBasketballPostDragId?: string | null;
 }
 
 function buildSnapMeta(kind: PreviewSnapMeta["kind"], label: string): PreviewSnapMeta {
@@ -134,7 +136,9 @@ export function useEditorInteractionPreviews({
   customGateWidthMm,
   placedGateVisuals,
   placedBasketballPostVisuals,
-  drawChainStart
+  drawChainStart,
+  activeGateDragId = null,
+  activeBasketballPostDragId = null
 }: EditorInteractionPreviewsOptions) {
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / viewScale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / viewScale);
@@ -147,6 +151,182 @@ export function useEditorInteractionPreviews({
   const requestedGateWidthMm = useMemo(
     () => resolveGateWidthMm(gateType, customGateWidthMm),
     [customGateWidthMm, gateType]
+  );
+
+  const buildSnappedGatePreview = useCallback(
+    (
+      segment: LayoutSegment,
+      baseOffsetMm: number,
+      gateWidthMm: number,
+      excludedGateId: string | null = null
+    ): ReturnType<typeof buildGatePreview> => {
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      const midpointMm = segmentLengthMm / 2;
+      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+      let snappedOffsetMm = baseOffsetMm;
+      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+      let snapMeta = buildSnapMeta("FREE", "Free placement");
+      let selectedAnchorPoint: PointMm | null = null;
+
+      const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = midpointMm;
+        bestSnapDistanceMm = midpointDistanceMm;
+        snapMeta = buildSnapMeta("CENTERED", "Centered");
+      }
+
+      const segmentTangent = normalizeVector({
+        x: segment.end.x - segment.start.x,
+        y: segment.end.y - segment.start.y
+      });
+      const gateAlignmentAnchors = !segmentTangent
+        ? []
+        : placedGateVisuals
+            .filter(
+              (gate) =>
+                gate.id !== excludedGateId &&
+                gate.segmentId !== segment.id &&
+                Math.abs(dot(segmentTangent, gate.tangent)) >= 0.9
+            )
+            .map((gate) => gate.centerPoint);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(segment, baseOffsetMm, gateAlignmentAnchors, anchorWindowMm);
+      const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - baseOffsetMm);
+      if (
+        anchorSnapResult.anchorPoint &&
+        anchorSnapDistanceMm <= anchorWindowMm &&
+        anchorSnapDistanceMm < bestSnapDistanceMm
+      ) {
+        snappedOffsetMm = anchorSnapResult.offsetMm;
+        selectedAnchorPoint = anchorSnapResult.anchorPoint;
+        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned gate");
+      }
+
+      snappedOffsetMm = Math.max(
+        0,
+        Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+      );
+
+      const preview = buildGatePreview(segment, snappedOffsetMm, gateWidthMm);
+      if (!preview) {
+        return null;
+      }
+      const previewWithSnap = {
+        ...preview,
+        snapMeta
+      };
+      if (!selectedAnchorPoint) {
+        return previewWithSnap;
+      }
+      return {
+        ...previewWithSnap,
+        alignmentGuide: {
+          anchorPoint: selectedAnchorPoint,
+          targetPoint: preview.targetPoint
+        }
+      };
+    },
+    [placedGateVisuals]
+  );
+
+  const buildSnappedBasketballPostPreview = useCallback(
+    (
+      segment: LayoutSegment,
+      baseOffsetMm: number,
+      signedDistanceMm: number,
+      excludedBasketballPostId: string | null = null,
+      facingOverride: InlineFeatureFacing | null = null
+    ): BasketballPostInsertionPreview | null => {
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      const midpointMm = segmentLengthMm / 2;
+      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+      let snappedOffsetMm = baseOffsetMm;
+      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+      let snapMeta = buildSnapMeta("FREE", "Free placement");
+      let selectedAnchorPoint: PointMm | null = null;
+
+      const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = midpointMm;
+        bestSnapDistanceMm = midpointDistanceMm;
+        snapMeta = buildSnapMeta("CENTERED", "Centered");
+      }
+
+      const segmentTangent = normalizeVector({
+        x: segment.end.x - segment.start.x,
+        y: segment.end.y - segment.start.y
+      });
+      const alignmentAnchors = !segmentTangent
+        ? []
+        : placedBasketballPostVisuals
+            .filter(
+              (post) =>
+                post.id !== excludedBasketballPostId &&
+                post.segmentId !== segment.id &&
+                Math.abs(dot(segmentTangent, post.tangent)) >= 0.9
+            )
+            .map((post) => post.point);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
+      const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - baseOffsetMm);
+      if (
+        anchorSnapResult.anchorPoint &&
+        anchorSnapDistanceMm <= anchorWindowMm &&
+        anchorSnapDistanceMm < bestSnapDistanceMm
+      ) {
+        snappedOffsetMm = anchorSnapResult.offsetMm;
+        selectedAnchorPoint = anchorSnapResult.anchorPoint;
+        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned post");
+      }
+
+      snappedOffsetMm = Math.max(
+        0,
+        Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+      );
+
+      const point = interpolateAlongSegment(segment, snappedOffsetMm);
+      const tangent =
+        segmentTangent ??
+        normalizeVector({
+          x: segment.end.x - segment.start.x,
+          y: segment.end.y - segment.start.y
+        });
+      if (!tangent) {
+        return null;
+      }
+
+      const facing = facingOverride ?? (signedDistanceMm >= 0 ? "LEFT" : "RIGHT");
+      const leftNormal = { x: -tangent.y, y: tangent.x };
+      const normal =
+        facing === "RIGHT"
+          ? { x: -leftNormal.x, y: -leftNormal.y }
+          : leftNormal;
+
+      const preview: BasketballPostInsertionPreview = {
+        segment,
+        segmentLengthMm,
+        offsetMm: snappedOffsetMm,
+        point,
+        tangent,
+        normal,
+        facing,
+        targetPoint: point,
+        snapMeta
+      };
+
+      if (!selectedAnchorPoint) {
+        return preview;
+      }
+
+      return {
+        ...preview,
+        alignmentGuide: {
+          anchorPoint: selectedAnchorPoint,
+          targetPoint: preview.targetPoint
+        }
+      };
+    },
+    [placedBasketballPostVisuals]
   );
 
   const resolveDrawPoint = useCallback(
@@ -372,7 +552,16 @@ export function useEditorInteractionPreviews({
     segments
   ]);
 
-  const gatePreview = useMemo(() => {
+  const placedGateVisualById = useMemo(
+    () => new Map(placedGateVisuals.map((gate) => [gate.id, gate] as const)),
+    [placedGateVisuals]
+  );
+  const placedBasketballPostVisualById = useMemo(
+    () => new Map(placedBasketballPostVisuals.map((post) => [post.id, post] as const)),
+    [placedBasketballPostVisuals]
+  );
+
+  const placementGatePreview = useMemo(() => {
     if (interactionMode !== "GATE" || !pointerWorld) {
       return null;
     }
@@ -396,71 +585,24 @@ export function useEditorInteractionPreviews({
       return null;
     }
 
-    const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
-    const baseOffsetMm = best.offsetMm;
-    const midpointMm = segmentLengthMm / 2;
-    const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
-    const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
-    let snappedOffsetMm = baseOffsetMm;
-    let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
-    let snapMeta = buildSnapMeta("FREE", "Free placement");
-    let selectedAnchorPoint: PointMm | null = null;
+    return buildSnappedGatePreview(best.segment, best.offsetMm, requestedGateWidthMm);
+  }, [buildSnappedGatePreview, gatePointerSnapMm, interactionMode, pointerWorld, requestedGateWidthMm, segments]);
 
-    const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
-    if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
-      snappedOffsetMm = midpointMm;
-      bestSnapDistanceMm = midpointDistanceMm;
-      snapMeta = buildSnapMeta("CENTERED", "Centered");
-    }
-
-    const segmentTangent = normalizeVector({
-      x: best.segment.end.x - best.segment.start.x,
-      y: best.segment.end.y - best.segment.start.y
-    });
-    const gateAlignmentAnchors = !segmentTangent
-      ? []
-      : placedGateVisuals
-          .filter(
-            (gate) => gate.segmentId !== best.segment.id && Math.abs(dot(segmentTangent, gate.tangent)) >= 0.9
-          )
-          .map((gate) => gate.centerPoint);
-    const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, gateAlignmentAnchors, anchorWindowMm);
-    const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - baseOffsetMm);
-    if (
-      anchorSnapResult.anchorPoint &&
-      anchorSnapDistanceMm <= anchorWindowMm &&
-      anchorSnapDistanceMm < bestSnapDistanceMm
-    ) {
-      snappedOffsetMm = anchorSnapResult.offsetMm;
-      bestSnapDistanceMm = anchorSnapDistanceMm;
-      selectedAnchorPoint = anchorSnapResult.anchorPoint;
-      snapMeta = buildSnapMeta("ALIGNMENT", "Aligned gate");
-    }
-
-    snappedOffsetMm = Math.max(
-      0,
-      Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
-    );
-
-    const preview = buildGatePreview(best.segment, snappedOffsetMm, requestedGateWidthMm);
-    if (!preview) {
+  const selectDragGatePreview = useMemo(() => {
+    if (interactionMode !== "SELECT" || !pointerWorld || !activeGateDragId) {
       return null;
     }
-    const previewWithSnap = {
-      ...preview,
-      snapMeta
-    };
-    if (!selectedAnchorPoint) {
-      return previewWithSnap;
+    const activeGate = placedGateVisualById.get(activeGateDragId);
+    const activeSegment = activeGate ? segments.find((segment) => segment.id === activeGate.segmentId) : null;
+    if (!activeGate || !activeSegment) {
+      return null;
     }
-    return {
-      ...previewWithSnap,
-      alignmentGuide: {
-        anchorPoint: selectedAnchorPoint,
-        targetPoint: preview.targetPoint
-      }
-    };
-  }, [gatePointerSnapMm, interactionMode, placedGateVisuals, pointerWorld, requestedGateWidthMm, segments]);
+    const projection = projectPointOntoSegment(pointerWorld, activeSegment);
+    return buildSnappedGatePreview(activeSegment, projection.offsetMm, activeGate.widthMm, activeGate.id);
+  }, [activeGateDragId, buildSnappedGatePreview, interactionMode, placedGateVisualById, pointerWorld, segments]);
+
+  const gatePreview = selectDragGatePreview ?? placementGatePreview;
+  const activeDraggedGateType = activeGateDragId ? placedGateVisualById.get(activeGateDragId)?.gateType ?? null : null;
 
   const gatePreviewVisual = useMemo(() => {
     if (!gatePreview) {
@@ -477,9 +619,9 @@ export function useEditorInteractionPreviews({
       widthMm: gatePreview.widthMm,
       tangent: gatePreview.tangent,
       normal: gatePreview.normal,
-      leafCount: resolveGatePreviewLeafCount(gateType, gatePreview.widthMm)
+      leafCount: resolveGatePreviewLeafCount(activeDraggedGateType ?? gateType, gatePreview.widthMm)
     } satisfies GateVisual;
-  }, [gatePreview, gateType]);
+  }, [activeDraggedGateType, gatePreview, gateType]);
 
   const resolveBasketballPostPreview = useCallback(
     (worldPoint: PointMm): BasketballPostInsertionPreview | null => {
@@ -510,101 +652,47 @@ export function useEditorInteractionPreviews({
         return null;
       }
 
-      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
-      const midpointMm = segmentLengthMm / 2;
-      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
-      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
-      let snappedOffsetMm = best.offsetMm;
-      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
-      let snapMeta = buildSnapMeta("FREE", "Free placement");
-      let selectedAnchorPoint: PointMm | null = null;
-
-      const midpointDistanceMm = Math.abs(best.offsetMm - midpointMm);
-      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
-        snappedOffsetMm = midpointMm;
-        bestSnapDistanceMm = midpointDistanceMm;
-        snapMeta = buildSnapMeta("CENTERED", "Centered");
-      }
-
-      const segmentTangent = normalizeVector({
-        x: best.segment.end.x - best.segment.start.x,
-        y: best.segment.end.y - best.segment.start.y
-      });
-      const alignmentAnchors = !segmentTangent
-        ? []
-        : placedBasketballPostVisuals
-            .filter(
-              (post) => post.segmentId !== best.segment.id && Math.abs(dot(segmentTangent, post.tangent)) >= 0.9
-            )
-            .map((post) => post.point);
-      const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, best.offsetMm, alignmentAnchors, anchorWindowMm);
-      const anchorSnapDistanceMm = Math.abs(anchorSnapResult.offsetMm - best.offsetMm);
-      if (
-        anchorSnapResult.anchorPoint &&
-        anchorSnapDistanceMm <= anchorWindowMm &&
-        anchorSnapDistanceMm < bestSnapDistanceMm
-      ) {
-        snappedOffsetMm = anchorSnapResult.offsetMm;
-        selectedAnchorPoint = anchorSnapResult.anchorPoint;
-        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned post");
-      }
-
-      snappedOffsetMm = Math.max(
-        0,
-        Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
-      );
-
-      const point = interpolateAlongSegment(best.segment, snappedOffsetMm);
-      const tangent =
-        segmentTangent ??
-        normalizeVector({
-          x: best.segment.end.x - best.segment.start.x,
-          y: best.segment.end.y - best.segment.start.y
-        });
-      if (!tangent) {
-        return null;
-      }
-
-      const facing = best.signedDistanceMm >= 0 ? "LEFT" : "RIGHT";
-      const leftNormal = { x: -tangent.y, y: tangent.x };
-      const normal =
-        facing === "RIGHT"
-          ? { x: -leftNormal.x, y: -leftNormal.y }
-          : leftNormal;
-
-      const preview: BasketballPostInsertionPreview = {
-        segment: best.segment,
-        segmentLengthMm,
-        offsetMm: snappedOffsetMm,
-        point,
-        tangent,
-        normal,
-        facing,
-        targetPoint: point,
-        snapMeta
-      };
-
-      if (!selectedAnchorPoint) {
-        return preview;
-      }
-
-      return {
-        ...preview,
-        alignmentGuide: {
-          anchorPoint: selectedAnchorPoint,
-          targetPoint: preview.targetPoint
-        }
-      };
+      return buildSnappedBasketballPostPreview(best.segment, best.offsetMm, best.signedDistanceMm);
     },
-    [basketballPostPointerSnapMm, placedBasketballPostVisuals, segments]
+    [basketballPostPointerSnapMm, buildSnappedBasketballPostPreview, segments]
   );
 
-  const basketballPostPreview = useMemo(() => {
+  const placementBasketballPostPreview = useMemo(() => {
     if (interactionMode !== "BASKETBALL_POST" || !pointerWorld) {
       return null;
     }
     return resolveBasketballPostPreview(pointerWorld);
   }, [interactionMode, pointerWorld, resolveBasketballPostPreview]);
+
+  const selectDragBasketballPostPreview = useMemo(() => {
+    if (interactionMode !== "SELECT" || !pointerWorld || !activeBasketballPostDragId) {
+      return null;
+    }
+    const activeBasketballPost = placedBasketballPostVisualById.get(activeBasketballPostDragId);
+    const activeSegment = activeBasketballPost
+      ? segments.find((segment) => segment.id === activeBasketballPost.segmentId)
+      : null;
+    if (!activeBasketballPost || !activeSegment) {
+      return null;
+    }
+    const projection = projectPointOntoSegment(pointerWorld, activeSegment);
+    return buildSnappedBasketballPostPreview(
+      activeSegment,
+      projection.offsetMm,
+      projection.signedDistanceMm,
+      activeBasketballPost.id,
+      activeBasketballPost.facing
+    );
+  }, [
+    activeBasketballPostDragId,
+    buildSnappedBasketballPostPreview,
+    interactionMode,
+    placedBasketballPostVisualById,
+    pointerWorld,
+    segments
+  ]);
+
+  const basketballPostPreview = selectDragBasketballPostPreview ?? placementBasketballPostPreview;
 
   const drawHoverSnap = useMemo(() => {
     if (interactionMode !== "DRAW" || !pointerWorld || drawStart) {
