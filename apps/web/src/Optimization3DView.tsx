@@ -944,7 +944,7 @@ export function Optimization3DView({
 
           setOrbit((current) => ({
             ...current,
-            yaw: current.yaw + deltaX * 0.0052,
+            yaw: current.yaw - deltaX * 0.0052,
             pitch: clamp(current.pitch + deltaY * 0.0042, 0.2, 1.1)
           }));
         }}

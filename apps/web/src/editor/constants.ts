@@ -36,7 +36,7 @@ export const GATE_WIDTH_OPTIONS_MM = [1000, 1200, 1500, 1800, 2400, 3000, 3600, 
 export const GATE_OPEN_ANGLE_DEGREES = 33;
 export const GATE_DOUBLE_LEAF_THRESHOLD_MM = 1800;
 export const RECESS_INPUT_STEP_M = 0.05;
-export const INITIAL_VISIBLE_WIDTH_MM = 150000;
+export const INITIAL_VISIBLE_WIDTH_MM = 60000;
 export const SCALE_BAR_TARGET_RATIO = 0.18;
 export const SCALE_BAR_MAX_RATIO = 0.4;
 export const SCALE_BAR_CANDIDATES_MM = [
@@ -78,7 +78,7 @@ export const ROLL_FORM_HEIGHT_OPTIONS: FenceHeightKey[] = [...ROLL_FORM_HEIGHT_K
 export function defaultFenceSpec(): FenceSpec {
   return {
     system: "TWIN_BAR",
-    height: "2m",
+    height: "3m",
     twinBarVariant: "STANDARD"
   };
 }

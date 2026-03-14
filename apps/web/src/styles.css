@@ -1176,7 +1176,8 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   z-index: 34;
   pointer-events: auto;
   overscroll-behavior: contain;
@@ -2357,6 +2358,7 @@ button:disabled {
     width: calc(100vw - 26px);
     max-height: 86vh;
     padding: 10px;
+    overflow-y: auto;
   }
 
   .optimization-modal-head {

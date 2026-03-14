@@ -8,6 +8,11 @@ describe("useEditorShellState", () => {
     const state = renderHookServer(() => useEditorShellState());
 
     expect(state.interactionMode).toBe("DRAW");
+    expect(state.activeSpec).toEqual({
+      system: "TWIN_BAR",
+      height: "3m",
+      twinBarVariant: "STANDARD"
+    });
     expect(state.recessWidthMm).toBe(7500);
     expect(state.recessDepthMm).toBe(2500);
     expect(state.gateType).toBe("SINGLE_LEAF");
