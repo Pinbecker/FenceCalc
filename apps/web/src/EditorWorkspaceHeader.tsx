@@ -14,6 +14,7 @@ interface EditorWorkspaceHeaderProps {
   onSetCurrentCustomerName: (name: string) => void;
   onSaveDrawing: () => void;
   onSaveDrawingAsNew: () => void;
+  onExportPdf: () => void;
   onStartNewDraft: () => void;
   onGoToLogin: () => void;
   onNavigateDashboard: () => void;
@@ -37,6 +38,7 @@ export function EditorWorkspaceHeader({
   onSetCurrentCustomerName,
   onSaveDrawing,
   onSaveDrawingAsNew,
+  onExportPdf,
   onStartNewDraft,
   onGoToLogin,
   onNavigateDashboard,
@@ -92,6 +94,9 @@ export function EditorWorkspaceHeader({
               <button type="button" className="ghost" onClick={onSaveDrawingAsNew} disabled={isSavingDrawing}>
                 Save As
               </button>
+              <button type="button" className="ghost" onClick={onExportPdf}>
+                Export PDF
+              </button>
               <button type="button" className="ghost" onClick={onStartNewDraft}>
                 New Draft
               </button>
@@ -99,6 +104,9 @@ export function EditorWorkspaceHeader({
           </div>
         ) : (
           <div className="editor-document-bar">
+            <button type="button" className="ghost" onClick={onExportPdf}>
+              Export PDF
+            </button>
             <button type="button" onClick={onGoToLogin}>
               Go To Login
             </button>

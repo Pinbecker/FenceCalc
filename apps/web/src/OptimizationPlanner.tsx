@@ -50,32 +50,41 @@ function formatSolverLabel(bucket: TwinBarOptimizationBucket): string {
   return bucket.solver === "EXACT_SEARCH" ? "Exact search" : "Best-fit packing";
 }
 
+function formatPanelCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "panel" : "panels"}`;
+}
+
+function formatOpenedPanelCountLabel(count: number): string {
+  return `${count} opened stock ${count === 1 ? "panel" : "panels"}`;
+}
+
+function formatReuseCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "reuse" : "reuses"}`;
+}
+
 function buildDockHeadline(summary: OptimizationSummary, canInspect: boolean): string {
-  const plannedPanels = summary.twinBar.buckets.reduce(
-    (sum, bucket) => sum + bucket.plans.length,
-    0,
-  );
   if (!canInspect) {
     return "No layout to plan yet";
   }
   if (summary.twinBar.totalCutDemands === 0) {
     return "No cut pieces need planning";
   }
-  return `${plannedPanels} stock-panel plans in live cut layout`;
+  if (summary.twinBar.panelsSaved === 0) {
+    return "No panels saved in live cut layout";
+  }
+  return `${formatPanelCountLabel(summary.twinBar.panelsSaved)} saved in live cut layout`;
 }
 
 function buildDockCopy(summary: OptimizationSummary, canInspect: boolean): string {
-  const plannedPanels = summary.twinBar.buckets.reduce(
-    (sum, bucket) => sum + bucket.plans.length,
-    0,
-  );
   if (!canInspect) {
     return "Draw a layout to generate stock-panel plans.";
   }
   if (summary.twinBar.totalCutDemands === 0) {
     return `${summary.twinBar.fixedFullPanels} full panels already land cleanly.`;
   }
-  return `${summary.twinBar.totalCutDemands} cut pieces laid across ${plannedPanels} opened stock panels.`;
+  return `${summary.twinBar.totalCutDemands} cut pieces are covered by ${formatOpenedPanelCountLabel(
+    summary.twinBar.stockPanelsOpened
+  )}.`;
 }
 
 function buildGroupTitle(bucket: TwinBarOptimizationBucket): string {
@@ -116,9 +125,10 @@ export function OptimizationPlanner({
   const activePlanId = activePlan?.id ?? null;
   const activePlanIndex = activePlan ? reusablePlans.findIndex((plan) => plan.id === activePlan.id) : -1;
   const hasVisiblePlans = visiblePlans.length > 0;
-  const visiblePanelsSaved = visiblePlans.reduce((sum, plan) => sum + plan.panelsSaved, 0);
-  const visibleReusedCuts = visiblePlans.reduce((sum, plan) => sum + plan.reusedCuts, 0);
-  const visibleLeftoverMm = visiblePlans.reduce((sum, plan) => sum + plan.leftoverMm, 0);
+  const displayPlans = reusablePlans.length > 0 ? reusablePlans : visiblePlans;
+  const visiblePanelsSaved = displayPlans.reduce((sum, plan) => sum + plan.panelsSaved, 0);
+  const visibleReusedCuts = displayPlans.reduce((sum, plan) => sum + plan.reusedCuts, 0);
+  const visibleLeftoverMm = displayPlans.reduce((sum, plan) => sum + plan.leftoverMm, 0);
   const handleOpenPlanner = () => {
     const firstVisiblePlan = visiblePlans[0] ?? null;
     if ((selectedPlanId === null || !visiblePlans.some((plan) => plan.id === selectedPlanId)) && firstVisiblePlan) {
@@ -220,7 +230,7 @@ export function OptimizationPlanner({
                         {formatVariantShortLabel(bucket.variant)} {formatHeightLabelFromMm(bucket.stockPanelHeightMm)}
                       </span>
                       <strong>
-                        save {bucket.panelsSaved} | reuse {bucket.reusedCuts}/{bucket.cutDemands}
+                        save {bucket.panelsSaved} | {formatReuseCountLabel(bucket.reusedCuts)}
                       </strong>
                     </article>
                   ))}
@@ -258,7 +268,7 @@ export function OptimizationPlanner({
                                 <div>
                                   <span className="optimization-plan-kicker">Opened Panel {planIndex}</span>
                                   <strong>
-                                    saves {plan.panelsSaved} | {plan.cuts.length} cuts
+                                    saves {plan.panelsSaved} | {formatReuseCountLabel(plan.reusedCuts)}
                                   </strong>
                                 </div>
                                 <span className="optimization-plan-leftover">{formatLengthMm(plan.leftoverMm)} left</span>

@@ -66,6 +66,8 @@ export function Optimization3DView({
   const freshCutCount = activePlan?.cuts.filter((cut) => cut.mode === "OPEN_STOCK_PANEL").length ?? 0;
   const reuseCutCount = activePlan?.cuts.filter((cut) => cut.mode === "REUSE_OFFCUT").length ?? 0;
   const legendItems = buildLegendItems();
+  const reuseCountLabel = `${reuseCutCount} ${reuseCutCount === 1 ? "reuse" : "reuses"}`;
+  const freshCountLabel = `${freshCutCount} ${freshCutCount === 1 ? "fresh cut" : "fresh cuts"}`;
 
   return (
     <section className="optimization-3d-view" aria-label="3D reuse view">
@@ -96,8 +98,8 @@ export function Optimization3DView({
           {activePlanIndex !== null && planCount > 1 ? <span>Opened panel {activePlanIndex + 1} of {planCount}</span> : null}
           <span>{formatVariantLabel(activePlan.variant)}</span>
           <span>{formatHeightLabelFromMm(activePlan.stockPanelHeightMm)} stock</span>
-          <span>{freshCutCount} fresh</span>
-          <span>{reuseCutCount} reused</span>
+          <span>{freshCountLabel}</span>
+          <span>{reuseCountLabel}</span>
           <span>{formatLengthMm(activePlan.leftoverMm)} left</span>
         </div>
       ) : null}

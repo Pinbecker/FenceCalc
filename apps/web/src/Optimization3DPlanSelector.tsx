@@ -9,6 +9,10 @@ interface Optimization3DPlanSelectorProps {
   formatLengthLabel: (valueMm: number) => string;
 }
 
+function formatReuseCountLabel(reusedCuts: number): string {
+  return `${reusedCuts} ${reusedCuts === 1 ? "reuse" : "reuses"}`;
+}
+
 export function Optimization3DPlanSelector({
   activePlan,
   activePlanIndex,
@@ -65,7 +69,7 @@ export function Optimization3DPlanSelector({
               >
                 <span>Opened panel {index + 1}</span>
                 <strong>
-                  {plan.cuts.length} uses | {formatLengthLabel(plan.leftoverMm)} left
+                  {formatReuseCountLabel(plan.reusedCuts)} | {formatLengthLabel(plan.leftoverMm)} left
                 </strong>
               </button>
             );

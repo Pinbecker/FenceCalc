@@ -58,4 +58,42 @@ describe("buildOptimization3DRenderData", () => {
     expect(renderData.faces.every((face) => Number.isFinite(face.depth))).toBe(true);
     expect(renderData.strokes.every((stroke) => Number.isFinite(stroke.depth))).toBe(true);
   });
+
+  it("renders gates with a distinct blue palette", () => {
+    const renderData = buildOptimization3DRenderData(
+      {
+        panelSlices: [],
+        posts: [],
+        rails: [],
+        basketballPosts: [],
+        floodlightColumns: [],
+        cutOverlays: [],
+        reuseLinks: [],
+        gates: [
+          {
+            key: "gate-1",
+            start: { x: 0, y: 0 },
+            end: { x: 1200, y: 0 },
+            center: { x: 600, y: 0 },
+            normal: { x: 0, y: 1 },
+            heightMm: 2000,
+            leafCount: 1
+          }
+        ],
+        bounds: {
+          minX: 0,
+          maxX: 1200,
+          minZ: -600,
+          maxZ: 600,
+          maxHeightMm: 2000
+        }
+      },
+      DEFAULT_ORBIT,
+      920,
+      320
+    );
+
+    const gateFace = renderData.faces.find((face) => face.key === "gate-1-leaf-0-front");
+    expect(gateFace?.fill).toBe("rgba(67, 112, 189, 0.72)");
+  });
 });

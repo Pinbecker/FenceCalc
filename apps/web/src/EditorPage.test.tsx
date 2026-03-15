@@ -385,6 +385,7 @@ describe("EditorPage", () => {
     expect(html).toContain("Acme Fencing workspace");
     expect(html).toContain("Jane Owner");
     expect(html).toContain("Admin");
+    expect(html).toContain("Export PDF");
     expect(html).toContain("Sidebar SELECT");
     expect(html).toContain("CanvasStage");
     expect(html).toContain("OptimizationPlanner false");

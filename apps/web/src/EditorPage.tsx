@@ -15,6 +15,7 @@ import { EditorLengthEditor } from "./EditorLengthEditor";
 import { EditorOverlayPanels } from "./EditorOverlayPanels";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorWorkspaceHeader } from "./EditorWorkspaceHeader";
+import { exportDrawingPdfReport } from "./drawingPdfReport";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorDerivedState } from "./editor/useEditorDerivedState";
 import { useEditorInteractionPreviews } from "./editor/useEditorInteractionPreviews";
@@ -569,6 +570,40 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onNavigate("drawings");
   }
 
+  function handleExportPdf(): void {
+    let canvasImageDataUrl: string | null = null;
+    try {
+      canvasImageDataUrl = stageRef.current?.toDataURL({
+        pixelRatio: 2,
+        mimeType: "image/png"
+      }) ?? null;
+    } catch {
+      canvasImageDataUrl = null;
+    }
+
+    const opened = exportDrawingPdfReport({
+      companyName: session?.company.name ?? null,
+      preparedBy: session?.user.displayName ?? null,
+      drawingTitle,
+      drawingId: workspace.currentDrawingId,
+      customerName: workspace.currentCustomerName,
+      generatedAtIso: new Date().toISOString(),
+      isDirty: workspace.isDirty,
+      layout: currentLayout,
+      canvasImageDataUrl,
+      estimate,
+      estimateSegments,
+      segmentOrdinalById,
+      resolvedGatePlacements,
+      resolvedBasketballPostPlacements,
+      resolvedFloodlightColumnPlacements
+    });
+
+    if (!opened) {
+      window.alert("The PDF export could not open a new tab. Allow pop-ups for this site and try again.");
+    }
+  }
+
   return (
     <div className="editor-page">
       <EditorWorkspaceHeader
@@ -589,6 +624,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         onSaveDrawingAsNew={() => {
           void workspace.saveDrawingAsNew();
         }}
+        onExportPdf={handleExportPdf}
         onStartNewDraft={handleStartNewDraft}
         onGoToLogin={() => guardedNavigate("login")}
         onNavigateDashboard={() => guardedNavigate("dashboard")}

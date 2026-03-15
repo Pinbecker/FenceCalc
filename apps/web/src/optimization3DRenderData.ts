@@ -69,7 +69,7 @@ export interface Optimization3DRenderData {
 export const DEFAULT_ORBIT: OrbitState = {
   yaw: -0.82,
   pitch: 0.62,
-  zoom: 0.98,
+  zoom: 1.22,
   panX: 0,
   panY: 0
 };
@@ -115,6 +115,14 @@ const OVERLAY_PALETTE = {
     badgeFill: "#10b8ad",
     badgeStroke: "#dbfffb"
   }
+} as const;
+
+const GATE_PALETTE = {
+  frontFill: "rgba(67, 112, 189, 0.72)",
+  sideFill: "rgba(41, 79, 149, 0.84)",
+  topFill: "rgba(194, 218, 255, 0.92)",
+  stroke: "rgba(28, 57, 112, 0.9)",
+  brace: "rgba(240, 247, 255, 0.88)"
 } as const;
 
 const GROUND_PADDING_MM = 1600;
@@ -539,17 +547,17 @@ export function buildOptimization3DRenderData(
         {
           key: `${gate.key}-leaf-${leafIndex}-front`,
           points: [bottomStart, bottomEnd, topEnd, topStart],
-          fill: "rgba(170, 125, 59, 0.66)"
+          fill: GATE_PALETTE.frontFill
         },
         {
           key: `${gate.key}-leaf-${leafIndex}-top`,
           points: [topStart, topEnd, outerTopEnd, outerTopStart],
-          fill: "rgba(231, 205, 160, 0.9)"
+          fill: GATE_PALETTE.topFill
         },
         {
           key: `${gate.key}-leaf-${leafIndex}-side`,
           points: [bottomEnd, outerBottomEnd, outerTopEnd, topEnd],
-          fill: "rgba(122, 88, 36, 0.82)"
+          fill: GATE_PALETTE.sideFill
         }
       ];
       gateFaces.forEach((face) => {
@@ -557,7 +565,7 @@ export function buildOptimization3DRenderData(
           key: face.key,
           points: formatPolygonPoints(face.points),
           fill: face.fill,
-          stroke: "rgba(93, 63, 20, 0.88)",
+          stroke: GATE_PALETTE.stroke,
           strokeWidth: 1,
           opacity: 1,
           depth: getFaceDepth(face.points) + 0.12
@@ -568,7 +576,7 @@ export function buildOptimization3DRenderData(
         key: `${gate.key}-leaf-${leafIndex}-brace`,
         kind: "polyline",
         value: `${bottomStart.x},${bottomStart.y} ${topEnd.x},${topEnd.y}`,
-        stroke: "rgba(246, 235, 208, 0.82)",
+        stroke: GATE_PALETTE.brace,
         strokeWidth: 1.3,
         opacity: 1,
         depth: (bottomStart.depth + topEnd.depth) / 2 + 0.2

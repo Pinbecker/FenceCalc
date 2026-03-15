@@ -84,6 +84,7 @@ describe("Optimization3DView", () => {
     expect(html).toContain("3D Reuse View");
     expect(html).toContain("Opened panel view");
     expect(html).toContain("Opened panel 1");
+    expect(html).toContain("1 reuse");
     expect(html).toContain("Fresh stock cut");
     expect(html).toContain("Reused offcut");
     expect(html).toContain("Open panel on segment #1");
