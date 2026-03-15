@@ -4155,3 +4155,225 @@ button:disabled {
     min-width: 0;
   }
 }
+
+.pricing-page-summary,
+.estimate-meta-strip,
+.estimate-totals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.pricing-page-summary article,
+.estimate-meta-strip article,
+.estimate-totals-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(246, 248, 247, 0.92);
+  border: 1px solid rgba(102, 117, 108, 0.12);
+}
+
+.pricing-page-summary span,
+.estimate-meta-strip span,
+.estimate-totals-grid span {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5f6c65;
+}
+
+.pricing-page-summary strong,
+.estimate-meta-strip strong,
+.estimate-totals-grid strong {
+  font-size: 1rem;
+  color: #213029;
+}
+
+.pricing-system-stack,
+.estimate-group-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.pricing-system-card,
+.estimate-group-card,
+.estimate-ancillary-card,
+.estimate-totals-card {
+  display: grid;
+  gap: 16px;
+}
+
+.pricing-category-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.pricing-category-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(252, 252, 251, 0.98), rgba(244, 247, 245, 0.94));
+  border: 1px solid rgba(102, 117, 108, 0.12);
+}
+
+.pricing-category-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.pricing-category-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #213029;
+}
+
+.pricing-category-head span {
+  color: #647168;
+  font-size: 0.78rem;
+}
+
+.pricing-table,
+.estimate-table {
+  display: grid;
+  gap: 8px;
+}
+
+.pricing-table-row,
+.estimate-table-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(102, 117, 108, 0.1);
+}
+
+.pricing-table-row {
+  grid-template-columns: minmax(240px, 2fr) 90px repeat(2, 110px) 92px minmax(220px, 1.4fr);
+}
+
+.estimate-table-row {
+  grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(100px, 0.9fr)) minmax(110px, 1fr);
+}
+
+.pricing-table-head,
+.estimate-table-head {
+  background: rgba(227, 234, 230, 0.7);
+  color: #4d5a53;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pricing-table-row input,
+.pricing-table-row textarea,
+.estimate-ancillary-row input {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(112, 126, 117, 0.18);
+  background: rgba(250, 251, 250, 0.96);
+  color: #223029;
+  font: inherit;
+}
+
+.pricing-table-row textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+
+.pricing-item-main {
+  display: grid;
+  gap: 6px;
+}
+
+.pricing-item-code {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6d796f;
+}
+
+.pricing-checkbox-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #506057;
+  font-size: 0.82rem;
+}
+
+.estimate-ancillary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.estimate-ancillary-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(100px, 0.8fr)) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.estimate-group-subtotal {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.estimate-group-subtotal span {
+  color: #647168;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.estimate-group-subtotal strong {
+  color: #213029;
+  font-size: 1rem;
+}
+
+.estimate-item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.estimate-item-copy strong {
+  color: #213029;
+}
+
+.estimate-item-copy span {
+  color: #66736b;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.estimate-table-row > span,
+.estimate-table-row > strong {
+  color: #213029;
+  font-size: 0.9rem;
+}
+
+.estimate-totals-grid .is-grand-total {
+  background: linear-gradient(180deg, rgba(255, 248, 235, 0.96), rgba(255, 241, 218, 0.94));
+  border-color: rgba(179, 122, 51, 0.18);
+}
+
+@media (max-width: 1100px) {
+  .pricing-table-row,
+  .estimate-table-row,
+  .estimate-ancillary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-table-head,
+  .estimate-table-head {
+    display: none;
+  }
+}

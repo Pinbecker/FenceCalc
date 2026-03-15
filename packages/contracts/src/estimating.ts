@@ -1,0 +1,381 @@
+import type { FenceHeightKey, FenceSystem } from "./domain.js";
+
+export const PRICING_ITEM_CATEGORIES = [
+  "PANELS",
+  "POSTS",
+  "GATES",
+  "CONCRETE",
+  "FLOODLIGHT_COLUMNS",
+  "BASKETBALL_POSTS",
+  "FIXINGS",
+  "PLANT",
+  "ANCILLARY"
+] as const;
+
+export type PricingItemCategory = (typeof PRICING_ITEM_CATEGORIES)[number];
+
+export interface PricingItem {
+  itemCode: string;
+  displayName: string;
+  category: PricingItemCategory;
+  fenceSystem: FenceSystem;
+  unit: string;
+  materialCost: number;
+  labourCost: number;
+  isActive: boolean;
+  notes?: string | undefined;
+  sortOrder?: number | undefined;
+}
+
+export interface PricingConfigRecord {
+  companyId: string;
+  items: PricingItem[];
+  updatedAtIso: string;
+  updatedByUserId: string | null;
+}
+
+export interface AncillaryEstimateItem {
+  id: string;
+  description: string;
+  quantity: number;
+  materialCost: number;
+  labourCost: number;
+}
+
+export interface ConcreteRule {
+  heightKey: FenceHeightKey;
+  depthMm: number;
+  widthMm: number;
+  lengthMm: number;
+}
+
+export interface EstimateRow {
+  key: string;
+  itemCode: string | null;
+  itemName: string;
+  category: PricingItemCategory;
+  quantity: number;
+  unit: string;
+  unitMaterialCost: number;
+  unitLabourCost: number;
+  totalMaterialCost: number;
+  totalLabourCost: number;
+  totalCost: number;
+  notes?: string | undefined;
+}
+
+export interface EstimateGroup {
+  key: string;
+  title: string;
+  rows: EstimateRow[];
+  subtotalMaterialCost: number;
+  subtotalLabourCost: number;
+  subtotalCost: number;
+}
+
+export interface EstimateTotals {
+  materialCost: number;
+  labourCost: number;
+  totalCost: number;
+}
+
+export interface DrawingEstimateInput {
+  drawingId: string;
+  drawingName: string;
+  customerName: string;
+}
+
+export interface PricedEstimateResult {
+  drawing: DrawingEstimateInput;
+  groups: EstimateGroup[];
+  ancillaryItems: AncillaryEstimateItem[];
+  totals: EstimateTotals;
+}
+
+function buildPanelItem(height: FenceHeightKey, sortOrder: number): PricingItem {
+  return {
+    itemCode: `TWIN_BAR_PANEL_${height.replace(".", "_").replace("m", "M")}`,
+    displayName: `Twin Bar panel ${height}`,
+    category: "PANELS",
+    fenceSystem: "TWIN_BAR",
+    unit: "panel",
+    materialCost: 0,
+    labourCost: 0,
+    isActive: true,
+    sortOrder
+  };
+}
+
+function buildDefaultPricingItems(): PricingItem[] {
+  const items: PricingItem[] = [];
+  let sortOrder = 10;
+
+  (["1.2m", "1.8m", "2m", "2.4m", "3m", "4m", "4.5m", "5m", "6m"] as FenceHeightKey[]).forEach((height) => {
+    items.push(buildPanelItem(height, sortOrder));
+    sortOrder += 10;
+  });
+
+  items.push(
+    {
+      itemCode: "TWIN_BAR_POST_INTERMEDIATE",
+      displayName: "Twin Bar intermediate post",
+      category: "POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_POST_END",
+      displayName: "Twin Bar end post",
+      category: "POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      notes: "Used for end posts. Inline joins and junctions remain provisional in estimate rules.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_POST_CORNER_INTERNAL",
+      displayName: "Twin Bar corner post internal",
+      category: "POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_POST_CORNER_EXTERNAL",
+      displayName: "Twin Bar corner post external",
+      category: "POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_GATE_SINGLE_LEAF_LEAF",
+      displayName: "Single leaf gate leaf",
+      category: "GATES",
+      fenceSystem: "TWIN_BAR",
+      unit: "leaf",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_GATE_SINGLE_LEAF_POSTS",
+      displayName: "Single leaf gate posts",
+      category: "GATES",
+      fenceSystem: "TWIN_BAR",
+      unit: "set",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_GATE_DOUBLE_LEAF_LEAVES",
+      displayName: "Double leaf gate leaves",
+      category: "GATES",
+      fenceSystem: "TWIN_BAR",
+      unit: "leaf",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_GATE_DOUBLE_LEAF_POSTS",
+      displayName: "Double leaf gate posts",
+      category: "GATES",
+      fenceSystem: "TWIN_BAR",
+      unit: "set",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FENCE_CONCRETE",
+      displayName: "Twin Bar fence concrete",
+      category: "CONCRETE",
+      fenceSystem: "TWIN_BAR",
+      unit: "m3",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN",
+      displayName: "Floodlight column",
+      category: "FLOODLIGHT_COLUMNS",
+      fenceSystem: "TWIN_BAR",
+      unit: "column",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_CONCRETE",
+      displayName: "Floodlight column concrete",
+      category: "FLOODLIGHT_COLUMNS",
+      fenceSystem: "TWIN_BAR",
+      unit: "m3",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS",
+      displayName: "Floodlight column bolts",
+      category: "FLOODLIGHT_COLUMNS",
+      fenceSystem: "TWIN_BAR",
+      unit: "bolt",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX",
+      displayName: "Floodlight column chemfix",
+      category: "FLOODLIGHT_COLUMNS",
+      fenceSystem: "TWIN_BAR",
+      unit: "tube",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      notes: "Chemfix quantity rule is provisional and isolated in estimate rules.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_BASKETBALL_POST",
+      displayName: "Basketball post",
+      category: "BASKETBALL_POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_BASKETBALL_POST_CONCRETE",
+      displayName: "Basketball post concrete",
+      category: "BASKETBALL_POSTS",
+      fenceSystem: "TWIN_BAR",
+      unit: "m3",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FIXING_NUT",
+      displayName: "Nuts",
+      category: "FIXINGS",
+      fenceSystem: "TWIN_BAR",
+      unit: "each",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      notes: "Quantity logic to be defined later.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FIXING_BOLT",
+      displayName: "Bolts",
+      category: "FIXINGS",
+      fenceSystem: "TWIN_BAR",
+      unit: "each",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      notes: "Quantity logic to be defined later.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_FIXING_WASHER",
+      displayName: "Washers",
+      category: "FIXINGS",
+      fenceSystem: "TWIN_BAR",
+      unit: "each",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: true,
+      notes: "Quantity logic to be defined later.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "TWIN_BAR_GENERAL_PLANT",
+      displayName: "General plant",
+      category: "PLANT",
+      fenceSystem: "TWIN_BAR",
+      unit: "item",
+      materialCost: 700,
+      labourCost: 0,
+      isActive: true,
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "ROLL_FORM_PANEL_2M",
+      displayName: "Roll Form Welded Mesh panel 2m",
+      category: "PANELS",
+      fenceSystem: "ROLL_FORM",
+      unit: "panel",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: false,
+      notes: "Placeholder item. Roll Form estimating rules will be added later.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "ROLL_FORM_PANEL_3M",
+      displayName: "Roll Form Welded Mesh panel 3m",
+      category: "PANELS",
+      fenceSystem: "ROLL_FORM",
+      unit: "panel",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: false,
+      notes: "Placeholder item. Roll Form estimating rules will be added later.",
+      sortOrder: sortOrder += 10
+    },
+    {
+      itemCode: "ROLL_FORM_POST",
+      displayName: "Roll Form Welded Mesh post",
+      category: "POSTS",
+      fenceSystem: "ROLL_FORM",
+      unit: "post",
+      materialCost: 0,
+      labourCost: 0,
+      isActive: false,
+      notes: "Placeholder item. Roll Form estimating rules will be added later.",
+      sortOrder: sortOrder += 10
+    }
+  );
+
+  return items;
+}
+
+export function buildDefaultPricingConfig(companyId = "", updatedByUserId: string | null = null): PricingConfigRecord {
+  return {
+    companyId,
+    items: buildDefaultPricingItems(),
+    updatedAtIso: new Date(0).toISOString(),
+    updatedByUserId
+  };
+}

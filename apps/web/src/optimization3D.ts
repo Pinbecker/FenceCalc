@@ -26,6 +26,14 @@ export interface Optimization3DPost {
   heightMm: number;
 }
 
+export interface Optimization3DRail {
+  key: string;
+  start: PointMm;
+  end: PointMm;
+  centerHeightMm: number;
+  diameterMm: number;
+}
+
 export interface Optimization3DGate {
   key: string;
   start: PointMm;
@@ -81,6 +89,7 @@ export interface Optimization3DReuseLink {
 export interface Optimization3DScene {
   panelSlices: Optimization3DPanelSlice[];
   posts: Optimization3DPost[];
+  rails: Optimization3DRail[];
   gates: Optimization3DGate[];
   basketballPosts: Optimization3DBasketballPost[];
   floodlightColumns: Optimization3DFloodlightColumn[];
@@ -107,6 +116,8 @@ const BASKETBALL_POST_ARM_LENGTH_MM = 1800;
 const BASKETBALL_POST_HOOP_RADIUS_MM = 180;
 const FLOODLIGHT_COLUMN_HEIGHT_MM = 6000;
 const FLOODLIGHT_BAR_WIDTH_MM = 840;
+const TWIN_BAR_LOW_PANEL_TOP_RAIL_DIAMETER_MM = 60;
+const TWIN_BAR_LOW_PANEL_TOP_RAIL_CENTER_HEIGHT_MM = 1170;
 
 function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): PointMm {
   const lengthMm = distanceMm(segment.start, segment.end);
@@ -123,7 +134,10 @@ function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): Poin
 function buildVisualLayers(segment: LayoutSegment): VisualLayer[] {
   const config = getSpecConfig(segment.spec);
   const rawLayers = config.layers.map((layer) => layer.heightMm);
-  const remainingDeltaMm = config.assembledHeightMm - rawLayers.reduce((sum, value) => sum + value, 0);
+  const remainingDeltaMm =
+    segment.spec.system === "TWIN_BAR" && segment.spec.height === "1.2m"
+      ? 0
+      : config.assembledHeightMm - rawLayers.reduce((sum, value) => sum + value, 0);
   if (remainingDeltaMm > 0 && rawLayers.length > 0) {
     rawLayers[rawLayers.length - 1] = (rawLayers[rawLayers.length - 1] ?? 0) + remainingDeltaMm;
   }
@@ -261,6 +275,18 @@ function buildPosts(estimateSegments: LayoutSegment[]): Optimization3DPost[] {
   return [...postsByKey.values()];
 }
 
+function buildRails(estimateSegments: LayoutSegment[]): Optimization3DRail[] {
+  return estimateSegments
+    .filter((segment) => segment.spec.system === "TWIN_BAR" && segment.spec.height === "1.2m")
+    .map((segment) => ({
+      key: `rail-${segment.id}`,
+      start: segment.start,
+      end: segment.end,
+      centerHeightMm: TWIN_BAR_LOW_PANEL_TOP_RAIL_CENTER_HEIGHT_MM,
+      diameterMm: TWIN_BAR_LOW_PANEL_TOP_RAIL_DIAMETER_MM
+    }));
+}
+
 function buildGates(placements: ResolvedGatePlacement[]): Optimization3DGate[] {
   return placements.map((placement) => ({
     key: placement.key,
@@ -393,6 +419,7 @@ export function buildOptimization3DScene(
 ): Optimization3DScene {
   const panelSlices = buildPanelSlices(estimateSegments);
   const posts = buildPosts(estimateSegments);
+  const rails = buildRails(estimateSegments);
   const gates = buildGates(gatePlacements);
   const basketballPosts = buildBasketballPosts(basketballPostPlacements);
   const floodlightColumns = buildFloodlightColumns(floodlightColumnPlacements);
@@ -403,6 +430,7 @@ export function buildOptimization3DScene(
   const allGroundPoints = [
     ...estimateSegments.flatMap((segment) => [segment.start, segment.end]),
     ...posts.map((post) => post.point),
+    ...rails.flatMap((rail) => [rail.start, rail.end]),
     ...gates.flatMap((gate) => [gate.start, gate.end, gate.center]),
     ...basketballPosts.map((post) => post.point),
     ...floodlightColumns.map((column) => column.point)
@@ -415,6 +443,7 @@ export function buildOptimization3DScene(
     maxHeightMm: Math.max(
       2200,
       ...posts.map((post) => post.heightMm),
+      ...rails.map((rail) => rail.centerHeightMm + rail.diameterMm / 2),
       ...gates.map((gate) => gate.heightMm),
       ...basketballPosts.map((post) => post.heightMm),
       ...floodlightColumns.map((column) => column.heightMm),
@@ -426,6 +455,7 @@ export function buildOptimization3DScene(
   return {
     panelSlices,
     posts,
+    rails,
     gates,
     basketballPosts,
     floodlightColumns,

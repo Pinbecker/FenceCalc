@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 
 import { migrateSqliteDatabase } from "./sqliteSchema.js";
 import { SqliteDrawingStore } from "./sqliteDrawingStore.js";
+import { SqlitePricingStore } from "./sqlitePricingStore.js";
 import { SqliteSupportStore } from "./sqliteSupportStore.js";
 import { SqliteUserSessionStore } from "./sqliteUserSessionStore.js";
 import type {
@@ -16,6 +17,7 @@ import type {
   CreateUserInput,
   RestoreDrawingVersionInput,
   SetDrawingArchivedStateInput,
+  UpsertPricingConfigInput,
   UpdateDrawingInput
 } from "./types.js";
 
@@ -23,6 +25,7 @@ export class SqliteAppRepository implements AppRepository {
   private readonly database: Database.Database;
   private readonly userSessions: SqliteUserSessionStore;
   private readonly drawings: SqliteDrawingStore;
+  private readonly pricing: SqlitePricingStore;
   private readonly support: SqliteSupportStore;
 
   public constructor(databasePath: string) {
@@ -33,6 +36,7 @@ export class SqliteAppRepository implements AppRepository {
     migrateSqliteDatabase(this.database);
     this.userSessions = new SqliteUserSessionStore(this.database);
     this.drawings = new SqliteDrawingStore(this.database);
+    this.pricing = new SqlitePricingStore(this.database);
     this.support = new SqliteSupportStore(this.database);
   }
 
@@ -118,6 +122,14 @@ export class SqliteAppRepository implements AppRepository {
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput) {
     return Promise.resolve(this.drawings.restoreDrawingVersion(input));
+  }
+
+  public getPricingConfig(companyId: string) {
+    return Promise.resolve(this.pricing.getPricingConfig(companyId));
+  }
+
+  public upsertPricingConfig(input: UpsertPricingConfigInput) {
+    return Promise.resolve(this.pricing.upsertPricingConfig(input));
   }
 
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void> {

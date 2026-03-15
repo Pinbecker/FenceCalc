@@ -503,6 +503,53 @@ export function Optimization3DView({
       });
     }
 
+    for (const rail of scene.rails) {
+      const frontEdge = {
+        start: toGroundPoint(rail.start),
+        end: toGroundPoint(rail.end)
+      };
+      const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, rail.diameterMm);
+      const bottomHeightMm = rail.centerHeightMm - rail.diameterMm / 2;
+      const topHeightMm = rail.centerHeightMm + rail.diameterMm / 2;
+      const frontBottomStart = project({ x: frontEdge.start.x, y: bottomHeightMm, z: frontEdge.start.z });
+      const frontBottomEnd = project({ x: frontEdge.end.x, y: bottomHeightMm, z: frontEdge.end.z });
+      const frontTopEnd = project({ x: frontEdge.end.x, y: topHeightMm, z: frontEdge.end.z });
+      const frontTopStart = project({ x: frontEdge.start.x, y: topHeightMm, z: frontEdge.start.z });
+      const outerBottomEnd = project({ x: outerEdge.end.x, y: bottomHeightMm, z: outerEdge.end.z });
+      const outerTopEnd = project({ x: outerEdge.end.x, y: topHeightMm, z: outerEdge.end.z });
+      const outerTopStart = project({ x: outerEdge.start.x, y: topHeightMm, z: outerEdge.start.z });
+
+      const railFaces = [
+        {
+          key: `${rail.key}-front`,
+          points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart],
+          fill: "rgba(196, 203, 212, 0.92)"
+        },
+        {
+          key: `${rail.key}-top`,
+          points: [frontTopStart, frontTopEnd, outerTopEnd, outerTopStart],
+          fill: "rgba(246, 249, 252, 0.98)"
+        },
+        {
+          key: `${rail.key}-side`,
+          points: [frontBottomEnd, outerBottomEnd, outerTopEnd, frontTopEnd],
+          fill: "rgba(132, 143, 154, 0.94)"
+        }
+      ];
+
+      railFaces.forEach((face) => {
+        faces.push({
+          key: face.key,
+          points: formatPolygonPoints(face.points),
+          fill: face.fill,
+          stroke: "rgba(94, 106, 118, 0.82)",
+          strokeWidth: 0.86,
+          opacity: 1,
+          depth: getFaceDepth(face.points) + 0.06
+        });
+      });
+    }
+
     for (const post of scene.posts) {
       const halfWidthMm = 42;
       const groundX = post.point.x;

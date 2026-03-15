@@ -1,6 +1,7 @@
-import type { AuditLogRecord, CompanyRecord, DrawingRecord, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { AuditLogRecord, CompanyRecord, DrawingRecord, DrawingVersionRecord, PricingConfigRecord } from "@fence-estimator/contracts";
 
 import { InMemoryDrawingStore } from "./inMemoryDrawingStore.js";
+import { InMemoryPricingStore } from "./inMemoryPricingStore.js";
 import {
   InMemorySupportStore,
   type InMemoryPasswordResetTokenRecord
@@ -18,6 +19,7 @@ import type {
   SessionRecord,
   SetDrawingArchivedStateInput,
   StoredUser,
+  UpsertPricingConfigInput,
   UpdateDrawingInput
 } from "./types.js";
 
@@ -27,6 +29,7 @@ export class InMemoryAppRepository implements AppRepository {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly drawingsMap = new Map<string, DrawingRecord>();
   private readonly drawingVersionsMap = new Map<string, DrawingVersionRecord[]>();
+  private readonly pricingConfigs = new Map<string, PricingConfigRecord>();
   private readonly auditLog: AuditLogRecord[] = [];
   private readonly passwordResetTokens = new Map<string, InMemoryPasswordResetTokenRecord>();
   private readonly userSessions = new InMemoryUserSessionStore({
@@ -38,6 +41,9 @@ export class InMemoryAppRepository implements AppRepository {
     drawings: this.drawingsMap,
     drawingVersions: this.drawingVersionsMap,
     users: this.users
+  });
+  private readonly pricing = new InMemoryPricingStore({
+    pricingConfigs: this.pricingConfigs
   });
   private readonly support = new InMemorySupportStore({
     companies: this.companies,
@@ -127,6 +133,14 @@ export class InMemoryAppRepository implements AppRepository {
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput) {
     return Promise.resolve(this.drawings.restoreDrawingVersion(input));
+  }
+
+  public getPricingConfig(companyId: string) {
+    return Promise.resolve(this.pricing.getPricingConfig(companyId));
+  }
+
+  public upsertPricingConfig(input: UpsertPricingConfigInput) {
+    return Promise.resolve(this.pricing.upsertPricingConfig(input));
   }
 
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void> {

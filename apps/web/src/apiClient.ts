@@ -6,7 +6,9 @@ import type {
   DrawingRecord,
   DrawingSummary,
   DrawingVersionRecord,
-  LayoutModel
+  LayoutModel,
+  PricingConfigRecord,
+  PricingItem
 } from "@fence-estimator/contracts";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
@@ -229,6 +231,19 @@ export async function restoreDrawingVersion(
 export async function listAuditLog(limit = 50): Promise<AuditLogRecord[]> {
   const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/audit-log?limit=${limit}`);
   return response.entries;
+}
+
+export async function getPricingConfig(): Promise<PricingConfigRecord> {
+  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>("/api/v1/pricing-config");
+  return response.pricingConfig;
+}
+
+export async function updatePricingConfig(items: PricingItem[]): Promise<PricingConfigRecord> {
+  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>("/api/v1/pricing-config", {
+    method: "PUT",
+    body: { items }
+  });
+  return response.pricingConfig;
 }
 
 export async function requestPasswordReset(input: PasswordResetRequestInput): Promise<void> {

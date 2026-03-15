@@ -9,13 +9,15 @@ import type {
   DrawingSummary,
   DrawingVersionRecord,
   DrawingVersionSource,
-  LayoutModel
+  LayoutModel,
+  PricingConfigRecord
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
   drawingCanvasViewportSchema,
   estimateResultSchema,
-  layoutModelSchema
+  layoutModelSchema,
+  pricingConfigRecordSchema
 } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 import type { ZodType } from "zod";
@@ -86,6 +88,13 @@ export interface AuditLogRow {
   summary: string;
   metadata_json: string | null;
   created_at_iso: string;
+}
+
+export interface PricingConfigRow {
+  company_id: string;
+  config_json: string;
+  updated_at_iso: string;
+  updated_by_user_id: string | null;
 }
 
 export interface PasswordResetTokenRow {
@@ -275,5 +284,15 @@ export function toAuditLog(row: AuditLogRow): AuditLogRecord {
     summary: row.summary,
     createdAtIso: row.created_at_iso,
     ...(metadata ? { metadata } : {})
+  };
+}
+
+export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
+  const parsed = parseStoredJson(row.config_json, pricingConfigRecordSchema, `pricing config for company ${row.company_id}`);
+  return {
+    ...parsed,
+    companyId: row.company_id,
+    updatedAtIso: row.updated_at_iso,
+    updatedByUserId: row.updated_by_user_id
   };
 }

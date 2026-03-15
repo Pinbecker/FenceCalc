@@ -272,4 +272,37 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     expect(response.statusCode).toBe(401);
     await app.close();
   });
+
+  it("returns and updates company pricing configuration", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const initial = await app.inject({
+      method: "GET",
+      url: "/api/v1/pricing-config",
+      headers: cookieHeader
+    });
+
+    expect(initial.statusCode).toBe(200);
+    const initialBody = initial.json<{ pricingConfig: { items: Array<{ itemCode: string; materialCost: number }> } }>();
+    expect(initialBody.pricingConfig.items.find((item) => item.itemCode === "TWIN_BAR_GENERAL_PLANT")?.materialCost).toBe(700);
+
+    const updatedItems = initialBody.pricingConfig.items.map((item) =>
+      item.itemCode === "TWIN_BAR_GENERAL_PLANT" ? { ...item, materialCost: 850 } : item
+    );
+
+    const update = await app.inject({
+      method: "PUT",
+      url: "/api/v1/pricing-config",
+      headers: cookieHeader,
+      payload: {
+        items: updatedItems
+      }
+    });
+
+    expect(update.statusCode).toBe(200);
+    expect(update.json<{ pricingConfig: { items: Array<{ itemCode: string; materialCost: number }> } }>()
+      .pricingConfig.items.find((item) => item.itemCode === "TWIN_BAR_GENERAL_PLANT")?.materialCost).toBe(850);
+
+    await app.close();
+  });
 });

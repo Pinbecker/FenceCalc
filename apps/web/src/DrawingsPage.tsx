@@ -13,6 +13,7 @@ interface DrawingsPageProps {
   isLoading: boolean;
   onRefresh(this: void): Promise<void>;
   onOpenDrawing(this: void, drawingId: string): void;
+  onOpenEstimate(this: void, drawingId: string): void;
   onCreateDrawing(this: void): void;
   onToggleArchive(this: void, drawingId: string, archived: boolean): Promise<boolean>;
   onLoadVersions(this: void, drawingId: string): Promise<DrawingVersionRecord[]>;
@@ -36,6 +37,7 @@ export function DrawingsPage({
   isLoading,
   onRefresh,
   onOpenDrawing,
+  onOpenEstimate,
   onCreateDrawing,
   onToggleArchive,
   onLoadVersions,
@@ -270,6 +272,9 @@ export function DrawingsPage({
                       <div className="drawing-library-row-actions">
                         <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
                           Open In Editor
+                        </button>
+                        <button type="button" className="portal-secondary-button" onClick={() => onOpenEstimate(drawing.id)}>
+                          Estimate
                         </button>
                         <button
                           type="button"

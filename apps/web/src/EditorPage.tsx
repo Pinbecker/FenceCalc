@@ -49,7 +49,10 @@ import {
 
 interface EditorPageProps {
   initialDrawingId?: string | null;
-  onNavigate: (route: "dashboard" | "drawings" | "editor" | "admin" | "login", query?: Record<string, string>) => void;
+  onNavigate: (
+    route: "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin" | "login",
+    query?: Record<string, string>
+  ) => void;
 }
 
 function reconcileGatePlacementsForSegments(
@@ -642,6 +645,29 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
             </button>
             <button type="button" className="ghost editor-link-btn" onClick={handleOpenDrawings}>
               Drawings
+            </button>
+            <button
+              type="button"
+              className="ghost editor-link-btn"
+              disabled={!workspace.currentDrawingId || workspace.isDirty}
+              title={
+                workspace.currentDrawingId
+                  ? workspace.isDirty
+                    ? "Save the drawing before opening its estimate."
+                    : "Open estimate"
+                  : "Save this drawing first to open its estimate."
+              }
+              onClick={() => {
+                if (!workspace.currentDrawingId || workspace.isDirty) {
+                  return;
+                }
+                guardedNavigate("estimate", { drawingId: workspace.currentDrawingId });
+              }}
+            >
+              Estimate
+            </button>
+            <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("pricing")}>
+              Pricing
             </button>
             {canManageAdmin ? (
               <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("admin")}>

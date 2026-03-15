@@ -10,7 +10,8 @@ import type {
   DrawingSummary,
   DrawingVersionRecord,
   EstimateResult,
-  LayoutModel
+  LayoutModel,
+  PricingConfigRecord
 } from "@fence-estimator/contracts";
 
 export interface StoredUser extends CompanyUserRecord {
@@ -120,6 +121,13 @@ export interface CreateAuditLogInput {
   metadata?: Record<string, string | number | boolean | null>;
 }
 
+export interface UpsertPricingConfigInput {
+  companyId: string;
+  items: PricingConfigRecord["items"];
+  updatedAtIso: string;
+  updatedByUserId: string;
+}
+
 export interface CreatePasswordResetTokenInput {
   id: string;
   userId: string;
@@ -166,6 +174,8 @@ export interface AppRepository {
   setDrawingArchivedState(input: SetDrawingArchivedStateInput): Promise<DrawingRecord | null>;
   listDrawingVersions(drawingId: string, companyId: string): Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion(input: RestoreDrawingVersionInput): Promise<DrawingRecord | null>;
+  getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
+  upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;
   createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void>;
   consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string): Promise<PasswordResetConsumption | null>;
   addAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord>;

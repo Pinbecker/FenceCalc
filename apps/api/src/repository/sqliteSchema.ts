@@ -145,6 +145,19 @@ export function migrateSqliteDatabase(database: Database.Database): void {
       sql: `
         SELECT 1;
       `
+    },
+    {
+      name: "006_pricing_configs",
+      sql: `
+        CREATE TABLE IF NOT EXISTS pricing_configs (
+          company_id TEXT PRIMARY KEY,
+          config_json TEXT NOT NULL,
+          updated_at_iso TEXT NOT NULL,
+          updated_by_user_id TEXT,
+          FOREIGN KEY (company_id) REFERENCES companies(id),
+          FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+        );
+      `
     }
   ] as const;
 
@@ -269,6 +282,19 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         SELECT 1
         FROM drawing_versions dv
         WHERE dv.drawing_id = d.id
+      )
+    `);
+  }
+
+  if (!tableExists(database, "pricing_configs")) {
+    database.exec(`
+      CREATE TABLE pricing_configs (
+        company_id TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL,
+        updated_at_iso TEXT NOT NULL,
+        updated_by_user_id TEXT,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
       )
     `);
   }

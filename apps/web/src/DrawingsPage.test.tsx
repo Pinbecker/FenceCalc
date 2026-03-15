@@ -117,6 +117,7 @@ describe("DrawingsPage", () => {
         isLoading={false}
         onRefresh={() => Promise.resolve()}
         onOpenDrawing={() => undefined}
+        onOpenEstimate={() => undefined}
         onCreateDrawing={() => undefined}
         onToggleArchive={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
@@ -130,5 +131,6 @@ describe("DrawingsPage", () => {
     expect(html).toContain("Version History");
     expect(html).toContain("Archive");
     expect(html).toContain("Open In Editor");
+    expect(html).toContain("Estimate");
   });
 });

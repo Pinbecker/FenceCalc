@@ -4,6 +4,7 @@ import { registerAuditRoutes } from "./audit/index.js";
 import { registerAuthRoutes } from "./auth/index.js";
 import { registerDrawingRoutes } from "./drawings/index.js";
 import { registerEstimateRoutes } from "./estimate/index.js";
+import { registerPricingRoutes } from "./pricing/index.js";
 import { registerSetupRoutes } from "./setup/index.js";
 import { registerUserRoutes } from "./users/index.js";
 
@@ -13,5 +14,6 @@ export function registerModules(dependencies: RouteDependencies): void {
   registerAuthRoutes(dependencies);
   registerUserRoutes(dependencies);
   registerDrawingRoutes(dependencies);
+  registerPricingRoutes(dependencies);
   registerAuditRoutes(dependencies);
 }

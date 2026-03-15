@@ -18,6 +18,11 @@ const DrawingsPage = lazy(async () => {
   return { default: module.DrawingsPage };
 });
 
+const EstimatePage = lazy(async () => {
+  const module = await import("./EstimatePage");
+  return { default: module.EstimatePage };
+});
+
 const EditorPage = lazy(async () => {
   const module = await import("./EditorPage");
   return { default: module.EditorPage };
@@ -28,12 +33,17 @@ const LoginPage = lazy(async () => {
   return { default: module.LoginPage };
 });
 
+const PricingPage = lazy(async () => {
+  const module = await import("./PricingPage");
+  return { default: module.PricingPage };
+});
+
 function PortalNav(props: {
   companyName: string;
   userName: string;
   userRole: string;
   currentRoute: string;
-  onNavigate: (route: "dashboard" | "drawings" | "editor" | "admin") => void;
+  onNavigate: (route: "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin") => void;
   onLogout: () => void;
   showAdmin: boolean;
 }) {
@@ -68,6 +78,13 @@ function PortalNav(props: {
             onClick={() => props.onNavigate("editor")}
           >
             Editor
+          </button>
+          <button
+            type="button"
+            className={props.currentRoute === "pricing" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("pricing")}
+          >
+            Pricing
           </button>
           {props.showAdmin ? (
             <button
@@ -125,7 +142,7 @@ export function App() {
       return;
     }
 
-    if (route === "dashboard" || route === "drawings") {
+    if (route === "dashboard" || route === "drawings" || route === "estimate") {
       void portal.refreshDrawings();
     }
 
@@ -201,12 +218,17 @@ export function App() {
               isLoading={portal.isLoadingDrawings}
               onRefresh={portal.refreshDrawings}
               onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
+              onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
               onCreateDrawing={() => navigate("editor")}
               onToggleArchive={portal.setDrawingArchived}
               onLoadVersions={portal.loadDrawingVersions}
               onRestoreVersion={portal.restoreDrawingVersion}
             />
           ) : null}
+          {route === "estimate" ? (
+            <EstimatePage session={portal.session} drawingId={query.drawingId ?? null} onNavigate={navigate} />
+          ) : null}
+          {route === "pricing" ? <PricingPage session={portal.session} /> : null}
           {route === "admin" ? (
             <AdminPage
               users={portal.users}

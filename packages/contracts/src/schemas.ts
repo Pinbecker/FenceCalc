@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FENCE_HEIGHT_KEYS, ROLL_FORM_HEIGHT_KEYS, TWIN_BAR_HEIGHT_KEYS } from "./domain.js";
+import { PRICING_ITEM_CATEGORIES } from "./estimating.js";
 
 export const pointMmSchema = z.object({
   x: z.number().finite(),
@@ -338,6 +339,39 @@ export const estimateResultSchema = z.object({
 
 export const estimateSnapshotRequestSchema = z.object({
   layout: layoutModelSchema
+});
+
+export const pricingItemCategorySchema = z.enum(PRICING_ITEM_CATEGORIES);
+export const pricingItemSchema = z.object({
+  itemCode: z.string().trim().min(1).max(120),
+  displayName: z.string().trim().min(1).max(200),
+  category: pricingItemCategorySchema,
+  fenceSystem: fenceSystemSchema,
+  unit: z.string().trim().min(1).max(40),
+  materialCost: z.number().finite().min(0),
+  labourCost: z.number().finite().min(0),
+  isActive: z.boolean(),
+  notes: z.string().trim().max(600).optional(),
+  sortOrder: z.number().finite().optional()
+});
+
+export const pricingConfigRecordSchema = z.object({
+  companyId: z.string().trim().min(0).max(120),
+  items: z.array(pricingItemSchema).max(500),
+  updatedAtIso: z.string().datetime(),
+  updatedByUserId: z.string().trim().min(1).max(120).nullable()
+});
+
+export const pricingConfigUpdateRequestSchema = z.object({
+  items: z.array(pricingItemSchema).max(500)
+});
+
+export const ancillaryEstimateItemSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(240),
+  quantity: z.number().finite().min(0),
+  materialCost: z.number().finite().min(0),
+  labourCost: z.number().finite().min(0)
 });
 
 export const emailSchema = z.string().trim().email().max(320).transform((value) => value.toLowerCase());

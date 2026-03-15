@@ -98,6 +98,23 @@ describe("buildOptimization3DScene", () => {
     expect(scene.bounds.maxHeightMm).toBeGreaterThan(5000);
   });
 
+  it("renders 1.2m twin bar as a 1.0m panel with a top rail", () => {
+    const segment: LayoutSegment = {
+      id: "seg-low",
+      start: { x: 0, y: 0 },
+      end: { x: 2525, y: 0 },
+      spec: { system: "TWIN_BAR", height: "1.2m", twinBarVariant: "STANDARD" }
+    };
+
+    const scene = buildOptimization3DScene([segment], [], new Map());
+
+    expect(scene.panelSlices).toHaveLength(1);
+    expect(scene.panelSlices[0]?.heightMm).toBe(1000);
+    expect(scene.rails).toHaveLength(1);
+    expect(scene.rails[0]?.diameterMm).toBe(60);
+    expect(scene.posts[0]?.heightMm).toBe(1200);
+  });
+
   it("keeps overlays for each plan separate when several plans are shown together", () => {
     const segment: LayoutSegment = {
       id: "seg-multi",
