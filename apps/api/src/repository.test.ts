@@ -173,6 +173,83 @@ describe("InMemoryAppRepository", () => {
     await expect(repository.listDrawingVersions("drawing-1", "company-1")).resolves.toHaveLength(2);
   });
 
+  it("stores immutable quotes against a drawing version", async () => {
+    const repository = new InMemoryAppRepository();
+    await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: "company-1",
+      name: "Quoted drawing",
+      customerName: "Cleveland Land Services",
+      layout: emptyLayout,
+      savedViewport: null,
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: "user-1",
+      updatedByUserId: "user-1",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await repository.createQuote({
+      id: "quote-1",
+      companyId: "company-1",
+      drawingId: "drawing-1",
+      drawingVersionNumber: 1,
+      pricedEstimate: {
+        drawing: {
+          drawingId: "drawing-1",
+          drawingName: "Quoted drawing",
+          customerName: "Cleveland Land Services"
+        },
+        groups: [],
+        ancillaryItems: [],
+        totals: {
+          materialCost: 100,
+          labourCost: 20,
+          totalCost: 120
+        },
+        warnings: [],
+        pricingSnapshot: {
+          updatedAtIso: new Date(0).toISOString(),
+          updatedByUserId: null,
+          source: "DEFAULT"
+        }
+      },
+      drawingSnapshot: {
+        drawingId: "drawing-1",
+        drawingName: "Quoted drawing",
+        customerName: "Cleveland Land Services",
+        layout: emptyLayout,
+        estimate: emptyEstimate,
+        schemaVersion: DRAWING_SCHEMA_VERSION,
+        rulesVersion: RULES_ENGINE_VERSION,
+        versionNumber: 1
+      },
+      createdByUserId: "user-1",
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+
+    const quotes = await repository.listQuotesForDrawing("drawing-1", "company-1");
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]).toMatchObject({
+      id: "quote-1",
+      drawingVersionNumber: 1,
+      pricedEstimate: { totals: { totalCost: 120 } }
+    });
+  });
+
   it("stores company users beyond the owner account", async () => {
     const repository = new InMemoryAppRepository();
     await repository.bootstrapOwnerAccount({
@@ -389,6 +466,86 @@ describe("SqliteAppRepository", () => {
       savedViewport: { x: 250, y: 125, scale: 0.3 }
     });
     await expect(repository.listAuditLog(account.company.id)).resolves.toHaveLength(1);
+  });
+
+  it("persists immutable quotes in sqlite", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    expect(account).not.toBeNull();
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: account.company.id,
+      name: "Stored quote drawing",
+      customerName: "Cleveland Land Services",
+      layout: emptyLayout,
+      savedViewport: null,
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: account.user.id,
+      updatedByUserId: account.user.id,
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await repository.createQuote({
+      id: "quote-1",
+      companyId: account.company.id,
+      drawingId: "drawing-1",
+      drawingVersionNumber: 1,
+      pricedEstimate: {
+        drawing: {
+          drawingId: "drawing-1",
+          drawingName: "Stored quote drawing",
+          customerName: "Cleveland Land Services"
+        },
+        groups: [],
+        ancillaryItems: [],
+        totals: {
+          materialCost: 90,
+          labourCost: 30,
+          totalCost: 120
+        },
+        warnings: [],
+        pricingSnapshot: {
+          updatedAtIso: new Date(0).toISOString(),
+          updatedByUserId: null,
+          source: "DEFAULT"
+        }
+      },
+      drawingSnapshot: {
+        drawingId: "drawing-1",
+        drawingName: "Stored quote drawing",
+        customerName: "Cleveland Land Services",
+        layout: emptyLayout,
+        estimate: emptyEstimate,
+        schemaVersion: DRAWING_SCHEMA_VERSION,
+        rulesVersion: RULES_ENGINE_VERSION,
+        versionNumber: 1
+      },
+      createdByUserId: account.user.id,
+      createdAtIso: "2026-03-10T01:00:00.000Z"
+    });
+
+    const sqliteQuotes = await repository.listQuotesForDrawing("drawing-1", account.company.id);
+    expect(sqliteQuotes).toHaveLength(1);
+    expect(sqliteQuotes[0]?.id).toBe("quote-1");
+    expect(sqliteQuotes[0]?.drawingVersionNumber).toBe(1);
+    expect(sqliteQuotes[0]?.pricedEstimate.totals.totalCost).toBe(120);
   });
 
   it("supports manager recovery primitives for persisted users", async () => {

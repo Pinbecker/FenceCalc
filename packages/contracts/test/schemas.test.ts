@@ -11,6 +11,8 @@ import {
   loginRequestSchema,
   passwordResetConfirmSchema,
   passwordResetRequestSchema,
+  quoteCreateRequestSchema,
+  quoteRecordSchema,
   userPasswordSetRequestSchema,
   userCreateRequestSchema
 } from "../src/schemas.js";
@@ -230,5 +232,89 @@ describe("contracts schemas", () => {
         password: "supersecure123"
       }).success,
     ).toBe(false);
+  });
+
+  it("defaults quote ancillary items and validates immutable quote records", () => {
+    const createResult = quoteCreateRequestSchema.parse({});
+    expect(createResult.ancillaryItems).toEqual([]);
+
+    const recordResult = quoteRecordSchema.safeParse({
+      id: "quote-1",
+      companyId: "company-1",
+      drawingId: "drawing-1",
+      drawingVersionNumber: 3,
+      pricedEstimate: {
+        drawing: {
+          drawingId: "drawing-1",
+          drawingName: "Main yard",
+          customerName: "Cleveland Land Services"
+        },
+        groups: [],
+        ancillaryItems: [],
+        totals: {
+          materialCost: 100,
+          labourCost: 25,
+          totalCost: 125
+        },
+        warnings: [],
+        pricingSnapshot: {
+          updatedAtIso: "1970-01-01T00:00:00.000Z",
+          updatedByUserId: null,
+          source: "DEFAULT"
+        }
+      },
+      drawingSnapshot: {
+        drawingId: "drawing-1",
+        drawingName: "Main yard",
+        customerName: "Cleveland Land Services",
+        layout: {
+          segments: [],
+          gates: [],
+          basketballPosts: [],
+          floodlightColumns: []
+        },
+        estimate: {
+          posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+          corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+          materials: {
+            twinBarPanels: 0,
+            twinBarPanelsSuperRebound: 0,
+            twinBarPanelsByStockHeightMm: {},
+            twinBarPanelsByFenceHeight: {},
+            roll2100: 0,
+            roll900: 0,
+            totalRolls: 0,
+            rollsByFenceHeight: {}
+          },
+          optimization: {
+            strategy: "CHAINED_CUT_PLANNER",
+            twinBar: {
+              reuseAllowanceMm: 200,
+              stockPanelWidthMm: 2525,
+              fixedFullPanels: 0,
+              baselinePanels: 0,
+              optimizedPanels: 0,
+              panelsSaved: 0,
+              totalCutDemands: 0,
+              stockPanelsOpened: 0,
+              reusedCuts: 0,
+              totalConsumedMm: 0,
+              totalLeftoverMm: 0,
+              reusableLeftoverMm: 0,
+              utilizationRate: 0,
+              buckets: []
+            }
+          },
+          segments: []
+        },
+        schemaVersion: 1,
+        rulesVersion: "2026-03-11",
+        versionNumber: 3
+      },
+      createdByUserId: "user-1",
+      createdAtIso: "2026-03-12T12:00:00.000Z"
+    });
+
+    expect(recordResult.success).toBe(true);
   });
 });

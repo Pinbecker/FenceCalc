@@ -125,4 +125,79 @@ describe("buildEstimateFromDrawing", () => {
     expect(ancillaryGroup?.rows).toHaveLength(1);
     expect(ancillaryGroup?.rows[0]?.totalCost).toBe(60);
   });
+
+  it("surfaces warnings instead of provisional rows for unsupported pricing paths", () => {
+    const drawing: DrawingRecord = {
+      ...buildDrawing(),
+      layout: {
+        ...buildDrawing().layout,
+        segments: [
+          {
+            id: "seg-roll-form",
+            start: { x: 0, y: 0 },
+            end: { x: 3000, y: 0 },
+            spec: { system: "ROLL_FORM", height: "2m" }
+          }
+        ],
+        gates: [
+          {
+            id: "gate-custom",
+            segmentId: "seg-roll-form",
+            startOffsetMm: 500,
+            endOffsetMm: 1700,
+            gateType: "CUSTOM"
+          }
+        ],
+        basketballPosts: [],
+        floodlightColumns: []
+      }
+    };
+    drawing.estimate = estimateDrawingLayout(drawing.layout);
+
+    const result = buildEstimateFromDrawing(drawing, buildPricingConfig());
+
+    expect(result.warnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining(["UNSUPPORTED_FENCE_SYSTEM", "CUSTOM_GATES", "FIXINGS_EXCLUDED"])
+    );
+    expect(result.groups.find((group) => group.key === "fixings")).toBeUndefined();
+    expect(result.groups.find((group) => group.key === "gates")).toBeUndefined();
+  });
+
+  it("flags junction and unclassified corner counts for manual review", () => {
+    const baseDrawing = buildDrawing();
+    const drawing: DrawingRecord = {
+      ...baseDrawing,
+      estimate: {
+        ...baseDrawing.estimate,
+        posts: {
+          ...baseDrawing.estimate.posts,
+          total: 6,
+          byHeightAndType: {
+            "2000": {
+              end: 2,
+              intermediate: 1,
+              corner: 0,
+              junction: 1,
+              inlineJoin: 2,
+              total: 6
+            }
+          }
+        },
+        corners: {
+          ...baseDrawing.estimate.corners,
+          total: 1,
+          unclassified: 1
+        }
+      }
+    };
+
+    const result = buildEstimateFromDrawing(drawing, buildPricingConfig());
+
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "INLINE_JOIN_OR_JUNCTION_POSTS" }),
+        expect.objectContaining({ code: "UNCLASSIFIED_CORNERS" })
+      ])
+    );
+  });
 });

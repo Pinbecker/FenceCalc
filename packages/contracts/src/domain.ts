@@ -293,7 +293,7 @@ export interface DrawingVersionRecord {
   createdAtIso: string;
 }
 
-export type AuditEntityType = "AUTH" | "USER" | "DRAWING";
+export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE";
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
   | "LOGIN_SUCCEEDED"
@@ -306,7 +306,8 @@ export type AuditAction =
   | "DRAWING_UPDATED"
   | "DRAWING_ARCHIVED"
   | "DRAWING_UNARCHIVED"
-  | "DRAWING_VERSION_RESTORED";
+  | "DRAWING_VERSION_RESTORED"
+  | "QUOTE_CREATED";
 
 export interface AuditLogRecord {
   id: string;

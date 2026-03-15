@@ -151,6 +151,125 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
+  it("returns a server-priced estimate with pricing snapshot metadata", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawings",
+      headers: cookieHeader,
+      payload: {
+        name: "Priced estimate test",
+        customerName: "Cleveland Land Services",
+        layout: {
+          segments: [
+            {
+              id: "one",
+              start: { x: 0, y: 0 },
+              end: { x: 5050, y: 0 },
+              spec: { system: "TWIN_BAR", height: "2m" }
+            }
+          ],
+          gates: []
+        }
+      }
+    });
+    expect(create.statusCode).toBe(201);
+    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+
+    const pricedEstimate = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawings/${drawingId}/priced-estimate`,
+      headers: cookieHeader
+    });
+
+    expect(pricedEstimate.statusCode).toBe(200);
+    expect(pricedEstimate.json<{
+      pricedEstimate: {
+        drawing: { drawingId: string };
+        groups: Array<{ key: string }>;
+        pricingSnapshot: { source: string };
+      };
+    }>().pricedEstimate).toMatchObject({
+      drawing: { drawingId },
+      pricingSnapshot: { source: "DEFAULT" }
+    });
+    expect(
+      pricedEstimate.json<{ pricedEstimate: { groups: Array<{ key: string }> } }>().pricedEstimate.groups.map((group) => group.key)
+    ).toContain("panels");
+
+    await app.close();
+  });
+
+  it("creates and lists immutable quote snapshots for a drawing", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawings",
+      headers: cookieHeader,
+      payload: {
+        name: "Quoted yard",
+        customerName: "Cleveland Land Services",
+        layout: {
+          segments: [
+            {
+              id: "one",
+              start: { x: 0, y: 0 },
+              end: { x: 5050, y: 0 },
+              spec: { system: "TWIN_BAR", height: "2m" }
+            }
+          ],
+          gates: []
+        }
+      }
+    });
+    expect(create.statusCode).toBe(201);
+    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+
+    const quoteCreate = await app.inject({
+      method: "POST",
+      url: `/api/v1/drawings/${drawingId}/quotes`,
+      headers: cookieHeader,
+      payload: {
+        ancillaryItems: [
+          {
+            id: "ancillary-1",
+            description: "Lift hire",
+            quantity: 1,
+            materialCost: 50,
+            labourCost: 10
+          }
+        ]
+      }
+    });
+
+    expect(quoteCreate.statusCode).toBe(201);
+    const createdQuote = quoteCreate.json<{
+      quote: {
+        drawingId: string;
+        drawingVersionNumber: number;
+        pricedEstimate: { ancillaryItems: Array<{ description: string }>; totals: { totalCost: number } };
+      };
+    }>().quote;
+    expect(createdQuote.drawingId).toBe(drawingId);
+    expect(createdQuote.drawingVersionNumber).toBe(1);
+    expect(createdQuote.pricedEstimate.ancillaryItems[0]?.description).toBe("Lift hire");
+
+    const quoteList = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawings/${drawingId}/quotes`,
+      headers: cookieHeader
+    });
+
+    expect(quoteList.statusCode).toBe(200);
+    expect(quoteList.json<{ quotes: Array<{ drawingVersionNumber: number }> }>().quotes).toEqual([
+      expect.objectContaining({ drawingVersionNumber: 1 })
+    ]);
+
+    await app.close();
+  });
+
   it("rejects stale drawing updates with a version conflict", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
 
@@ -302,6 +421,84 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     expect(update.statusCode).toBe(200);
     expect(update.json<{ pricingConfig: { items: Array<{ itemCode: string; materialCost: number }> } }>()
       .pricingConfig.items.find((item) => item.itemCode === "TWIN_BAR_GENERAL_PLANT")?.materialCost).toBe(850);
+
+    await app.close();
+  });
+
+  it("rejects pricing configuration access for members while allowing admins", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const createMember = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: cookieHeader,
+      payload: {
+        displayName: "Team Member",
+        email: "member@example.com",
+        password: "membersecure123",
+        role: "MEMBER"
+      }
+    });
+    expect(createMember.statusCode).toBe(201);
+
+    const createAdmin = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: cookieHeader,
+      payload: {
+        displayName: "Ops Admin",
+        email: "admin@example.com",
+        password: "adminsecure123",
+        role: "ADMIN"
+      }
+    });
+    expect(createAdmin.statusCode).toBe(201);
+
+    const memberLogin = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "member@example.com",
+        password: "membersecure123"
+      }
+    });
+    expect(memberLogin.statusCode).toBe(200);
+    const memberCookieHeader = getCookieHeader(memberLogin);
+
+    const memberGet = await app.inject({
+      method: "GET",
+      url: "/api/v1/pricing-config",
+      headers: memberCookieHeader
+    });
+    expect(memberGet.statusCode).toBe(403);
+
+    const memberPut = await app.inject({
+      method: "PUT",
+      url: "/api/v1/pricing-config",
+      headers: memberCookieHeader,
+      payload: {
+        items: []
+      }
+    });
+    expect(memberPut.statusCode).toBe(403);
+
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "admin@example.com",
+        password: "adminsecure123"
+      }
+    });
+    expect(adminLogin.statusCode).toBe(200);
+    const adminCookieHeader = getCookieHeader(adminLogin);
+
+    const adminGet = await app.inject({
+      method: "GET",
+      url: "/api/v1/pricing-config",
+      headers: adminCookieHeader
+    });
+    expect(adminGet.statusCode).toBe(200);
 
     await app.close();
   });

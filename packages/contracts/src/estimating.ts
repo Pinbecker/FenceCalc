@@ -1,4 +1,10 @@
-import type { FenceHeightKey, FenceSystem } from "./domain.js";
+import type {
+  DrawingCanvasViewport,
+  EstimateResult,
+  FenceHeightKey,
+  FenceSystem,
+  LayoutModel
+} from "./domain.js";
 
 export const PRICING_ITEM_CATEGORIES = [
   "PANELS",
@@ -79,6 +85,24 @@ export interface EstimateTotals {
   totalCost: number;
 }
 
+export type EstimateWarningCode =
+  | "UNSUPPORTED_FENCE_SYSTEM"
+  | "INLINE_JOIN_OR_JUNCTION_POSTS"
+  | "UNCLASSIFIED_CORNERS"
+  | "CUSTOM_GATES"
+  | "FIXINGS_EXCLUDED";
+
+export interface EstimateWarning {
+  code: EstimateWarningCode;
+  message: string;
+}
+
+export interface EstimatePricingSnapshot {
+  updatedAtIso: string;
+  updatedByUserId: string | null;
+  source: "DEFAULT" | "COMPANY_CONFIG";
+}
+
 export interface DrawingEstimateInput {
   drawingId: string;
   drawingName: string;
@@ -90,6 +114,31 @@ export interface PricedEstimateResult {
   groups: EstimateGroup[];
   ancillaryItems: AncillaryEstimateItem[];
   totals: EstimateTotals;
+  warnings: EstimateWarning[];
+  pricingSnapshot: EstimatePricingSnapshot;
+}
+
+export interface QuoteDrawingSnapshot {
+  drawingId: string;
+  drawingName: string;
+  customerName: string;
+  layout: LayoutModel;
+  savedViewport?: DrawingCanvasViewport | null;
+  estimate: EstimateResult;
+  schemaVersion: number;
+  rulesVersion: string;
+  versionNumber: number;
+}
+
+export interface QuoteRecord {
+  id: string;
+  companyId: string;
+  drawingId: string;
+  drawingVersionNumber: number;
+  pricedEstimate: PricedEstimateResult;
+  drawingSnapshot: QuoteDrawingSnapshot;
+  createdByUserId: string;
+  createdAtIso: string;
 }
 
 function buildPanelItem(height: FenceHeightKey, sortOrder: number): PricingItem {
@@ -136,7 +185,6 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      notes: "Used for end posts. Inline joins and junctions remain provisional in estimate rules.",
       sortOrder: sortOrder += 10
     },
     {
@@ -258,7 +306,6 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      notes: "Chemfix quantity rule is provisional and isolated in estimate rules.",
       sortOrder: sortOrder += 10
     },
     {
@@ -284,42 +331,6 @@ function buildDefaultPricingItems(): PricingItem[] {
       sortOrder: sortOrder += 10
     },
     {
-      itemCode: "TWIN_BAR_FIXING_NUT",
-      displayName: "Nuts",
-      category: "FIXINGS",
-      fenceSystem: "TWIN_BAR",
-      unit: "each",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: true,
-      notes: "Quantity logic to be defined later.",
-      sortOrder: sortOrder += 10
-    },
-    {
-      itemCode: "TWIN_BAR_FIXING_BOLT",
-      displayName: "Bolts",
-      category: "FIXINGS",
-      fenceSystem: "TWIN_BAR",
-      unit: "each",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: true,
-      notes: "Quantity logic to be defined later.",
-      sortOrder: sortOrder += 10
-    },
-    {
-      itemCode: "TWIN_BAR_FIXING_WASHER",
-      displayName: "Washers",
-      category: "FIXINGS",
-      fenceSystem: "TWIN_BAR",
-      unit: "each",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: true,
-      notes: "Quantity logic to be defined later.",
-      sortOrder: sortOrder += 10
-    },
-    {
       itemCode: "TWIN_BAR_GENERAL_PLANT",
       displayName: "General plant",
       category: "PLANT",
@@ -328,42 +339,6 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 700,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
-    },
-    {
-      itemCode: "ROLL_FORM_PANEL_2M",
-      displayName: "Roll Form Welded Mesh panel 2m",
-      category: "PANELS",
-      fenceSystem: "ROLL_FORM",
-      unit: "panel",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: false,
-      notes: "Placeholder item. Roll Form estimating rules will be added later.",
-      sortOrder: sortOrder += 10
-    },
-    {
-      itemCode: "ROLL_FORM_PANEL_3M",
-      displayName: "Roll Form Welded Mesh panel 3m",
-      category: "PANELS",
-      fenceSystem: "ROLL_FORM",
-      unit: "panel",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: false,
-      notes: "Placeholder item. Roll Form estimating rules will be added later.",
-      sortOrder: sortOrder += 10
-    },
-    {
-      itemCode: "ROLL_FORM_POST",
-      displayName: "Roll Form Welded Mesh post",
-      category: "POSTS",
-      fenceSystem: "ROLL_FORM",
-      unit: "post",
-      materialCost: 0,
-      labourCost: 0,
-      isActive: false,
-      notes: "Placeholder item. Roll Form estimating rules will be added later.",
       sortOrder: sortOrder += 10
     }
   );

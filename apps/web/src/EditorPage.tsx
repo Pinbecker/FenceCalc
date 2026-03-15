@@ -14,6 +14,7 @@ import { EditorCanvasControls } from "./EditorCanvasControls";
 import { EditorLengthEditor } from "./EditorLengthEditor";
 import { EditorOverlayPanels } from "./EditorOverlayPanels";
 import { EditorSidebar } from "./EditorSidebar";
+import { EditorWorkspaceHeader } from "./EditorWorkspaceHeader";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorDerivedState } from "./editor/useEditorDerivedState";
 import { useEditorInteractionPreviews } from "./editor/useEditorInteractionPreviews";
@@ -533,6 +534,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   });
   const session = workspace.session;
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
+  const canManagePricing = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
   const interactionLabel =
     shellState.interactionMode === "DRAW"
@@ -569,114 +571,37 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
 
   return (
     <div className="editor-page">
-      <header className="editor-header">
-        <div className="editor-header-main">
-          <div className="editor-header-copy">
-            <span className="portal-eyebrow">Workspace Editor</span>
-            <h1>{drawingTitle}</h1>
-            <p>
-              {session
-                ? `${session.company.name} workspace. Keep the canvas central and use the surrounding rails only when you need tooling or estimate detail.`
-                : "Review the drawing canvas and sign in when you need to save or reopen company work."}
-            </p>
-          </div>
-          {session ? (
-            <div className="editor-document-bar">
-              <div className="editor-document-fields">
-                <label className="editor-document-name">
-                  <span>Customer</span>
-                  <input
-                    type="text"
-                    value={workspace.currentCustomerName}
-                    placeholder="Customer name"
-                    onChange={(event) => workspace.setCurrentCustomerName(event.target.value)}
-                  />
-                </label>
-                <label className="editor-document-name">
-                  <span>Drawing Name</span>
-                  <input
-                    type="text"
-                    value={workspace.currentDrawingName}
-                    placeholder="Name this drawing"
-                    onChange={(event) => workspace.setCurrentDrawingName(event.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="editor-document-actions-compact">
-                <button type="button" onClick={() => void workspace.saveDrawing()} disabled={workspace.isSavingDrawing}>
-                  {workspace.currentDrawingId ? "Save" : "Save New"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => void workspace.saveDrawingAsNew()}
-                  disabled={workspace.isSavingDrawing}
-                >
-                  Save As
-                </button>
-                <button type="button" className="ghost" onClick={handleStartNewDraft}>
-                  New Draft
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="editor-document-bar">
-              <button type="button" onClick={() => guardedNavigate("login")}>
-                Go To Login
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="editor-header-meta">
-          {session ? (
-            <>
-              <span className="editor-session-chip">
-                {session.user.displayName}
-              </span>
-              <span className="portal-user-chip">{session.user.role}</span>
-              <span className={`editor-save-pill${workspace.isDirty ? " dirty" : ""}`}>
-                {workspace.isDirty ? "Unsaved changes" : "All changes saved"}
-              </span>
-            </>
-          ) : null}
-          <nav className="editor-route-nav" aria-label="Editor navigation">
-            <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("dashboard")}>
-              Dashboard
-            </button>
-            <button type="button" className="ghost editor-link-btn" onClick={handleOpenDrawings}>
-              Drawings
-            </button>
-            <button
-              type="button"
-              className="ghost editor-link-btn"
-              disabled={!workspace.currentDrawingId || workspace.isDirty}
-              title={
-                workspace.currentDrawingId
-                  ? workspace.isDirty
-                    ? "Save the drawing before opening its estimate."
-                    : "Open estimate"
-                  : "Save this drawing first to open its estimate."
-              }
-              onClick={() => {
-                if (!workspace.currentDrawingId || workspace.isDirty) {
-                  return;
-                }
-                guardedNavigate("estimate", { drawingId: workspace.currentDrawingId });
-              }}
-            >
-              Estimate
-            </button>
-            <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("pricing")}>
-              Pricing
-            </button>
-            {canManageAdmin ? (
-              <button type="button" className="ghost editor-link-btn" onClick={() => guardedNavigate("admin")}>
-                Admin
-              </button>
-            ) : null}
-          </nav>
-        </div>
-      </header>
+      <EditorWorkspaceHeader
+        session={session}
+        drawingTitle={drawingTitle}
+        currentDrawingId={workspace.currentDrawingId}
+        currentDrawingName={workspace.currentDrawingName}
+        currentCustomerName={workspace.currentCustomerName}
+        isDirty={workspace.isDirty}
+        isSavingDrawing={workspace.isSavingDrawing}
+        canManagePricing={canManagePricing}
+        canManageAdmin={canManageAdmin}
+        onSetCurrentDrawingName={workspace.setCurrentDrawingName}
+        onSetCurrentCustomerName={workspace.setCurrentCustomerName}
+        onSaveDrawing={() => {
+          void workspace.saveDrawing();
+        }}
+        onSaveDrawingAsNew={() => {
+          void workspace.saveDrawingAsNew();
+        }}
+        onStartNewDraft={handleStartNewDraft}
+        onGoToLogin={() => guardedNavigate("login")}
+        onNavigateDashboard={() => guardedNavigate("dashboard")}
+        onNavigateDrawings={handleOpenDrawings}
+        onNavigateEstimate={() => {
+          if (!workspace.currentDrawingId || workspace.isDirty) {
+            return;
+          }
+          guardedNavigate("estimate", { drawingId: workspace.currentDrawingId });
+        }}
+        onNavigatePricing={() => guardedNavigate("pricing")}
+        onNavigateAdmin={() => guardedNavigate("admin")}
+      />
 
       <div className="editor-workspace-shell">
         <EditorSidebar

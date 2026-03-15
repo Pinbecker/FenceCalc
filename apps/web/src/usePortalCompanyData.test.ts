@@ -112,7 +112,7 @@ async function loadUsePortalCompanyData(options?: {
   let stateIndex = 0;
 
   const apiClient = {
-    createUser: vi.fn(async () => ({
+    createUser: vi.fn(() => Promise.resolve({
       id: "user-2",
       companyId: "company-1",
       email: "admin@example.com",
@@ -120,8 +120,8 @@ async function loadUsePortalCompanyData(options?: {
       role: "ADMIN",
       createdAtIso: "2026-03-10T12:00:00.000Z"
     })),
-    listAuditLog: vi.fn(async () => sampleAuditLog),
-    listDrawingVersions: vi.fn(async () => [
+    listAuditLog: vi.fn(() => Promise.resolve(sampleAuditLog)),
+    listDrawingVersions: vi.fn(() => Promise.resolve([
       {
         id: "version-1",
         drawingId: "drawing-1",
@@ -171,20 +171,20 @@ async function loadUsePortalCompanyData(options?: {
         createdByUserId: "user-1",
         createdAtIso: "2026-03-10T10:00:00.000Z"
       }
-    ]),
-    listDrawings: vi.fn(async () => sampleDrawings),
-    listUsers: vi.fn(async () => sampleUsers),
-    restoreDrawingVersion: vi.fn(async () => ({
+    ])),
+    listDrawings: vi.fn(() => Promise.resolve(sampleDrawings)),
+    listUsers: vi.fn(() => Promise.resolve(sampleUsers)),
+    restoreDrawingVersion: vi.fn(() => Promise.resolve({
       id: "drawing-1",
       name: "Restored boundary",
       versionNumber: 3
     })),
-    setDrawingArchivedState: vi.fn(async () => ({
+    setDrawingArchivedState: vi.fn(() => Promise.resolve({
       id: "drawing-1",
       name: "Archived boundary",
       versionNumber: 3
     })),
-    setUserPassword: vi.fn(async () => undefined),
+    setUserPassword: vi.fn(() => Promise.resolve()),
     ...options?.apiOverrides
   };
   const apiErrors = {
@@ -198,7 +198,7 @@ async function loadUsePortalCompanyData(options?: {
       users: [],
       auditLog: []
     },
-    loadPortalCompanyData: vi.fn(async () => ({
+    loadPortalCompanyData: vi.fn(() => Promise.resolve({
       drawings: sampleDrawings,
       users: sampleUsers,
       auditLog: sampleAuditLog
@@ -393,10 +393,10 @@ describe("usePortalCompanyData", () => {
     const { usePortalCompanyData, stateSetters } = await loadUsePortalCompanyData({
       stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null],
       apiOverrides: {
-        setDrawingArchivedState: vi.fn(async () => {
+        setDrawingArchivedState: vi.fn(() => {
           throw staleError;
         }),
-        restoreDrawingVersion: vi.fn(async () => {
+        restoreDrawingVersion: vi.fn(() => {
           throw staleError;
         })
       },
@@ -428,10 +428,10 @@ describe("usePortalCompanyData", () => {
     const authenticatedLoad = await loadUsePortalCompanyData({
       stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null],
       apiOverrides: {
-        setDrawingArchivedState: vi.fn(async () => {
+        setDrawingArchivedState: vi.fn(() => {
           throw staleError;
         }),
-        restoreDrawingVersion: vi.fn(async () => {
+        restoreDrawingVersion: vi.fn(() => {
           throw staleError;
         })
       },

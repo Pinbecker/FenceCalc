@@ -1,17 +1,20 @@
 import { useEffect } from "react";
 
 export interface UseEditorKeyboardShortcutsOptions {
-  undo(): void;
-  redo(): void;
-  deleteSelectedBasketballPost(): boolean;
-  deleteSelectedFloodlightColumn?(): boolean;
-  deleteSelectedGate(): boolean;
-  deleteSelectedSegment(): boolean;
-  setInteractionMode(mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN"): void;
-  setIsSpacePressed(value: boolean): void;
-  setDisableSnap(value: boolean): void;
-  cancelActiveDrawing(): void;
-  finishActiveInteraction(): void;
+  undo(this: void): void;
+  redo(this: void): void;
+  deleteSelectedBasketballPost(this: void): boolean;
+  deleteSelectedFloodlightColumn?(this: void): boolean;
+  deleteSelectedGate(this: void): boolean;
+  deleteSelectedSegment(this: void): boolean;
+  setInteractionMode(
+    this: void,
+    mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN"
+  ): void;
+  setIsSpacePressed(this: void, value: boolean): void;
+  setDisableSnap(this: void, value: boolean): void;
+  cancelActiveDrawing(this: void): void;
+  finishActiveInteraction(this: void): void;
 }
 
 export function isEditableShortcutTarget(target: EventTarget | null): boolean {

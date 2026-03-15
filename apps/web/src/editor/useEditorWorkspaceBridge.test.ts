@@ -69,6 +69,10 @@ const sampleDrawing = {
   updatedAtIso: "2026-03-10T11:00:00.000Z"
 } satisfies DrawingRecord;
 
+interface MockWorkspacePersistenceOptions {
+  onLoadDrawing: (drawing: DrawingRecord) => void;
+}
+
 describe("useEditorWorkspaceBridge", () => {
   afterEach(() => {
     vi.resetModules();
@@ -93,7 +97,7 @@ describe("useEditorWorkspaceBridge", () => {
       shouldLoadInitialDrawing: vi.fn(() => true)
     }));
     vi.doMock("../useWorkspacePersistence", () => ({
-      useWorkspacePersistence: vi.fn((options) => {
+      useWorkspacePersistence: vi.fn((options: MockWorkspacePersistenceOptions) => {
         capturedPersistenceOptions = options;
         return {
           currentDrawingId: null,

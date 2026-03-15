@@ -17,13 +17,16 @@ export function EditorFencePalettePanel({
   onSetActiveSpec,
   getSegmentColor
 }: EditorFencePalettePanelProps) {
+  const isLegacyRollFormDrawing = activeSpec.system === "ROLL_FORM";
+  const systemValue = isLegacyRollFormDrawing ? "ROLL_FORM" : "TWIN_BAR";
+
   return (
     <section className="panel-block panel-fence-palette">
       <h2>Fence Palette</h2>
       <label>
         System
         <select
-          value={activeSpec.system}
+          value={systemValue}
           onChange={(event) => {
             const nextSystem = event.target.value as FenceSpec["system"];
             onSetActiveSpec((previous) => {
@@ -45,9 +48,15 @@ export function EditorFencePalettePanel({
           }}
         >
           <option value="TWIN_BAR">Twin Bar</option>
-          <option value="ROLL_FORM">Roll Form Welded Mesh</option>
+          {isLegacyRollFormDrawing ? <option value="ROLL_FORM">Roll Form Welded Mesh (legacy)</option> : null}
         </select>
       </label>
+      {isLegacyRollFormDrawing ? (
+        <p className="muted-line">
+          Roll Form pricing is not enabled in this deployment. Legacy Roll Form drawings can still be reviewed, but they must
+          be converted or quoted manually.
+        </p>
+      ) : null}
       <label>
         Height
         <select
@@ -57,7 +66,7 @@ export function EditorFencePalettePanel({
             onSetActiveSpec((previous) => ({ ...previous, height: nextHeight }));
           }}
         >
-          {activeHeightOptions.map((heightOption) => (
+          {(activeSpec.system === "TWIN_BAR" ? activeHeightOptions : rollFormHeightOptions).map((heightOption) => (
             <option key={heightOption} value={heightOption}>
               {heightOption}
             </option>

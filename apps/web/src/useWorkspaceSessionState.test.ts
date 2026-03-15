@@ -78,11 +78,11 @@ async function loadUseWorkspaceSessionState(options?: {
   const requestRef = { current: 0 };
 
   const apiClient = {
-    getAuthenticatedUser: vi.fn(async () => sampleSession),
-    listDrawings: vi.fn(async () => sampleDrawings),
-    login: vi.fn(async () => sampleSession),
-    logout: vi.fn(async () => undefined),
-    registerAccount: vi.fn(async () => sampleSession),
+    getAuthenticatedUser: vi.fn(() => Promise.resolve(sampleSession)),
+    listDrawings: vi.fn(() => Promise.resolve(sampleDrawings)),
+    login: vi.fn(() => Promise.resolve(sampleSession)),
+    logout: vi.fn(() => Promise.resolve()),
+    registerAccount: vi.fn(() => Promise.resolve(sampleSession)),
     ...options?.apiOverrides
   };
   const apiErrors = {
@@ -206,7 +206,7 @@ describe("useWorkspaceSessionState", () => {
     const { useWorkspaceSessionState, apiErrors, sessionStore, stateSetters } = await loadUseWorkspaceSessionState({
       stateValues: [null, [], true, false, false],
       apiOverrides: {
-        getAuthenticatedUser: vi.fn(async () => {
+        getAuthenticatedUser: vi.fn(() => {
           throw authError;
         })
       }

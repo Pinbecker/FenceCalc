@@ -1,7 +1,15 @@
-import type { AuditLogRecord, CompanyRecord, DrawingRecord, DrawingVersionRecord, PricingConfigRecord } from "@fence-estimator/contracts";
+import type {
+  AuditLogRecord,
+  CompanyRecord,
+  DrawingRecord,
+  DrawingVersionRecord,
+  PricingConfigRecord,
+  QuoteRecord
+} from "@fence-estimator/contracts";
 
 import { InMemoryDrawingStore } from "./inMemoryDrawingStore.js";
 import { InMemoryPricingStore } from "./inMemoryPricingStore.js";
+import { InMemoryQuoteStore } from "./inMemoryQuoteStore.js";
 import {
   InMemorySupportStore,
   type InMemoryPasswordResetTokenRecord
@@ -13,6 +21,7 @@ import type {
   CreateAuditLogInput,
   CreateDrawingInput,
   CreatePasswordResetTokenInput,
+  CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   RestoreDrawingVersionInput,
@@ -29,6 +38,7 @@ export class InMemoryAppRepository implements AppRepository {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly drawingsMap = new Map<string, DrawingRecord>();
   private readonly drawingVersionsMap = new Map<string, DrawingVersionRecord[]>();
+  private readonly quotesByDrawingId = new Map<string, QuoteRecord[]>();
   private readonly pricingConfigs = new Map<string, PricingConfigRecord>();
   private readonly auditLog: AuditLogRecord[] = [];
   private readonly passwordResetTokens = new Map<string, InMemoryPasswordResetTokenRecord>();
@@ -44,6 +54,9 @@ export class InMemoryAppRepository implements AppRepository {
   });
   private readonly pricing = new InMemoryPricingStore({
     pricingConfigs: this.pricingConfigs
+  });
+  private readonly quotes = new InMemoryQuoteStore({
+    quotesByDrawingId: this.quotesByDrawingId
   });
   private readonly support = new InMemorySupportStore({
     companies: this.companies,
@@ -133,6 +146,14 @@ export class InMemoryAppRepository implements AppRepository {
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput) {
     return Promise.resolve(this.drawings.restoreDrawingVersion(input));
+  }
+
+  public createQuote(input: CreateQuoteInput) {
+    return Promise.resolve(this.quotes.createQuote(input));
+  }
+
+  public listQuotesForDrawing(drawingId: string, companyId: string) {
+    return Promise.resolve(this.quotes.listQuotesForDrawing(drawingId, companyId));
   }
 
   public getPricingConfig(companyId: string) {

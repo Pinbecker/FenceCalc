@@ -30,14 +30,14 @@ function formatTimestamp(value: string | null): string {
   }).format(new Date(value));
 }
 
-function formatPricingSavedLabel(pricingConfig: PricingConfigRecord | null): string {
+export function formatPricingSavedLabel(pricingConfig: PricingConfigRecord | null): string {
   if (!pricingConfig || pricingConfig.updatedByUserId === null) {
     return "Default configuration";
   }
   return formatTimestamp(pricingConfig.updatedAtIso);
 }
 
-function groupItems(items: PricingItem[]) {
+export function groupItems(items: PricingItem[]) {
   const systems = new Map<string, Map<PricingItemCategory, PricingItem[]>>();
 
   items
@@ -107,11 +107,11 @@ export function PricingPage({ session }: PricingPageProps) {
     setIsSaving(true);
     setErrorMessage(null);
     setNoticeMessage(null);
-      try {
-        const nextPricingConfig = await updatePricingConfig(draftItems);
-        setPricingConfig(nextPricingConfig);
-        setDraftItems(nextPricingConfig.items);
-        setNoticeMessage(`Saved pricing for ${session.company.name} at ${formatTimestamp(nextPricingConfig.updatedAtIso)}.`);
+    try {
+      const nextPricingConfig = await updatePricingConfig(draftItems);
+      setPricingConfig(nextPricingConfig);
+      setDraftItems(nextPricingConfig.items);
+      setNoticeMessage(`Saved pricing for ${session.company.name} at ${formatTimestamp(nextPricingConfig.updatedAtIso)}.`);
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -125,7 +125,7 @@ export function PricingPage({ session }: PricingPageProps) {
         <div>
           <span className="portal-eyebrow">Estimating Configuration</span>
           <h1>Pricing and labour rates</h1>
-          <p>The estimate pages read from this company pricing configuration. Twin Bar is live now, and Roll Form is scaffolded for later expansion.</p>
+          <p>The estimate pages read from this company pricing configuration. This deployment currently prices Twin Bar layouts only.</p>
         </div>
         <div className="portal-header-actions">
           <button
@@ -164,10 +164,10 @@ export function PricingPage({ session }: PricingPageProps) {
           <span>Active</span>
           <strong>{draftItems.filter((item) => item.isActive).length}</strong>
         </article>
-          <article>
-            <span>Last saved</span>
-            <strong>{formatPricingSavedLabel(pricingConfig)}</strong>
-          </article>
+        <article>
+          <span>Last saved</span>
+          <strong>{formatPricingSavedLabel(pricingConfig)}</strong>
+        </article>
       </section>
 
       {isLoading ? (

@@ -52,6 +52,27 @@ interface FrozenOptimizationState {
   selectedPlanVisual: OptimizationPlanVisual | null;
 }
 
+function buildOptimizationState(
+  segments: LayoutSegment[],
+  gatePlacements: GatePlacement[],
+  selectedPlanId: string | null,
+  estimateSegmentsById: Map<string, LayoutSegment>
+): FrozenOptimizationState {
+  const estimate = estimateDrawingLayout({
+    segments,
+    gates: gatePlacements
+  });
+  const highlightableOptimizationPlans = getVisibleOptimizationPlans(estimate.optimization);
+  const selectedPlan =
+    selectedPlanId === null ? null : highlightableOptimizationPlans.find((plan) => plan.id === selectedPlanId) ?? null;
+
+  return {
+    estimate,
+    highlightableOptimizationPlans,
+    selectedPlanVisual: buildOptimizationPlanVisual(selectedPlan, estimateSegmentsById, interpolateAlongSegment)
+  };
+}
+
 export function useEditorDerivedState({
   segments,
   gatePlacements,
@@ -97,46 +118,30 @@ export function useEditorDerivedState({
     () => buildSegmentMap(estimateSegments),
     [estimateSegments]
   );
-  const liveEstimate = useMemo(() => {
-    return estimateDrawingLayout({
-      segments,
-      gates: gatePlacements
-    });
-  }, [gatePlacements, segments]);
-  const liveOptimizationSummary = liveEstimate.optimization;
-  const liveHighlightableOptimizationPlans = useMemo(
-    () => getVisibleOptimizationPlans(liveOptimizationSummary),
-    [liveOptimizationSummary]
-  );
-  const liveSelectedPlan = useMemo(() => {
-    if (!selectedPlanId) {
+  const liveOptimizationState = useMemo(() => {
+    if (freezeOptimization) {
       return null;
     }
-    return liveHighlightableOptimizationPlans.find((plan) => plan.id === selectedPlanId) ?? null;
-  }, [liveHighlightableOptimizationPlans, selectedPlanId]);
-  const liveSelectedPlanVisual = useMemo(
-    () => buildOptimizationPlanVisual(liveSelectedPlan, estimateSegmentsById, interpolateAlongSegment),
-    [estimateSegmentsById, liveSelectedPlan]
-  );
+
+    return buildOptimizationState(segments, gatePlacements, selectedPlanId, estimateSegmentsById);
+  }, [estimateSegmentsById, freezeOptimization, gatePlacements, segments, selectedPlanId]);
   const frozenOptimizationRef = useRef<FrozenOptimizationState | null>(null);
 
-  if (!freezeOptimization) {
-    frozenOptimizationRef.current = {
-      estimate: liveEstimate,
-      highlightableOptimizationPlans: liveHighlightableOptimizationPlans,
-      selectedPlanVisual: liveSelectedPlanVisual
-    };
+  if (liveOptimizationState) {
+    frozenOptimizationRef.current = liveOptimizationState;
   }
+
+  const optimizationState = frozenOptimizationRef.current ?? buildOptimizationState(segments, gatePlacements, selectedPlanId, estimateSegmentsById);
 
   const estimate = freezeOptimization && frozenOptimizationRef.current
     ? frozenOptimizationRef.current.estimate
-    : liveEstimate;
+    : optimizationState.estimate;
   const highlightableOptimizationPlans = freezeOptimization && frozenOptimizationRef.current
     ? frozenOptimizationRef.current.highlightableOptimizationPlans
-    : liveHighlightableOptimizationPlans;
+    : optimizationState.highlightableOptimizationPlans;
   const selectedPlanVisual = freezeOptimization && frozenOptimizationRef.current
     ? frozenOptimizationRef.current.selectedPlanVisual
-    : liveSelectedPlanVisual;
+    : optimizationState.selectedPlanVisual;
   const visualPosts = useMemo(
     () => buildVisualPosts(estimateSegments, gateNodeHeightByKey),
     [estimateSegments, gateNodeHeightByKey]
@@ -210,7 +215,6 @@ export function useEditorDerivedState({
       }),
     [estimate, postHeightRows, resolvedBasketballPostPlacements, resolvedGatePlacements]
   );
-  const optimizationSummary = estimate.optimization;
   const selectedSegment = useMemo(() => {
     if (!selectedSegmentId) {
       return null;

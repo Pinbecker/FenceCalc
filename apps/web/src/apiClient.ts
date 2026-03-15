@@ -1,4 +1,5 @@
 import type {
+  AncillaryEstimateItem,
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
@@ -8,7 +9,9 @@ import type {
   DrawingVersionRecord,
   LayoutModel,
   PricingConfigRecord,
-  PricingItem
+  PricingItem,
+  PricedEstimateResult,
+  QuoteRecord,
 } from "@fence-estimator/contracts";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
@@ -167,6 +170,24 @@ export async function listDrawings(): Promise<DrawingSummary[]> {
 export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`);
   return response.drawing;
+}
+
+export async function getPricedEstimate(drawingId: string): Promise<PricedEstimateResult> {
+  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(`/api/v1/drawings/${drawingId}/priced-estimate`);
+  return response.pricedEstimate;
+}
+
+export async function listQuotes(drawingId: string): Promise<QuoteRecord[]> {
+  const response = await requestJson<{ quotes: QuoteRecord[] }>(`/api/v1/drawings/${drawingId}/quotes`);
+  return response.quotes;
+}
+
+export async function createQuoteSnapshot(drawingId: string, ancillaryItems: AncillaryEstimateItem[]): Promise<QuoteRecord> {
+  const response = await requestJson<{ quote: QuoteRecord }>(`/api/v1/drawings/${drawingId}/quotes`, {
+    method: "POST",
+    body: { ancillaryItems }
+  });
+  return response.quote;
 }
 
 export async function createDrawing(input: {

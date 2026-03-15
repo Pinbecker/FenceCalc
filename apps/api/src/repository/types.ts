@@ -11,7 +11,8 @@ import type {
   DrawingVersionRecord,
   EstimateResult,
   LayoutModel,
-  PricingConfigRecord
+  PricingConfigRecord,
+  QuoteRecord
 } from "@fence-estimator/contracts";
 
 export interface StoredUser extends CompanyUserRecord {
@@ -136,6 +137,8 @@ export interface CreatePasswordResetTokenInput {
   expiresAtIso: string;
 }
 
+export type CreateQuoteInput = QuoteRecord;
+
 export interface PasswordResetConsumption {
   user: CompanyUserRecord;
   company: CompanyRecord;
@@ -174,6 +177,8 @@ export interface AppRepository {
   setDrawingArchivedState(input: SetDrawingArchivedStateInput): Promise<DrawingRecord | null>;
   listDrawingVersions(drawingId: string, companyId: string): Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion(input: RestoreDrawingVersionInput): Promise<DrawingRecord | null>;
+  createQuote(input: CreateQuoteInput): Promise<QuoteRecord>;
+  listQuotesForDrawing(drawingId: string, companyId: string): Promise<QuoteRecord[]>;
   getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
   upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;
   createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void>;

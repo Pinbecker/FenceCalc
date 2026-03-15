@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { AncillaryEstimateItem, AuthSessionEnvelope, DrawingRecord, PricingConfigRecord } from "@fence-estimator/contracts";
+import type {
+  AncillaryEstimateItem,
+  AuthSessionEnvelope,
+  DrawingRecord,
+  EstimateGroup,
+  EstimateRow,
+  EstimateTotals,
+  PricedEstimateResult,
+  QuoteRecord
+} from "@fence-estimator/contracts";
 
-import { getDrawing, getPricingConfig } from "./apiClient";
-import { buildEstimateFromDrawing } from "./estimating/buildEstimateFromDrawing.js";
+import { createQuoteSnapshot, getDrawing, getPricedEstimate, listQuotes } from "./apiClient";
 import type { PortalRoute } from "./useHashRoute";
 
 interface EstimatePageProps {
@@ -34,11 +42,17 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
-function formatPricingSavedLabel(pricingConfig: PricingConfigRecord): string {
-  if (pricingConfig.updatedByUserId === null) {
+function formatPricingSavedLabel(pricedEstimate: PricedEstimateResult): string {
+  if (pricedEstimate.pricingSnapshot.source === "DEFAULT") {
     return "Default configuration";
   }
-  return formatTimestamp(pricingConfig.updatedAtIso);
+  return formatTimestamp(pricedEstimate.pricingSnapshot.updatedAtIso);
+}
+
+export function formatQuoteSummaryLabel(quote: QuoteRecord): string {
+  return `${formatTimestamp(quote.createdAtIso)} | v${quote.drawingVersionNumber} | ${formatMoney(
+    quote.pricedEstimate.totals.totalCost
+  )}`;
 }
 
 function buildAncillaryItem(): AncillaryEstimateItem {
@@ -51,33 +65,115 @@ function buildAncillaryItem(): AncillaryEstimateItem {
   };
 }
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function buildAncillaryRows(items: AncillaryEstimateItem[]): EstimateRow[] {
+  return items
+    .filter((item) => item.quantity > 0 || item.materialCost > 0 || item.labourCost > 0 || item.description.trim().length > 0)
+    .map((item) => {
+      const quantity = Math.round(item.quantity * 1000) / 1000;
+      const totalMaterialCost = roundMoney(quantity * item.materialCost);
+      const totalLabourCost = roundMoney(quantity * item.labourCost);
+      return {
+        key: item.id,
+        itemCode: null,
+        itemName: item.description.trim() || "Ancillary item",
+        category: "ANCILLARY",
+        quantity,
+        unit: "item",
+        unitMaterialCost: item.materialCost,
+        unitLabourCost: item.labourCost,
+        totalMaterialCost,
+        totalLabourCost,
+        totalCost: roundMoney(totalMaterialCost + totalLabourCost)
+      };
+    });
+}
+
+function buildAncillaryGroup(items: AncillaryEstimateItem[]): EstimateGroup | null {
+  const rows = buildAncillaryRows(items);
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const subtotalMaterialCost = roundMoney(rows.reduce((sum, row) => sum + row.totalMaterialCost, 0));
+  const subtotalLabourCost = roundMoney(rows.reduce((sum, row) => sum + row.totalLabourCost, 0));
+  return {
+    key: "ancillary-items",
+    title: "Ancillary items",
+    rows,
+    subtotalMaterialCost,
+    subtotalLabourCost,
+    subtotalCost: roundMoney(subtotalMaterialCost + subtotalLabourCost)
+  };
+}
+
+export function mergeEstimateWithAncillaryItems(
+  baseEstimate: PricedEstimateResult,
+  ancillaryItems: AncillaryEstimateItem[]
+): PricedEstimateResult {
+  const ancillaryGroup = buildAncillaryGroup(ancillaryItems);
+  const nonAncillaryGroups = baseEstimate.groups.filter((group) => group.key !== "ancillary-items");
+  const groups = ancillaryGroup ? [...nonAncillaryGroups, ancillaryGroup] : nonAncillaryGroups;
+  const totals: EstimateTotals = groups.reduce(
+    (sum, group) => ({
+      materialCost: roundMoney(sum.materialCost + group.subtotalMaterialCost),
+      labourCost: roundMoney(sum.labourCost + group.subtotalLabourCost),
+      totalCost: roundMoney(sum.totalCost + group.subtotalCost)
+    }),
+    { materialCost: 0, labourCost: 0, totalCost: 0 }
+  );
+
+  return {
+    ...baseEstimate,
+    ancillaryItems,
+    groups,
+    totals
+  };
+}
+
 export function EstimatePage({ session, drawingId, onNavigate }: EstimatePageProps) {
+  const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null);
-  const [pricingConfig, setPricingConfig] = useState<PricingConfigRecord | null>(null);
+  const [basePricedEstimate, setBasePricedEstimate] = useState<PricedEstimateResult | null>(null);
   const [ancillaryItems, setAncillaryItems] = useState<AncillaryEstimateItem[]>([]);
+  const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingQuote, setIsCreatingQuote] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [quoteNoticeMessage, setQuoteNoticeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     if (!drawingId) {
       setIsLoading(false);
       setDrawing(null);
+      setBasePricedEstimate(null);
+      setQuotes([]);
       return;
     }
 
     setIsLoading(true);
     void (async () => {
       try {
-        const [nextDrawing, nextPricingConfig] = await Promise.all([getDrawing(drawingId), getPricingConfig()]);
+        const [nextDrawing, nextPricedEstimate, nextQuotes] = await Promise.all([
+          getDrawing(drawingId),
+          getPricedEstimate(drawingId),
+          listQuotes(drawingId)
+        ]);
         if (cancelled) {
           return;
         }
         setDrawing(nextDrawing);
-        setPricingConfig(nextPricingConfig);
+        setBasePricedEstimate(nextPricedEstimate);
+        setQuotes(nextQuotes);
         setErrorMessage(null);
       } catch (error) {
         if (!cancelled) {
+          setBasePricedEstimate(null);
+          setQuotes([]);
           setErrorMessage((error as Error).message);
         }
       } finally {
@@ -93,11 +189,29 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
   }, [drawingId]);
 
   const pricedEstimate = useMemo(() => {
-    if (!drawing || !pricingConfig) {
+    if (!basePricedEstimate) {
       return null;
     }
-    return buildEstimateFromDrawing(drawing, pricingConfig, ancillaryItems);
-  }, [ancillaryItems, drawing, pricingConfig]);
+    return mergeEstimateWithAncillaryItems(basePricedEstimate, ancillaryItems);
+  }, [ancillaryItems, basePricedEstimate]);
+
+  const handleCreateQuote = async () => {
+    if (!drawingId) {
+      return;
+    }
+    setIsCreatingQuote(true);
+    setQuoteNoticeMessage(null);
+    setErrorMessage(null);
+    try {
+      const quote = await createQuoteSnapshot(drawingId, ancillaryItems);
+      setQuotes((current) => [quote, ...current]);
+      setQuoteNoticeMessage(`Saved quote snapshot at ${formatTimestamp(quote.createdAtIso)}.`);
+    } catch (error) {
+      setErrorMessage((error as Error).message);
+    } finally {
+      setIsCreatingQuote(false);
+    }
+  };
 
   return (
     <section className="portal-page estimate-page">
@@ -117,9 +231,11 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               Open In Editor
             </button>
           ) : null}
-          <button type="button" className="portal-secondary-button" onClick={() => onNavigate("pricing")}>
-            Pricing
-          </button>
+          {canManagePricing ? (
+            <button type="button" className="portal-secondary-button" onClick={() => onNavigate("pricing")}>
+              Pricing
+            </button>
+          ) : null}
           <button type="button" className="portal-primary-button" onClick={() => onNavigate("drawings")}>
             Drawing Library
           </button>
@@ -127,6 +243,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
       </header>
 
       {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
+      {quoteNoticeMessage ? <div className="portal-inline-message portal-inline-notice">{quoteNoticeMessage}</div> : null}
 
       {!drawingId ? (
         <div className="portal-empty-state">
@@ -141,7 +258,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
         </div>
       ) : null}
 
-      {drawing && pricingConfig && pricedEstimate ? (
+      {drawing && pricedEstimate ? (
         <>
           <section className="portal-surface-card estimate-meta-strip">
             <article>
@@ -166,8 +283,41 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             </article>
             <article>
               <span>Pricing last saved</span>
-              <strong>{formatPricingSavedLabel(pricingConfig)}</strong>
+              <strong>{formatPricingSavedLabel(pricedEstimate)}</strong>
             </article>
+          </section>
+
+          <section className="portal-surface-card estimate-ancillary-card">
+            <div className="portal-section-heading">
+              <div>
+                <span className="portal-section-kicker">Quote snapshots</span>
+                <h2>Saved immutable quotes</h2>
+              </div>
+              <button
+                type="button"
+                className="portal-primary-button"
+                onClick={() => void handleCreateQuote()}
+                disabled={isCreatingQuote}
+              >
+                {isCreatingQuote ? "Saving Quote..." : "Save Quote Snapshot"}
+              </button>
+            </div>
+
+            {quotes.length === 0 ? <p className="portal-empty-copy">No quote snapshots saved for this drawing yet.</p> : null}
+
+            {quotes.length > 0 ? (
+              <div className="estimate-ancillary-list">
+                {quotes.map((quote) => (
+                  <article key={quote.id} className="estimate-ancillary-row">
+                    <div className="estimate-item-copy">
+                      <strong>{quote.pricedEstimate.drawing.drawingName}</strong>
+                      <span>{formatQuoteSummaryLabel(quote)}</span>
+                    </div>
+                    <span>{quote.pricedEstimate.pricingSnapshot.source === "DEFAULT" ? "Default pricing" : "Company pricing"}</span>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="portal-surface-card estimate-ancillary-card">
@@ -247,6 +397,24 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               ))}
             </div>
           </section>
+
+          {pricedEstimate.warnings.length > 0 ? (
+            <section className="portal-surface-card">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Manual review</span>
+                  <h2>Estimate exclusions and warnings</h2>
+                </div>
+              </div>
+              <div className="portal-inline-message portal-inline-error">
+                <ul>
+                  {pricedEstimate.warnings.map((warning) => (
+                    <li key={warning.code}>{warning.message}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ) : null}
 
           <div className="estimate-group-stack">
             {pricedEstimate.groups.map((group) => (

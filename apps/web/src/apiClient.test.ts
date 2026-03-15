@@ -3,13 +3,16 @@
 import {
   ApiClientError,
   bootstrapOwner,
+  createQuoteSnapshot,
   createDrawing,
   createUser,
   getAuthenticatedUser,
+  getPricedEstimate,
   getSetupStatus,
   listAuditLog,
   listDrawingVersions,
   listDrawings,
+  listQuotes,
   listUsers,
   login,
   logout,
@@ -428,5 +431,230 @@ describe("apiClient", () => {
     const firstRequest = fetchMock.mock.calls[0]?.[1];
     expect(firstRequest?.credentials).toBe("include");
     expect(firstRequest?.headers).toMatchObject({ "content-type": "application/json" });
+  });
+
+  it("loads server-priced estimates from the drawing route", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          pricedEstimate: {
+            drawing: {
+              drawingId: "drawing-1",
+              drawingName: "Yard",
+              customerName: "Cleveland Land Services"
+            },
+            groups: [],
+            ancillaryItems: [],
+            totals: {
+              materialCost: 0,
+              labourCost: 0,
+              totalCost: 0
+            },
+            warnings: [],
+            pricingSnapshot: {
+              updatedAtIso: "1970-01-01T00:00:00.000Z",
+              updatedByUserId: null,
+              source: "DEFAULT"
+            }
+          }
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const pricedEstimate = await getPricedEstimate("drawing-1");
+
+    expect(pricedEstimate.drawing.drawingId).toBe("drawing-1");
+    expect(pricedEstimate.pricingSnapshot.source).toBe("DEFAULT");
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/drawings/drawing-1/priced-estimate", expect.anything());
+  });
+
+  it("lists and creates immutable quote snapshots for a drawing", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          quotes: [
+            {
+              id: "quote-1",
+              companyId: "company-1",
+              drawingId: "drawing-1",
+              drawingVersionNumber: 2,
+              pricedEstimate: {
+                drawing: {
+                  drawingId: "drawing-1",
+                  drawingName: "Yard",
+                  customerName: "Cleveland Land Services"
+                },
+                groups: [],
+                ancillaryItems: [],
+                totals: {
+                  materialCost: 100,
+                  labourCost: 50,
+                  totalCost: 150
+                },
+                warnings: [],
+                pricingSnapshot: {
+                  updatedAtIso: "1970-01-01T00:00:00.000Z",
+                  updatedByUserId: null,
+                  source: "DEFAULT"
+                }
+              },
+              drawingSnapshot: {
+                drawingId: "drawing-1",
+                drawingName: "Yard",
+                customerName: "Cleveland Land Services",
+                layout: { segments: [], gates: [], basketballPosts: [], floodlightColumns: [] },
+                estimate: {
+                  posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+                  corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+                  materials: {
+                    twinBarPanels: 0,
+                    twinBarPanelsSuperRebound: 0,
+                    twinBarPanelsByStockHeightMm: {},
+                    twinBarPanelsByFenceHeight: {},
+                    roll2100: 0,
+                    roll900: 0,
+                    totalRolls: 0,
+                    rollsByFenceHeight: {}
+                  },
+                  optimization: {
+                    strategy: "CHAINED_CUT_PLANNER",
+                    twinBar: {
+                      reuseAllowanceMm: 200,
+                      stockPanelWidthMm: 2525,
+                      fixedFullPanels: 0,
+                      baselinePanels: 0,
+                      optimizedPanels: 0,
+                      panelsSaved: 0,
+                      totalCutDemands: 0,
+                      stockPanelsOpened: 0,
+                      reusedCuts: 0,
+                      totalConsumedMm: 0,
+                      totalLeftoverMm: 0,
+                      reusableLeftoverMm: 0,
+                      utilizationRate: 0,
+                      buckets: []
+                    }
+                  },
+                  segments: []
+                },
+                schemaVersion: TEST_SCHEMA_VERSION,
+                rulesVersion: TEST_RULES_VERSION,
+                versionNumber: 2
+              },
+              createdByUserId: "user-1",
+              createdAtIso: "2026-03-12T10:00:00.000Z"
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          quote: {
+            id: "quote-2",
+            companyId: "company-1",
+            drawingId: "drawing-1",
+            drawingVersionNumber: 3,
+            pricedEstimate: {
+              drawing: {
+                drawingId: "drawing-1",
+                drawingName: "Yard",
+                customerName: "Cleveland Land Services"
+              },
+              groups: [],
+              ancillaryItems: [
+                {
+                  id: "ancillary-1",
+                  description: "Lift hire",
+                  quantity: 1,
+                  materialCost: 10,
+                  labourCost: 5
+                }
+              ],
+              totals: {
+                materialCost: 110,
+                labourCost: 55,
+                totalCost: 165
+              },
+              warnings: [],
+              pricingSnapshot: {
+                updatedAtIso: "1970-01-01T00:00:00.000Z",
+                updatedByUserId: null,
+                source: "DEFAULT"
+              }
+            },
+            drawingSnapshot: {
+              drawingId: "drawing-1",
+              drawingName: "Yard",
+              customerName: "Cleveland Land Services",
+              layout: { segments: [], gates: [], basketballPosts: [], floodlightColumns: [] },
+              estimate: {
+                posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+                corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+                materials: {
+                  twinBarPanels: 0,
+                  twinBarPanelsSuperRebound: 0,
+                  twinBarPanelsByStockHeightMm: {},
+                  twinBarPanelsByFenceHeight: {},
+                  roll2100: 0,
+                  roll900: 0,
+                  totalRolls: 0,
+                  rollsByFenceHeight: {}
+                },
+                optimization: {
+                  strategy: "CHAINED_CUT_PLANNER",
+                  twinBar: {
+                    reuseAllowanceMm: 200,
+                    stockPanelWidthMm: 2525,
+                    fixedFullPanels: 0,
+                    baselinePanels: 0,
+                    optimizedPanels: 0,
+                    panelsSaved: 0,
+                    totalCutDemands: 0,
+                    stockPanelsOpened: 0,
+                    reusedCuts: 0,
+                    totalConsumedMm: 0,
+                    totalLeftoverMm: 0,
+                    reusableLeftoverMm: 0,
+                    utilizationRate: 0,
+                    buckets: []
+                  }
+                },
+                segments: []
+              },
+              schemaVersion: TEST_SCHEMA_VERSION,
+              rulesVersion: TEST_RULES_VERSION,
+              versionNumber: 3
+            },
+            createdByUserId: "user-1",
+            createdAtIso: "2026-03-13T10:00:00.000Z"
+          }
+        }),
+        { status: 201 }
+      )
+    );
+
+    const listedQuotes = await listQuotes("drawing-1");
+    const createdQuote = await createQuoteSnapshot("drawing-1", [
+      {
+        id: "ancillary-1",
+        description: "Lift hire",
+        quantity: 1,
+        materialCost: 10,
+        labourCost: 5
+      }
+    ]);
+
+    expect(listedQuotes[0]?.id).toBe("quote-1");
+    expect(createdQuote.id).toBe("quote-2");
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/drawings/drawing-1/quotes", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/drawings/drawing-1/quotes",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 });

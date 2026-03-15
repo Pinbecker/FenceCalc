@@ -158,6 +158,26 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
         );
       `
+    },
+    {
+      name: "007_quotes",
+      sql: `
+        CREATE TABLE IF NOT EXISTS quotes (
+          id TEXT PRIMARY KEY,
+          company_id TEXT NOT NULL,
+          drawing_id TEXT NOT NULL,
+          drawing_version_number INTEGER NOT NULL,
+          quote_json TEXT NOT NULL,
+          created_by_user_id TEXT NOT NULL,
+          created_at_iso TEXT NOT NULL,
+          FOREIGN KEY (company_id) REFERENCES companies(id),
+          FOREIGN KEY (drawing_id) REFERENCES drawings(id),
+          FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_quotes_drawing_created
+        ON quotes(company_id, drawing_id, created_at_iso DESC);
+      `
     }
   ] as const;
 
@@ -296,6 +316,27 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         FOREIGN KEY (company_id) REFERENCES companies(id),
         FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
       )
+    `);
+  }
+
+  if (!tableExists(database, "quotes")) {
+    database.exec(`
+      CREATE TABLE quotes (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        drawing_id TEXT NOT NULL,
+        drawing_version_number INTEGER NOT NULL,
+        quote_json TEXT NOT NULL,
+        created_by_user_id TEXT NOT NULL,
+        created_at_iso TEXT NOT NULL,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (drawing_id) REFERENCES drawings(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+      )
+    `);
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_quotes_drawing_created
+      ON quotes(company_id, drawing_id, created_at_iso DESC)
     `);
   }
 }

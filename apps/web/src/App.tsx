@@ -46,6 +46,7 @@ function PortalNav(props: {
   onNavigate: (route: "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin") => void;
   onLogout: () => void;
   showAdmin: boolean;
+  showPricing: boolean;
 }) {
   return (
     <header className="portal-topbar">
@@ -79,13 +80,15 @@ function PortalNav(props: {
           >
             Editor
           </button>
-          <button
-            type="button"
-            className={props.currentRoute === "pricing" ? "is-active" : undefined}
-            onClick={() => props.onNavigate("pricing")}
-          >
-            Pricing
-          </button>
+          {props.showPricing ? (
+            <button
+              type="button"
+              className={props.currentRoute === "pricing" ? "is-active" : undefined}
+              onClick={() => props.onNavigate("pricing")}
+            >
+              Pricing
+            </button>
+          ) : null}
           {props.showAdmin ? (
             <button
               type="button"
@@ -117,36 +120,79 @@ function PortalLoadingCard(props: { label: string }) {
   );
 }
 
+export function canManageAdmin(role: string | null | undefined): boolean {
+  return role === "OWNER" || role === "ADMIN";
+}
+
+export function canManagePricing(role: string | null | undefined): boolean {
+  return role === "OWNER" || role === "ADMIN";
+}
+
+export function getPortalRedirectTarget(input: {
+  hasSession: boolean;
+  route: string;
+  showAdmin: boolean;
+  showPricing: boolean;
+}): "login" | "dashboard" | null {
+  if (!input.hasSession && input.route !== "login") {
+    return "login";
+  }
+
+  if (input.hasSession && input.route === "login") {
+    return "dashboard";
+  }
+
+  if (input.hasSession && input.route === "pricing" && !input.showPricing) {
+    return "dashboard";
+  }
+
+  if (input.hasSession && input.route === "admin" && !input.showAdmin) {
+    return "dashboard";
+  }
+
+  return null;
+}
+
+export function shouldRefreshPortalDrawings(route: string): boolean {
+  return route === "dashboard" || route === "drawings" || route === "estimate";
+}
+
+export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
+  return showAdmin && (route === "admin" || route === "dashboard");
+}
+
 export function App() {
   const { route, query, navigate } = useHashRoute();
   const portal = usePortalSession();
-  const showAdmin = portal.session?.user.role === "OWNER" || portal.session?.user.role === "ADMIN";
+  const showAdmin = canManageAdmin(portal.session?.user.role);
+  const showPricing = canManagePricing(portal.session?.user.role);
 
   useEffect(() => {
     if (portal.isRestoringSession) {
       return;
     }
 
-    if (!portal.session && route !== "login") {
-      navigate("login");
-      return;
+    const redirectTarget = getPortalRedirectTarget({
+      hasSession: Boolean(portal.session),
+      route,
+      showAdmin,
+      showPricing
+    });
+    if (redirectTarget) {
+      navigate(redirectTarget);
     }
-
-    if (portal.session && route === "login") {
-      navigate("dashboard");
-    }
-  }, [navigate, portal.isRestoringSession, portal.session, route]);
+  }, [navigate, portal.isRestoringSession, portal.session, route, showAdmin, showPricing]);
 
   useEffect(() => {
     if (!portal.session) {
       return;
     }
 
-    if (route === "dashboard" || route === "drawings" || route === "estimate") {
+    if (shouldRefreshPortalDrawings(route)) {
       void portal.refreshDrawings();
     }
 
-    if ((route === "admin" || route === "dashboard") && showAdmin) {
+    if (shouldRefreshPortalAdminData(route, showAdmin)) {
       void portal.refreshUsers();
       void portal.refreshAuditLog();
     }
@@ -200,6 +246,7 @@ export function App() {
         userRole={portal.session.user.role}
         currentRoute={route}
         showAdmin={showAdmin}
+        showPricing={showPricing}
         onNavigate={navigate}
         onLogout={() => {
           portal.logout();
@@ -228,8 +275,8 @@ export function App() {
           {route === "estimate" ? (
             <EstimatePage session={portal.session} drawingId={query.drawingId ?? null} onNavigate={navigate} />
           ) : null}
-          {route === "pricing" ? <PricingPage session={portal.session} /> : null}
-          {route === "admin" ? (
+          {route === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
+          {route === "admin" && showAdmin ? (
             <AdminPage
               users={portal.users}
               auditLog={portal.auditLog}

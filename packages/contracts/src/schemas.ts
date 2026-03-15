@@ -374,6 +374,91 @@ export const ancillaryEstimateItemSchema = z.object({
   labourCost: z.number().finite().min(0)
 });
 
+export const estimateWarningSchema = z.object({
+  code: z.enum([
+    "UNSUPPORTED_FENCE_SYSTEM",
+    "INLINE_JOIN_OR_JUNCTION_POSTS",
+    "UNCLASSIFIED_CORNERS",
+    "CUSTOM_GATES",
+    "FIXINGS_EXCLUDED"
+  ]),
+  message: z.string().trim().min(1).max(600)
+});
+
+export const estimatePricingSnapshotSchema = z.object({
+  updatedAtIso: z.string().datetime(),
+  updatedByUserId: z.string().trim().min(1).max(120).nullable(),
+  source: z.enum(["DEFAULT", "COMPANY_CONFIG"])
+});
+
+export const estimateRowSchema = z.object({
+  key: z.string().trim().min(1).max(160),
+  itemCode: z.string().trim().min(1).max(160).nullable(),
+  itemName: z.string().trim().min(1).max(240),
+  category: pricingItemCategorySchema,
+  quantity: z.number().finite().min(0),
+  unit: z.string().trim().min(1).max(40),
+  unitMaterialCost: z.number().finite().min(0),
+  unitLabourCost: z.number().finite().min(0),
+  totalMaterialCost: z.number().finite().min(0),
+  totalLabourCost: z.number().finite().min(0),
+  totalCost: z.number().finite().min(0),
+  notes: z.string().trim().max(600).optional()
+});
+
+export const estimateGroupSchema = z.object({
+  key: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(1).max(160),
+  rows: z.array(estimateRowSchema).max(500),
+  subtotalMaterialCost: z.number().finite().min(0),
+  subtotalLabourCost: z.number().finite().min(0),
+  subtotalCost: z.number().finite().min(0)
+});
+
+export const pricedEstimateResultSchema = z.object({
+  drawing: z.object({
+    drawingId: z.string().trim().min(1).max(120),
+    drawingName: z.string().trim().min(1).max(160),
+    customerName: z.string().trim().min(1).max(160)
+  }),
+  groups: z.array(estimateGroupSchema).max(200),
+  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200),
+  totals: z.object({
+    materialCost: z.number().finite().min(0),
+    labourCost: z.number().finite().min(0),
+    totalCost: z.number().finite().min(0)
+  }),
+  warnings: z.array(estimateWarningSchema).max(50),
+  pricingSnapshot: estimatePricingSnapshotSchema
+});
+
+export const quoteDrawingSnapshotSchema = z.object({
+  drawingId: z.string().trim().min(1).max(120),
+  drawingName: z.string().trim().min(1).max(160),
+  customerName: z.string().trim().min(1).max(160),
+  layout: layoutModelSchema,
+  savedViewport: drawingCanvasViewportSchema.nullable().optional(),
+  estimate: estimateResultSchema,
+  schemaVersion: z.coerce.number().int().min(1),
+  rulesVersion: z.string().trim().min(1).max(120),
+  versionNumber: z.coerce.number().int().min(1)
+});
+
+export const quoteRecordSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  companyId: z.string().trim().min(1).max(120),
+  drawingId: z.string().trim().min(1).max(120),
+  drawingVersionNumber: z.coerce.number().int().min(1),
+  pricedEstimate: pricedEstimateResultSchema,
+  drawingSnapshot: quoteDrawingSnapshotSchema,
+  createdByUserId: z.string().trim().min(1).max(120),
+  createdAtIso: z.string().datetime()
+});
+
+export const quoteCreateRequestSchema = z.object({
+  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([])
+});
+
 export const emailSchema = z.string().trim().email().max(320).transform((value) => value.toLowerCase());
 export const passwordSchema = z.string().min(10).max(128);
 export const companyNameSchema = z.string().trim().min(2).max(120);

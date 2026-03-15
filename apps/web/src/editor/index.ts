@@ -1,5 +1,4 @@
 export { EditorCanvasControls } from "../EditorCanvasControls.js";
-export { EditorDocumentPanel } from "../EditorDocumentPanel.js";
 export { EditorFencePalettePanel } from "../EditorFencePalettePanel.js";
 export { EditorInteractionPanel } from "../EditorInteractionPanel.js";
 export { EditorOverlayPanels } from "../EditorOverlayPanels.js";

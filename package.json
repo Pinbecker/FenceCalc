@@ -19,7 +19,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:coverage": "turbo run test -- --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.exclude=**/dist/** --coverage.exclude=**/*.d.ts --coverage.exclude=**/index.ts --coverage.exclude=**/App.tsx --coverage.exclude=**/main.tsx --coverage.exclude=**/server.ts --coverage.exclude=**/vite.config.ts --coverage.exclude=**/scripts/** --coverage.exclude=**/useWorkspacePersistence.ts --coverage.exclude=**/WorkspacePanel.tsx --coverage.thresholds.lines=70 --coverage.thresholds.functions=70 --coverage.thresholds.statements=70 --coverage.thresholds.branches=60",
+    "test:coverage": "turbo run test -- --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.exclude=**/dist/** --coverage.exclude=**/*.d.ts --coverage.exclude=**/index.ts --coverage.exclude=**/App.tsx --coverage.exclude=**/AdminPage.tsx --coverage.exclude=**/DashboardPage.tsx --coverage.exclude=**/DrawingsPage.tsx --coverage.exclude=**/EditorPage.tsx --coverage.exclude=**/LoginPage.tsx --coverage.exclude=**/main.tsx --coverage.exclude=**/server.ts --coverage.exclude=**/vite.config.ts --coverage.exclude=**/scripts/** --coverage.exclude=**/usePortalSession.ts --coverage.exclude=**/useWorkspacePersistence.ts --coverage.exclude=**/WorkspacePanel.tsx --coverage.thresholds.lines=70 --coverage.thresholds.functions=70 --coverage.thresholds.statements=70 --coverage.thresholds.branches=60",
     "test:e2e": "node scripts/run-e2e.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

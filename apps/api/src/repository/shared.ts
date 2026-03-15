@@ -10,14 +10,16 @@ import type {
   DrawingVersionRecord,
   DrawingVersionSource,
   LayoutModel,
-  PricingConfigRecord
+  PricingConfigRecord,
+  QuoteRecord
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
   drawingCanvasViewportSchema,
   estimateResultSchema,
   layoutModelSchema,
-  pricingConfigRecordSchema
+  pricingConfigRecordSchema,
+  quoteRecordSchema
 } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 import type { ZodType } from "zod";
@@ -95,6 +97,16 @@ export interface PricingConfigRow {
   config_json: string;
   updated_at_iso: string;
   updated_by_user_id: string | null;
+}
+
+export interface QuoteRow {
+  id: string;
+  company_id: string;
+  drawing_id: string;
+  drawing_version_number: number;
+  quote_json: string;
+  created_by_user_id: string;
+  created_at_iso: string;
 }
 
 export interface PasswordResetTokenRow {
@@ -294,5 +306,37 @@ export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
     companyId: row.company_id,
     updatedAtIso: row.updated_at_iso,
     updatedByUserId: row.updated_by_user_id
+  };
+}
+
+export function toQuoteRecord(row: QuoteRow): QuoteRecord {
+  const parsed = parseStoredJson(row.quote_json, quoteRecordSchema, `quote ${row.id}`);
+  const drawingSnapshot = {
+    layout: {
+      segments: parsed.drawingSnapshot.layout.segments,
+      gates: parsed.drawingSnapshot.layout.gates ?? [],
+      basketballPosts: parsed.drawingSnapshot.layout.basketballPosts ?? [],
+      floodlightColumns: parsed.drawingSnapshot.layout.floodlightColumns ?? []
+    },
+    drawingId: parsed.drawingSnapshot.drawingId,
+    drawingName: parsed.drawingSnapshot.drawingName,
+    customerName: parsed.drawingSnapshot.customerName,
+    estimate: parsed.drawingSnapshot.estimate,
+    schemaVersion: parsed.drawingSnapshot.schemaVersion,
+    rulesVersion: parsed.drawingSnapshot.rulesVersion,
+    versionNumber: parsed.drawingSnapshot.versionNumber,
+    ...(parsed.drawingSnapshot.savedViewport !== undefined
+      ? { savedViewport: parsed.drawingSnapshot.savedViewport }
+      : {})
+  };
+  return {
+    ...parsed,
+    id: row.id,
+    companyId: row.company_id,
+    drawingId: row.drawing_id,
+    drawingVersionNumber: row.drawing_version_number,
+    drawingSnapshot,
+    createdByUserId: row.created_by_user_id,
+    createdAtIso: row.created_at_iso
   };
 }

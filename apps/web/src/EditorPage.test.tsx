@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
 
-type Route = "dashboard" | "drawings" | "editor" | "admin" | "login";
-
 type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
 
 const mockSelectionState = {
@@ -105,8 +103,8 @@ const mockWorkspace = {
   isSavingDrawing: false,
   setCurrentDrawingName: vi.fn(),
   setCurrentCustomerName: vi.fn(),
-  saveDrawing: vi.fn(async () => undefined),
-  saveDrawingAsNew: vi.fn(async () => undefined),
+  saveDrawing: vi.fn(() => Promise.resolve()),
+  saveDrawingAsNew: vi.fn(() => Promise.resolve()),
   startNewDraft: vi.fn(),
   currentDrawingVersion: 1,
   drawings: [],
@@ -424,5 +422,24 @@ describe("EditorPage", () => {
     expect(html).toContain("Unsaved changes");
     expect(html).toContain("<h2>Rectangle</h2>");
     expect(html).toContain("LengthEditorOpen");
+  });
+
+  it("hides pricing and admin navigation for member users", () => {
+    mockWorkspace.session = {
+      ...baseSession,
+      user: {
+        ...baseSession.user,
+        role: "MEMBER",
+        displayName: "Casey Member"
+      }
+    };
+
+    const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
+
+    expect(html).toContain("Casey Member");
+    expect(html).toContain("Dashboard");
+    expect(html).toContain("Drawings");
+    expect(html).not.toContain(">Pricing<");
+    expect(html).not.toContain(">Admin<");
   });
 });

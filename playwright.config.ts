@@ -6,7 +6,7 @@ const tempDir = resolve(".tmp", "playwright");
 mkdirSync(tempDir, { recursive: true });
 
 const databasePath = resolve(tempDir, `e2e-${Date.now()}.db`);
-const apiUrl = "http://127.0.0.1:3001";
+const apiUrl = "http://127.0.0.1:3101";
 const webUrl = "http://127.0.0.1:4173";
 
 export default defineConfig({
@@ -26,13 +26,13 @@ export default defineConfig({
   webServer: [
     {
       command: "node apps/api/dist/server.js",
-      port: 3001,
+      port: 3101,
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
         ...process.env,
         HOST: "127.0.0.1",
-        PORT: "3001",
+        PORT: "3101",
         DATABASE_PATH: databasePath,
         ALLOWED_ORIGINS: webUrl,
         SESSION_COOKIE_SECURE: "false",

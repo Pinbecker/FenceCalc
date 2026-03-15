@@ -14,7 +14,7 @@ function run(command, args, options = {}) {
 run("npm", ["run", "build"], {
   env: {
     ...process.env,
-    VITE_API_BASE_URL: "http://127.0.0.1:3001"
+    VITE_API_BASE_URL: "http://127.0.0.1:3101"
   }
 });
 run("npx", ["playwright", "test"]);

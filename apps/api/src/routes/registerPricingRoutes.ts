@@ -1,11 +1,11 @@
 import { buildDefaultPricingConfig, pricingConfigUpdateRequestSchema } from "@fence-estimator/contracts";
 
-import { requireAuth } from "../authorization.js";
+import { requirePricingManager } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
 
 export function registerPricingRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
   app.get("/api/v1/pricing-config", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
+    const authenticated = await requirePricingManager(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -18,7 +18,7 @@ export function registerPricingRoutes({ app, config, repository, writeLimiter }:
   });
 
   app.put("/api/v1/pricing-config", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
+    const authenticated = await requirePricingManager(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }

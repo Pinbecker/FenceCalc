@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 import type { LayoutModel } from "@fence-estimator/contracts";
 
 import { isEmptyLayout, normalizeLayout } from "./workspacePersistenceUtils";
@@ -14,11 +14,13 @@ export function useWorkspaceSavedState(
   );
   const savedNameRef = useRef("");
   const savedCustomerNameRef = useRef("");
+  const [savedRevision, bumpSavedRevision] = useReducer((value: number) => value + 1, 0);
 
   const rememberSavedState = useCallback((layout: LayoutModel, drawingName: string, customerName: string) => {
     savedLayoutSnapshotRef.current = JSON.stringify(normalizeLayout(layout));
     savedNameRef.current = drawingName;
     savedCustomerNameRef.current = customerName;
+    bumpSavedRevision();
   }, []);
 
   const resetSavedState = useCallback(() => {
@@ -33,7 +35,7 @@ export function useWorkspaceSavedState(
     }
 
     return nameChanged || customerChanged || !isEmptyLayout(normalizedLayout);
-  }, [currentCustomerName, currentDrawingId, currentDrawingName, normalizedLayout]);
+  }, [currentCustomerName, currentDrawingId, currentDrawingName, normalizedLayout, savedRevision]);
 
   return {
     isDirty,

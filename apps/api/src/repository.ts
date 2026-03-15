@@ -7,6 +7,7 @@ export type {
   CreateDrawingInput,
   BootstrapOwnerAccountInput,
   CreatePasswordResetTokenInput,
+  CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   DrawingWithMembership,

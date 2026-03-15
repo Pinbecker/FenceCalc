@@ -16,6 +16,10 @@ export function userCanManageUsers(user: CompanyUserRecord): boolean {
   return user.role === "OWNER" || user.role === "ADMIN";
 }
 
+export function userCanManagePricing(user: CompanyUserRecord): boolean {
+  return user.role === "OWNER" || user.role === "ADMIN";
+}
+
 export async function requireAuth(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -66,6 +70,25 @@ export async function requireUserManager(
 
   if (!userCanManageUsers(authenticated.user)) {
     await reply.code(403).send({ error: "User management requires admin access" });
+    return null;
+  }
+
+  return authenticated;
+}
+
+export async function requirePricingManager(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  repository: AppRepository,
+  config: AppConfig,
+): Promise<AuthenticatedRequestContext | null> {
+  const authenticated = await requireAuth(request, reply, repository, config);
+  if (!authenticated) {
+    return null;
+  }
+
+  if (!userCanManagePricing(authenticated.user)) {
+    await reply.code(403).send({ error: "Pricing configuration requires admin access" });
     return null;
   }
 

@@ -1,10 +1,13 @@
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import {
+  quoteCreateRequestSchema,
+  buildDefaultPricingConfig,
   drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
   drawingUpdateRequestSchema
 } from "@fence-estimator/contracts";
+import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
 import { requireAuth } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
@@ -14,6 +17,7 @@ import {
   setDrawingArchivedStateForCompany,
   updateDrawingForCompany
 } from "../services/drawingService.js";
+import { createQuoteForDrawing } from "../services/quoteService.js";
 
 const drawingScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
 const drawingRestoreRequestSchema = z.object({
@@ -105,6 +109,81 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
       return reply.code(404).send({ error: "Drawing not found" });
     }
     return reply.code(200).send({ drawing });
+  });
+
+  app.get("/api/v1/drawings/:id/priced-estimate", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const drawing = await repository.getDrawingById(params.id, authenticated.company.id);
+    if (!drawing) {
+      return reply.code(404).send({ error: "Drawing not found" });
+    }
+
+    const pricingConfig =
+      (await repository.getPricingConfig(authenticated.company.id)) ??
+      buildDefaultPricingConfig(authenticated.company.id, null);
+
+    return reply.code(200).send({
+      pricedEstimate: buildPricedEstimate(drawing, pricingConfig)
+    });
+  });
+
+  app.get("/api/v1/drawings/:id/quotes", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const drawing = await repository.getDrawingById(params.id, authenticated.company.id);
+    if (!drawing) {
+      return reply.code(404).send({ error: "Drawing not found" });
+    }
+
+    const quotes = await repository.listQuotesForDrawing(params.id, authenticated.company.id);
+    return reply.code(200).send({ quotes });
+  });
+
+  app.post("/api/v1/drawings/:id/quotes", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    if (!writeLimiter.allow(`quote-create:${request.ip}`)) {
+      return reply.code(429).send({ error: "Rate limit exceeded" });
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const parsed = quoteCreateRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid quote payload",
+        details: parsed.error.flatten()
+      });
+    }
+
+    const result = await createQuoteForDrawing(repository, authenticated, params.id, parsed.data.ancillaryItems);
+    if (result.kind !== "success") {
+      return reply.code(404).send({ error: "Drawing not found" });
+    }
+
+    return reply.code(201).send({ quote: result.quote });
   });
 
   app.put("/api/v1/drawings/:id", async (request, reply) => {
