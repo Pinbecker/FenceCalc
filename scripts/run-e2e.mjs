@@ -1,4 +1,17 @@
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
+
+const webDistDir = resolve("apps/web/dist");
+
+function cleanDistDirectory(directory) {
+  rmSync(directory, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100
+  });
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -10,6 +23,8 @@ function run(command, args, options = {}) {
     process.exit(result.status ?? 1);
   }
 }
+
+cleanDistDirectory(webDistDir);
 
 run("npm", ["run", "build"], {
   env: {
