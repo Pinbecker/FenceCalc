@@ -488,4 +488,71 @@ describe("useEditorInteractionPreviews", () => {
     expect(result.floodlightColumnPreview?.facing).toBe("RIGHT");
     expect(result.floodlightColumnPreview?.normal).toEqual({ x: 0, y: -1 });
   });
+
+  it("stops an active draw at the first blocking fence-line intersection", () => {
+    const crossingSegments: LayoutSegment[] = [
+      { id: "base", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, spec },
+      { id: "cross", start: { x: 3000, y: -2000 }, end: { x: 3000, y: 2000 }, spec }
+    ];
+
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: crossingSegments,
+        lineSnapSegments: crossingSegments,
+        interactionMode: "DRAW",
+        pointerWorld: { x: 5800, y: 0 },
+        drawStart: { x: 0, y: -1500 },
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: true,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: [],
+        placedBasketballPostVisuals: [],
+        drawChainStart: { x: 0, y: -1500 }
+      })
+    );
+
+    expect(result.ghostEnd).toEqual({ x: 3000, y: -700 });
+    expect(result.drawSnapLabel).toBe("Fence intersection");
+  });
+
+  it("uses split fence runs for hover measurements when an inline replacement post divides the segment", () => {
+    const lineSnapSegments: LayoutSegment[] = [
+      { id: "run-left", start: { x: 0, y: 0 }, end: { x: 33500, y: 0 }, spec },
+      { id: "run-right", start: { x: 33500, y: 0 }, end: { x: 67000, y: 0 }, spec }
+    ];
+
+    const result = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: [{ id: "s1", start: { x: 0, y: 0 }, end: { x: 67000, y: 0 }, spec }],
+        lineSnapSegments,
+        interactionMode: "DRAW",
+        pointerWorld: { x: 16800, y: 40 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 0.2,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: [],
+        placedBasketballPostVisuals: [],
+        drawChainStart: null
+      })
+    );
+
+    expect(result.drawHoverSnap?.segment.id).toBe("run-left");
+    expect(result.drawHoverSnap?.startOffsetMm).toBe(16750);
+    expect(result.drawHoverSnap?.endOffsetMm).toBe(16750);
+  });
 });

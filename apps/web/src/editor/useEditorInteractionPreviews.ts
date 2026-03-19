@@ -12,6 +12,7 @@ import {
   quantize
 } from "./constants";
 import {
+  clampSegmentEndToBlockingIntersection,
   classifyIncidentNode,
   dot,
   findNearestNode,
@@ -55,6 +56,7 @@ import type {
 
 interface EditorInteractionPreviewsOptions {
   segments: LayoutSegment[];
+  lineSnapSegments?: LayoutSegment[];
   interactionMode: InteractionMode;
   pointerWorld: PointMm | null;
   drawStart: PointMm | null;
@@ -128,6 +130,7 @@ function findNearestPreDrawHoverSnap(
 
 export function useEditorInteractionPreviews({
   segments,
+  lineSnapSegments = [],
   interactionMode,
   pointerWorld,
   drawStart,
@@ -149,6 +152,7 @@ export function useEditorInteractionPreviews({
   activeBasketballPostDragId = null,
   activeFloodlightColumnDragId = null
 }: EditorInteractionPreviewsOptions) {
+  const drawSegments = lineSnapSegments.length > 0 ? lineSnapSegments : segments;
   const nodeSnapDistanceMm = Math.min(600, NODE_SNAP_DISTANCE_PX / viewScale);
   const axisGuideSnapDistanceMm = Math.min(600, AXIS_GUIDE_SNAP_PX / viewScale);
   const drawLineSnapDistanceMm = Math.min(900, DRAW_LINE_SNAP_PX / viewScale);
@@ -488,7 +492,7 @@ export function useEditorInteractionPreviews({
       }
 
       if (!drawStart) {
-        const hoverSnap = findNearestPreDrawHoverSnap(angleCandidate, segments, drawLineSnapDistanceMm);
+        const hoverSnap = findNearestPreDrawHoverSnap(angleCandidate, drawSegments, drawLineSnapDistanceMm);
         if (hoverSnap) {
           return {
             point: hoverSnap.point,
@@ -508,30 +512,46 @@ export function useEditorInteractionPreviews({
       const guided = snapToAxisGuide(drawStart, basePoint, drawAnchorNodes, axisGuideSnapDistanceMm);
       const guidedNearestNode = findNearestNode(guided.point, drawAnchorNodes, nodeSnapDistanceMm);
       if (guidedNearestNode) {
+        const clampedPoint = clampSegmentEndToBlockingIntersection(drawStart, quantize(guidedNearestNode), drawSegments);
         return {
-          point: quantize(guidedNearestNode),
+          point: quantize(clampedPoint),
           guide: guided.guide,
-          snapMeta: buildSnapMeta("NODE", "Endpoint")
+          snapMeta:
+            distanceMm(drawStart, clampedPoint) + 0.001 < distanceMm(drawStart, quantize(guidedNearestNode))
+              ? buildSnapMeta("SEGMENT", "Fence intersection")
+              : buildSnapMeta("NODE", "Endpoint")
         };
       }
-      const guidedLineSnap = findNearestSegmentSnap(guided.point, segments, drawLineSnapDistanceMm);
+      const guidedLineSnap = findNearestSegmentSnap(guided.point, drawSegments, drawLineSnapDistanceMm);
       if (guidedLineSnap) {
+        const clampedPoint = clampSegmentEndToBlockingIntersection(drawStart, guidedLineSnap.point, drawSegments);
         return {
-          point: guidedLineSnap.point,
+          point: quantize(clampedPoint),
           guide: guided.guide,
-          snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+          snapMeta:
+            distanceMm(drawStart, clampedPoint) + 0.001 < distanceMm(drawStart, guidedLineSnap.point)
+              ? buildSnapMeta("SEGMENT", "Fence intersection")
+              : buildSnapMeta("SEGMENT", "Fence line")
         };
       }
+      const unclampedPoint = guided.point;
+      const clampedPoint = clampSegmentEndToBlockingIntersection(drawStart, unclampedPoint, drawSegments);
       return {
-        point: guided.point,
+        point: quantize(clampedPoint),
         guide: guided.guide,
-        snapMeta: guided.guide ? buildSnapMeta("AXIS", "Axis aligned") : snapMeta
+        snapMeta:
+          distanceMm(drawStart, clampedPoint) + 0.001 < distanceMm(drawStart, unclampedPoint)
+            ? buildSnapMeta("SEGMENT", "Fence intersection")
+            : guided.guide
+              ? buildSnapMeta("AXIS", "Axis aligned")
+              : snapMeta
       };
     },
     [
       axisGuideSnapDistanceMm,
       disableSnap,
       drawAnchorNodes,
+      drawSegments,
       drawLineSnapDistanceMm,
       drawStart,
       nodeSnapDistanceMm,
@@ -560,7 +580,7 @@ export function useEditorInteractionPreviews({
     const toleranceMm = DRAW_INCREMENT_MM * 0.6;
     const connectedSegments = segments.filter((segment) =>
       ghostSnap?.snapMeta?.kind === "NODE"
-        ? distanceMm(segment.start, ghostEnd) <= toleranceMm || distanceMm(segment.end, ghostEnd) <= toleranceMm
+      ? distanceMm(segment.start, ghostEnd) <= toleranceMm || distanceMm(segment.end, ghostEnd) <= toleranceMm
         : projectPointOntoSegment(ghostEnd, segment).distanceMm <= toleranceMm
     );
     return connectedSegments.length > 0
@@ -569,7 +589,7 @@ export function useEditorInteractionPreviews({
           segments: connectedSegments
         }
       : null;
-  }, [drawStart, ghostEnd, ghostSnap?.snapMeta?.kind, interactionMode, segments]);
+  }, [drawSegments, drawStart, ghostEnd, ghostSnap?.snapMeta?.kind, interactionMode]);
   const closeLoopPoint = useMemo(() => {
     if (!drawStart || !drawChainStart || !ghostEnd) {
       return null;
@@ -914,8 +934,8 @@ export function useEditorInteractionPreviews({
     if (resolveDrawPoint(pointerWorld).snapMeta?.kind === "NODE") {
       return null;
     }
-    return findNearestPreDrawHoverSnap(quantize(pointerWorld), segments, drawLineSnapDistanceMm);
-  }, [drawLineSnapDistanceMm, drawStart, interactionMode, pointerWorld, resolveDrawPoint, segments]);
+    return findNearestPreDrawHoverSnap(quantize(pointerWorld), drawSegments, drawLineSnapDistanceMm);
+  }, [drawLineSnapDistanceMm, drawSegments, drawStart, interactionMode, pointerWorld, resolveDrawPoint]);
   const effectiveDrawSnapLabel = drawStart ? drawSnapLabel : drawHoverSnap?.snapMeta?.label ?? null;
 
   const hoveredBasketballPostId = useMemo(() => {

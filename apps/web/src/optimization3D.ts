@@ -245,7 +245,10 @@ function buildPanelSlices(estimateSegments: LayoutSegment[]): Optimization3DPane
   return slices;
 }
 
-function buildPosts(estimateSegments: LayoutSegment[]): Optimization3DPost[] {
+function buildPostsWithExcludedNodes(
+  estimateSegments: LayoutSegment[],
+  excludedNodeKeys: Set<string>
+): Optimization3DPost[] {
   const postsByKey = new Map<string, Optimization3DPost>();
 
   for (const segment of estimateSegments) {
@@ -259,6 +262,9 @@ function buildPosts(estimateSegments: LayoutSegment[]): Optimization3DPost[] {
       const offsetMm = Math.min(segmentLengthMm, index * config.bayWidthMm);
       const point = interpolateAlongSegment(segment, offsetMm);
       const key = `${Math.round(point.x)}:${Math.round(point.y)}`;
+      if (excludedNodeKeys.has(key)) {
+        continue;
+      }
       const existing = postsByKey.get(key);
       if (existing) {
         existing.heightMm = Math.max(existing.heightMm, config.assembledHeightMm);
@@ -418,7 +424,12 @@ export function buildOptimization3DScene(
   floodlightColumnPlacements: ResolvedFloodlightColumnPlacement[] = []
 ): Optimization3DScene {
   const panelSlices = buildPanelSlices(estimateSegments);
-  const posts = buildPosts(estimateSegments);
+  const replacementNodeKeys = new Set(
+    [...basketballPostPlacements, ...floodlightColumnPlacements].map(
+      (placement) => `${Math.round(placement.point.x)}:${Math.round(placement.point.y)}`
+    )
+  );
+  const posts = buildPostsWithExcludedNodes(estimateSegments, replacementNodeKeys);
   const rails = buildRails(estimateSegments);
   const gates = buildGates(gatePlacements);
   const basketballPosts = buildBasketballPosts(basketballPostPlacements);

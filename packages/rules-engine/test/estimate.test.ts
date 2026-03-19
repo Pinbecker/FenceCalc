@@ -277,4 +277,79 @@ describe("estimateLayout", () => {
     expect(result.materials.twinBarPanels).toBe(4);
     expect(result.posts.total).toBe(6);
   });
+
+  it("treats basketball posts as replacement fence-line posts and splits the run", () => {
+    const layout: LayoutModel = {
+      segments: [
+        {
+          id: "basketball-run",
+          start: { x: 0, y: 0 },
+          end: { x: 5050, y: 0 },
+          spec: { system: "TWIN_BAR", height: "3m" }
+        }
+      ],
+      basketballPosts: [
+        {
+          id: "bb-1",
+          segmentId: "basketball-run",
+          offsetMm: 2525,
+          facing: "LEFT"
+        }
+      ]
+    };
+
+    const result = estimateDrawingLayout(layout);
+
+    expect(result.materials.twinBarPanels).toBe(2);
+    expect(result.posts.intermediate).toBe(0);
+    expect(result.posts.terminal).toBe(2);
+    expect(result.posts.total).toBe(2);
+    expect(result.segments).toHaveLength(2);
+    expect(result.segments.map((segment) => segment.lengthMm)).toEqual([2525, 2525]);
+  });
+
+  it("treats floodlight columns as replacement corner posts", () => {
+    const layout: LayoutModel = {
+      segments: [
+        {
+          id: "s1",
+          start: { x: 0, y: 0 },
+          end: { x: 10000, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s2",
+          start: { x: 10000, y: 0 },
+          end: { x: 10000, y: 5000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s3",
+          start: { x: 10000, y: 5000 },
+          end: { x: 0, y: 5000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s4",
+          start: { x: 0, y: 5000 },
+          end: { x: 0, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        }
+      ],
+      floodlightColumns: [
+        {
+          id: "fc-1",
+          segmentId: "s1",
+          offsetMm: 10000,
+          facing: "LEFT"
+        }
+      ]
+    };
+
+    const result = estimateDrawingLayout(layout);
+
+    expect(result.corners.total).toBe(3);
+    expect(result.corners.external).toBe(3);
+    expect(result.posts.total).toBe(11);
+  });
 });

@@ -338,6 +338,47 @@ export function sameGatePlacementList(left: GatePlacement[], right: GatePlacemen
   return true;
 }
 
+export function clampSegmentEndToBlockingIntersection(
+  start: PointMm,
+  proposedEnd: PointMm,
+  segments: LayoutSegment[]
+): PointMm {
+  const candidate: LayoutSegment = {
+    id: "__candidate__",
+    start,
+    end: proposedEnd,
+    spec: {
+      system: "TWIN_BAR",
+      height: "2m"
+    }
+  };
+  const candidateLengthMm = distanceMm(start, proposedEnd);
+  if (candidateLengthMm <= 0.001) {
+    return proposedEnd;
+  }
+
+  const epsilon = 0.001;
+  let blockedEnd = proposedEnd;
+  let bestDistanceMm = candidateLengthMm;
+
+  for (const segment of segments) {
+    const intersection = segmentIntersectionPoint(candidate, segment);
+    if (!intersection) {
+      continue;
+    }
+
+    const distanceFromStartMm = distanceMm(start, intersection);
+    if (distanceFromStartMm <= epsilon || distanceFromStartMm >= bestDistanceMm - epsilon) {
+      continue;
+    }
+
+    blockedEnd = intersection;
+    bestDistanceMm = distanceFromStartMm;
+  }
+
+  return blockedEnd;
+}
+
 export function sameBasketballPostPlacement(
   left: BasketballPostPlacement,
   right: BasketballPostPlacement

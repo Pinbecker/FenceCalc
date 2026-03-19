@@ -60,6 +60,7 @@ export type { GridLine, ScreenPoint, Viewport, VisibleBounds } from "./canvasVie
 export {
   buildOppositeGateGuides,
   buildScaleBar,
+  clampSegmentEndToBlockingIntersection,
   clampGatePlacementToSegment,
   classifyIncidentNode,
   collectInteriorIntersectionOffsetsMm,

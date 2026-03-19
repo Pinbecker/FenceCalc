@@ -5,7 +5,7 @@ import type {
   GatePlacement,
   LayoutSegment
 } from "@fence-estimator/contracts";
-import { estimateDrawingLayout } from "@fence-estimator/rules-engine";
+import { buildDerivedFenceTopology, estimateDrawingLayout } from "@fence-estimator/rules-engine";
 
 import { buildOptimizationPlanVisual } from "../optimizationVisual";
 import type { OptimizationPlanVisual } from "../optimizationVisual";
@@ -25,7 +25,6 @@ import { ROLL_FORM_HEIGHT_OPTIONS, TWIN_BAR_HEIGHT_OPTIONS } from "./constants";
 import { buildOppositeGateGuides, buildScaleBar } from "./editorMath";
 import { buildRecessAlignmentAnchors } from "./recess";
 import {
-  buildEstimateSegments,
   buildSegmentConnectivity,
   resolveBasketballPostPlacements,
   resolveFloodlightColumnPlacements,
@@ -55,12 +54,16 @@ interface FrozenOptimizationState {
 function buildOptimizationState(
   segments: LayoutSegment[],
   gatePlacements: GatePlacement[],
+  basketballPostPlacements: BasketballPostPlacement[],
+  floodlightColumnPlacements: FloodlightColumnPlacement[],
   selectedPlanId: string | null,
   estimateSegmentsById: Map<string, LayoutSegment>
 ): FrozenOptimizationState {
   const estimate = estimateDrawingLayout({
     segments,
-    gates: gatePlacements
+    gates: gatePlacements,
+    basketballPosts: basketballPostPlacements,
+    floodlightColumns: floodlightColumnPlacements
   });
   const highlightableOptimizationPlans = getVisibleOptimizationPlans(estimate.optimization);
   const selectedPlan =
@@ -110,9 +113,19 @@ export function useEditorDerivedState({
     () => buildGateNodeHeightByKey(resolvedGatePlacements),
     [resolvedGatePlacements]
   );
+  const derivedFenceTopology = useMemo(
+    () =>
+      buildDerivedFenceTopology({
+        segments,
+        gates: gatePlacements,
+        basketballPosts: basketballPostPlacements,
+        floodlightColumns: floodlightColumnPlacements
+      }),
+    [basketballPostPlacements, floodlightColumnPlacements, gatePlacements, segments]
+  );
   const estimateSegments = useMemo(
-    () => buildEstimateSegments(segments, gatesBySegmentId),
-    [gatesBySegmentId, segments]
+    () => derivedFenceTopology.estimateSegments,
+    [derivedFenceTopology]
   );
   const estimateSegmentsById = useMemo(
     () => buildSegmentMap(estimateSegments),
@@ -123,15 +136,31 @@ export function useEditorDerivedState({
       return null;
     }
 
-    return buildOptimizationState(segments, gatePlacements, selectedPlanId, estimateSegmentsById);
-  }, [estimateSegmentsById, freezeOptimization, gatePlacements, segments, selectedPlanId]);
+    return buildOptimizationState(
+      segments,
+      gatePlacements,
+      basketballPostPlacements,
+      floodlightColumnPlacements,
+      selectedPlanId,
+      estimateSegmentsById
+    );
+  }, [basketballPostPlacements, estimateSegmentsById, floodlightColumnPlacements, freezeOptimization, gatePlacements, segments, selectedPlanId]);
   const frozenOptimizationRef = useRef<FrozenOptimizationState | null>(null);
 
   if (liveOptimizationState) {
     frozenOptimizationRef.current = liveOptimizationState;
   }
 
-  const optimizationState = frozenOptimizationRef.current ?? buildOptimizationState(segments, gatePlacements, selectedPlanId, estimateSegmentsById);
+  const optimizationState =
+    frozenOptimizationRef.current ??
+    buildOptimizationState(
+      segments,
+      gatePlacements,
+      basketballPostPlacements,
+      floodlightColumnPlacements,
+      selectedPlanId,
+      estimateSegmentsById
+    );
 
   const estimate = freezeOptimization && frozenOptimizationRef.current
     ? frozenOptimizationRef.current.estimate
@@ -143,8 +172,8 @@ export function useEditorDerivedState({
     ? frozenOptimizationRef.current.selectedPlanVisual
     : optimizationState.selectedPlanVisual;
   const visualPosts = useMemo(
-    () => buildVisualPosts(estimateSegments, gateNodeHeightByKey),
-    [estimateSegments, gateNodeHeightByKey]
+    () => buildVisualPosts(estimateSegments, gateNodeHeightByKey, derivedFenceTopology.replacementNodeKeys),
+    [derivedFenceTopology.replacementNodeKeys, estimateSegments, gateNodeHeightByKey]
   );
   const recessAlignmentAnchors = useMemo(
     () => buildRecessAlignmentAnchors(segments),
@@ -180,8 +209,14 @@ export function useEditorDerivedState({
     [resolvedGatePlacements]
   );
   const segmentLengthLabelsBySegmentId = useMemo(
-    () => buildSegmentLengthLabelsBySegmentId(segments, selectedSegmentId, viewScale),
-    [segments, selectedSegmentId, viewScale]
+    () =>
+      buildSegmentLengthLabelsBySegmentId(
+        segments,
+        selectedSegmentId,
+        viewScale,
+        derivedFenceTopology.segmentSplitOffsetsBySegmentId
+      ),
+    [derivedFenceTopology.segmentSplitOffsetsBySegmentId, segments, selectedSegmentId, viewScale]
   );
   const visibleSegmentLabelKeys = useMemo(
     () => buildVisibleSegmentLabelKeys(segmentLengthLabelsBySegmentId, viewScale),
@@ -211,9 +246,10 @@ export function useEditorDerivedState({
         postHeightRows,
         resolvedGatePlacements,
         resolvedBasketballPostPlacements,
+        resolvedFloodlightColumnPlacements,
         estimate
       }),
-    [estimate, postHeightRows, resolvedBasketballPostPlacements, resolvedGatePlacements]
+    [estimate, postHeightRows, resolvedBasketballPostPlacements, resolvedFloodlightColumnPlacements, resolvedGatePlacements]
   );
   const selectedSegment = useMemo(() => {
     if (!selectedSegmentId) {

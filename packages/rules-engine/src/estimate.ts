@@ -37,6 +37,10 @@ interface Component {
 const CORNER_STRAIGHT_TOLERANCE_DEGREES = 1;
 type TerminalPostType = "end" | "inlineJoin" | "corner" | "junction";
 
+interface EstimateLayoutOptions {
+  excludedNodeKeys?: Set<string>;
+}
+
 function buildNodes(segments: LayoutSegment[]): Map<string, NodeRecord> {
   const nodes = new Map<string, NodeRecord>();
 
@@ -196,9 +200,10 @@ function classifyTerminalPostType(node: NodeRecord): TerminalPostType {
   return angleBetweenDegrees(first.vectorAway, second.vectorAway) > CORNER_STRAIGHT_TOLERANCE_DEGREES ? "corner" : "inlineJoin";
 }
 
-export function estimateLayout(layout: LayoutModel): EstimateResult {
+export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptions = {}): EstimateResult {
   const segments = layout.segments.filter((segment) => distanceMm(segment.start, segment.end) > 0);
   const nodes = buildNodes(segments);
+  const excludedNodeKeys = options.excludedNodeKeys ?? new Set<string>();
   const intermediateByHeightMm: Record<string, number> = {};
 
   const segmentEstimates: SegmentEstimate[] = [];
@@ -318,6 +323,9 @@ export function estimateLayout(layout: LayoutModel): EstimateResult {
   }
 
   for (const node of nodes.values()) {
+    if (excludedNodeKeys.has(node.key)) {
+      continue;
+    }
     const nodeType = classifyTerminalPostType(node);
     if (nodeType === "corner" || nodeType === "junction") {
       cornerNodeKeys.add(node.key);
@@ -393,7 +401,7 @@ export function estimateLayout(layout: LayoutModel): EstimateResult {
     }
   }
 
-  const terminalPosts = nodes.size;
+  const terminalPosts = [...nodes.keys()].filter((key) => !excludedNodeKeys.has(key)).length;
   const byHeightMm: Record<string, number> = {};
   for (const [heightKey, count] of Object.entries(intermediateByHeightMm)) {
     const bucket = ensureHeightBucket(heightKey);

@@ -95,6 +95,8 @@ describe("buildOptimization3DScene", () => {
 
     expect(scene.basketballPosts).toHaveLength(1);
     expect(scene.floodlightColumns).toHaveLength(1);
+    expect(scene.posts.some((post) => post.point.x === 1200 && post.point.y === 0)).toBe(false);
+    expect(scene.posts.some((post) => post.point.x === 2200 && post.point.y === 0)).toBe(false);
     expect(scene.bounds.maxHeightMm).toBeGreaterThan(5000);
   });
 

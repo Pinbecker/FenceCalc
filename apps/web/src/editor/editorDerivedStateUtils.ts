@@ -72,7 +72,8 @@ export function buildGateNodeHeightByKey(gates: ResolvedGatePlacement[]): Map<st
 
 export function buildVisualPosts(
   estimateSegments: LayoutSegment[],
-  gateNodeHeightByKey: Map<string, number>
+  gateNodeHeightByKey: Map<string, number>,
+  replacementNodeKeys: Set<string> = new Set()
 ): VisualPost[] {
   const postsByCoordinate = new Map<string, VisualPost>();
   const incidentNodes = new Map<string, IncidentNode>();
@@ -123,7 +124,7 @@ export function buildVisualPosts(
   }
 
   for (const [coordinateKey, node] of incidentNodes) {
-    if (gateNodeHeightByKey.has(coordinateKey)) {
+    if (gateNodeHeightByKey.has(coordinateKey) || replacementNodeKeys.has(coordinateKey)) {
       continue;
     }
     postsByCoordinate.set(coordinateKey, {
@@ -172,7 +173,8 @@ export function buildPostTypeCounts(visualPosts: VisualPost[]): Record<PostKind,
 export function buildSegmentLengthLabelsBySegmentId(
   segments: LayoutSegment[],
   selectedSegmentId: string | null,
-  viewScale: number
+  viewScale: number,
+  splitOffsetsBySegmentId: Map<string, number[]> = new Map()
 ): Map<string, SegmentLengthLabel[]> {
   const map = new Map<string, SegmentLengthLabel[]>();
 
@@ -186,7 +188,12 @@ export function buildSegmentLengthLabelsBySegmentId(
       y: segment.end.x - segment.start.x
     });
     const labelOffsetMm = SEGMENT_LABEL_OFFSET_PX / viewScale;
-    const offsets = collectInteriorIntersectionOffsetsMm(segment, segments);
+    const offsets = [
+      ...collectInteriorIntersectionOffsetsMm(segment, segments),
+      ...(splitOffsetsBySegmentId.get(segment.id) ?? [])
+    ]
+      .sort((left, right) => left - right)
+      .filter((offsetMm, index, values) => index === 0 || Math.abs(offsetMm - values[index - 1]!) > 0.001);
     const boundaries = [0, ...offsets, segmentLengthMm];
     const labels: SegmentLengthLabel[] = [];
 

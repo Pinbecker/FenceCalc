@@ -126,9 +126,10 @@ describe("buildPricedEstimate", () => {
     ]);
 
     expect(result.pricingSnapshot.source).toBe("COMPANY_CONFIG");
-    expect(result.groups.find((group) => group.key === "panels")?.rows[0]?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "panels")?.rows[0]?.quantity).toBe(3);
     expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_END")?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "concrete")?.rows[0]?.quantity).toBeCloseTo(0.229, 3);
+    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")).toBeUndefined();
+    expect(result.groups.find((group) => group.key === "concrete")?.rows[0]?.quantity).toBeCloseTo(0.153, 3);
     expect(
       result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.quantity
     ).toBe(4);

@@ -94,13 +94,13 @@ describe("buildEstimateFromDrawing", () => {
     const floodlightGroup = result.groups.find((group) => group.key === "floodlight-columns");
     const basketballGroup = result.groups.find((group) => group.key === "basketball-posts");
 
-    expect(panelsGroup?.rows[0]?.quantity).toBe(2);
-    expect(panelsGroup?.rows[0]?.totalCost).toBe(24);
+    expect(panelsGroup?.rows[0]?.quantity).toBe(3);
+    expect(panelsGroup?.rows[0]?.totalCost).toBe(36);
 
     expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_END")?.quantity).toBe(2);
-    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")?.quantity).toBe(1);
+    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")).toBeUndefined();
 
-    expect(concreteGroup?.rows[0]?.quantity).toBeCloseTo(0.229, 3);
+    expect(concreteGroup?.rows[0]?.quantity).toBeCloseTo(0.153, 3);
     expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.quantity).toBe(4);
     expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX")?.quantity).toBe(8);
     expect(basketballGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_BASKETBALL_POST")?.quantity).toBe(1);

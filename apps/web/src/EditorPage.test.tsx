@@ -179,6 +179,7 @@ const mockDerivedState = {
     },
     gateCountsByHeight: [],
     basketballPostCountsByHeight: [],
+    floodlightColumnCountsByHeight: [],
     twinBarFenceRows: []
   },
   estimate: {

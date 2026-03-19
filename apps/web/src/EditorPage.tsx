@@ -324,7 +324,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     canvasWidth,
     freezeOptimization: isOptimizationFrozen
   });
-  const { postRowsByType, gateCounts, gateCountsByHeight, basketballPostCountsByHeight, twinBarFenceRows } = editorSummary;
+  const {
+    postRowsByType,
+    gateCounts,
+    gateCountsByHeight,
+    basketballPostCountsByHeight,
+    floodlightColumnCountsByHeight,
+    twinBarFenceRows
+  } = editorSummary;
   const optimizationSummary = estimate.optimization;
   const panelCount = estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
   const fenceRunCount = estimateSegments.length;
@@ -385,6 +392,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolveDrawPoint
   } = useEditorInteractionPreviews({
     segments,
+    lineSnapSegments: estimateSegments,
     interactionMode: shellState.interactionMode,
     pointerWorld,
     drawStart: selectionState.drawStart,
@@ -843,6 +851,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
               gateCounts={gateCounts}
               gateCountsByHeight={gateCountsByHeight}
               basketballPostCountsByHeight={basketballPostCountsByHeight}
+              floodlightColumnCountsByHeight={floodlightColumnCountsByHeight}
               twinBarFenceRows={twinBarFenceRows}
               postTypeCounts={postTypeCounts}
               panelCount={panelCount}

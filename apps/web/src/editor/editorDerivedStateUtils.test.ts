@@ -88,6 +88,17 @@ describe("editorDerivedStateUtils", () => {
     expect(counts.INTERMEDIATE).toBeGreaterThan(0);
   });
 
+  it("skips normal post markers where replacement posts sit in the run", () => {
+    const estimateSegments = [
+      createSegment("left", { x: 0, y: 0 }, { x: 2500, y: 0 }),
+      createSegment("right", { x: 2500, y: 0 }, { x: 5000, y: 0 })
+    ];
+
+    const visualPosts = buildVisualPosts(estimateSegments, new Map(), new Set(["2500:0"]));
+
+    expect(visualPosts.some((post) => post.point.x === 2500 && post.point.y === 0)).toBe(false);
+  });
+
   it("splits length labels around interior intersections", () => {
     const segments = [
       createSegment("main", { x: 0, y: 0 }, { x: 1000, y: 0 }),
@@ -100,6 +111,18 @@ describe("editorDerivedStateUtils", () => {
     expect(mainLabels).toHaveLength(2);
     expect(mainLabels?.every((label) => label.isSelected)).toBe(true);
     expect(mainLabels?.map((label) => label.text)).toEqual(["0.50m", "0.50m"]);
+  });
+
+  it("splits length labels around replacement post offsets", () => {
+    const segments = [createSegment("main", { x: 0, y: 0 }, { x: 67000, y: 0 })];
+    const labelsBySegmentId = buildSegmentLengthLabelsBySegmentId(
+      segments,
+      "main",
+      1,
+      new Map([["main", [33500]]])
+    );
+
+    expect(labelsBySegmentId.get("main")?.map((label) => label.text)).toEqual(["33.50m", "33.50m"]);
   });
 
   it("keeps selected labels visible when label bounds overlap", () => {

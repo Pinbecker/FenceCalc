@@ -91,6 +91,20 @@ describe("buildEditorSummaryData", () => {
           placement: { id: "bp-2", segmentId: "segment-2", offsetMm: 1800, facing: "RIGHT" }
         }
       ],
+      resolvedFloodlightColumnPlacements: [
+        {
+          id: "fc-1",
+          segmentId: "segment-3",
+          offsetMm: 2400,
+          key: "fc-1",
+          point: { x: 2400, y: 0 },
+          tangent: { x: 1, y: 0 },
+          normal: { x: 0, y: -1 },
+          facing: "LEFT",
+          spec: { system: "TWIN_BAR", height: "2m" },
+          placement: { id: "fc-1", segmentId: "segment-3", offsetMm: 2400, facing: "LEFT" }
+        }
+      ],
       estimate
     });
 
@@ -104,6 +118,7 @@ describe("buildEditorSummaryData", () => {
       { height: "2m", count: 1 },
       { height: "3m", count: 1 }
     ]);
+    expect(summary.floodlightColumnCountsByHeight).toEqual([{ height: "2m", count: 1 }]);
     expect(summary.twinBarFenceRows).toEqual([
       { height: "2m", standard: 4, superRebound: 1, total: 5 },
       { height: "3m", standard: 2, superRebound: 0, total: 2 }

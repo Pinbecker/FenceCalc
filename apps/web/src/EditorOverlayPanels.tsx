@@ -33,6 +33,7 @@ interface EditorOverlayPanelsProps {
   };
   gateCountsByHeight: HeightLabelCountRow[];
   basketballPostCountsByHeight: HeightLabelCountRow[];
+  floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: TwinBarFenceRow[];
   postTypeCounts: PostTypeCounts;
   panelCount: number;
@@ -68,6 +69,7 @@ export function EditorOverlayPanels({
   gateCounts,
   gateCountsByHeight,
   basketballPostCountsByHeight,
+  floodlightColumnCountsByHeight,
   twinBarFenceRows,
   postTypeCounts,
   panelCount,
@@ -86,6 +88,7 @@ export function EditorOverlayPanels({
     postTypeCounts.INLINE_JOIN +
     postTypeCounts.GATE;
   const basketballPostCount = basketballPostCountsByHeight.reduce((sum, row) => sum + row.count, 0);
+  const floodlightColumnCount = floodlightColumnCountsByHeight.reduce((sum, row) => sum + row.count, 0);
 
   return (
     <>
@@ -116,6 +119,10 @@ export function EditorOverlayPanels({
           <article className="editor-summary-metric">
             <span>BB Posts</span>
             <strong>{basketballPostCount}</strong>
+          </article>
+          <article className="editor-summary-metric">
+            <span>Floodlights</span>
+            <strong>{floodlightColumnCount}</strong>
           </article>
           <article className="editor-summary-metric">
             <span>Panels</span>
@@ -212,6 +219,20 @@ export function EditorOverlayPanels({
                   rows={[
                     { label: "Total", value: basketballPostCount },
                     ...basketballPostCountsByHeight.map((row) => ({
+                      label: row.height,
+                      value: row.count
+                    }))
+                  ].filter((row) => row.value > 0)}
+                />
+              </div>
+
+              <div className="count-group">
+                <h3>Floodlight Columns</h3>
+                <CountList
+                  empty="No floodlight columns placed."
+                  rows={[
+                    { label: "Total", value: floodlightColumnCount },
+                    ...floodlightColumnCountsByHeight.map((row) => ({
                       label: row.height,
                       value: row.count
                     }))

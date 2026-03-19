@@ -1,6 +1,11 @@
 import type { EstimateResult, GatePlacement } from "@fence-estimator/contracts";
 
-import type { HeightCountRow, HeightLabelCountRow, ResolvedBasketballPostPlacement } from "./types.js";
+import type {
+  HeightCountRow,
+  HeightLabelCountRow,
+  ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement
+} from "./types.js";
 
 interface PostHeightRow {
   heightMm: number;
@@ -36,6 +41,7 @@ export interface EditorSummaryData {
   };
   gateCountsByHeight: HeightLabelCountRow[];
   basketballPostCountsByHeight: HeightLabelCountRow[];
+  floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: Array<{ height: string; standard: number; superRebound: number }>;
 }
 
@@ -43,6 +49,7 @@ export function buildEditorSummaryData(input: {
   postHeightRows: PostHeightRow[];
   resolvedGatePlacements: ResolvedGateSummary[];
   resolvedBasketballPostPlacements: ResolvedBasketballPostPlacement[];
+  resolvedFloodlightColumnPlacements: ResolvedFloodlightColumnPlacement[];
   estimate: EstimateResult;
 }): EditorSummaryData {
   const rowsForType = (typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin") =>
@@ -79,6 +86,13 @@ export function buildEditorSummaryData(input: {
     .map(([height, count]) => ({ height, count }))
     .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
 
+  const floodlightColumnCountsByHeight = [...input.resolvedFloodlightColumnPlacements.reduce<Map<string, number>>((map, floodlightColumn) => {
+    map.set(floodlightColumn.spec.height, (map.get(floodlightColumn.spec.height) ?? 0) + 1);
+    return map;
+  }, new Map())]
+    .map(([height, count]) => ({ height, count }))
+    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+
   const twinBarFenceRows = Object.entries(input.estimate.materials.twinBarPanelsByFenceHeight)
     .map(([height, counts]) => ({ height, ...counts }))
     .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
@@ -99,6 +113,7 @@ export function buildEditorSummaryData(input: {
     },
     gateCountsByHeight,
     basketballPostCountsByHeight,
+    floodlightColumnCountsByHeight,
     twinBarFenceRows
   };
 }

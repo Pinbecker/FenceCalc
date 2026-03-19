@@ -17,6 +17,7 @@ describe("EditorOverlayPanels", () => {
         gateCounts={{ total: 1, single: 1, double: 0, custom: 0 }}
         gateCountsByHeight={[{ height: "2m", count: 1 }]}
         basketballPostCountsByHeight={[{ height: "2m", count: 2 }]}
+        floodlightColumnCountsByHeight={[{ height: "2m", count: 1 }]}
         twinBarFenceRows={[{ height: "2m", standard: 4, superRebound: 1 }]}
         postTypeCounts={{
           END: 2,
@@ -42,5 +43,6 @@ describe("EditorOverlayPanels", () => {
     expect(html).toContain("Panels");
     expect(html).toContain("Basketball Posts");
     expect(html).toContain("BB Posts");
+    expect(html).toContain("Floodlights");
   });
 });
