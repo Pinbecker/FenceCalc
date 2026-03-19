@@ -1,8 +1,11 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { loadConfig } from "./config.js";
 
 describe("loadConfig", () => {
+  const productionDatabasePath = resolve("var", "lib", "fence-estimator", "fence-estimator.db");
+
   it("provides safe local defaults", () => {
     const config = loadConfig({});
 
@@ -65,7 +68,7 @@ describe("loadConfig", () => {
     expect(() =>
       loadConfig({
         NODE_ENV: "production",
-        DATABASE_PATH: "C:\\\\srv\\\\fence-estimator\\\\fence-estimator.db",
+        DATABASE_PATH: productionDatabasePath,
         SESSION_COOKIE_SECURE: "false",
         ALLOWED_ORIGINS: "https://app.example.com"
       }),
