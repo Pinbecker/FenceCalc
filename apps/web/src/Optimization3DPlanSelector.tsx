@@ -3,10 +3,8 @@ import type { TwinBarOptimizationPlan } from "@fence-estimator/contracts";
 interface Optimization3DPlanSelectorProps {
   activePlan: TwinBarOptimizationPlan | null;
   activePlanIndex: number | null;
-  planCount: number;
   plans: TwinBarOptimizationPlan[];
   onSelectPlan: (planId: string) => void;
-  formatLengthLabel: (valueMm: number) => string;
 }
 
 function formatReuseCountLabel(reusedCuts: number): string {
@@ -16,10 +14,8 @@ function formatReuseCountLabel(reusedCuts: number): string {
 export function Optimization3DPlanSelector({
   activePlan,
   activePlanIndex,
-  planCount,
   plans,
-  onSelectPlan,
-  formatLengthLabel
+  onSelectPlan
 }: Optimization3DPlanSelectorProps) {
   if (plans.length === 0) {
     return null;
@@ -27,21 +23,11 @@ export function Optimization3DPlanSelector({
 
   return (
     <div className="optimization-3d-selector" aria-label="Opened panel view selector">
-      <div className="optimization-3d-selector-head">
-        <strong>Opened panel view</strong>
-        {activePlanIndex !== null && planCount > 1 ? (
-          <span>
-            Showing {activePlanIndex + 1} of {planCount}
-          </span>
-        ) : (
-          <span>Showing the full reuse chain for the selected reusable panel</span>
-        )}
-      </div>
-
       <div className="optimization-3d-selector-controls">
         <button
           type="button"
           className="optimization-3d-selector-nav"
+          aria-label="Previous panel"
           onClick={() => {
             if (activePlanIndex === null || plans.length <= 1) {
               return;
@@ -54,7 +40,7 @@ export function Optimization3DPlanSelector({
           }}
           disabled={plans.length <= 1}
         >
-          Prev
+          {"<"}
         </button>
 
         <div className="optimization-plan-strip-top optimization-plan-strip-inline">
@@ -67,10 +53,8 @@ export function Optimization3DPlanSelector({
                 className={`optimization-plan-pill${isActive ? " is-active" : ""}`}
                 onClick={() => onSelectPlan(plan.id)}
               >
-                <span>Opened panel {index + 1}</span>
-                <strong>
-                  {formatReuseCountLabel(plan.reusedCuts)} | {formatLengthLabel(plan.leftoverMm)} left
-                </strong>
+                <span>Panel {index + 1}</span>
+                <strong>{formatReuseCountLabel(plan.reusedCuts)}</strong>
               </button>
             );
           })}
@@ -79,6 +63,7 @@ export function Optimization3DPlanSelector({
         <button
           type="button"
           className="optimization-3d-selector-nav"
+          aria-label="Next panel"
           onClick={() => {
             if (activePlanIndex === null || plans.length <= 1) {
               return;
@@ -91,7 +76,7 @@ export function Optimization3DPlanSelector({
           }}
           disabled={plans.length <= 1}
         >
-          Next
+          {">"}
         </button>
       </div>
     </div>

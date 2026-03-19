@@ -168,16 +168,15 @@ describe("OptimizationPlanner", () => {
     );
 
     expect(html).toContain("3D Reuse View");
-    expect(html).toContain("The 3D picker only shows opened panels that actually get reused");
+    expect(html).toContain("Cut Planner");
+    expect(html).toContain("2 saved");
     expect(html).toContain("2 panels saved in live cut layout");
     expect(html).toContain("4 cut pieces are covered by 2 opened stock panels.");
-    expect(html).toContain("Open panel on segment #1");
-    expect(html).toContain("Reuse offcut on segment #2");
-    expect(html).toContain("Open panel on segment #99");
-    expect(html).toContain("Shown in 3D view");
-    expect(html).toContain("Opened panel 1");
+    expect(html).toContain("Panel 1");
     expect(html).toContain("2 reuses");
-    expect(html).not.toContain("Opened panel 2</span>");
+    expect(html).not.toContain("The 3D picker only shows opened panels that actually get reused");
+    expect(html).not.toContain("Open panel on segment #1");
+    expect(html).not.toContain("Shown in 3D view");
   });
 
   it("shows all plans even when none save a panel", () => {
@@ -204,8 +203,8 @@ describe("OptimizationPlanner", () => {
     );
 
     expect(html).toContain("3D Reuse View");
-    expect(html).toContain("The 3D picker only shows opened panels that actually get reused");
     expect(html).toContain("No panels saved in live cut layout");
+    expect(html).toContain("0 saved");
     expect(html).not.toContain("No stock-panel plans available");
   });
 
@@ -233,6 +232,7 @@ describe("OptimizationPlanner", () => {
       />
     );
 
-    expect(html).toContain("Shown in 3D view");
+    expect(html).toContain("Panel 1");
+    expect(html).toContain("2 reuses");
   });
 });

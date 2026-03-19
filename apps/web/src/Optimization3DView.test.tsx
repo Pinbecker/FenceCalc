@@ -59,7 +59,7 @@ function buildPlan(): TwinBarOptimizationPlan {
 }
 
 describe("Optimization3DView", () => {
-  it("renders the plan selector, legend, and active cut steps", () => {
+  it("renders a compact view-first toolbar for the active plan", () => {
     const plan = buildPlan();
     const html = renderToStaticMarkup(
       <Optimization3DView
@@ -82,13 +82,15 @@ describe("Optimization3DView", () => {
     );
 
     expect(html).toContain("3D Reuse View");
-    expect(html).toContain("Opened panel view");
-    expect(html).toContain("Opened panel 1");
+    expect(html).toContain("Panel 1");
     expect(html).toContain("1 reuse");
     expect(html).toContain("Walk");
-    expect(html).toContain("Fresh stock cut");
-    expect(html).toContain("Reused offcut");
-    expect(html).toContain("Open panel on segment #1");
-    expect(html).toContain("Reuse offcut on segment #2");
+    expect(html).toContain("Fresh");
+    expect(html).toContain("Reuse");
+    expect(html).toContain("2 cuts in chain");
+    expect(html).toContain("Open S1 -&gt; Reuse S2");
+    expect(html).toContain("2.52m stock panel / 0.93m left after chain");
+    expect(html).toContain("leaves 1.82m offcut");
+    expect(html).not.toContain("Open panel on segment #1");
   });
 });
