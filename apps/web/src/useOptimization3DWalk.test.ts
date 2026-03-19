@@ -33,6 +33,7 @@ describe("useOptimization3DWalk helpers", () => {
     expect(walk.z).toBeGreaterThan(scene.bounds.minZ);
     expect(walk.z).toBeLessThan(scene.bounds.maxZ);
     expect(walk.eyeHeightMm).toBe(1700);
+    expect(walk.yaw).toBe(0);
   });
 
   it("moves and turns the walk camera with pointer and keyboard input", () => {
@@ -45,6 +46,34 @@ describe("useOptimization3DWalk helpers", () => {
     expect(lookedWalk.pitch).toBeGreaterThan(baseWalk.pitch);
     expect(movedWalk.z).toBeGreaterThan(baseWalk.z);
     expect(strafedWalk.x).toBeGreaterThan(baseWalk.x);
+  });
+
+  it("starts from the long-side edge and looks inward on wide pitches", () => {
+    const wideScene: Optimization3DScene = {
+      ...scene,
+      bounds: {
+        minX: 0,
+        maxX: 24000,
+        minZ: 0,
+        maxZ: 12000,
+        maxHeightMm: 5000
+      }
+    };
+
+    const walk = buildDefaultWalkState(wideScene);
+
+    expect(walk.x).toBeGreaterThan(wideScene.bounds.minX);
+    expect(walk.x).toBeLessThan(wideScene.bounds.maxX / 2);
+    expect(walk.z).toBe(6000);
+    expect(walk.yaw).toBeGreaterThan(1.4);
+    expect(walk.yaw).toBeLessThan(1.7);
+  });
+
+  it("accepts a larger custom movement step for bigger pitches", () => {
+    const baseWalk = buildDefaultWalkState(scene);
+    const movedWalk = applyWalkKeyboardInput(baseWalk, "w", 640);
+
+    expect(Math.round(movedWalk.z - baseWalk.z)).toBe(640);
   });
 
   it("adjusts walk eye height from the wheel input", () => {

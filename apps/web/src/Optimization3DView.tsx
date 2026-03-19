@@ -49,6 +49,12 @@ function buildLegendItems(): string[] {
   ];
 }
 
+function normalizeHeadingDegrees(yaw: number): number {
+  const fullTurn = Math.PI * 2;
+  const normalized = ((yaw % fullTurn) + fullTurn) % fullTurn;
+  return Math.round((normalized * 180) / Math.PI);
+}
+
 export function Optimization3DView({
   estimateSegments,
   activePlan,
@@ -91,6 +97,20 @@ export function Optimization3DView({
   const freshCountLabel = `${freshCutCount} ${freshCutCount === 1 ? "fresh cut" : "fresh cuts"}`;
   const activeCamera = cameraMode === "walk" ? walkController.walk : orbitController.orbit;
   const activeStageHandlers = cameraMode === "walk" ? walkController.stageHandlers : orbitController.stageHandlers;
+  const walkAcrossPercent = Math.round(
+    ((walkController.walk.x - scene.bounds.minX) / Math.max(scene.bounds.maxX - scene.bounds.minX, 1)) * 100
+  );
+  const walkDepthPercent = Math.round(
+    ((walkController.walk.z - scene.bounds.minZ) / Math.max(scene.bounds.maxZ - scene.bounds.minZ, 1)) * 100
+  );
+  const walkHud =
+    cameraMode === "walk"
+      ? {
+          heading: `Heading ${normalizeHeadingDegrees(walkController.walk.yaw)}°`,
+          eyeHeight: `Eye ${formatLengthMm(walkController.walk.eyeHeightMm)}`,
+          position: `Pitch ${walkAcrossPercent}% across / ${walkDepthPercent}% deep`
+        }
+      : null;
   const resetActiveCamera = () => {
     if (cameraMode === "walk") {
       walkController.resetWalk();
@@ -100,7 +120,7 @@ export function Optimization3DView({
   };
   const instructions =
     cameraMode === "walk"
-      ? "Walk mode: drag to look around, use W A S D to move, Q and E to change eye height, and 0 to reset."
+      ? "Walk mode: click the view first, drag to look around, use W A S D to move, hold Shift to move faster, use Q and E to change eye height, and press 0 to reset."
       : "Orbit mode: drag to orbit, hold Shift and drag to pan, and scroll to zoom. The picker only includes opened panels that actually get reused, and the view shows one full reuse chain at a time.";
 
   return (
@@ -158,6 +178,7 @@ export function Optimization3DView({
         camera={activeCamera}
         mode={cameraMode}
         stageHandlers={activeStageHandlers}
+        walkHud={walkHud}
       />
 
       <div className="optimization-3d-legend">

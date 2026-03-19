@@ -1340,6 +1340,7 @@ h1 {
 }
 
 .optimization-3d-stage {
+  position: relative;
   height: 420px;
   overflow: hidden;
   border-radius: 18px;
@@ -1353,6 +1354,9 @@ h1 {
 
 .optimization-3d-stage.is-walk {
   cursor: crosshair;
+  background:
+    radial-gradient(circle at 50% 54%, rgba(255, 242, 204, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(230, 241, 252, 0.98), rgba(201, 222, 203, 0.96) 60%, rgba(111, 144, 96, 0.92) 100%);
 }
 
 .optimization-3d-stage:active {
@@ -1367,6 +1371,92 @@ h1 {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.optimization-3d-walk-banner,
+.optimization-3d-walk-hud,
+.optimization-3d-walk-reticle {
+  position: absolute;
+  pointer-events: none;
+}
+
+.optimization-3d-walk-banner {
+  top: 14px;
+  left: 14px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(215, 233, 221, 0.32);
+  border-radius: 14px;
+  background: rgba(18, 31, 28, 0.46);
+  color: rgba(241, 250, 244, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(10, 17, 15, 0.14);
+}
+
+.optimization-3d-walk-banner strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.optimization-3d-walk-banner span {
+  max-width: 30ch;
+  color: rgba(232, 242, 236, 0.82);
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.optimization-3d-walk-hud {
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.optimization-3d-walk-hud span {
+  padding: 8px 10px;
+  border: 1px solid rgba(215, 233, 221, 0.24);
+  border-radius: 999px;
+  background: rgba(13, 24, 21, 0.5);
+  color: rgba(240, 248, 242, 0.92);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(12px);
+}
+
+.optimization-3d-walk-reticle {
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 251, 249, 0.28);
+  background: rgba(7, 14, 12, 0.1);
+  box-shadow: 0 0 0 1px rgba(10, 18, 15, 0.08);
+}
+
+.optimization-3d-walk-reticle i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  background: rgba(246, 251, 249, 0.84);
+  transform: translate(-50%, -50%);
+}
+
+.optimization-3d-walk-reticle i:first-child {
+  width: 10px;
+  height: 1px;
+}
+
+.optimization-3d-walk-reticle i:last-child {
+  width: 1px;
+  height: 10px;
 }
 
 .optimization-3d-legend {

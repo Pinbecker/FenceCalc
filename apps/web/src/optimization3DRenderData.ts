@@ -19,6 +19,12 @@ export interface ProjectedPoint {
   depth: number;
 }
 
+interface CameraSpacePoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface OrbitState {
   yaw: number;
   pitch: number;
@@ -194,7 +200,7 @@ function getFaceDepth(points: ReadonlyArray<ProjectedPoint>): number {
 
 function buildMeshStrokes(
   slice: Optimization3DPanelSlice,
-  project: (point: Point3D) => ProjectedPoint
+  projectSegment: (start: Point3D, end: Point3D) => [ProjectedPoint, ProjectedPoint] | null
 ): RenderStroke[] {
   const strokes: RenderStroke[] = [];
   const palette = PANEL_PALETTE[slice.tone];
@@ -211,8 +217,14 @@ function buildMeshStrokes(
       x: slice.start.x + (slice.end.x - slice.start.x) * ratio,
       y: slice.start.y + (slice.end.y - slice.start.y) * ratio
     };
-    const lineStart = project(toWorldPoint(groundPoint, slice.baseHeightMm));
-    const lineEnd = project(toWorldPoint(groundPoint, slice.baseHeightMm + slice.heightMm));
+    const projectedLine = projectSegment(
+      toWorldPoint(groundPoint, slice.baseHeightMm),
+      toWorldPoint(groundPoint, slice.baseHeightMm + slice.heightMm)
+    );
+    if (!projectedLine) {
+      continue;
+    }
+    const [lineStart, lineEnd] = projectedLine;
     strokes.push({
       key: `${slice.key}-mesh-v-${lineIndex}`,
       kind: "polyline",
@@ -229,8 +241,11 @@ function buildMeshStrokes(
     if (heightMm >= slice.baseHeightMm + slice.heightMm - 1) {
       continue;
     }
-    const lineStart = project(toWorldPoint(slice.start, heightMm));
-    const lineEnd = project(toWorldPoint(slice.end, heightMm));
+    const projectedLine = projectSegment(toWorldPoint(slice.start, heightMm), toWorldPoint(slice.end, heightMm));
+    if (!projectedLine) {
+      continue;
+    }
+    const [lineStart, lineEnd] = projectedLine;
     strokes.push({
       key: `${slice.key}-mesh-h-${lineIndex}`,
       kind: "polyline",
@@ -247,11 +262,14 @@ function buildMeshStrokes(
 
 function createOverlayBadge(
   overlay: Optimization3DCutOverlay,
-  project: (point: Point3D) => ProjectedPoint
-): RenderBadge {
+  projectVisiblePoint: (point: Point3D) => ProjectedPoint | null
+): RenderBadge | null {
   const palette = OVERLAY_PALETTE[overlay.mode];
   const badgeHeightMm = overlay.baseHeightMm + overlay.heightMm + 280;
-  const projected = project(toWorldPoint(overlay.center, badgeHeightMm));
+  const projected = projectVisiblePoint(toWorldPoint(overlay.center, badgeHeightMm));
+  if (!projected) {
+    return null;
+  }
   return {
     key: `${overlay.key}-badge`,
     cx: projected.x,
@@ -284,47 +302,14 @@ function buildProjector(
   if (isWalkState(camera)) {
     const focalLength = Math.min(viewportWidth, viewportHeight) * 1.04;
     const nearPlaneMm = 140;
-    return {
-      scale: focalLength / 1000,
-      project: (point: Point3D): ProjectedPoint => {
-        const translatedX = point.x - camera.x;
-        const translatedY = point.y - camera.eyeHeightMm;
-        const translatedZ = point.z - camera.z;
-
-        const yawCos = Math.cos(camera.yaw);
-        const yawSin = Math.sin(camera.yaw);
-        const pitchCos = Math.cos(camera.pitch);
-        const pitchSin = Math.sin(camera.pitch);
-
-        const yawX = translatedX * yawCos - translatedZ * yawSin;
-        const yawZ = translatedX * yawSin + translatedZ * yawCos;
-        const pitchY = translatedY * pitchCos - yawZ * pitchSin;
-        const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
-        const safeDepth = Math.max(nearPlaneMm, pitchZ);
-        const perspective = focalLength / safeDepth;
-
-        return {
-          x: viewportWidth / 2 + yawX * perspective,
-          y: viewportHeight * 0.62 - pitchY * perspective,
-          depth: pitchZ
-        };
-      }
-    };
-  }
-
-  const scale = (Math.min(viewportWidth, viewportHeight) * 0.8 * camera.zoom) / spanMm;
-
-  return {
-    scale,
-    project: (point: Point3D): ProjectedPoint => {
-      const translatedX = point.x - center.x;
-      const translatedY = point.y - center.y;
-      const translatedZ = point.z - center.z;
-
-      const yawCos = Math.cos(camera.yaw);
-      const yawSin = Math.sin(camera.yaw);
-      const pitchCos = Math.cos(camera.pitch);
-      const pitchSin = Math.sin(camera.pitch);
+    const yawCos = Math.cos(camera.yaw);
+    const yawSin = Math.sin(camera.yaw);
+    const pitchCos = Math.cos(camera.pitch);
+    const pitchSin = Math.sin(camera.pitch);
+    const toCameraSpace = (point: Point3D): CameraSpacePoint => {
+      const translatedX = point.x - camera.x;
+      const translatedY = point.y - camera.eyeHeightMm;
+      const translatedZ = point.z - camera.z;
 
       const yawX = translatedX * yawCos - translatedZ * yawSin;
       const yawZ = translatedX * yawSin + translatedZ * yawCos;
@@ -332,11 +317,124 @@ function buildProjector(
       const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
 
       return {
-        x: viewportWidth / 2 + yawX * scale + camera.panX,
-        y: viewportHeight * 0.68 - pitchY * scale + camera.panY,
-        depth: pitchZ
+        x: yawX,
+        y: pitchY,
+        z: pitchZ
       };
-    }
+    };
+    const projectCameraPoint = (point: CameraSpacePoint): ProjectedPoint => {
+      const perspective = focalLength / point.z;
+      return {
+        x: viewportWidth / 2 + point.x * perspective,
+        y: viewportHeight * 0.62 - point.y * perspective,
+        depth: point.z
+      };
+    };
+    const interpolateToNearPlane = (start: CameraSpacePoint, end: CameraSpacePoint): CameraSpacePoint => {
+      const deltaZ = end.z - start.z;
+      const safeDeltaZ = Math.abs(deltaZ) < 0.0001 ? (deltaZ < 0 ? -0.0001 : 0.0001) : deltaZ;
+      const ratio = (nearPlaneMm - start.z) / safeDeltaZ;
+      return {
+        x: start.x + (end.x - start.x) * ratio,
+        y: start.y + (end.y - start.y) * ratio,
+        z: nearPlaneMm
+      };
+    };
+    const clipSegmentToNearPlane = (
+      start: CameraSpacePoint,
+      end: CameraSpacePoint
+    ): [CameraSpacePoint, CameraSpacePoint] | null => {
+      const startVisible = start.z >= nearPlaneMm;
+      const endVisible = end.z >= nearPlaneMm;
+      if (!startVisible && !endVisible) {
+        return null;
+      }
+      if (startVisible && endVisible) {
+        return [start, end];
+      }
+      const clippedPoint = interpolateToNearPlane(start, end);
+      return startVisible ? [start, clippedPoint] : [clippedPoint, end];
+    };
+    const clipPolygonToNearPlane = (points: ReadonlyArray<CameraSpacePoint>): CameraSpacePoint[] => {
+      if (points.length === 0) {
+        return [];
+      }
+      const clipped: CameraSpacePoint[] = [];
+      let previous = points[points.length - 1]!;
+      let previousVisible = previous.z >= nearPlaneMm;
+
+      for (const current of points) {
+        const currentVisible = current.z >= nearPlaneMm;
+        if (currentVisible !== previousVisible) {
+          clipped.push(interpolateToNearPlane(previous, current));
+        }
+        if (currentVisible) {
+          clipped.push(current);
+        }
+        previous = current;
+        previousVisible = currentVisible;
+      }
+
+      return clipped;
+    };
+    return {
+      scale: focalLength / 1000,
+      project: (point: Point3D): ProjectedPoint => {
+        const cameraPoint = toCameraSpace(point);
+        return projectCameraPoint({
+          ...cameraPoint,
+          z: Math.max(nearPlaneMm, cameraPoint.z)
+        });
+      },
+      projectVisiblePoint: (point: Point3D): ProjectedPoint | null => {
+        const cameraPoint = toCameraSpace(point);
+        return cameraPoint.z >= nearPlaneMm ? projectCameraPoint(cameraPoint) : null;
+      },
+      projectFace: (points: ReadonlyArray<Point3D>): ProjectedPoint[] | null => {
+        const clippedPoints = clipPolygonToNearPlane(points.map(toCameraSpace));
+        return clippedPoints.length >= 3 ? clippedPoints.map(projectCameraPoint) : null;
+      },
+      projectSegment: (start: Point3D, end: Point3D): [ProjectedPoint, ProjectedPoint] | null => {
+        const clippedSegment = clipSegmentToNearPlane(toCameraSpace(start), toCameraSpace(end));
+        return clippedSegment ? [projectCameraPoint(clippedSegment[0]), projectCameraPoint(clippedSegment[1])] : null;
+      },
+      projectPolyline: (points: ReadonlyArray<Point3D>): ProjectedPoint[] | null => {
+        const cameraPoints = points.map(toCameraSpace);
+        return cameraPoints.every((point) => point.z >= nearPlaneMm) ? cameraPoints.map(projectCameraPoint) : null;
+      }
+    };
+  }
+
+  const scale = (Math.min(viewportWidth, viewportHeight) * 0.8 * camera.zoom) / spanMm;
+  const orbitProjectPoint = (point: Point3D): ProjectedPoint => {
+    const translatedX = point.x - center.x;
+    const translatedY = point.y - center.y;
+    const translatedZ = point.z - center.z;
+
+    const yawCos = Math.cos(camera.yaw);
+    const yawSin = Math.sin(camera.yaw);
+    const pitchCos = Math.cos(camera.pitch);
+    const pitchSin = Math.sin(camera.pitch);
+
+    const yawX = translatedX * yawCos - translatedZ * yawSin;
+    const yawZ = translatedX * yawSin + translatedZ * yawCos;
+    const pitchY = translatedY * pitchCos - yawZ * pitchSin;
+    const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
+
+    return {
+      x: viewportWidth / 2 + yawX * scale + camera.panX,
+      y: viewportHeight * 0.68 - pitchY * scale + camera.panY,
+      depth: pitchZ
+    };
+  };
+
+  return {
+    scale,
+    project: orbitProjectPoint,
+    projectVisiblePoint: (point: Point3D): ProjectedPoint => orbitProjectPoint(point),
+    projectFace: (points: ReadonlyArray<Point3D>): ProjectedPoint[] => points.map(orbitProjectPoint),
+    projectSegment: (start: Point3D, end: Point3D): [ProjectedPoint, ProjectedPoint] => [orbitProjectPoint(start), orbitProjectPoint(end)],
+    projectPolyline: (points: ReadonlyArray<Point3D>): ProjectedPoint[] => points.map(orbitProjectPoint)
   };
 }
 
@@ -346,57 +444,122 @@ export function buildOptimization3DRenderData(
   viewportWidth: number,
   viewportHeight: number
 ): Optimization3DRenderData {
-  const { project, scale } = buildProjector(scene, camera, viewportWidth, viewportHeight);
+  const { projectVisiblePoint, projectFace, projectSegment, projectPolyline, scale } = buildProjector(
+    scene,
+    camera,
+    viewportWidth,
+    viewportHeight
+  );
   const faces: RenderFace[] = [];
   const strokes: RenderStroke[] = [];
   const badges: RenderBadge[] = [];
+
+  const pushFace = (
+    key: string,
+    points: ReadonlyArray<Point3D>,
+    fill: string,
+    stroke: string,
+    strokeWidth: number,
+    opacity: number,
+    depthOffset: number = 0
+  ) => {
+    const projected = projectFace(points);
+    if (!projected || projected.length < 3) {
+      return;
+    }
+    faces.push({
+      key,
+      points: formatPolygonPoints(projected),
+      fill,
+      stroke,
+      strokeWidth,
+      opacity,
+      depth: getFaceDepth(projected) + depthOffset
+    });
+  };
+
+  const pushSegmentStroke = (
+    key: string,
+    start: Point3D,
+    end: Point3D,
+    stroke: string,
+    strokeWidth: number,
+    opacity: number,
+    depthOffset: number = 0,
+    dashArray?: string
+  ) => {
+    const projected = projectSegment(start, end);
+    if (!projected) {
+      return;
+    }
+    const [from, to] = projected;
+    const strokeRecord: RenderStroke = {
+      key,
+      kind: "polyline",
+      value: `${from.x},${from.y} ${to.x},${to.y}`,
+      stroke,
+      strokeWidth,
+      opacity,
+      depth: (from.depth + to.depth) / 2 + depthOffset
+    };
+    if (dashArray) {
+      strokeRecord.dashArray = dashArray;
+    }
+    strokes.push(strokeRecord);
+  };
+
+  const pushPolylineStroke = (
+    key: string,
+    points: ReadonlyArray<Point3D>,
+    stroke: string,
+    strokeWidth: number,
+    opacity: number,
+    depthOffset: number = 0,
+    dashArray?: string
+  ) => {
+    const projected = projectPolyline(points);
+    if (!projected || projected.length < 2) {
+      return;
+    }
+    const strokeRecord: RenderStroke = {
+      key,
+      kind: "polyline",
+      value: projected.map((point) => `${point.x},${point.y}`).join(" "),
+      stroke,
+      strokeWidth,
+      opacity,
+      depth: getFaceDepth(projected) + depthOffset
+    };
+    if (dashArray) {
+      strokeRecord.dashArray = dashArray;
+    }
+    strokes.push(strokeRecord);
+  };
 
   const groundMinX = scene.bounds.minX - GROUND_PADDING_MM;
   const groundMaxX = scene.bounds.maxX + GROUND_PADDING_MM;
   const groundMinZ = scene.bounds.minZ - GROUND_PADDING_MM;
   const groundMaxZ = scene.bounds.maxZ + GROUND_PADDING_MM;
-  const groundPoints = [
-    project({ x: groundMinX, y: 0, z: groundMinZ }),
-    project({ x: groundMaxX, y: 0, z: groundMinZ }),
-    project({ x: groundMaxX, y: 0, z: groundMaxZ }),
-    project({ x: groundMinX, y: 0, z: groundMaxZ })
-  ];
-  faces.push({
-    key: "ground",
-    points: formatPolygonPoints(groundPoints),
-    fill: "rgba(204, 219, 205, 0.52)",
-    stroke: "rgba(118, 136, 119, 0.2)",
-    strokeWidth: 1,
-    opacity: 1,
-    depth: getFaceDepth(groundPoints)
-  });
+  pushFace(
+    "ground",
+    [
+      { x: groundMinX, y: 0, z: groundMinZ },
+      { x: groundMaxX, y: 0, z: groundMinZ },
+      { x: groundMaxX, y: 0, z: groundMaxZ },
+      { x: groundMinX, y: 0, z: groundMaxZ }
+    ],
+    "rgba(204, 219, 205, 0.52)",
+    "rgba(118, 136, 119, 0.2)",
+    1,
+    1
+  );
 
   for (let gridX = groundMinX; gridX <= groundMaxX; gridX += 2500) {
-    const start = project({ x: gridX, y: 0, z: groundMinZ });
-    const end = project({ x: gridX, y: 0, z: groundMaxZ });
-    strokes.push({
-      key: `grid-x-${gridX}`,
-      kind: "polyline",
-      value: `${start.x},${start.y} ${end.x},${end.y}`,
-      stroke: "rgba(91, 110, 98, 0.13)",
-      strokeWidth: 0.9,
-      opacity: 1,
-      depth: (start.depth + end.depth) / 2
-    });
+    pushSegmentStroke(`grid-x-${gridX}`, { x: gridX, y: 0, z: groundMinZ }, { x: gridX, y: 0, z: groundMaxZ }, "rgba(91, 110, 98, 0.13)", 0.9, 1);
   }
 
   for (let gridZ = groundMinZ; gridZ <= groundMaxZ; gridZ += 2500) {
-    const start = project({ x: groundMinX, y: 0, z: gridZ });
-    const end = project({ x: groundMaxX, y: 0, z: gridZ });
-    strokes.push({
-      key: `grid-z-${gridZ}`,
-      kind: "polyline",
-      value: `${start.x},${start.y} ${end.x},${end.y}`,
-      stroke: "rgba(91, 110, 98, 0.13)",
-      strokeWidth: 0.9,
-      opacity: 1,
-      depth: (start.depth + end.depth) / 2
-    });
+    pushSegmentStroke(`grid-z-${gridZ}`, { x: groundMinX, y: 0, z: gridZ }, { x: groundMaxX, y: 0, z: gridZ }, "rgba(91, 110, 98, 0.13)", 0.9, 1);
   }
 
   for (const slice of scene.panelSlices) {
@@ -410,65 +573,57 @@ export function buildOptimization3DRenderData(
     const shadowEdge = offsetEdge(frontEdge.start, frontEdge.end, 130);
     const shadowDriftX = -140;
     const shadowDriftZ = 100;
-    const shadowPoints = [
-      project({ x: frontEdge.start.x + shadowDriftX, y: 0, z: frontEdge.start.z + shadowDriftZ }),
-      project({ x: frontEdge.end.x + shadowDriftX, y: 0, z: frontEdge.end.z + shadowDriftZ }),
-      project({ x: shadowEdge.end.x + shadowDriftX, y: 0, z: shadowEdge.end.z + shadowDriftZ }),
-      project({ x: shadowEdge.start.x + shadowDriftX, y: 0, z: shadowEdge.start.z + shadowDriftZ })
-    ];
-    faces.push({
-      key: `${slice.key}-shadow`,
-      points: formatPolygonPoints(shadowPoints),
-      fill: "rgba(36, 46, 41, 0.09)",
-      stroke: "transparent",
-      strokeWidth: 0,
-      opacity: 1,
-      depth: getFaceDepth(shadowPoints) - 12
-    });
+    pushFace(
+      `${slice.key}-shadow`,
+      [
+        { x: frontEdge.start.x + shadowDriftX, y: 0, z: frontEdge.start.z + shadowDriftZ },
+        { x: frontEdge.end.x + shadowDriftX, y: 0, z: frontEdge.end.z + shadowDriftZ },
+        { x: shadowEdge.end.x + shadowDriftX, y: 0, z: shadowEdge.end.z + shadowDriftZ },
+        { x: shadowEdge.start.x + shadowDriftX, y: 0, z: shadowEdge.start.z + shadowDriftZ }
+      ],
+      "rgba(36, 46, 41, 0.09)",
+      "transparent",
+      0,
+      1,
+      -12
+    );
 
-    const frontBottomStart = project({ x: frontEdge.start.x, y: slice.baseHeightMm, z: frontEdge.start.z });
-    const frontBottomEnd = project({ x: frontEdge.end.x, y: slice.baseHeightMm, z: frontEdge.end.z });
-    const frontTopEnd = project({ x: frontEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.end.z });
-    const frontTopStart = project({
-      x: frontEdge.start.x,
-      y: slice.baseHeightMm + slice.heightMm,
-      z: frontEdge.start.z
-    });
-    const backBottomEnd = project({ x: backEdge.end.x, y: slice.baseHeightMm, z: backEdge.end.z });
-    const backTopEnd = project({ x: backEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: backEdge.end.z });
-    const backTopStart = project({ x: backEdge.start.x, y: slice.baseHeightMm + slice.heightMm, z: backEdge.start.z });
-
-    const sliceFaces = [
+    [
       {
         key: `${slice.key}-front`,
-        points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart],
+        points: [
+          { x: frontEdge.start.x, y: slice.baseHeightMm, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: slice.baseHeightMm, z: frontEdge.end.z },
+          { x: frontEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.end.z },
+          { x: frontEdge.start.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.start.z }
+        ],
         fill: palette.frontFill
       },
       {
         key: `${slice.key}-top`,
-        points: [frontTopStart, frontTopEnd, backTopEnd, backTopStart],
+        points: [
+          { x: frontEdge.start.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.end.z },
+          { x: backEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: backEdge.end.z },
+          { x: backEdge.start.x, y: slice.baseHeightMm + slice.heightMm, z: backEdge.start.z }
+        ],
         fill: palette.topFill
       },
       {
         key: `${slice.key}-side`,
-        points: [frontBottomEnd, backBottomEnd, backTopEnd, frontTopEnd],
+        points: [
+          { x: frontEdge.end.x, y: slice.baseHeightMm, z: frontEdge.end.z },
+          { x: backEdge.end.x, y: slice.baseHeightMm, z: backEdge.end.z },
+          { x: backEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: backEdge.end.z },
+          { x: frontEdge.end.x, y: slice.baseHeightMm + slice.heightMm, z: frontEdge.end.z }
+        ],
         fill: palette.sideFill
       }
-    ];
-
-    sliceFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: palette.stroke,
-        strokeWidth: 0.92,
-        opacity: 1,
-        depth: getFaceDepth(face.points)
-      });
+    ].forEach((face) => {
+      pushFace(face.key, face.points, face.fill, palette.stroke, 0.92, 1);
     });
 
-    strokes.push(...buildMeshStrokes(slice, project));
+    strokes.push(...buildMeshStrokes(slice, projectSegment));
   }
 
   for (const kickboard of scene.kickboards ?? []) {
@@ -477,38 +632,38 @@ export function buildOptimization3DRenderData(
       end: toGroundPoint(kickboard.end)
     };
     const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, kickboard.thicknessMm);
-    const frontBottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
-    const frontBottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
-    const frontTopEnd = project({ x: frontEdge.end.x, y: kickboard.heightMm, z: frontEdge.end.z });
-    const frontTopStart = project({ x: frontEdge.start.x, y: kickboard.heightMm, z: frontEdge.start.z });
-    const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
-    const outerTopEnd = project({ x: outerEdge.end.x, y: kickboard.heightMm, z: outerEdge.end.z });
-    const outerTopStart = project({ x: outerEdge.start.x, y: kickboard.heightMm, z: outerEdge.start.z });
     const fill = kickboard.profile === "CHAMFERED" ? "rgba(151, 99, 56, 0.9)" : "rgba(122, 82, 50, 0.92)";
 
     [
       {
         key: `${kickboard.key}-front`,
-        points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart]
+        points: [
+          { x: frontEdge.start.x, y: 0, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+          { x: frontEdge.end.x, y: kickboard.heightMm, z: frontEdge.end.z },
+          { x: frontEdge.start.x, y: kickboard.heightMm, z: frontEdge.start.z }
+        ]
       },
       {
         key: `${kickboard.key}-top`,
-        points: [frontTopStart, frontTopEnd, outerTopEnd, outerTopStart]
+        points: [
+          { x: frontEdge.start.x, y: kickboard.heightMm, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: kickboard.heightMm, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: kickboard.heightMm, z: outerEdge.end.z },
+          { x: outerEdge.start.x, y: kickboard.heightMm, z: outerEdge.start.z }
+        ]
       },
       {
         key: `${kickboard.key}-side`,
-        points: [frontBottomEnd, outerBottomEnd, outerTopEnd, frontTopEnd]
+        points: [
+          { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: 0, z: outerEdge.end.z },
+          { x: outerEdge.end.x, y: kickboard.heightMm, z: outerEdge.end.z },
+          { x: frontEdge.end.x, y: kickboard.heightMm, z: frontEdge.end.z }
+        ]
       }
     ].forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill,
-        stroke: "rgba(70, 44, 23, 0.84)",
-        strokeWidth: 0.9,
-        opacity: 1,
-        depth: getFaceDepth(face.points) + 0.04
-      });
+      pushFace(face.key, face.points, fill, "rgba(70, 44, 23, 0.84)", 0.9, 1, 0.04);
     });
   }
 
@@ -525,37 +680,37 @@ export function buildOptimization3DRenderData(
         end: toGroundPoint(wall.end)
       };
       const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, 34);
-      const bottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
-      const bottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
-      const topEnd = project({ x: frontEdge.end.x, y: goalUnit.enclosureHeightMm, z: frontEdge.end.z });
-      const topStart = project({ x: frontEdge.start.x, y: goalUnit.enclosureHeightMm, z: frontEdge.start.z });
-      const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
-      const outerTopEnd = project({ x: outerEdge.end.x, y: goalUnit.enclosureHeightMm, z: outerEdge.end.z });
-      const outerTopStart = project({ x: outerEdge.start.x, y: goalUnit.enclosureHeightMm, z: outerEdge.start.z });
 
       [
         {
           key: `${wall.key}-front`,
-          points: [bottomStart, bottomEnd, topEnd, topStart]
+          points: [
+            { x: frontEdge.start.x, y: 0, z: frontEdge.start.z },
+            { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+            { x: frontEdge.end.x, y: goalUnit.enclosureHeightMm, z: frontEdge.end.z },
+            { x: frontEdge.start.x, y: goalUnit.enclosureHeightMm, z: frontEdge.start.z }
+          ]
         },
         {
           key: `${wall.key}-top`,
-          points: [topStart, topEnd, outerTopEnd, outerTopStart]
+          points: [
+            { x: frontEdge.start.x, y: goalUnit.enclosureHeightMm, z: frontEdge.start.z },
+            { x: frontEdge.end.x, y: goalUnit.enclosureHeightMm, z: frontEdge.end.z },
+            { x: outerEdge.end.x, y: goalUnit.enclosureHeightMm, z: outerEdge.end.z },
+            { x: outerEdge.start.x, y: goalUnit.enclosureHeightMm, z: outerEdge.start.z }
+          ]
         },
         {
           key: `${wall.key}-side`,
-          points: [bottomEnd, outerBottomEnd, outerTopEnd, topEnd]
+          points: [
+            { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+            { x: outerEdge.end.x, y: 0, z: outerEdge.end.z },
+            { x: outerEdge.end.x, y: goalUnit.enclosureHeightMm, z: outerEdge.end.z },
+            { x: frontEdge.end.x, y: goalUnit.enclosureHeightMm, z: frontEdge.end.z }
+          ]
         }
       ].forEach((face) => {
-        faces.push({
-          key: face.key,
-          points: formatPolygonPoints(face.points),
-          fill: "rgba(121, 154, 173, 0.84)",
-          stroke: "rgba(50, 76, 92, 0.86)",
-          strokeWidth: 0.96,
-          opacity: 1,
-          depth: getFaceDepth(face.points) + 0.06
-        });
+        pushFace(face.key, face.points, "rgba(121, 154, 173, 0.84)", "rgba(50, 76, 92, 0.86)", 0.96, 1, 0.06);
       });
     }
 
@@ -588,61 +743,56 @@ export function buildOptimization3DRenderData(
       { key: `${goalUnit.key}-front-panel-right`, start: rightSlotPoint, end: goalUnit.exitPoint }
     ];
     for (const face of frontPanelFaces) {
-      const bottomStart = project(toWorldPoint(face.start, goalMouthHeightMm));
-      const bottomEnd = project(toWorldPoint(face.end, goalMouthHeightMm));
-      const topEnd = project(toWorldPoint(face.end, goalUnit.enclosureHeightMm));
-      const topStart = project(toWorldPoint(face.start, goalUnit.enclosureHeightMm));
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints([bottomStart, bottomEnd, topEnd, topStart]),
-        fill: "rgba(197, 205, 212, 0.82)",
-        stroke: "rgba(92, 104, 118, 0.88)",
-        strokeWidth: 0.94,
-        opacity: 1,
-        depth: getFaceDepth([bottomStart, bottomEnd, topEnd, topStart]) + 0.08
-      });
+      pushFace(
+        face.key,
+        [
+          toWorldPoint(face.start, goalMouthHeightMm),
+          toWorldPoint(face.end, goalMouthHeightMm),
+          toWorldPoint(face.end, goalUnit.enclosureHeightMm),
+          toWorldPoint(face.start, goalUnit.enclosureHeightMm)
+        ],
+        "rgba(197, 205, 212, 0.82)",
+        "rgba(92, 104, 118, 0.88)",
+        0.94,
+        1,
+        0.08
+      );
     }
 
-    const lintelStart = project(toWorldPoint(goalUnit.entryPoint, goalMouthHeightMm));
-    const lintelEnd = project(toWorldPoint(goalUnit.exitPoint, goalMouthHeightMm));
-    strokes.push({
-      key: `${goalUnit.key}-lintel`,
-      kind: "polyline",
-      value: `${lintelStart.x},${lintelStart.y} ${lintelEnd.x},${lintelEnd.y}`,
-      stroke: "rgba(255, 215, 166, 0.94)",
-      strokeWidth: 2,
-      opacity: 1,
-      depth: (lintelStart.depth + lintelEnd.depth) / 2 + 0.1
-    });
+    pushSegmentStroke(
+      `${goalUnit.key}-lintel`,
+      toWorldPoint(goalUnit.entryPoint, goalMouthHeightMm),
+      toWorldPoint(goalUnit.exitPoint, goalMouthHeightMm),
+      "rgba(255, 215, 166, 0.94)",
+      2,
+      1,
+      0.1
+    );
 
     const armHeightMm = Math.max(goalMouthHeightMm + 350, goalUnit.enclosureHeightMm - 260);
-    const postTop = project(toWorldPoint(goalUnit.rearCenterPoint, goalUnit.enclosureHeightMm + 400));
-    const postBottom = project(toWorldPoint(goalUnit.rearCenterPoint, 0));
-    strokes.push({
-      key: `${goalUnit.key}-basketball-post`,
-      kind: "polyline",
-      value: `${postBottom.x},${postBottom.y} ${postTop.x},${postTop.y}`,
-      stroke: "rgba(38, 84, 183, 0.94)",
-      strokeWidth: 2.1,
-      opacity: 1,
-      depth: (postBottom.depth + postTop.depth) / 2 + 0.1
-    });
+    pushSegmentStroke(
+      `${goalUnit.key}-basketball-post`,
+      toWorldPoint(goalUnit.rearCenterPoint, 0),
+      toWorldPoint(goalUnit.rearCenterPoint, goalUnit.enclosureHeightMm + 400),
+      "rgba(38, 84, 183, 0.94)",
+      2.1,
+      1,
+      0.1
+    );
 
     const armExitPoint = {
       x: frontMidpoint.x - goalUnit.normal.x * 420,
       y: frontMidpoint.y - goalUnit.normal.y * 420
     };
-    const armStart = project(toWorldPoint(goalUnit.rearCenterPoint, armHeightMm));
-    const armEnd = project(toWorldPoint(armExitPoint, armHeightMm));
-    strokes.push({
-      key: `${goalUnit.key}-basketball-arm`,
-      kind: "polyline",
-      value: `${armStart.x},${armStart.y} ${armEnd.x},${armEnd.y}`,
-      stroke: "rgba(255, 183, 89, 0.96)",
-      strokeWidth: 2.1,
-      opacity: 1,
-      depth: (armStart.depth + armEnd.depth) / 2 + 0.11
-    });
+    pushSegmentStroke(
+      `${goalUnit.key}-basketball-arm`,
+      toWorldPoint(goalUnit.rearCenterPoint, armHeightMm),
+      toWorldPoint(armExitPoint, armHeightMm),
+      "rgba(255, 183, 89, 0.96)",
+      2.1,
+      1,
+      0.11
+    );
 
     const boardCenter = {
       x: armExitPoint.x - goalUnit.normal.x * 140,
@@ -650,50 +800,70 @@ export function buildOptimization3DRenderData(
     };
     const boardHalfWidthMm = 420;
     const boardHalfHeightMm = 300;
-    const boardTopLeft = project(toWorldPoint({
-      x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
-      y: boardCenter.y - frontTangent.y * boardHalfWidthMm
-    }, armHeightMm + boardHalfHeightMm));
-    const boardTopRight = project(toWorldPoint({
-      x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
-      y: boardCenter.y + frontTangent.y * boardHalfWidthMm
-    }, armHeightMm + boardHalfHeightMm));
-    const boardBottomRight = project(toWorldPoint({
-      x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
-      y: boardCenter.y + frontTangent.y * boardHalfWidthMm
-    }, armHeightMm - boardHalfHeightMm));
-    const boardBottomLeft = project(toWorldPoint({
-      x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
-      y: boardCenter.y - frontTangent.y * boardHalfWidthMm
-    }, armHeightMm - boardHalfHeightMm));
-    faces.push({
-      key: `${goalUnit.key}-backboard`,
-      points: formatPolygonPoints([boardBottomLeft, boardBottomRight, boardTopRight, boardTopLeft]),
-      fill: "rgba(244, 250, 255, 0.88)",
-      stroke: "rgba(87, 104, 121, 0.9)",
-      strokeWidth: 0.9,
-      opacity: 1,
-      depth: getFaceDepth([boardBottomLeft, boardBottomRight, boardTopRight, boardTopLeft]) + 0.12
-    });
+    pushFace(
+      `${goalUnit.key}-backboard`,
+      [
+        toWorldPoint(
+          {
+            x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
+            y: boardCenter.y - frontTangent.y * boardHalfWidthMm
+          },
+          armHeightMm - boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
+            y: boardCenter.y + frontTangent.y * boardHalfWidthMm
+          },
+          armHeightMm - boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
+            y: boardCenter.y + frontTangent.y * boardHalfWidthMm
+          },
+          armHeightMm + boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
+            y: boardCenter.y - frontTangent.y * boardHalfWidthMm
+          },
+          armHeightMm + boardHalfHeightMm
+        )
+      ],
+      "rgba(244, 250, 255, 0.88)",
+      "rgba(87, 104, 121, 0.9)",
+      0.9,
+      1,
+      0.12
+    );
 
-    const hoopAnchor = project(toWorldPoint({
-      x: boardCenter.x - goalUnit.normal.x * 110,
-      y: boardCenter.y - goalUnit.normal.y * 110
-    }, armHeightMm - 40));
-    faces.push({
-      key: `${goalUnit.key}-hoop`,
-      points: formatPolygonPoints([
-        { x: hoopAnchor.x - 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
-        { x: hoopAnchor.x + 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
-        { x: hoopAnchor.x + 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth },
-        { x: hoopAnchor.x - 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth }
-      ]),
-      fill: "rgba(255, 151, 70, 0.98)",
-      stroke: "rgba(168, 92, 33, 0.92)",
-      strokeWidth: 0.8,
-      opacity: 1,
-      depth: hoopAnchor.depth + 0.13
-    });
+    const hoopAnchor = projectVisiblePoint(
+      toWorldPoint(
+        {
+          x: boardCenter.x - goalUnit.normal.x * 110,
+          y: boardCenter.y - goalUnit.normal.y * 110
+        },
+        armHeightMm - 40
+      )
+    );
+    if (hoopAnchor) {
+      faces.push({
+        key: `${goalUnit.key}-hoop`,
+        points: formatPolygonPoints([
+          { x: hoopAnchor.x - 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+          { x: hoopAnchor.x + 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+          { x: hoopAnchor.x + 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth },
+          { x: hoopAnchor.x - 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth }
+        ]),
+        fill: "rgba(255, 151, 70, 0.98)",
+        stroke: "rgba(168, 92, 33, 0.92)",
+        strokeWidth: 0.8,
+        opacity: 1,
+        depth: hoopAnchor.depth + 0.13
+      });
+    }
   }
 
   for (const rail of scene.rails) {
@@ -704,42 +874,41 @@ export function buildOptimization3DRenderData(
     const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, rail.diameterMm);
     const bottomHeightMm = rail.centerHeightMm - rail.diameterMm / 2;
     const topHeightMm = rail.centerHeightMm + rail.diameterMm / 2;
-    const frontBottomStart = project({ x: frontEdge.start.x, y: bottomHeightMm, z: frontEdge.start.z });
-    const frontBottomEnd = project({ x: frontEdge.end.x, y: bottomHeightMm, z: frontEdge.end.z });
-    const frontTopEnd = project({ x: frontEdge.end.x, y: topHeightMm, z: frontEdge.end.z });
-    const frontTopStart = project({ x: frontEdge.start.x, y: topHeightMm, z: frontEdge.start.z });
-    const outerBottomEnd = project({ x: outerEdge.end.x, y: bottomHeightMm, z: outerEdge.end.z });
-    const outerTopEnd = project({ x: outerEdge.end.x, y: topHeightMm, z: outerEdge.end.z });
-    const outerTopStart = project({ x: outerEdge.start.x, y: topHeightMm, z: outerEdge.start.z });
-
     const railFaces = [
       {
         key: `${rail.key}-front`,
-        points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart],
+        points: [
+          { x: frontEdge.start.x, y: bottomHeightMm, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: bottomHeightMm, z: frontEdge.end.z },
+          { x: frontEdge.end.x, y: topHeightMm, z: frontEdge.end.z },
+          { x: frontEdge.start.x, y: topHeightMm, z: frontEdge.start.z }
+        ],
         fill: "rgba(196, 203, 212, 0.92)"
       },
       {
         key: `${rail.key}-top`,
-        points: [frontTopStart, frontTopEnd, outerTopEnd, outerTopStart],
+        points: [
+          { x: frontEdge.start.x, y: topHeightMm, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: topHeightMm, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: topHeightMm, z: outerEdge.end.z },
+          { x: outerEdge.start.x, y: topHeightMm, z: outerEdge.start.z }
+        ],
         fill: "rgba(246, 249, 252, 0.98)"
       },
       {
         key: `${rail.key}-side`,
-        points: [frontBottomEnd, outerBottomEnd, outerTopEnd, frontTopEnd],
+        points: [
+          { x: frontEdge.end.x, y: bottomHeightMm, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: bottomHeightMm, z: outerEdge.end.z },
+          { x: outerEdge.end.x, y: topHeightMm, z: outerEdge.end.z },
+          { x: frontEdge.end.x, y: topHeightMm, z: frontEdge.end.z }
+        ],
         fill: "rgba(132, 143, 154, 0.94)"
       }
     ];
 
     railFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: "rgba(94, 106, 118, 0.82)",
-        strokeWidth: 0.86,
-        opacity: 1,
-        depth: getFaceDepth(face.points) + 0.06
-      });
+      pushFace(face.key, face.points, face.fill, "rgba(94, 106, 118, 0.82)", 0.86, 1, 0.06);
     });
   }
 
@@ -748,66 +917,60 @@ export function buildOptimization3DRenderData(
       start: toGroundPoint(sideNetting.start),
       end: toGroundPoint(sideNetting.end)
     };
-    const topStart = project({ x: frontEdge.start.x, y: sideNetting.totalHeightMm, z: frontEdge.start.z });
-    const topEnd = project({ x: frontEdge.end.x, y: sideNetting.totalHeightMm, z: frontEdge.end.z });
-    const bottomEnd = project({ x: frontEdge.end.x, y: sideNetting.baseHeightMm, z: frontEdge.end.z });
-    const bottomStart = project({ x: frontEdge.start.x, y: sideNetting.baseHeightMm, z: frontEdge.start.z });
-    const netFace = [bottomStart, bottomEnd, topEnd, topStart];
-
-    faces.push({
-      key: `${sideNetting.key}-net`,
-      points: formatPolygonPoints(netFace),
-      fill: "rgba(111, 214, 230, 0.18)",
-      stroke: "rgba(92, 196, 215, 0.72)",
-      strokeWidth: 0.9,
-      opacity: 1,
-      depth: getFaceDepth(netFace) + 0.05
-    });
+    pushFace(
+      `${sideNetting.key}-net`,
+      [
+        { x: frontEdge.start.x, y: sideNetting.baseHeightMm, z: frontEdge.start.z },
+        { x: frontEdge.end.x, y: sideNetting.baseHeightMm, z: frontEdge.end.z },
+        { x: frontEdge.end.x, y: sideNetting.totalHeightMm, z: frontEdge.end.z },
+        { x: frontEdge.start.x, y: sideNetting.totalHeightMm, z: frontEdge.start.z }
+      ],
+      "rgba(111, 214, 230, 0.18)",
+      "rgba(92, 196, 215, 0.72)",
+      0.9,
+      1,
+      0.05
+    );
 
     for (const point of sideNetting.extendedPostPoints) {
-      const bottom = project(toWorldPoint(point, 0));
-      const top = project(toWorldPoint(point, sideNetting.totalHeightMm));
-      strokes.push({
-        key: `${sideNetting.key}-post-${point.x}-${point.y}`,
-        kind: "polyline",
-        value: `${bottom.x},${bottom.y} ${top.x},${top.y}`,
-        stroke: "rgba(30, 40, 47, 0.9)",
-        strokeWidth: 2,
-        opacity: 1,
-        depth: (bottom.depth + top.depth) / 2 + 0.06
-      });
+      pushSegmentStroke(
+        `${sideNetting.key}-post-${point.x}-${point.y}`,
+        toWorldPoint(point, 0),
+        toWorldPoint(point, sideNetting.totalHeightMm),
+        "rgba(30, 40, 47, 0.9)",
+        2,
+        1,
+        0.06
+      );
     }
   }
 
   for (const pitchDivider of scene.pitchDividers ?? []) {
-    const bottomStart = project(toWorldPoint(pitchDivider.startPoint, 0));
-    const bottomEnd = project(toWorldPoint(pitchDivider.endPoint, 0));
-    const topEnd = project(toWorldPoint(pitchDivider.endPoint, pitchDivider.heightMm));
-    const topStart = project(toWorldPoint(pitchDivider.startPoint, pitchDivider.heightMm));
-    const dividerFace = [bottomStart, bottomEnd, topEnd, topStart];
-
-    faces.push({
-      key: `${pitchDivider.key}-net`,
-      points: formatPolygonPoints(dividerFace),
-      fill: "rgba(64, 199, 255, 0.22)",
-      stroke: "rgba(82, 221, 255, 0.92)",
-      strokeWidth: 1.1,
-      opacity: 1,
-      depth: getFaceDepth(dividerFace) + 0.05
-    });
+    pushFace(
+      `${pitchDivider.key}-net`,
+      [
+        toWorldPoint(pitchDivider.startPoint, 0),
+        toWorldPoint(pitchDivider.endPoint, 0),
+        toWorldPoint(pitchDivider.endPoint, pitchDivider.heightMm),
+        toWorldPoint(pitchDivider.startPoint, pitchDivider.heightMm)
+      ],
+      "rgba(64, 199, 255, 0.22)",
+      "rgba(82, 221, 255, 0.92)",
+      1.1,
+      1,
+      0.05
+    );
 
     [pitchDivider.startPoint, pitchDivider.endPoint, ...pitchDivider.supportPoints].forEach((point, index) => {
-      const bottom = project(toWorldPoint(point, 0));
-      const top = project(toWorldPoint(point, pitchDivider.heightMm));
-      strokes.push({
-        key: `${pitchDivider.key}-support-${index}`,
-        kind: "polyline",
-        value: `${bottom.x},${bottom.y} ${top.x},${top.y}`,
-        stroke: "rgba(123, 228, 255, 0.98)",
-        strokeWidth: 2.25,
-        opacity: 1,
-        depth: (bottom.depth + top.depth) / 2 + 0.08
-      });
+      pushSegmentStroke(
+        `${pitchDivider.key}-support-${index}`,
+        toWorldPoint(point, 0),
+        toWorldPoint(point, pitchDivider.heightMm),
+        "rgba(123, 228, 255, 0.98)",
+        2.25,
+        1,
+        0.08
+      );
     });
   }
 
@@ -815,42 +978,41 @@ export function buildOptimization3DRenderData(
     const halfWidthMm = 42;
     const groundX = post.point.x;
     const groundZ = post.point.y;
-    const northWestBottom = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const northEastBottom = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const southEastBottom = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
-    const northWestTop = project({ x: groundX - halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm });
-    const northEastTop = project({ x: groundX + halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm });
-    const southEastTop = project({ x: groundX + halfWidthMm, y: post.heightMm, z: groundZ + halfWidthMm });
-    const southWestTop = project({ x: groundX - halfWidthMm, y: post.heightMm, z: groundZ + halfWidthMm });
-
     const postFaces = [
       {
         key: `${post.key}-front`,
-        points: [northWestBottom, northEastBottom, northEastTop, northWestTop],
+        points: [
+          { x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm },
+          { x: groundX - halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(34, 42, 51, 0.88)"
       },
       {
         key: `${post.key}-side`,
-        points: [northEastBottom, southEastBottom, southEastTop, northEastTop],
+        points: [
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: post.heightMm, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(22, 30, 38, 0.92)"
       },
       {
         key: `${post.key}-top`,
-        points: [northWestTop, northEastTop, southEastTop, southWestTop],
+        points: [
+          { x: groundX - halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: post.heightMm, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: post.heightMm, z: groundZ + halfWidthMm },
+          { x: groundX - halfWidthMm, y: post.heightMm, z: groundZ + halfWidthMm }
+        ],
         fill: "rgba(96, 109, 121, 0.96)"
       }
     ];
 
     postFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: "rgba(14, 20, 27, 0.84)",
-        strokeWidth: 0.82,
-        opacity: 1,
-        depth: getFaceDepth(face.points)
-      });
+      pushFace(face.key, face.points, face.fill, "rgba(14, 20, 27, 0.84)", 0.82, 1);
     });
   }
 
@@ -878,52 +1040,52 @@ export function buildOptimization3DRenderData(
         end: toGroundPoint(leafEnd)
       };
       const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, 48);
-      const bottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
-      const bottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
-      const topEnd = project({ x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z });
-      const topStart = project({ x: frontEdge.start.x, y: gate.heightMm, z: frontEdge.start.z });
-      const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
-      const outerTopEnd = project({ x: outerEdge.end.x, y: gate.heightMm, z: outerEdge.end.z });
-      const outerTopStart = project({ x: outerEdge.start.x, y: gate.heightMm, z: outerEdge.start.z });
 
       const gateFaces = [
         {
           key: `${gate.key}-leaf-${leafIndex}-front`,
-          points: [bottomStart, bottomEnd, topEnd, topStart],
+          points: [
+            { x: frontEdge.start.x, y: 0, z: frontEdge.start.z },
+            { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+            { x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z },
+            { x: frontEdge.start.x, y: gate.heightMm, z: frontEdge.start.z }
+          ],
           fill: GATE_PALETTE.frontFill
         },
         {
           key: `${gate.key}-leaf-${leafIndex}-top`,
-          points: [topStart, topEnd, outerTopEnd, outerTopStart],
+          points: [
+            { x: frontEdge.start.x, y: gate.heightMm, z: frontEdge.start.z },
+            { x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z },
+            { x: outerEdge.end.x, y: gate.heightMm, z: outerEdge.end.z },
+            { x: outerEdge.start.x, y: gate.heightMm, z: outerEdge.start.z }
+          ],
           fill: GATE_PALETTE.topFill
         },
         {
           key: `${gate.key}-leaf-${leafIndex}-side`,
-          points: [bottomEnd, outerBottomEnd, outerTopEnd, topEnd],
+          points: [
+            { x: frontEdge.end.x, y: 0, z: frontEdge.end.z },
+            { x: outerEdge.end.x, y: 0, z: outerEdge.end.z },
+            { x: outerEdge.end.x, y: gate.heightMm, z: outerEdge.end.z },
+            { x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z }
+          ],
           fill: GATE_PALETTE.sideFill
         }
       ];
       gateFaces.forEach((face) => {
-        faces.push({
-          key: face.key,
-          points: formatPolygonPoints(face.points),
-          fill: face.fill,
-          stroke: GATE_PALETTE.stroke,
-          strokeWidth: 1,
-          opacity: 1,
-          depth: getFaceDepth(face.points) + 0.12
-        });
+        pushFace(face.key, face.points, face.fill, GATE_PALETTE.stroke, 1, 1, 0.12);
       });
 
-      strokes.push({
-        key: `${gate.key}-leaf-${leafIndex}-brace`,
-        kind: "polyline",
-        value: `${bottomStart.x},${bottomStart.y} ${topEnd.x},${topEnd.y}`,
-        stroke: GATE_PALETTE.brace,
-        strokeWidth: 1.3,
-        opacity: 1,
-        depth: (bottomStart.depth + topEnd.depth) / 2 + 0.2
-      });
+      pushSegmentStroke(
+        `${gate.key}-leaf-${leafIndex}-brace`,
+        { x: frontEdge.start.x, y: 0, z: frontEdge.start.z },
+        { x: frontEdge.end.x, y: gate.heightMm, z: frontEdge.end.z },
+        GATE_PALETTE.brace,
+        1.3,
+        1,
+        0.2
+      );
     }
   }
 
@@ -932,59 +1094,60 @@ export function buildOptimization3DRenderData(
     const groundX = basketballPost.point.x;
     const groundZ = basketballPost.point.y;
     const topY = basketballPost.heightMm;
-    const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const frontTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm });
-    const frontTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm });
-    const sideBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
-    const sideTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm });
-    const sideTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm });
     const columnFaces = [
       {
         key: `${basketballPost.key}-front`,
-        points: [frontBottomLeft, frontBottomRight, frontTopRight, frontTopLeft],
+        points: [
+          { x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(42, 70, 154, 0.88)"
       },
       {
         key: `${basketballPost.key}-side`,
-        points: [frontBottomRight, sideBottomRight, sideTopRight, frontTopRight],
+        points: [
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(29, 53, 127, 0.92)"
       },
       {
         key: `${basketballPost.key}-top`,
-        points: [frontTopLeft, frontTopRight, sideTopRight, sideTopLeft],
+        points: [
+          { x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm },
+          { x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm }
+        ],
         fill: "rgba(132, 165, 255, 0.96)"
       }
     ];
     columnFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: "rgba(16, 29, 75, 0.84)",
-        strokeWidth: 0.84,
-        opacity: 1,
-        depth: getFaceDepth(face.points)
-      });
+      pushFace(face.key, face.points, face.fill, "rgba(16, 29, 75, 0.84)", 0.84, 1);
     });
 
     const armEnd = {
       x: basketballPost.point.x + basketballPost.normal.x * basketballPost.armLengthMm,
       y: basketballPost.point.y + basketballPost.normal.y * basketballPost.armLengthMm
     };
-    const armStartProjected = project({ x: basketballPost.point.x, y: topY - 180, z: basketballPost.point.y });
-    const armEndProjected = project({ x: armEnd.x, y: topY - 180, z: armEnd.y });
-    strokes.push({
-      key: `${basketballPost.key}-arm`,
-      kind: "polyline",
-      value: `${armStartProjected.x},${armStartProjected.y} ${armEndProjected.x},${armEndProjected.y}`,
-      stroke: "rgba(255, 156, 79, 0.94)",
-      strokeWidth: 2.2,
-      opacity: 1,
-      depth: (armStartProjected.depth + armEndProjected.depth) / 2 + 0.2
-    });
+    pushSegmentStroke(
+      `${basketballPost.key}-arm`,
+      { x: basketballPost.point.x, y: topY - 180, z: basketballPost.point.y },
+      { x: armEnd.x, y: topY - 180, z: armEnd.y },
+      "rgba(255, 156, 79, 0.94)",
+      2.2,
+      1,
+      0.2
+    );
 
-    const hoopCenter = armEndProjected;
+    const hoopCenter = projectVisiblePoint({ x: armEnd.x, y: topY - 180, z: armEnd.y });
+    if (!hoopCenter) {
+      continue;
+    }
     const hoopRadius = Math.max(4, basketballPost.hoopRadiusMm * scale);
     const ringPoints = Array.from({ length: 18 }, (_, index) => {
       const angle = (Math.PI * 2 * index) / 18;
@@ -1006,65 +1169,63 @@ export function buildOptimization3DRenderData(
     const groundX = floodlightColumn.point.x;
     const groundZ = floodlightColumn.point.y;
     const topY = floodlightColumn.heightMm;
-    const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
-    const frontTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm });
-    const frontTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm });
-    const sideBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
-    const sideTopRight = project({ x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm });
-    const sideTopLeft = project({ x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm });
     const columnFaces = [
       {
         key: `${floodlightColumn.key}-front`,
-        points: [frontBottomLeft, frontBottomRight, frontTopRight, frontTopLeft],
+        points: [
+          { x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(147, 147, 157, 0.9)"
       },
       {
         key: `${floodlightColumn.key}-side`,
-        points: [frontBottomRight, sideBottomRight, sideTopRight, frontTopRight],
+        points: [
+          { x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm }
+        ],
         fill: "rgba(104, 106, 117, 0.94)"
       },
       {
         key: `${floodlightColumn.key}-top`,
-        points: [frontTopLeft, frontTopRight, sideTopRight, sideTopLeft],
+        points: [
+          { x: groundX - halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ - halfWidthMm },
+          { x: groundX + halfWidthMm, y: topY, z: groundZ + halfWidthMm },
+          { x: groundX - halfWidthMm, y: topY, z: groundZ + halfWidthMm }
+        ],
         fill: "rgba(220, 223, 232, 0.98)"
       }
     ];
     columnFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: "rgba(56, 60, 72, 0.82)",
-        strokeWidth: 0.9,
-        opacity: 1,
-        depth: getFaceDepth(face.points)
-      });
+      pushFace(face.key, face.points, face.fill, "rgba(56, 60, 72, 0.82)", 0.9, 1);
     });
 
     const forward = floodlightColumn.normal;
     const across = { x: -forward.y, y: forward.x };
     const barHalfWidth = floodlightColumn.barWidthMm / 2;
     const barCenterHeightMm = topY - 220;
-    const barStart = project({
-      x: floodlightColumn.point.x - across.x * barHalfWidth,
-      y: barCenterHeightMm,
-      z: floodlightColumn.point.y - across.y * barHalfWidth
-    });
-    const barEnd = project({
-      x: floodlightColumn.point.x + across.x * barHalfWidth,
-      y: barCenterHeightMm,
-      z: floodlightColumn.point.y + across.y * barHalfWidth
-    });
-    strokes.push({
-      key: `${floodlightColumn.key}-bar`,
-      kind: "polyline",
-      value: `${barStart.x},${barStart.y} ${barEnd.x},${barEnd.y}`,
-      stroke: "rgba(255, 243, 177, 0.96)",
-      strokeWidth: 2.4,
-      opacity: 1,
-      depth: (barStart.depth + barEnd.depth) / 2 + 0.2
-    });
+    pushSegmentStroke(
+      `${floodlightColumn.key}-bar`,
+      {
+        x: floodlightColumn.point.x - across.x * barHalfWidth,
+        y: barCenterHeightMm,
+        z: floodlightColumn.point.y - across.y * barHalfWidth
+      },
+      {
+        x: floodlightColumn.point.x + across.x * barHalfWidth,
+        y: barCenterHeightMm,
+        z: floodlightColumn.point.y + across.y * barHalfWidth
+      },
+      "rgba(255, 243, 177, 0.96)",
+      2.4,
+      1,
+      0.2
+    );
   }
 
   for (const overlay of scene.cutOverlays) {
@@ -1074,71 +1235,66 @@ export function buildOptimization3DRenderData(
       end: toGroundPoint(overlay.end)
     };
     const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, OVERLAY_TRACK_BASE_OFFSET_MM);
-    const frontBottomStart = project({ x: frontEdge.start.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.start.z });
-    const frontBottomEnd = project({ x: frontEdge.end.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z });
-    const frontTopEnd = project({
-      x: frontEdge.end.x,
-      y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM,
-      z: frontEdge.end.z
-    });
-    const frontTopStart = project({
-      x: frontEdge.start.x,
-      y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM,
-      z: frontEdge.start.z
-    });
-    const outerBottomEnd = project({ x: outerEdge.end.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: outerEdge.end.z });
-    const outerTopEnd = project({
-      x: outerEdge.end.x,
-      y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM,
-      z: outerEdge.end.z
-    });
-    const outerTopStart = project({
-      x: outerEdge.start.x,
-      y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM,
-      z: outerEdge.start.z
-    });
 
     const overlayFaces = [
       {
         key: `${overlay.key}-front`,
-        points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart],
+        points: [
+          { x: frontEdge.start.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z },
+          { x: frontEdge.end.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z },
+          { x: frontEdge.start.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.start.z }
+        ],
         fill: palette.frontFill
       },
       {
         key: `${overlay.key}-top`,
-        points: [frontTopStart, frontTopEnd, outerTopEnd, outerTopStart],
+        points: [
+          { x: frontEdge.start.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.start.z },
+          { x: frontEdge.end.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: outerEdge.end.z },
+          { x: outerEdge.start.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: outerEdge.start.z }
+        ],
         fill: palette.topFill
       },
       {
         key: `${overlay.key}-side`,
-        points: [frontBottomEnd, outerBottomEnd, outerTopEnd, frontTopEnd],
+        points: [
+          { x: frontEdge.end.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z },
+          { x: outerEdge.end.x, y: overlay.baseHeightMm + OVERLAY_TRACK_LIFT_MM, z: outerEdge.end.z },
+          { x: outerEdge.end.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: outerEdge.end.z },
+          { x: frontEdge.end.x, y: overlay.baseHeightMm + overlay.heightMm + OVERLAY_TRACK_LIFT_MM, z: frontEdge.end.z }
+        ],
         fill: palette.sideFill
       }
     ];
 
     overlayFaces.forEach((face) => {
-      faces.push({
-        key: face.key,
-        points: formatPolygonPoints(face.points),
-        fill: face.fill,
-        stroke: palette.stroke,
-        strokeWidth: 1.16,
-        opacity: 0.98,
-        depth: getFaceDepth(face.points) + 0.08
-      });
+      pushFace(face.key, face.points, face.fill, palette.stroke, 1.16, 0.98, 0.08);
     });
 
-    badges.push(createOverlayBadge(overlay, project));
+    const badge = createOverlayBadge(overlay, projectVisiblePoint);
+    if (badge) {
+      badges.push(badge);
+    }
   }
 
   for (const link of scene.reuseLinks) {
-    const start = project(link.start);
-    const end = project(link.end);
-    const control = project({
-      x: (link.start.x + link.end.x) / 2,
-      y: Math.max(link.start.y, link.end.y) + 440,
-      z: (link.start.z + link.end.z) / 2
-    });
+    const projectedLink = projectPolyline([
+      link.start,
+      {
+        x: (link.start.x + link.end.x) / 2,
+        y: Math.max(link.start.y, link.end.y) + 440,
+        z: (link.start.z + link.end.z) / 2
+      },
+      link.end
+    ]);
+    if (!projectedLink || projectedLink.length !== 3) {
+      continue;
+    }
+    const start = projectedLink[0]!;
+    const control = projectedLink[1]!;
+    const end = projectedLink[2]!;
     strokes.push({
       key: link.key,
       kind: "path",

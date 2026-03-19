@@ -11,13 +11,19 @@ interface Optimization3DCanvasStageProps {
   camera: Optimization3DCameraState;
   mode: "orbit" | "walk";
   stageHandlers: Optimization3DStageHandlers;
+  walkHud?: {
+    heading: string;
+    eyeHeight: string;
+    position: string;
+  } | null;
 }
 
 export function Optimization3DCanvasStage({
   scene,
   camera,
   mode,
-  stageHandlers
+  stageHandlers,
+  walkHud = null
 }: Optimization3DCanvasStageProps) {
   const { ref, size } = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -34,8 +40,8 @@ export function Optimization3DCanvasStage({
       return;
     }
 
-    drawOptimization3DCanvas(canvas, renderData, viewportWidth, viewportHeight);
-  }, [renderData, viewportHeight, viewportWidth]);
+    drawOptimization3DCanvas(canvas, renderData, viewportWidth, viewportHeight, mode);
+  }, [mode, renderData, viewportHeight, viewportWidth]);
 
   return (
     <div ref={ref} className={`optimization-3d-stage ${mode === "walk" ? "is-walk" : "is-orbit"}`} tabIndex={0} {...stageHandlers}>
@@ -45,6 +51,23 @@ export function Optimization3DCanvasStage({
         role="img"
         aria-label={mode === "walk" ? "Walkable 3D fence view" : "3D twin-bar fence reuse plan"}
       />
+      {mode === "walk" && walkHud ? (
+        <>
+          <div className="optimization-3d-walk-banner" aria-hidden="true">
+            <strong>Walk View</strong>
+            <span>Click to focus. Drag to look. Hold Shift for longer strides.</span>
+          </div>
+          <div className="optimization-3d-walk-hud" aria-hidden="true">
+            <span>{walkHud.heading}</span>
+            <span>{walkHud.eyeHeight}</span>
+            <span>{walkHud.position}</span>
+          </div>
+          <div className="optimization-3d-walk-reticle" aria-hidden="true">
+            <i />
+            <i />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

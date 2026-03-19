@@ -12,7 +12,8 @@ export function drawOptimization3DCanvas(
   canvas: HTMLCanvasElement,
   renderData: Optimization3DRenderData,
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
+  mode: "orbit" | "walk"
 ): void {
   const context = canvas.getContext("2d");
   if (!context) {
@@ -25,11 +26,54 @@ export function drawOptimization3DCanvas(
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   context.clearRect(0, 0, viewportWidth, viewportHeight);
 
-  const background = context.createLinearGradient(0, 0, 0, viewportHeight);
-  background.addColorStop(0, "#f5f8fb");
-  background.addColorStop(1, "#dde4e4");
-  context.fillStyle = background;
-  context.fillRect(0, 0, viewportWidth, viewportHeight);
+  if (mode === "walk") {
+    const sky = context.createLinearGradient(0, 0, 0, viewportHeight * 0.66);
+    sky.addColorStop(0, "#dcecff");
+    sky.addColorStop(0.58, "#edf5fb");
+    sky.addColorStop(1, "#f3f7f3");
+    context.fillStyle = sky;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+
+    const horizonGlow = context.createRadialGradient(
+      viewportWidth * 0.5,
+      viewportHeight * 0.56,
+      16,
+      viewportWidth * 0.5,
+      viewportHeight * 0.56,
+      viewportWidth * 0.58
+    );
+    horizonGlow.addColorStop(0, "rgba(255, 247, 219, 0.42)");
+    horizonGlow.addColorStop(0.55, "rgba(238, 247, 233, 0.16)");
+    horizonGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    context.fillStyle = horizonGlow;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+
+    const turf = context.createLinearGradient(0, viewportHeight * 0.54, 0, viewportHeight);
+    turf.addColorStop(0, "rgba(140, 180, 132, 0)");
+    turf.addColorStop(0.18, "rgba(121, 164, 111, 0.34)");
+    turf.addColorStop(1, "rgba(66, 106, 70, 0.84)");
+    context.fillStyle = turf;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+
+    const vignette = context.createRadialGradient(
+      viewportWidth * 0.5,
+      viewportHeight * 0.48,
+      viewportHeight * 0.18,
+      viewportWidth * 0.5,
+      viewportHeight * 0.48,
+      viewportWidth * 0.82
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, "rgba(22, 35, 30, 0.26)");
+    context.fillStyle = vignette;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+  } else {
+    const background = context.createLinearGradient(0, 0, 0, viewportHeight);
+    background.addColorStop(0, "#f5f8fb");
+    background.addColorStop(1, "#dde4e4");
+    context.fillStyle = background;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+  }
 
   for (const face of renderData.faces) {
     const points = parsePoints(face.points);

@@ -5,6 +5,14 @@ import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/co
 import { buildOptimization3DScene } from "./optimization3D.js";
 import { buildOptimization3DRenderData, DEFAULT_ORBIT } from "./optimization3DRenderData.js";
 
+function parsePointString(value: string): Array<[number, number]> {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.split(",").map(Number) as [number, number])
+    .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+}
+
 describe("buildOptimization3DRenderData", () => {
   it("builds sorted scene faces, strokes, and badges for an active reuse plan", () => {
     const segment: LayoutSegment = {
@@ -140,5 +148,52 @@ describe("buildOptimization3DRenderData", () => {
     expect(renderData.faces.some((face) => face.key === "gate-walk-leaf-0-front")).toBe(true);
     expect(renderData.faces.every((face) => face.points.length > 0)).toBe(true);
     expect(renderData.strokes.every((stroke) => Number.isFinite(stroke.depth))).toBe(true);
+  });
+
+  it("clips walk-view geometry at the near plane instead of stretching it through the camera", () => {
+    const renderData = buildOptimization3DRenderData(
+      {
+        panelSlices: [],
+        posts: [],
+        rails: [],
+        basketballPosts: [],
+        floodlightColumns: [],
+        cutOverlays: [],
+        reuseLinks: [],
+        gates: [
+          {
+            key: "gate-clip",
+            start: { x: -800, y: 120 },
+            end: { x: 800, y: 120 },
+            center: { x: 0, y: 120 },
+            normal: { x: 0, y: 1 },
+            heightMm: 2000,
+            leafCount: 1
+          }
+        ],
+        bounds: {
+          minX: -1200,
+          maxX: 1200,
+          minZ: -800,
+          maxZ: 2200,
+          maxHeightMm: 2000
+        }
+      },
+      {
+        x: 0,
+        z: 0,
+        eyeHeightMm: 1700,
+        yaw: 0,
+        pitch: 0
+      },
+      920,
+      320
+    );
+
+    const gateFace = renderData.faces.find((face) => face.key === "gate-clip-leaf-0-side");
+    const gateFacePoints = parsePointString(gateFace?.points ?? "");
+
+    expect(gateFacePoints.length).toBeGreaterThanOrEqual(3);
+    expect(gateFacePoints.every(([x, y]) => Math.abs(x) < 6000 && Math.abs(y) < 6000)).toBe(true);
   });
 });

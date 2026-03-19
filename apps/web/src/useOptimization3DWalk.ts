@@ -18,21 +18,43 @@ const WALK_HEIGHT_STEP_MM = 140;
 const WALK_EYE_HEIGHT_MIN_MM = 1200;
 const WALK_EYE_HEIGHT_MAX_MM = 2600;
 const WALK_BOUNDARY_PADDING_MM = 1800;
+const WALK_ENTRY_RATIO = 0.18;
+const WALK_SPRINT_MULTIPLIER = 1.7;
+
+function deriveWalkStepMm(scene: Optimization3DScene): number {
+  const spanX = scene.bounds.maxX - scene.bounds.minX;
+  const spanZ = scene.bounds.maxZ - scene.bounds.minZ;
+  const baseSpanMm = Math.min(Math.max(spanX, 0), Math.max(spanZ, 0));
+  if (baseSpanMm <= 0.001) {
+    return WALK_STEP_MM;
+  }
+  return clamp(baseSpanMm * 0.036, 320, 760);
+}
+
+function buildWalkEntryCoordinate(min: number, max: number): number {
+  const span = max - min;
+  if (span <= 0.001) {
+    return (min + max) / 2;
+  }
+  return min + span * WALK_ENTRY_RATIO;
+}
 
 export function buildDefaultWalkState(scene: Optimization3DScene): WalkState {
   const centerX = (scene.bounds.minX + scene.bounds.maxX) / 2;
+  const centerZ = (scene.bounds.minZ + scene.bounds.maxZ) / 2;
+  const spanX = scene.bounds.maxX - scene.bounds.minX;
   const spanZ = scene.bounds.maxZ - scene.bounds.minZ;
-  const entryZ =
-    spanZ > 1200
-      ? scene.bounds.minZ + spanZ * 0.18
-      : (scene.bounds.minZ + scene.bounds.maxZ) / 2;
+  const useDepthEntry = spanZ >= spanX;
+  const x = useDepthEntry ? centerX : buildWalkEntryCoordinate(scene.bounds.minX, scene.bounds.maxX);
+  const z = useDepthEntry ? buildWalkEntryCoordinate(scene.bounds.minZ, scene.bounds.maxZ) : centerZ;
+  const yaw = Math.atan2(centerX - x, centerZ - z);
 
   return {
-    x: centerX,
-    z: entryZ,
+    x,
+    z,
     eyeHeightMm: 1700,
-    yaw: 0,
-    pitch: -0.08
+    yaw,
+    pitch: -0.06
   };
 }
 
@@ -61,7 +83,7 @@ export function applyWalkWheelDelta(walk: WalkState, deltaY: number): WalkState 
   };
 }
 
-export function applyWalkKeyboardInput(walk: WalkState, key: string): WalkState {
+export function applyWalkKeyboardInput(walk: WalkState, key: string, stepMm: number = WALK_STEP_MM): WalkState {
   const forwardX = Math.sin(walk.yaw);
   const forwardZ = Math.cos(walk.yaw);
   const rightX = Math.cos(walk.yaw);
@@ -82,29 +104,29 @@ export function applyWalkKeyboardInput(walk: WalkState, key: string): WalkState 
   if (key === "w" || key === "W") {
     return {
       ...walk,
-      x: walk.x + forwardX * WALK_STEP_MM,
-      z: walk.z + forwardZ * WALK_STEP_MM
+      x: walk.x + forwardX * stepMm,
+      z: walk.z + forwardZ * stepMm
     };
   }
   if (key === "s" || key === "S") {
     return {
       ...walk,
-      x: walk.x - forwardX * WALK_STEP_MM,
-      z: walk.z - forwardZ * WALK_STEP_MM
+      x: walk.x - forwardX * stepMm,
+      z: walk.z - forwardZ * stepMm
     };
   }
   if (key === "a" || key === "A") {
     return {
       ...walk,
-      x: walk.x - rightX * WALK_STEP_MM,
-      z: walk.z - rightZ * WALK_STEP_MM
+      x: walk.x - rightX * stepMm,
+      z: walk.z - rightZ * stepMm
     };
   }
   if (key === "d" || key === "D") {
     return {
       ...walk,
-      x: walk.x + rightX * WALK_STEP_MM,
-      z: walk.z + rightZ * WALK_STEP_MM
+      x: walk.x + rightX * stepMm,
+      z: walk.z + rightZ * stepMm
     };
   }
   if (key === "q" || key === "Q") {
@@ -208,7 +230,8 @@ export function useOptimization3DWalk(scene: Optimization3DScene): {
           setWalk(nextWalk);
           return;
         }
-        const nextWalk = applyWalkKeyboardInput(walkRef.current, event.key);
+        const stepMm = deriveWalkStepMm(scene) * (event.shiftKey ? WALK_SPRINT_MULTIPLIER : 1);
+        const nextWalk = applyWalkKeyboardInput(walkRef.current, event.key, stepMm);
         if (nextWalk === walkRef.current) {
           return;
         }
