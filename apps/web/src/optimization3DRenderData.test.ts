@@ -96,4 +96,49 @@ describe("buildOptimization3DRenderData", () => {
     const gateFace = renderData.faces.find((face) => face.key === "gate-1-leaf-0-front");
     expect(gateFace?.fill).toBe("rgba(67, 112, 189, 0.72)");
   });
+
+  it("supports a walk camera for first-person pitch views", () => {
+    const renderData = buildOptimization3DRenderData(
+      {
+        panelSlices: [],
+        posts: [],
+        rails: [],
+        basketballPosts: [],
+        floodlightColumns: [],
+        cutOverlays: [],
+        reuseLinks: [],
+        gates: [
+          {
+            key: "gate-walk",
+            start: { x: -600, y: 3200 },
+            end: { x: 600, y: 3200 },
+            center: { x: 0, y: 3200 },
+            normal: { x: 0, y: 1 },
+            heightMm: 2000,
+            leafCount: 1
+          }
+        ],
+        bounds: {
+          minX: -1200,
+          maxX: 1200,
+          minZ: 0,
+          maxZ: 5000,
+          maxHeightMm: 2000
+        }
+      },
+      {
+        x: 0,
+        z: 400,
+        eyeHeightMm: 1700,
+        yaw: 0,
+        pitch: 0.04
+      },
+      920,
+      320
+    );
+
+    expect(renderData.faces.some((face) => face.key === "gate-walk-leaf-0-front")).toBe(true);
+    expect(renderData.faces.every((face) => face.points.length > 0)).toBe(true);
+    expect(renderData.strokes.every((stroke) => Number.isFinite(stroke.depth))).toBe(true);
+  });
 });

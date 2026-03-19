@@ -232,6 +232,22 @@ describe("buildOptimization3DScene", () => {
     expect(scene.posts[0]?.heightMm).toBe(1200);
   });
 
+  it("keeps plan-view Y orientation aligned in 3D scene bounds", () => {
+    const segment: LayoutSegment = {
+      id: "seg-oriented",
+      start: { x: 1000, y: 2000 },
+      end: { x: 1000, y: 6500 },
+      spec: { system: "TWIN_BAR", height: "3m", twinBarVariant: "STANDARD" }
+    };
+
+    const scene = buildOptimization3DScene([segment], [], new Map());
+
+    expect(scene.bounds.minX).toBe(1000);
+    expect(scene.bounds.maxX).toBe(1000);
+    expect(scene.bounds.minZ).toBe(2000);
+    expect(scene.bounds.maxZ).toBe(6500);
+  });
+
   it("keeps overlays for each plan separate when several plans are shown together", () => {
     const segment: LayoutSegment = {
       id: "seg-multi",

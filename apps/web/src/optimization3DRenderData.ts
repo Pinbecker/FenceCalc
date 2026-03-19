@@ -27,6 +27,16 @@ export interface OrbitState {
   panY: number;
 }
 
+export interface WalkState {
+  x: number;
+  z: number;
+  eyeHeightMm: number;
+  yaw: number;
+  pitch: number;
+}
+
+export type Optimization3DCameraState = OrbitState | WalkState;
+
 export interface RenderFace {
   key: string;
   points: string;
@@ -141,15 +151,19 @@ function toWorldPoint(point: { x: number; y: number }, heightMm: number): Point3
   return {
     x: point.x,
     y: heightMm,
-    z: -point.y
+    z: point.y
   };
 }
 
 function toGroundPoint(point: { x: number; y: number }): GroundPoint3D {
   return {
     x: point.x,
-    z: -point.y
+    z: point.y
   };
+}
+
+function isWalkState(camera: Optimization3DCameraState): camera is WalkState {
+  return "eyeHeightMm" in camera;
 }
 
 function offsetEdge(start: GroundPoint3D, end: GroundPoint3D, offsetMm: number) {
@@ -250,7 +264,12 @@ function createOverlayBadge(
   };
 }
 
-function buildProjector(scene: Optimization3DScene, orbit: OrbitState, viewportWidth: number, viewportHeight: number) {
+function buildProjector(
+  scene: Optimization3DScene,
+  camera: Optimization3DCameraState,
+  viewportWidth: number,
+  viewportHeight: number
+) {
   const center = {
     x: (scene.bounds.minX + scene.bounds.maxX) / 2,
     y: scene.bounds.maxHeightMm * 0.34,
@@ -262,7 +281,38 @@ function buildProjector(scene: Optimization3DScene, orbit: OrbitState, viewportW
     scene.bounds.maxZ - scene.bounds.minZ + GROUND_PADDING_MM * 2,
     scene.bounds.maxHeightMm * 2.1
   );
-  const scale = (Math.min(viewportWidth, viewportHeight) * 0.8 * orbit.zoom) / spanMm;
+  if (isWalkState(camera)) {
+    const focalLength = Math.min(viewportWidth, viewportHeight) * 1.04;
+    const nearPlaneMm = 140;
+    return {
+      scale: focalLength / 1000,
+      project: (point: Point3D): ProjectedPoint => {
+        const translatedX = point.x - camera.x;
+        const translatedY = point.y - camera.eyeHeightMm;
+        const translatedZ = point.z - camera.z;
+
+        const yawCos = Math.cos(camera.yaw);
+        const yawSin = Math.sin(camera.yaw);
+        const pitchCos = Math.cos(camera.pitch);
+        const pitchSin = Math.sin(camera.pitch);
+
+        const yawX = translatedX * yawCos - translatedZ * yawSin;
+        const yawZ = translatedX * yawSin + translatedZ * yawCos;
+        const pitchY = translatedY * pitchCos - yawZ * pitchSin;
+        const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
+        const safeDepth = Math.max(nearPlaneMm, pitchZ);
+        const perspective = focalLength / safeDepth;
+
+        return {
+          x: viewportWidth / 2 + yawX * perspective,
+          y: viewportHeight * 0.62 - pitchY * perspective,
+          depth: pitchZ
+        };
+      }
+    };
+  }
+
+  const scale = (Math.min(viewportWidth, viewportHeight) * 0.8 * camera.zoom) / spanMm;
 
   return {
     scale,
@@ -271,10 +321,10 @@ function buildProjector(scene: Optimization3DScene, orbit: OrbitState, viewportW
       const translatedY = point.y - center.y;
       const translatedZ = point.z - center.z;
 
-      const yawCos = Math.cos(orbit.yaw);
-      const yawSin = Math.sin(orbit.yaw);
-      const pitchCos = Math.cos(orbit.pitch);
-      const pitchSin = Math.sin(orbit.pitch);
+      const yawCos = Math.cos(camera.yaw);
+      const yawSin = Math.sin(camera.yaw);
+      const pitchCos = Math.cos(camera.pitch);
+      const pitchSin = Math.sin(camera.pitch);
 
       const yawX = translatedX * yawCos - translatedZ * yawSin;
       const yawZ = translatedX * yawSin + translatedZ * yawCos;
@@ -282,8 +332,8 @@ function buildProjector(scene: Optimization3DScene, orbit: OrbitState, viewportW
       const pitchZ = translatedY * pitchSin + yawZ * pitchCos;
 
       return {
-        x: viewportWidth / 2 + yawX * scale + orbit.panX,
-        y: viewportHeight * 0.68 - pitchY * scale + orbit.panY,
+        x: viewportWidth / 2 + yawX * scale + camera.panX,
+        y: viewportHeight * 0.68 - pitchY * scale + camera.panY,
         depth: pitchZ
       };
     }
@@ -292,11 +342,11 @@ function buildProjector(scene: Optimization3DScene, orbit: OrbitState, viewportW
 
 export function buildOptimization3DRenderData(
   scene: Optimization3DScene,
-  orbit: OrbitState,
+  camera: Optimization3DCameraState,
   viewportWidth: number,
   viewportHeight: number
 ): Optimization3DRenderData {
-  const { project, scale } = buildProjector(scene, orbit, viewportWidth, viewportHeight);
+  const { project, scale } = buildProjector(scene, camera, viewportWidth, viewportHeight);
   const faces: RenderFace[] = [];
   const strokes: RenderStroke[] = [];
   const badges: RenderBadge[] = [];
@@ -764,7 +814,7 @@ export function buildOptimization3DRenderData(
   for (const post of scene.posts) {
     const halfWidthMm = 42;
     const groundX = post.point.x;
-    const groundZ = -post.point.y;
+    const groundZ = post.point.y;
     const northWestBottom = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
     const northEastBottom = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
     const southEastBottom = project({ x: groundX + halfWidthMm, y: 0, z: groundZ + halfWidthMm });
@@ -880,7 +930,7 @@ export function buildOptimization3DRenderData(
   for (const basketballPost of scene.basketballPosts) {
     const halfWidthMm = 36;
     const groundX = basketballPost.point.x;
-    const groundZ = -basketballPost.point.y;
+    const groundZ = basketballPost.point.y;
     const topY = basketballPost.heightMm;
     const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
     const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
@@ -922,8 +972,8 @@ export function buildOptimization3DRenderData(
       x: basketballPost.point.x + basketballPost.normal.x * basketballPost.armLengthMm,
       y: basketballPost.point.y + basketballPost.normal.y * basketballPost.armLengthMm
     };
-    const armStartProjected = project({ x: basketballPost.point.x, y: topY - 180, z: -basketballPost.point.y });
-    const armEndProjected = project({ x: armEnd.x, y: topY - 180, z: -armEnd.y });
+    const armStartProjected = project({ x: basketballPost.point.x, y: topY - 180, z: basketballPost.point.y });
+    const armEndProjected = project({ x: armEnd.x, y: topY - 180, z: armEnd.y });
     strokes.push({
       key: `${basketballPost.key}-arm`,
       kind: "polyline",
@@ -954,7 +1004,7 @@ export function buildOptimization3DRenderData(
   for (const floodlightColumn of scene.floodlightColumns) {
     const halfWidthMm = 54;
     const groundX = floodlightColumn.point.x;
-    const groundZ = -floodlightColumn.point.y;
+    const groundZ = floodlightColumn.point.y;
     const topY = floodlightColumn.heightMm;
     const frontBottomLeft = project({ x: groundX - halfWidthMm, y: 0, z: groundZ - halfWidthMm });
     const frontBottomRight = project({ x: groundX + halfWidthMm, y: 0, z: groundZ - halfWidthMm });
@@ -999,12 +1049,12 @@ export function buildOptimization3DRenderData(
     const barStart = project({
       x: floodlightColumn.point.x - across.x * barHalfWidth,
       y: barCenterHeightMm,
-      z: -(floodlightColumn.point.y - across.y * barHalfWidth)
+      z: floodlightColumn.point.y - across.y * barHalfWidth
     });
     const barEnd = project({
       x: floodlightColumn.point.x + across.x * barHalfWidth,
       y: barCenterHeightMm,
-      z: -(floodlightColumn.point.y + across.y * barHalfWidth)
+      z: floodlightColumn.point.y + across.y * barHalfWidth
     });
     strokes.push({
       key: `${floodlightColumn.key}-bar`,

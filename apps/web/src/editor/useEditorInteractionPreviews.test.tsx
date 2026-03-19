@@ -1,5 +1,6 @@
 import type { LayoutSegment } from "@fence-estimator/contracts";
 import { describe, expect, it } from "vitest";
+import { getSegmentIntermediatePostOffsets } from "@fence-estimator/rules-engine";
 
 import { defaultFenceSpec } from "./constants.js";
 import { resolveBasketballPostPlacements, resolveFloodlightColumnPlacements, resolveGatePlacements } from "./segmentTopology.js";
@@ -348,6 +349,7 @@ describe("useEditorInteractionPreviews", () => {
 
     expect(result.basketballPostPreview?.segment.id).toBe("s1");
     expect(result.basketballPostPreview?.facing).toBe("RIGHT");
+    expect(result.basketballPostPreview?.offsetMm).toBe(getSegmentIntermediatePostOffsets(segments[0]!)[0]);
   });
 
   it("shows gate and basketball post alignment previews while dragging in select mode", () => {

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/contracts";
 
 import { formatHeightLabelFromMm, formatLengthMm } from "./formatters";
@@ -19,6 +19,7 @@ import { Optimization3DPlanSteps } from "./Optimization3DPlanSteps.js";
 import { buildOptimization3DScene } from "./optimization3D.js";
 import { formatVariantLabel } from "./optimization3DRenderData.js";
 import { useOptimization3DOrbit } from "./useOptimization3DOrbit.js";
+import { useOptimization3DWalk } from "./useOptimization3DWalk.js";
 
 interface Optimization3DViewProps {
   estimateSegments: LayoutSegment[];
@@ -64,6 +65,7 @@ export function Optimization3DView({
   sideNettings = [],
   onSelectPlan
 }: Optimization3DViewProps) {
+  const [cameraMode, setCameraMode] = useState<"orbit" | "walk">("orbit");
   const orbitController = useOptimization3DOrbit();
   const scene = useMemo(
     () =>
@@ -81,25 +83,54 @@ export function Optimization3DView({
       ),
     [activePlan, basketballPosts, estimateSegments, floodlightColumns, gates, goalUnits, kickboards, pitchDividers, segmentOrdinalById, sideNettings]
   );
+  const walkController = useOptimization3DWalk(scene);
   const freshCutCount = activePlan?.cuts.filter((cut) => cut.mode === "OPEN_STOCK_PANEL").length ?? 0;
   const reuseCutCount = activePlan?.cuts.filter((cut) => cut.mode === "REUSE_OFFCUT").length ?? 0;
   const legendItems = buildLegendItems();
   const reuseCountLabel = `${reuseCutCount} ${reuseCutCount === 1 ? "reuse" : "reuses"}`;
   const freshCountLabel = `${freshCutCount} ${freshCutCount === 1 ? "fresh cut" : "fresh cuts"}`;
+  const activeCamera = cameraMode === "walk" ? walkController.walk : orbitController.orbit;
+  const activeStageHandlers = cameraMode === "walk" ? walkController.stageHandlers : orbitController.stageHandlers;
+  const resetActiveCamera = () => {
+    if (cameraMode === "walk") {
+      walkController.resetWalk();
+      return;
+    }
+    orbitController.resetOrbit();
+  };
+  const instructions =
+    cameraMode === "walk"
+      ? "Walk mode: drag to look around, use W A S D to move, Q and E to change eye height, and 0 to reset."
+      : "Orbit mode: drag to orbit, hold Shift and drag to pan, and scroll to zoom. The picker only includes opened panels that actually get reused, and the view shows one full reuse chain at a time.";
 
   return (
     <section className="optimization-3d-view" aria-label="3D reuse view">
       <div className="optimization-3d-copy">
         <div>
           <h3>3D Reuse View</h3>
-          <p className="muted-line">
-            Drag to orbit, hold Shift and drag to pan, and scroll to zoom. The picker only includes opened panels that
-            actually get reused, and the view shows one full reuse chain at a time.
-          </p>
+          <p className="muted-line">{instructions}</p>
         </div>
-        <button type="button" className="optimization-3d-reset" onClick={() => orbitController.resetOrbit()}>
-          Reset view
-        </button>
+        <div className="optimization-3d-actions">
+          <div className="optimization-3d-mode-toggle" role="group" aria-label="3D camera mode">
+            <button
+              type="button"
+              className={`optimization-3d-mode-button ${cameraMode === "orbit" ? "is-active" : ""}`}
+              onClick={() => setCameraMode("orbit")}
+            >
+              Orbit
+            </button>
+            <button
+              type="button"
+              className={`optimization-3d-mode-button ${cameraMode === "walk" ? "is-active" : ""}`}
+              onClick={() => setCameraMode("walk")}
+            >
+              Walk
+            </button>
+          </div>
+          <button type="button" className="optimization-3d-reset" onClick={resetActiveCamera}>
+            Reset view
+          </button>
+        </div>
       </div>
 
       <Optimization3DPlanSelector
@@ -124,8 +155,9 @@ export function Optimization3DView({
 
       <Optimization3DCanvasStage
         scene={scene}
-        orbit={orbitController.orbit}
-        stageHandlers={orbitController.stageHandlers}
+        camera={activeCamera}
+        mode={cameraMode}
+        stageHandlers={activeStageHandlers}
       />
 
       <div className="optimization-3d-legend">

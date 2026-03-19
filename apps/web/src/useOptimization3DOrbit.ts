@@ -136,6 +136,7 @@ export function useOptimization3DOrbit(): {
     stageHandlers: {
       onPointerDown(event) {
         event.preventDefault();
+        event.currentTarget.focus();
         dragStateRef.current = {
           pointerId: event.pointerId,
           x: event.clientX,

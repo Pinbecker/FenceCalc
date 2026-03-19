@@ -1222,6 +1222,39 @@ h1 {
   gap: 12px;
 }
 
+.optimization-3d-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.optimization-3d-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 110, 102, 0.18);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.optimization-3d-mode-button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #4d5f56;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.optimization-3d-mode-button.is-active {
+  background: rgba(189, 103, 57, 0.14);
+  color: #2a3b33;
+}
+
 .optimization-3d-copy h3 {
   margin: 0 0 4px;
   font-size: 0.96rem;
@@ -1316,6 +1349,10 @@ h1 {
   touch-action: none;
   outline: none;
   overscroll-behavior: contain;
+}
+
+.optimization-3d-stage.is-walk {
+  cursor: crosshair;
 }
 
 .optimization-3d-stage:active {
@@ -2464,6 +2501,10 @@ button:disabled {
   .optimization-3d-copy {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .optimization-3d-actions {
+    justify-content: flex-start;
   }
 
   .optimization-3d-selector-controls {

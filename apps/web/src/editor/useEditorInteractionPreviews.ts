@@ -10,7 +10,7 @@ import type {
 } from "@fence-estimator/contracts";
 import { distanceMm, snapPointToAngle } from "@fence-estimator/geometry";
 import { PITCH_DIVIDER_MAX_SPAN_MM, PITCH_DIVIDER_SUPPORT_INTERVAL_MM } from "@fence-estimator/contracts";
-import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
+import { getSegmentIntermediatePostOffsets, getSegmentPostOffsets } from "@fence-estimator/rules-engine";
 
 import {
   AXIS_GUIDE_SNAP_PX,
@@ -416,6 +416,26 @@ export function useEditorInteractionPreviews({
         0,
         Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
       );
+      const intermediateOffsetsMm = getSegmentIntermediatePostOffsets(segment);
+      if (intermediateOffsetsMm.length === 0) {
+        return null;
+      }
+      let bestIntermediateOffsetMm = intermediateOffsetsMm[0] ?? null;
+      let bestIntermediateDeltaMm = Number.POSITIVE_INFINITY;
+      for (const candidateOffsetMm of intermediateOffsetsMm) {
+        const deltaMm = Math.abs(candidateOffsetMm - snappedOffsetMm);
+        if (deltaMm < bestIntermediateDeltaMm) {
+          bestIntermediateDeltaMm = deltaMm;
+          bestIntermediateOffsetMm = candidateOffsetMm;
+        }
+      }
+      if (bestIntermediateOffsetMm === null) {
+        return null;
+      }
+      snappedOffsetMm = bestIntermediateOffsetMm;
+      if (snapMeta.kind === "FREE") {
+        snapMeta = buildSnapMeta("SEGMENT", "Intermediate post");
+      }
 
       const point = interpolateAlongSegment(segment, snappedOffsetMm);
       const tangent =

@@ -497,12 +497,12 @@ function buildReuseLinks(cutOverlays: Optimization3DCutOverlay[]): Optimization3
         start: {
           x: previous?.center.x ?? overlay.center.x,
           y: (previous?.baseHeightMm ?? overlay.baseHeightMm) + (previous?.heightMm ?? overlay.heightMm) + 520,
-          z: -(previous?.center.y ?? overlay.center.y)
+          z: previous?.center.y ?? overlay.center.y
         },
         end: {
           x: overlay.center.x,
           y: overlay.baseHeightMm + overlay.heightMm + 520,
-          z: -overlay.center.y
+          z: overlay.center.y
         }
       };
     })
@@ -561,8 +561,8 @@ export function buildOptimization3DScene(
   const bounds = {
     minX: allGroundPoints.length > 0 ? Math.min(...allGroundPoints.map((point) => point.x)) : -2000,
     maxX: allGroundPoints.length > 0 ? Math.max(...allGroundPoints.map((point) => point.x)) : 2000,
-    minZ: allGroundPoints.length > 0 ? Math.min(...allGroundPoints.map((point) => -point.y)) : -2000,
-    maxZ: allGroundPoints.length > 0 ? Math.max(...allGroundPoints.map((point) => -point.y)) : 2000,
+    minZ: allGroundPoints.length > 0 ? Math.min(...allGroundPoints.map((point) => point.y)) : -2000,
+    maxZ: allGroundPoints.length > 0 ? Math.max(...allGroundPoints.map((point) => point.y)) : 2000,
     maxHeightMm: Math.max(
       2200,
       ...posts.map((post) => post.heightMm),
