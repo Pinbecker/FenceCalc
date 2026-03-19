@@ -138,6 +138,7 @@ export function buildEditorSummaryData(input: {
       .filter((line) => line.kind === "SIDE_NETTING")
       .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) }))
   };
+  const uniqueKickboardCount = new Set(input.resolvedKickboards.map((kickboard) => kickboard.sourceAttachmentId)).size;
 
   return {
     postRowsByType: {
@@ -159,7 +160,7 @@ export function buildEditorSummaryData(input: {
     twinBarFenceRows,
     featureCounts: {
       goalUnits: input.resolvedGoalUnits.length,
-      kickboards: input.resolvedKickboards.length,
+      kickboards: uniqueKickboardCount,
       pitchDividers: input.resolvedPitchDividers.length,
       sideNettings: input.resolvedSideNettings.length
     },

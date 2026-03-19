@@ -13,6 +13,92 @@ const emptyLayout: LayoutModel = {
   segments: []
 };
 
+const featureRichLayout: LayoutModel = {
+  segments: [
+    {
+      id: "s1",
+      start: { x: 0, y: 0 },
+      end: { x: 12000, y: 0 },
+      spec: { system: "TWIN_BAR", height: "3m" }
+    },
+    {
+      id: "s2",
+      start: { x: 0, y: 8000 },
+      end: { x: 12000, y: 8000 },
+      spec: { system: "TWIN_BAR", height: "3m" }
+    }
+  ],
+  gates: [],
+  basketballFeatures: [
+    {
+      id: "bf-1",
+      segmentId: "s1",
+      offsetMm: 2525,
+      facing: "LEFT",
+      type: "MOUNTED_TO_EXISTING_POST",
+      mountingMode: "POST_MOUNTED"
+    }
+  ],
+  basketballPosts: [
+    {
+      id: "bp-1",
+      segmentId: "s1",
+      offsetMm: 5050,
+      facing: "RIGHT",
+      type: "DEDICATED_POST",
+      mountingMode: "PROJECTING_ARM",
+      armLengthMm: 1800,
+      replacesIntermediatePost: true
+    }
+  ],
+  floodlightColumns: [
+    {
+      id: "fc-1",
+      segmentId: "s1",
+      offsetMm: 3000,
+      facing: "LEFT"
+    }
+  ],
+  goalUnits: [
+    {
+      id: "goal-1",
+      segmentId: "s1",
+      centerOffsetMm: 6000,
+      side: "LEFT",
+      widthMm: 3000,
+      depthMm: 1200,
+      goalHeightMm: 3000
+    }
+  ],
+  kickboards: [
+    {
+      id: "kick-1",
+      segmentId: "s1",
+      sectionHeightMm: 225,
+      thicknessMm: 50,
+      profile: "CHAMFERED",
+      boardLengthMm: 2500
+    }
+  ],
+  pitchDividers: [
+    {
+      id: "divider-1",
+      startAnchor: { segmentId: "s1", offsetMm: 2500 },
+      endAnchor: { segmentId: "s2", offsetMm: 8500 }
+    }
+  ],
+  sideNettings: [
+    {
+      id: "net-1",
+      segmentId: "s2",
+      additionalHeightMm: 2000,
+      startOffsetMm: 2525,
+      endOffsetMm: 7575,
+      extendedPostInterval: 3
+    }
+  ]
+};
+
 const emptyEstimate: EstimateResult = {
   posts: {
     terminal: 0,
@@ -466,6 +552,64 @@ describe("SqliteAppRepository", () => {
       savedViewport: { x: 250, y: 125, scale: 0.3 }
     });
     await expect(repository.listAuditLog(account.company.id)).resolves.toHaveLength(1);
+  });
+
+  it("round-trips full feature layouts from sqlite storage", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    expect(account).not.toBeNull();
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: account.company.id,
+      name: "Feature drawing",
+      customerName: "Cleveland Land Services",
+      layout: featureRichLayout,
+      savedViewport: { x: 250, y: 125, scale: 0.3 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: account.user.id,
+      updatedByUserId: account.user.id,
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject({
+      layout: {
+        basketballFeatures: [{ id: "bf-1" }],
+        basketballPosts: [{ id: "bp-1" }],
+        floodlightColumns: [{ id: "fc-1" }],
+        goalUnits: [{ id: "goal-1" }],
+        kickboards: [{ id: "kick-1" }],
+        pitchDividers: [{ id: "divider-1" }],
+        sideNettings: [{ id: "net-1" }]
+      }
+    });
+
+    await expect(repository.listDrawings(account.company.id)).resolves.toMatchObject([
+      {
+        previewLayout: {
+          goalUnits: [{ id: "goal-1" }],
+          kickboards: [{ id: "kick-1" }],
+          pitchDividers: [{ id: "divider-1" }],
+          sideNettings: [{ id: "net-1" }]
+        }
+      }
+    ]);
   });
 
   it("persists immutable quotes in sqlite", async () => {

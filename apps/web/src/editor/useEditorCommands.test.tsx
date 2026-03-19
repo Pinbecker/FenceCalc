@@ -710,4 +710,46 @@ describe("useEditorCommands", () => {
 
     uuidSpy.mockRestore();
   });
+
+  it("places basketball posts individually even when an opposite run exists", () => {
+    const threeMeterSpec = { ...defaultFenceSpec(), height: "3m" as const };
+    const uuidSpy = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValueOnce("99999999-9999-4999-8999-999999999999");
+    const harness = createCommandHarness({
+      interactionMode: "BASKETBALL_POST",
+      layout: {
+        segments: [
+          { id: "s1", start: { x: 0, y: 0 }, end: { x: 10000, y: 0 }, spec: threeMeterSpec },
+          { id: "s2", start: { x: 0, y: 8000 }, end: { x: 10000, y: 8000 }, spec: threeMeterSpec }
+        ],
+        gates: [],
+        basketballPosts: [],
+        floodlightColumns: []
+      },
+      basketballPostPreview: {
+        segment: { id: "s1", start: { x: 0, y: 0 }, end: { x: 10000, y: 0 }, spec: threeMeterSpec },
+        segmentLengthMm: 10000,
+        offsetMm: 2525,
+        point: { x: 2525, y: 0 },
+        tangent: { x: 1, y: 0 },
+        normal: { x: 0, y: -1 },
+        facing: "LEFT",
+        targetPoint: { x: 2525, y: 0 },
+        snapMeta: { kind: "ALIGNMENT", label: "Intermediate post" }
+      }
+    });
+
+    harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
+
+    expect(harness.state.layout.basketballPosts).toEqual([
+      expect.objectContaining({
+        id: "99999999-9999-4999-8999-999999999999",
+        segmentId: "s1",
+        offsetMm: 2525
+      })
+    ]);
+
+    uuidSpy.mockRestore();
+  });
 });

@@ -120,8 +120,8 @@ export function useEditorDerivedState({
     [goalUnitPlacements, segmentsById]
   );
   const resolvedKickboards = useMemo(
-    () => resolveKickboardAttachments(segmentsById, kickboardAttachments),
-    [kickboardAttachments, segmentsById]
+    () => resolveKickboardAttachments(segmentsById, kickboardAttachments, resolvedGoalUnits),
+    [kickboardAttachments, resolvedGoalUnits, segmentsById]
   );
   const resolvedPitchDividers = useMemo(
     () => resolvePitchDividerPlacements(segmentsById, pitchDividerPlacements),

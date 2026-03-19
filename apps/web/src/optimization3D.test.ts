@@ -144,6 +144,7 @@ describe("buildOptimization3DScene", () => {
     };
     const kickboard: ResolvedKickboardAttachment = {
       id: "kb-1",
+      sourceAttachmentId: "kb-1",
       segmentId: "seg-features-2",
       start: segment.start,
       end: segment.end,

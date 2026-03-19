@@ -2,7 +2,6 @@ import type {
   BasketballFeaturePlacement,
   FenceHeightKey,
   FenceSpec,
-  FloodlightColumnPlacement,
   GoalUnitPlacement,
   KickboardAttachment,
   LayoutSegment,
@@ -64,6 +63,7 @@ export interface ResolvedBasketballFeaturePlacement {
 
 export interface ResolvedKickboardAttachment {
   id: string;
+  sourceAttachmentId: string;
   segmentId: string;
   start: PointMm;
   end: PointMm;
@@ -373,26 +373,67 @@ export function resolveBasketballFeaturePlacements(
 
 export function resolveKickboardAttachments(
   segmentsById: Map<string, LayoutSegment>,
-  attachments: KickboardAttachment[]
+  attachments: KickboardAttachment[],
+  goalUnits: ResolvedGoalUnitPlacement[] = []
 ): ResolvedKickboardAttachment[] {
   return attachments
-    .map((attachment) => {
+    .flatMap((attachment) => {
       const segment = segmentsById.get(attachment.segmentId);
       if (!segment) {
-        return null;
+        return [];
       }
-      const lengthMm = distanceMm(segment.start, segment.end);
-      return {
-        id: attachment.id,
-        segmentId: attachment.segmentId,
-        start: segment.start,
-        end: segment.end,
-        lengthMm,
-        boardCount: Math.max(1, Math.ceil(lengthMm / attachment.boardLengthMm)),
+      const segmentGoalUnits = goalUnits
+        .filter((goalUnit) => goalUnit.segmentId === attachment.segmentId)
+        .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+
+      const kickboardRuns: Array<{ id: string; segmentId: string; start: PointMm; end: PointMm; lengthMm: number }> = [];
+      let totalLengthMm = 0;
+      let partIndex = 0;
+      let cursorOffsetMm = 0;
+
+      const pushRun = (start: PointMm, end: PointMm): void => {
+        const lengthMm = distanceMm(start, end);
+        if (lengthMm <= OFFSET_EPSILON_MM) {
+          return;
+        }
+        kickboardRuns.push({
+          id: partIndex === 0 ? attachment.id : `${attachment.id}::part-${partIndex}`,
+          segmentId: attachment.segmentId,
+          start,
+          end,
+          lengthMm
+        });
+        totalLengthMm += lengthMm;
+        partIndex += 1;
+      };
+
+      for (const goalUnit of segmentGoalUnits) {
+        if (goalUnit.startOffsetMm > cursorOffsetMm + OFFSET_EPSILON_MM) {
+          pushRun(interpolateAlongSegment(segment, cursorOffsetMm), goalUnit.entryPoint);
+        }
+        pushRun(goalUnit.entryPoint, goalUnit.recessEntryPoint);
+        pushRun(goalUnit.recessEntryPoint, goalUnit.recessExitPoint);
+        pushRun(goalUnit.recessExitPoint, goalUnit.exitPoint);
+        cursorOffsetMm = goalUnit.endOffsetMm;
+      }
+
+      const segmentLengthMm = distanceMm(segment.start, segment.end);
+      if (cursorOffsetMm < segmentLengthMm - OFFSET_EPSILON_MM || kickboardRuns.length === 0) {
+        pushRun(interpolateAlongSegment(segment, cursorOffsetMm), segment.end);
+      }
+
+      const boardCount = Math.max(1, Math.ceil(totalLengthMm / attachment.boardLengthMm));
+      return kickboardRuns.map((run) => ({
+        id: run.id,
+        sourceAttachmentId: attachment.id,
+        segmentId: run.segmentId,
+        start: run.start,
+        end: run.end,
+        lengthMm: run.lengthMm,
+        boardCount,
         placement: attachment
-      } satisfies ResolvedKickboardAttachment;
+      } satisfies ResolvedKickboardAttachment));
     })
-    .filter((attachment): attachment is ResolvedKickboardAttachment => attachment !== null)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 

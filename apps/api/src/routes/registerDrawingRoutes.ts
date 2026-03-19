@@ -10,6 +10,7 @@ import {
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
 import { requireAuth } from "../authorization.js";
+import { normalizeLayout } from "../estimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
@@ -85,7 +86,10 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
       });
     }
 
-    const result = await createDrawingForCompany(repository, authenticated, parsed.data);
+    const result = await createDrawingForCompany(repository, authenticated, {
+      ...parsed.data,
+      layout: normalizeLayout(parsed.data.layout)
+    });
     if (result.kind !== "success") {
       return sendDrawingMutationFailure(reply, result);
     }
@@ -208,7 +212,23 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
       });
     }
 
-    const result = await updateDrawingForCompany(repository, authenticated, params.id, parsed.data);
+    const updateInput: Parameters<typeof updateDrawingForCompany>[3] = {
+      expectedVersionNumber: parsed.data.expectedVersionNumber
+    };
+    if (parsed.data.name !== undefined) {
+      updateInput.name = parsed.data.name;
+    }
+    if (parsed.data.customerName !== undefined) {
+      updateInput.customerName = parsed.data.customerName;
+    }
+    if (parsed.data.savedViewport !== undefined) {
+      updateInput.savedViewport = parsed.data.savedViewport;
+    }
+    if (parsed.data.layout !== undefined) {
+      updateInput.layout = normalizeLayout(parsed.data.layout);
+    }
+
+    const result = await updateDrawingForCompany(repository, authenticated, params.id, updateInput);
     if (result.kind !== "success") {
       return sendDrawingMutationFailure(reply, result);
     }

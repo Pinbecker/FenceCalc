@@ -739,9 +739,9 @@ export function buildOptimization3DRenderData(
     faces.push({
       key: `${pitchDivider.key}-net`,
       points: formatPolygonPoints(dividerFace),
-      fill: "rgba(236, 245, 255, 0.12)",
-      stroke: "rgba(225, 241, 255, 0.64)",
-      strokeWidth: 0.92,
+      fill: "rgba(64, 199, 255, 0.22)",
+      stroke: "rgba(82, 221, 255, 0.92)",
+      strokeWidth: 1.1,
       opacity: 1,
       depth: getFaceDepth(dividerFace) + 0.05
     });
@@ -753,8 +753,8 @@ export function buildOptimization3DRenderData(
         key: `${pitchDivider.key}-support-${index}`,
         kind: "polyline",
         value: `${bottom.x},${bottom.y} ${top.x},${top.y}`,
-        stroke: "rgba(220, 232, 244, 0.94)",
-        strokeWidth: 2,
+        stroke: "rgba(123, 228, 255, 0.98)",
+        strokeWidth: 2.25,
         opacity: 1,
         depth: (bottom.depth + top.depth) / 2 + 0.08
       });

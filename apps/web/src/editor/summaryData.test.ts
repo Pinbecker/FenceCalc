@@ -173,6 +173,7 @@ describe("buildEditorSummaryData", () => {
       resolvedKickboards: [
         {
           id: "kick-1",
+          sourceAttachmentId: "kick-1",
           segmentId: "segment-1",
           start: { x: 0, y: 0 },
           end: { x: 5000, y: 0 },

@@ -259,7 +259,6 @@ export function useEditorInteractionPreviews({
   gateType,
   customGateWidthMm,
   basketballPlacementType = "DEDICATED_POST",
-  basketballArmLengthMm: _basketballArmLengthMm,
   placedGateVisuals,
   placedBasketballPostVisuals,
   placedFloodlightColumnVisuals = [],

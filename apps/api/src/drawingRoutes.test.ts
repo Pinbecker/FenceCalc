@@ -151,6 +151,145 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
+  it("preserves new feature attachments when drawings are created", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawings",
+      headers: cookieHeader,
+      payload: {
+        name: "Feature-rich drawing",
+        customerName: "Cleveland Land Services",
+        layout: {
+          segments: [
+            {
+              id: "one",
+              start: { x: 0.4, y: 0.2 },
+              end: { x: 12000.6, y: 0.8 },
+              spec: { system: "TWIN_BAR", height: "3m" }
+            },
+            {
+              id: "two",
+              start: { x: 0.1, y: 8000.2 },
+              end: { x: 12000.3, y: 8000.7 },
+              spec: { system: "TWIN_BAR", height: "3m" }
+            }
+          ],
+          goalUnits: [
+            {
+              id: "goal-1",
+              segmentId: "one",
+              centerOffsetMm: 6000.4,
+              side: "LEFT",
+              widthMm: 3000,
+              depthMm: 1200.3,
+              goalHeightMm: 3000
+            }
+          ],
+          kickboards: [
+            {
+              id: "kick-1",
+              segmentId: "one",
+              sectionHeightMm: 225,
+              thicknessMm: 50,
+              profile: "CHAMFERED",
+              boardLengthMm: 2500
+            }
+          ],
+          pitchDividers: [
+            {
+              id: "divider-1",
+              startAnchor: { segmentId: "one", offsetMm: 2000.4 },
+              endAnchor: { segmentId: "two", offsetMm: 9000.6 }
+            }
+          ],
+          sideNettings: [
+            {
+              id: "net-1",
+              segmentId: "one",
+              additionalHeightMm: 1999.6,
+              extendedPostInterval: 3,
+              startOffsetMm: 2500.4
+            },
+            {
+              id: "net-2",
+              segmentId: "two",
+              additionalHeightMm: 1200.2,
+              extendedPostInterval: 3,
+              endOffsetMm: 7500.8
+            }
+          ]
+        }
+      }
+    });
+
+    expect(create.statusCode).toBe(201);
+    const createdLayout = create.json<{
+      drawing: {
+        id: string;
+        layout: {
+          goalUnits: Array<{ centerOffsetMm: number; depthMm: number }>;
+          kickboards: Array<{ profile: string }>;
+          pitchDividers: Array<{ startAnchor: { offsetMm: number }; endAnchor: { offsetMm: number } }>;
+          sideNettings: Array<{
+            additionalHeightMm: number;
+            startOffsetMm?: number;
+            endOffsetMm?: number;
+          }>;
+        };
+      };
+    }>().drawing;
+
+    expect(createdLayout.layout.goalUnits[0]).toMatchObject({
+      centerOffsetMm: 6000,
+      depthMm: 1200
+    });
+    expect(createdLayout.layout.kickboards[0]).toMatchObject({
+      profile: "CHAMFERED"
+    });
+    expect(createdLayout.layout.pitchDividers[0]).toMatchObject({
+      startAnchor: { offsetMm: 2000 },
+      endAnchor: { offsetMm: 9001 }
+    });
+    expect(createdLayout.layout.sideNettings).toEqual([
+      expect.objectContaining({
+        additionalHeightMm: 2000,
+        startOffsetMm: 2500
+      }),
+      expect.objectContaining({
+        additionalHeightMm: 1200,
+        endOffsetMm: 7501
+      })
+    ]);
+    expect("endOffsetMm" in createdLayout.layout.sideNettings[0]!).toBe(false);
+    expect("startOffsetMm" in createdLayout.layout.sideNettings[1]!).toBe(false);
+
+    const load = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawings/${createdLayout.id}`,
+      headers: cookieHeader
+    });
+
+    expect(load.statusCode).toBe(200);
+    const loadedLayout = load.json<{
+      drawing: {
+        layout: {
+          goalUnits: Array<{ id: string }>;
+          kickboards: Array<{ id: string }>;
+          pitchDividers: Array<{ id: string }>;
+          sideNettings: Array<{ id: string }>;
+        };
+      };
+    }>().drawing.layout;
+    expect(loadedLayout.goalUnits.map((goalUnit) => goalUnit.id)).toEqual(["goal-1"]);
+    expect(loadedLayout.kickboards.map((kickboard) => kickboard.id)).toEqual(["kick-1"]);
+    expect(loadedLayout.pitchDividers.map((pitchDivider) => pitchDivider.id)).toEqual(["divider-1"]);
+    expect(loadedLayout.sideNettings.map((sideNetting) => sideNetting.id)).toEqual(["net-1", "net-2"]);
+
+    await app.close();
+  });
+
   it("returns a server-priced estimate with pricing snapshot metadata", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
 

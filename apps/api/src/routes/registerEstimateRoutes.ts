@@ -1,7 +1,7 @@
 ﻿import { layoutModelSchema } from "@fence-estimator/contracts";
 
 import { requireAuth } from "../authorization.js";
-import { buildEstimate } from "../estimateSupport.js";
+import { buildEstimate, normalizeLayout } from "../estimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 
 export function registerEstimateRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
@@ -44,7 +44,7 @@ export function registerEstimateRoutes({ app, config, repository, writeLimiter }
     }
 
     try {
-      const result = buildEstimate(parsed.data);
+      const result = buildEstimate(normalizeLayout(parsed.data));
       return reply.code(200).send(result);
     } catch (error) {
       return reply.code(400).send({

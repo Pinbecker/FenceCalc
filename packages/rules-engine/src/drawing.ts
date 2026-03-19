@@ -3,12 +3,9 @@ import type {
   FeatureQuantityLine,
   FloodlightColumnPlacement,
   GatePlacement,
-  KickboardAttachment,
   LayoutModel,
   LayoutSegment,
-  PitchDividerPlacement,
-  PointMm,
-  SideNettingAttachment
+  PointMm
 } from "@fence-estimator/contracts";
 import { distanceMm, pointKey } from "@fence-estimator/geometry";
 
@@ -249,7 +246,15 @@ function buildFeatureQuantities(input: {
     }
   }
 
+  const kickboardsBySourceAttachmentId = new Map<string, (typeof input.kickboards)[number]>();
   for (const kickboard of input.kickboards) {
+    const existing = kickboardsBySourceAttachmentId.get(kickboard.sourceAttachmentId);
+    if (!existing || kickboard.boardCount > existing.boardCount) {
+      kickboardsBySourceAttachmentId.set(kickboard.sourceAttachmentId, kickboard);
+    }
+  }
+
+  for (const kickboard of kickboardsBySourceAttachmentId.values()) {
     quantities.push(
       {
         key: `${kickboard.id}::boards`,
@@ -442,7 +447,7 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
     featureQuantities: buildFeatureQuantities({
       goalUnits: resolvedGoalUnits,
       basketballFeatures: resolvedBasketballFeatures,
-      kickboards: resolveKickboardAttachments(segmentsById, layout.kickboards ?? []),
+      kickboards: resolveKickboardAttachments(segmentsById, layout.kickboards ?? [], resolvedGoalUnits),
       pitchDividers: resolvePitchDividerPlacements(segmentsById, layout.pitchDividers ?? []),
       sideNettings: resolveSideNettingAttachments(segmentsById, layout.sideNettings ?? [])
     })

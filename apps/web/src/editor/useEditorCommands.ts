@@ -17,7 +17,6 @@ import type {
   SideNettingAttachment
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
-import { findOppositeBasketballPairCandidate } from "@fence-estimator/rules-engine";
 
 import { formatMetersInputFromMm } from "../formatters";
 import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, parseMetersInputToMm, quantize } from "./constants";
@@ -187,7 +186,6 @@ export function useEditorCommands({
   applyGatePlacements,
   applyBasketballPostPlacements,
   applyFloodlightColumnPlacements = () => undefined,
-  segments,
   segmentsById,
   resolvedGateById,
   resolvedBasketballPostById,
@@ -266,7 +264,6 @@ export function useEditorCommands({
   setPendingPitchDividerStart = () => null,
   setPendingSideNettingStart = () => null
 }: UseEditorCommandsOptions) {
-  const availableSegments = segments ?? [...segmentsById.values()];
   const updateSegment = useCallback(
     (segmentId: string, updater: (segment: LayoutSegment) => LayoutSegment): void => {
       applySegments((previous) =>
@@ -794,16 +791,9 @@ export function useEditorCommands({
 
   const insertBasketballPost = useCallback(
     (preview: BasketballPostInsertionPreview): void => {
-      const pairCandidate = findOppositeBasketballPairCandidate(
-        availableSegments,
-        preview.segment.id,
-        preview.offsetMm,
-        preview.facing
-      );
       applyBasketballPostPlacements((previous) => {
-        const nextBasketballPostId = crypto.randomUUID();
-        const basePlacement: BasketballPostPlacement = {
-          id: nextBasketballPostId,
+        const nextBasketballPost: BasketballPostPlacement = {
+          id: crypto.randomUUID(),
           segmentId: preview.segment.id,
           offsetMm: preview.offsetMm,
           facing: preview.facing,
@@ -812,49 +802,16 @@ export function useEditorCommands({
           armLengthMm: basketballPlacementType === "DEDICATED_POST" ? basketballArmLengthMm : undefined,
           replacesIntermediatePost: basketballPlacementType === "DEDICATED_POST"
         };
-        const pairedBasketballPostId = pairCandidate ? crypto.randomUUID() : null;
-        const nextBasketballPost: BasketballPostPlacement = pairCandidate
-          ? {
-              ...basePlacement,
-              pairedFeatureId: pairedBasketballPostId
-            }
-          : basePlacement;
-        const pairedPlacement =
-          pairCandidate && pairedBasketballPostId
-            ? ({
-                id: pairedBasketballPostId,
-                segmentId: pairCandidate.segmentId,
-                offsetMm: pairCandidate.offsetMm,
-                facing: pairCandidate.facing,
-                type: basketballPlacementType,
-                mountingMode: basketballPlacementType === "DEDICATED_POST" ? "PROJECTING_ARM" : "POST_MOUNTED",
-                armLengthMm: basketballPlacementType === "DEDICATED_POST" ? basketballArmLengthMm : undefined,
-                pairedFeatureId: nextBasketballPostId,
-                replacesIntermediatePost: basketballPlacementType === "DEDICATED_POST"
-              } satisfies BasketballPostPlacement)
-            : null;
         const next = previous.filter((placement) => {
-          const conflictsWithSource =
+          return !(
             placement.segmentId === nextBasketballPost.segmentId &&
-            Math.abs(placement.offsetMm - nextBasketballPost.offsetMm) <= DRAW_INCREMENT_MM * 0.5;
-          const conflictsWithPair =
-            pairedPlacement !== null &&
-            placement.segmentId === pairedPlacement.segmentId &&
-            Math.abs(placement.offsetMm - pairedPlacement.offsetMm) <= DRAW_INCREMENT_MM * 0.5;
-          return !conflictsWithSource && !conflictsWithPair;
+            Math.abs(placement.offsetMm - nextBasketballPost.offsetMm) <= DRAW_INCREMENT_MM * 0.5
+          );
         });
         next.push(nextBasketballPost);
-        if (pairedPlacement) {
-          next.push(pairedPlacement);
-        }
         next.sort((left, right) => left.id.localeCompare(right.id));
         return next;
       });
-      if (!pairCandidate) {
-        globalThis.window?.alert?.(
-          "No valid opposite basketball location was found. The first set was placed; partner selection UI is still TODO."
-        );
-      }
       setSelectedSegmentId(null);
       setSelectedGateId(null);
       setSelectedBasketballPostId(null);
@@ -866,7 +823,6 @@ export function useEditorCommands({
       applyBasketballPostPlacements,
       basketballArmLengthMm,
       basketballPlacementType,
-      availableSegments,
       setDrawChainStart,
       setDrawStart,
       setSelectedBasketballPostId,

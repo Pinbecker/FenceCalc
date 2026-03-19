@@ -105,7 +105,43 @@ describe("feature helpers", () => {
       ]
     )[0];
 
+    expect(attachment?.sourceAttachmentId).toBe("kb-1");
     expect(attachment?.boardCount).toBe(3);
+  });
+
+  it("routes kickboards around goal-unit recesses instead of across the goal mouth", () => {
+    const segment = buildSegment("run", 0, 0, 12000, 0, "3m");
+    const segmentsById = new Map([[segment.id, segment]]);
+    const goalUnit = resolveGoalUnitPlacements(segmentsById, [
+      {
+        id: "goal-1",
+        segmentId: "run",
+        centerOffsetMm: 5000,
+        side: "LEFT",
+        widthMm: 3000,
+        depthMm: 1200,
+        goalHeightMm: 3000
+      }
+    ]);
+
+    const kickboards = resolveKickboardAttachments(
+      segmentsById,
+      [
+        {
+          id: "kb-1",
+          segmentId: "run",
+          sectionHeightMm: 200,
+          thicknessMm: 50,
+          profile: "SQUARE",
+          boardLengthMm: 2500
+        }
+      ],
+      goalUnit
+    );
+
+    expect(kickboards).toHaveLength(5);
+    expect(kickboards.map((kickboard) => Math.round(kickboard.lengthMm))).toEqual([3500, 1200, 3000, 1200, 5500]);
+    expect(kickboards[0]?.boardCount).toBe(6);
   });
 
   it("adds pitch-divider supports every 15m and flags spans beyond 70m", () => {

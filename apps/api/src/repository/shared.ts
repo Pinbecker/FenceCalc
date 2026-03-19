@@ -26,6 +26,25 @@ import type { ZodType } from "zod";
 
 import type { StoredUser } from "./types.js";
 
+interface StoredLayoutShape {
+  segments: LayoutModel["segments"];
+  gates?: LayoutModel["gates"] | undefined;
+  basketballFeatures?: LayoutModel["basketballFeatures"] | undefined;
+  basketballPosts?: LayoutModel["basketballPosts"] | undefined;
+  floodlightColumns?: LayoutModel["floodlightColumns"] | undefined;
+  goalUnits?: LayoutModel["goalUnits"] | undefined;
+  kickboards?: LayoutModel["kickboards"] | undefined;
+  pitchDividers?: LayoutModel["pitchDividers"] | undefined;
+  sideNettings?: Array<{
+    id: string;
+    segmentId: string;
+    additionalHeightMm: number;
+    extendedPostInterval: 3;
+    startOffsetMm?: number | undefined;
+    endOffsetMm?: number | undefined;
+  }> | undefined;
+}
+
 export interface CompanyRow {
   id: string;
   name: string;
@@ -174,8 +193,34 @@ function buildPreviewLayout(layout: LayoutModel): LayoutModel {
   return {
     segments: layout.segments.slice(0, 40),
     gates: (layout.gates ?? []).slice(0, 12),
+    basketballFeatures: (layout.basketballFeatures ?? []).slice(0, 20),
     basketballPosts: (layout.basketballPosts ?? []).slice(0, 20),
-    floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20)
+    floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20),
+    goalUnits: (layout.goalUnits ?? []).slice(0, 12),
+    kickboards: (layout.kickboards ?? []).slice(0, 20),
+    pitchDividers: (layout.pitchDividers ?? []).slice(0, 12),
+    sideNettings: (layout.sideNettings ?? []).slice(0, 20)
+  };
+}
+
+function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
+  return {
+    segments: layout.segments,
+    gates: layout.gates ?? [],
+    basketballFeatures: layout.basketballFeatures ?? [],
+    basketballPosts: layout.basketballPosts ?? [],
+    floodlightColumns: layout.floodlightColumns ?? [],
+    goalUnits: layout.goalUnits ?? [],
+    kickboards: layout.kickboards ?? [],
+    pitchDividers: layout.pitchDividers ?? [],
+    sideNettings: (layout.sideNettings ?? []).map((sideNetting) => ({
+      id: sideNetting.id,
+      segmentId: sideNetting.segmentId,
+      additionalHeightMm: sideNetting.additionalHeightMm,
+      extendedPostInterval: sideNetting.extendedPostInterval,
+      ...(sideNetting.startOffsetMm === undefined ? {} : { startOffsetMm: sideNetting.startOffsetMm }),
+      ...(sideNetting.endOffsetMm === undefined ? {} : { endOffsetMm: sideNetting.endOffsetMm })
+    }))
   };
 }
 
@@ -186,12 +231,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     drawingCanvasViewportSchema,
     `viewport for drawing ${row.id}`
   );
-  const layout: LayoutModel = {
-    segments: parsedLayout.segments,
-    gates: parsedLayout.gates ?? [],
-    basketballPosts: parsedLayout.basketballPosts ?? [],
-    floodlightColumns: parsedLayout.floodlightColumns ?? []
-  };
+  const layout = buildStoredLayout(parsedLayout);
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`);
 
   return {
@@ -255,12 +295,7 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     drawingCanvasViewportSchema,
     `viewport for drawing version ${row.id}`
   );
-  const layout: LayoutModel = {
-    segments: parsedLayout.segments,
-    gates: parsedLayout.gates ?? [],
-    basketballPosts: parsedLayout.basketballPosts ?? [],
-    floodlightColumns: parsedLayout.floodlightColumns ?? []
-  };
+  const layout = buildStoredLayout(parsedLayout);
   const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`);
 
   return {
@@ -312,12 +347,7 @@ export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
 export function toQuoteRecord(row: QuoteRow): QuoteRecord {
   const parsed = parseStoredJson(row.quote_json, quoteRecordSchema, `quote ${row.id}`);
   const drawingSnapshot = {
-    layout: {
-      segments: parsed.drawingSnapshot.layout.segments,
-      gates: parsed.drawingSnapshot.layout.gates ?? [],
-      basketballPosts: parsed.drawingSnapshot.layout.basketballPosts ?? [],
-      floodlightColumns: parsed.drawingSnapshot.layout.floodlightColumns ?? []
-    },
+    layout: buildStoredLayout(parsed.drawingSnapshot.layout),
     drawingId: parsed.drawingSnapshot.drawingId,
     drawingName: parsed.drawingSnapshot.drawingName,
     customerName: parsed.drawingSnapshot.customerName,

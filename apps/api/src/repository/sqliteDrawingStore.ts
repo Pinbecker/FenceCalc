@@ -12,6 +12,22 @@ import type {
 export class SqliteDrawingStore {
   public constructor(private readonly database: Database.Database) {}
 
+  private tryReadDrawing(row: DrawingRow): DrawingRecord | null {
+    try {
+      return toDrawing(row);
+    } catch {
+      return null;
+    }
+  }
+
+  private tryReadDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord | null {
+    try {
+      return toDrawingVersion(row);
+    } catch {
+      return null;
+    }
+  }
+
   private buildContributorMetadata(companyId: string, drawingIds: string[]) {
     const contributorIdsByDrawingId = new Map<string, Set<string>>();
     for (const drawingId of drawingIds) {
@@ -47,7 +63,10 @@ export class SqliteDrawingStore {
   }
 
   private toSummary(row: DrawingRow, metadata: ReturnType<SqliteDrawingStore["buildContributorMetadata"]>): DrawingSummary {
-    const drawing = toDrawing(row);
+    const drawing = this.tryReadDrawing(row);
+    if (!drawing) {
+      throw new Error(`Unable to summarize corrupt drawing ${row.id}`);
+    }
     const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
     contributorIds.add(drawing.createdByUserId);
     contributorIds.add(drawing.updatedByUserId);
@@ -137,14 +156,32 @@ export class SqliteDrawingStore {
       companyId,
       rows.map((row) => row.id)
     );
-    return rows.map((row) => this.toSummary(row, metadata));
+    return rows.flatMap((row) => {
+      const drawing = this.tryReadDrawing(row);
+      if (!drawing) {
+        return [];
+      }
+      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
+      contributorIds.add(drawing.createdByUserId);
+      contributorIds.add(drawing.updatedByUserId);
+      const contributorUserIds = [...contributorIds];
+
+      return [toDrawingSummary(drawing, {
+        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
+        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
+        contributorUserIds,
+        contributorDisplayNames: contributorUserIds
+          .map((userId) => metadata.userDisplayNameById.get(userId))
+          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
+      })];
+    });
   }
 
   public getDrawingById(drawingId: string, companyId: string): DrawingRecord | null {
     const row = this.database
       .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
       .get(drawingId, companyId) as DrawingRow | undefined;
-    return row ? toDrawing(row) : null;
+    return row ? this.tryReadDrawing(row) : null;
   }
 
   public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
@@ -155,7 +192,10 @@ export class SqliteDrawingStore {
       return null;
     }
 
-    const current = toDrawing(existing);
+    const current = this.tryReadDrawing(existing);
+    if (!current) {
+      return null;
+    }
     const nextVersionNumber = current.versionNumber + 1;
     const update = this.database.transaction(() => {
       this.database
@@ -249,7 +289,69 @@ export class SqliteDrawingStore {
       );
 
     return {
-      ...toDrawing(existing),
+      ...(this.tryReadDrawing(existing) ?? {
+        id: existing.id,
+        companyId: existing.company_id,
+        name: existing.name,
+        customerName: existing.customer_name,
+        layout: { segments: [] },
+        estimate: {
+          posts: {
+            terminal: 0,
+            intermediate: 0,
+            total: 0,
+            cornerPosts: 0,
+            byHeightAndType: {},
+            byHeightMm: {}
+          },
+          corners: {
+            total: 0,
+            internal: 0,
+            external: 0,
+            unclassified: 0
+          },
+          materials: {
+            twinBarPanels: 0,
+            twinBarPanelsSuperRebound: 0,
+            twinBarPanelsByStockHeightMm: {},
+            twinBarPanelsByFenceHeight: {},
+            roll2100: 0,
+            roll900: 0,
+            totalRolls: 0,
+            rollsByFenceHeight: {}
+          },
+          optimization: {
+            strategy: "CHAINED_CUT_PLANNER",
+            twinBar: {
+              reuseAllowanceMm: 200,
+              stockPanelWidthMm: 2525,
+              fixedFullPanels: 0,
+              baselinePanels: 0,
+              optimizedPanels: 0,
+              panelsSaved: 0,
+              totalCutDemands: 0,
+              stockPanelsOpened: 0,
+              reusedCuts: 0,
+              totalConsumedMm: 0,
+              totalLeftoverMm: 0,
+              reusableLeftoverMm: 0,
+              utilizationRate: 0,
+              buckets: []
+            }
+          },
+          segments: []
+        },
+        schemaVersion: existing.schema_version,
+        rulesVersion: existing.rules_version,
+        versionNumber: existing.version_number,
+        isArchived: existing.is_archived === 1,
+        archivedAtIso: existing.archived_at_iso,
+        archivedByUserId: existing.archived_by_user_id,
+        createdByUserId: existing.created_by_user_id,
+        updatedByUserId: existing.updated_by_user_id,
+        createdAtIso: existing.created_at_iso,
+        updatedAtIso: existing.updated_at_iso
+      }),
       isArchived: input.archived,
       archivedAtIso: input.archived ? input.archivedAtIso : null,
       archivedByUserId: input.archived ? input.archivedByUserId : null,
@@ -270,7 +372,10 @@ export class SqliteDrawingStore {
         `,
       )
       .all(drawingId, companyId, companyId) as DrawingVersionRow[];
-    return rows.map((row) => toDrawingVersion(row));
+    return rows.flatMap((row) => {
+      const version = this.tryReadDrawingVersion(row);
+      return version ? [version] : [];
+    });
   }
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput): DrawingRecord | null {
@@ -288,9 +393,15 @@ export class SqliteDrawingStore {
       return null;
     }
 
-    const current = toDrawing(existing);
+    const current = this.tryReadDrawing(existing);
+    if (!current) {
+      return null;
+    }
     const restoredVersionNumber = current.versionNumber + 1;
-    const restoredVersion = toDrawingVersion(version);
+    const restoredVersion = this.tryReadDrawingVersion(version);
+    if (!restoredVersion) {
+      return null;
+    }
 
     const restore = this.database.transaction(() => {
       this.database
