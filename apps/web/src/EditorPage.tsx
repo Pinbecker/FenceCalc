@@ -4,8 +4,12 @@ import {
   type BasketballPostPlacement,
   type FloodlightColumnPlacement,
   type GatePlacement,
+  type GoalUnitPlacement,
+  type KickboardAttachment,
   type LayoutModel,
-  type LayoutSegment
+  type LayoutSegment,
+  type PitchDividerPlacement,
+  type SideNettingAttachment
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
@@ -29,13 +33,17 @@ import {
   chooseGridStep,
   useEditorCanvasViewport,
   useElementSize,
+  BASKETBALL_ARM_LENGTH_OPTIONS_MM,
   formatHeightLabelFromMm,
   formatLengthMm,
   formatMetersInputFromMm,
   GATE_WIDTH_OPTIONS_MM,
+  GOAL_UNIT_HEIGHT_OPTIONS_MM,
+  GOAL_UNIT_WIDTH_OPTIONS_MM,
   getSegmentColor,
   historyReducer,
   INITIAL_VISIBLE_WIDTH_MM,
+  KICKBOARD_SECTION_HEIGHT_OPTIONS_MM,
   MAX_SCALE,
   MIN_SCALE,
   OptimizationPlanner,
@@ -44,6 +52,7 @@ import {
   RECESS_WIDTH_OPTIONS_MM,
   ROLL_FORM_HEIGHT_OPTIONS,
   samePointApprox,
+  SIDE_NETTING_HEIGHT_OPTIONS_MM,
   type HistoryState,
   TWIN_BAR_HEIGHT_OPTIONS,
   useEditorKeyboardShortcuts
@@ -157,13 +166,96 @@ function reconcileFloodlightColumnsForSegments(
   return next;
 }
 
+function reconcileGoalUnitsForSegments(
+  previousGoalUnits: GoalUnitPlacement[],
+  nextSegments: LayoutSegment[]
+): GoalUnitPlacement[] {
+  const nextSegmentsById = new Map(nextSegments.map((segment) => [segment.id, segment]));
+  return previousGoalUnits
+    .flatMap((goalUnit) => {
+      const nextSegment = nextSegmentsById.get(goalUnit.segmentId);
+      if (!nextSegment) {
+        return [];
+      }
+      const segmentLengthMm = distanceMm(nextSegment.start, nextSegment.end);
+      if (goalUnit.widthMm > segmentLengthMm) {
+        return [];
+      }
+      const minCenterOffsetMm = goalUnit.widthMm / 2;
+      const maxCenterOffsetMm = segmentLengthMm - goalUnit.widthMm / 2;
+      return [{
+        ...goalUnit,
+        centerOffsetMm: Math.max(minCenterOffsetMm, Math.min(maxCenterOffsetMm, goalUnit.centerOffsetMm))
+      }];
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function reconcileKickboardsForSegments(
+  previousKickboards: KickboardAttachment[],
+  nextSegments: LayoutSegment[]
+): KickboardAttachment[] {
+  const nextSegmentIds = new Set(nextSegments.map((segment) => segment.id));
+  return previousKickboards
+    .filter((kickboard) => nextSegmentIds.has(kickboard.segmentId))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function reconcilePitchDividersForSegments(
+  previousPitchDividers: PitchDividerPlacement[],
+  nextSegments: LayoutSegment[]
+): PitchDividerPlacement[] {
+  const nextSegmentsById = new Map(nextSegments.map((segment) => [segment.id, segment]));
+  return previousPitchDividers
+    .flatMap((pitchDivider) => {
+      const startSegment = nextSegmentsById.get(pitchDivider.startAnchor.segmentId);
+      const endSegment = nextSegmentsById.get(pitchDivider.endAnchor.segmentId);
+      if (!startSegment || !endSegment) {
+        return [];
+      }
+      const startLengthMm = distanceMm(startSegment.start, startSegment.end);
+      const endLengthMm = distanceMm(endSegment.start, endSegment.end);
+      return [{
+        ...pitchDivider,
+        startAnchor: {
+          ...pitchDivider.startAnchor,
+          offsetMm: Math.max(0, Math.min(startLengthMm, pitchDivider.startAnchor.offsetMm))
+        },
+        endAnchor: {
+          ...pitchDivider.endAnchor,
+          offsetMm: Math.max(0, Math.min(endLengthMm, pitchDivider.endAnchor.offsetMm))
+        }
+      }];
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function reconcileSideNettingsForSegments(
+  previousSideNettings: SideNettingAttachment[],
+  nextSegments: LayoutSegment[]
+): SideNettingAttachment[] {
+  const nextSegmentIds = new Set(nextSegments.map((segment) => segment.id));
+  return previousSideNettings
+    .filter((sideNetting) => nextSegmentIds.has(sideNetting.segmentId))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
 export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
   const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
   const [history, dispatchHistory] = useReducer(historyReducer, {
     past: [],
-    present: { segments: [], gates: [], basketballPosts: [], floodlightColumns: [] },
+    present: {
+      segments: [],
+      gates: [],
+      basketballPosts: [],
+      floodlightColumns: [],
+      goalUnits: [],
+      kickboards: [],
+      pitchDividers: [],
+      sideNettings: []
+    },
     future: []
   } satisfies HistoryState);
   const shellState = useEditorShellState();
@@ -173,6 +265,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const gatePlacements = currentLayout.gates ?? [];
   const basketballPostPlacements = currentLayout.basketballPosts ?? [];
   const floodlightColumnPlacements = currentLayout.floodlightColumns ?? [];
+  const goalUnitPlacements = currentLayout.goalUnits ?? [];
+  const kickboardAttachments = currentLayout.kickboards ?? [];
+  const pitchDividerPlacements = currentLayout.pitchDividers ?? [];
+  const sideNettingAttachments = currentLayout.sideNettings ?? [];
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const isOptimizationFrozen =
@@ -219,10 +315,15 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       applyLayout((previous) => {
         const nextSegments = updater(previous.segments);
         return {
+          ...previous,
           segments: nextSegments,
           gates: reconcileGatePlacementsForSegments(previous.gates ?? [], previous.segments, nextSegments),
           basketballPosts: reconcileBasketballPostsForSegments(previous.basketballPosts ?? [], nextSegments),
-          floodlightColumns: reconcileFloodlightColumnsForSegments(previous.floodlightColumns ?? [], nextSegments)
+          floodlightColumns: reconcileFloodlightColumnsForSegments(previous.floodlightColumns ?? [], nextSegments),
+          goalUnits: reconcileGoalUnitsForSegments(previous.goalUnits ?? [], nextSegments),
+          kickboards: reconcileKickboardsForSegments(previous.kickboards ?? [], nextSegments),
+          pitchDividers: reconcilePitchDividersForSegments(previous.pitchDividers ?? [], nextSegments),
+          sideNettings: reconcileSideNettingsForSegments(previous.sideNettings ?? [], nextSegments)
         };
       });
     },
@@ -299,10 +400,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolvedBasketballPostPlacements,
     resolvedFloodlightColumnPlacements,
     resolvedGatePlacements,
+    resolvedGoalUnits,
+    resolvedKickboards,
     placedGateVisuals,
     postTypeCounts,
     recessAlignmentAnchors,
     resolvedGateById,
+    resolvedPitchDividers,
+    resolvedSideNettings,
     scaleBar,
     segmentLengthLabelsBySegmentId,
     segmentOrdinalById,
@@ -317,6 +422,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     gatePlacements,
     basketballPostPlacements,
     floodlightColumnPlacements,
+    goalUnitPlacements,
+    kickboardAttachments,
+    pitchDividerPlacements,
+    sideNettingAttachments,
     selectedSegmentId: selectionState.selectedSegmentId,
     selectedPlanId: shellState.selectedPlanId,
     activeSpecSystem: shellState.activeSpec.system,
@@ -374,6 +483,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,
+    goalUnitPreview,
     floodlightColumnPreview,
     drawSnapLabel,
     gatePreview,
@@ -384,10 +494,17 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     hoveredFloodlightColumnId,
     hoveredGateId,
     hoveredSegmentId,
+    kickboardPreview,
+    pitchDividerAnchorPreview,
+    pitchDividerPreview,
     rectanglePreviewEnd,
     recessPreview,
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
+    resolvePitchDividerAnchorPreview,
+    resolveSideNettingAnchorPreview,
+    sideNettingAnchorPreview,
+    sideNettingPreview,
     closeLoopPoint,
     resolveDrawPoint
   } = useEditorInteractionPreviews({
@@ -405,11 +522,18 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     recessWidthMm: shellState.recessWidthMm,
     recessDepthMm: shellState.recessDepthMm,
     recessSide: shellState.recessSide,
+    goalUnitWidthMm: shellState.goalUnitWidthMm,
+    goalUnitDepthMm: shellState.goalUnitDepthMm,
+    goalUnitHeightMm: shellState.goalUnitHeightMm,
     gateType: shellState.gateType,
     customGateWidthMm: shellState.customGateWidthMm,
+    basketballPlacementType: shellState.basketballPlacementType,
+    basketballArmLengthMm: shellState.basketballArmLengthMm,
     placedGateVisuals,
     placedBasketballPostVisuals: resolvedBasketballPostPlacements,
     placedFloodlightColumnVisuals: resolvedFloodlightColumnPlacements,
+    pendingPitchDividerStart: shellState.pendingPitchDividerStart,
+    pendingSideNettingStart: shellState.pendingSideNettingStart,
     activeGateDragId: selectionState.activeGateDrag?.gateId ?? null,
     activeBasketballPostDragId: selectionState.activeBasketballPostDrag?.basketballPostId ?? null,
     activeFloodlightColumnDragId: selectionState.activeFloodlightColumnDrag?.floodlightColumnId ?? null
@@ -448,6 +572,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyGatePlacements,
     applyBasketballPostPlacements,
     applyFloodlightColumnPlacements,
+    segments,
     segmentsById,
     resolvedGateById,
     resolvedBasketballPostById,
@@ -455,7 +580,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     connectivity,
     activeSpec: shellState.activeSpec,
     interactionMode: shellState.interactionMode,
+    goalUnitDepthMm: shellState.goalUnitDepthMm,
+    goalUnitHeightMm: shellState.goalUnitHeightMm,
     gateType: shellState.gateType,
+    basketballPlacementType: shellState.basketballPlacementType,
+    basketballArmLengthMm: shellState.basketballArmLengthMm,
+    kickboardSectionHeightMm: shellState.kickboardSectionHeightMm,
+    kickboardProfile: shellState.kickboardProfile,
+    sideNettingHeightMm: shellState.sideNettingHeightMm,
+    pendingPitchDividerStart: shellState.pendingPitchDividerStart,
+    pendingSideNettingStart: shellState.pendingSideNettingStart,
     drawStart: selectionState.drawStart,
     drawChainStart: selectionState.drawChainStart,
     rectangleStart: selectionState.rectangleStart,
@@ -474,11 +608,19 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     recessDepthMm: shellState.recessDepthMm,
     customGateWidthMm: shellState.customGateWidthMm,
     recessPreview,
+    goalUnitPreview,
     gatePreview,
     basketballPostPreview,
     floodlightColumnPreview,
+    kickboardPreview,
+    pitchDividerAnchorPreview,
+    pitchDividerPreview,
+    sideNettingAnchorPreview,
+    sideNettingPreview,
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
+    resolvePitchDividerAnchorPreview,
+    resolveSideNettingAnchorPreview,
     resolveDrawPoint,
     toWorld,
     beginPan,
@@ -505,7 +647,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setRecessWidthInputM: shellState.setRecessWidthInputM,
     setRecessDepthInputM: shellState.setRecessDepthInputM,
     setCustomGateWidthMm: shellState.setCustomGateWidthMm,
-    setCustomGateWidthInputM: shellState.setCustomGateWidthInputM
+    setCustomGateWidthInputM: shellState.setCustomGateWidthInputM,
+    setPendingPitchDividerStart: shellState.setPendingPitchDividerStart,
+    setPendingSideNettingStart: shellState.setPendingSideNettingStart
   });
 
   const keyboardShortcutOptions = useMemo(
@@ -554,11 +698,19 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           ? "Rectangle"
           : shellState.interactionMode === "RECESS"
             ? "Recess"
+            : shellState.interactionMode === "GOAL_UNIT"
+              ? "Goal Unit"
               : shellState.interactionMode === "GATE"
                 ? "Gate"
                 : shellState.interactionMode === "BASKETBALL_POST"
                   ? "Basketball Post"
-                  : "Floodlight Column";
+                  : shellState.interactionMode === "FLOODLIGHT_COLUMN"
+                    ? "Floodlight Column"
+                    : shellState.interactionMode === "KICKBOARD"
+                      ? "Kickboard"
+                      : shellState.interactionMode === "PITCH_DIVIDER"
+                        ? "Pitch Divider"
+                        : "Side Netting";
 
   function handleStartNewDraft(): void {
     if (!confirmDiscardChanges("Discard unsaved changes and start a new draft?")) {
@@ -652,15 +804,61 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           interactionMode={shellState.interactionMode}
           recessWidthInputM={shellState.recessWidthInputM}
           recessDepthInputM={shellState.recessDepthInputM}
+          goalUnitWidthMm={shellState.goalUnitWidthMm}
+          goalUnitHeightMm={shellState.goalUnitHeightMm}
+          basketballPlacementType={shellState.basketballPlacementType}
+          basketballArmLengthMm={shellState.basketballArmLengthMm}
+          kickboardSectionHeightMm={shellState.kickboardSectionHeightMm}
+          kickboardProfile={shellState.kickboardProfile}
+          sideNettingHeightMm={shellState.sideNettingHeightMm}
+          pendingPitchDividerStart={
+            shellState.pendingPitchDividerStart
+              ? {
+                  segmentId: shellState.pendingPitchDividerStart.segment.id,
+                  offsetMm: shellState.pendingPitchDividerStart.offsetMm
+                }
+              : null
+          }
+          pendingSideNettingStart={
+            shellState.pendingSideNettingStart
+              ? {
+                  segmentId: shellState.pendingSideNettingStart.segment.id,
+                  offsetMm: shellState.pendingSideNettingStart.offsetMm
+                }
+              : null
+          }
           gateType={shellState.gateType}
           customGateWidthInputM={shellState.customGateWidthInputM}
           recessWidthOptionsMm={RECESS_WIDTH_OPTIONS_MM}
           recessDepthOptionsMm={RECESS_DEPTH_OPTIONS_MM}
+          goalUnitWidthOptionsMm={GOAL_UNIT_WIDTH_OPTIONS_MM}
+          goalUnitHeightOptionsMm={GOAL_UNIT_HEIGHT_OPTIONS_MM}
+          basketballArmLengthOptionsMm={BASKETBALL_ARM_LENGTH_OPTIONS_MM}
+          kickboardSectionHeightOptionsMm={KICKBOARD_SECTION_HEIGHT_OPTIONS_MM}
+          sideNettingHeightOptionsMm={SIDE_NETTING_HEIGHT_OPTIONS_MM}
           gateWidthOptionsMm={GATE_WIDTH_OPTIONS_MM}
           recessPreview={recessPreview}
           gatePreview={gatePreview}
           basketballPostPreview={basketballPostPreview}
           floodlightColumnPreview={floodlightColumnPreview}
+          goalUnitPreview={goalUnitPreview}
+          kickboardPreview={
+            kickboardPreview
+              ? {
+                  segmentId: kickboardPreview.segment.id,
+                  snapMeta: kickboardPreview.snapMeta
+                }
+              : null
+          }
+          pitchDividerPreview={pitchDividerPreview}
+          sideNettingPreview={
+            sideNettingPreview
+              ? {
+                  lengthMm: sideNettingPreview.lengthMm,
+                  snapMeta: sideNettingPreview.snapMeta
+                }
+              : null
+          }
           activeSpec={shellState.activeSpec}
           activeHeightOptions={activeHeightOptions}
           twinBarHeightOptions={TWIN_BAR_HEIGHT_OPTIONS}
@@ -672,7 +870,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           onRecessWidthInputChange={onRecessWidthInputChange}
           onRecessDepthInputChange={onRecessDepthInputChange}
           onNormalizeRecessInputs={normalizeRecessInputs}
+          onSetGoalUnitWidthMm={shellState.setGoalUnitWidthMm}
+          onSetGoalUnitHeightMm={shellState.setGoalUnitHeightMm}
           onSetGateType={shellState.setGateType}
+          onSetBasketballPlacementType={shellState.setBasketballPlacementType}
+          onSetBasketballArmLengthMm={shellState.setBasketballArmLengthMm}
+          onSetKickboardSectionHeightMm={shellState.setKickboardSectionHeightMm}
+          onSetKickboardProfile={shellState.setKickboardProfile}
+          onSetSideNettingHeightMm={shellState.setSideNettingHeightMm}
           onCustomGateWidthInputChange={onCustomGateWidthInputChange}
           onNormalizeGateInputs={normalizeGateInputs}
           onSetActiveSpec={shellState.setActiveSpec}
@@ -726,9 +931,17 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 drawSnapLabel={drawSnapLabel}
                 rectanglePreviewEnd={rectanglePreviewEnd}
                 recessPreview={recessPreview}
+                goalUnitPreview={goalUnitPreview}
                 gatePreview={gatePreview}
                 basketballPostPreview={basketballPostPreview}
                 floodlightColumnPreview={floodlightColumnPreview}
+                kickboardPreview={kickboardPreview}
+                pitchDividerPreview={pitchDividerPreview}
+                pitchDividerAnchorPreview={pitchDividerAnchorPreview}
+                sideNettingPreview={sideNettingPreview}
+                sideNettingAnchorPreview={sideNettingAnchorPreview}
+                pendingPitchDividerStart={shellState.pendingPitchDividerStart}
+                pendingSideNettingStart={shellState.pendingSideNettingStart}
                 gatePreviewVisual={gatePreviewVisual}
                 hoveredBasketballPostId={hoveredBasketballPostId}
                 hoveredFloodlightColumnId={hoveredFloodlightColumnId}
@@ -746,6 +959,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 visibleSegmentLabelKeys={visibleSegmentLabelKeys}
                 placedBasketballPostVisuals={resolvedBasketballPostPlacements}
                 placedFloodlightColumnVisuals={resolvedFloodlightColumnPlacements}
+                goalUnitVisuals={resolvedGoalUnits}
+                kickboardVisuals={resolvedKickboards}
+                pitchDividerVisuals={resolvedPitchDividers}
+                sideNettingVisuals={resolvedSideNettings}
                 placedGateVisuals={placedGateVisuals}
                 oppositeGateGuides={oppositeGateGuides}
                 selectedPlanVisual={selectedPlanVisual}
@@ -838,6 +1055,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
               gates={resolvedGatePlacements}
               basketballPosts={resolvedBasketballPostPlacements}
               floodlightColumns={resolvedFloodlightColumnPlacements}
+              goalUnits={resolvedGoalUnits}
+              kickboards={resolvedKickboards}
+              pitchDividers={resolvedPitchDividers}
+              sideNettings={resolvedSideNettings}
               canInspect={segments.length > 0}
               isOpen={shellState.isOptimizationInspectorOpen}
               selectedPlanId={shellState.selectedPlanId}

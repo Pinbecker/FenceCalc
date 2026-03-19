@@ -3,6 +3,17 @@ import type { LayoutModel } from "@fence-estimator/contracts";
 
 import { isEmptyLayout, normalizeLayout } from "./workspacePersistenceUtils";
 
+const EMPTY_LAYOUT: LayoutModel = {
+  segments: [],
+  gates: [],
+  basketballPosts: [],
+  floodlightColumns: [],
+  goalUnits: [],
+  kickboards: [],
+  pitchDividers: [],
+  sideNettings: []
+};
+
 export function useWorkspaceSavedState(
   normalizedLayout: LayoutModel,
   currentDrawingId: string | null,
@@ -10,7 +21,7 @@ export function useWorkspaceSavedState(
   currentCustomerName: string,
 ) {
   const savedLayoutSnapshotRef = useRef<string>(
-    JSON.stringify({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] })
+    JSON.stringify(EMPTY_LAYOUT)
   );
   const savedNameRef = useRef("");
   const savedCustomerNameRef = useRef("");
@@ -24,7 +35,7 @@ export function useWorkspaceSavedState(
   }, []);
 
   const resetSavedState = useCallback(() => {
-    rememberSavedState({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] }, "", "");
+    rememberSavedState(EMPTY_LAYOUT, "", "");
   }, [rememberSavedState]);
 
   const isDirty = useMemo(() => {

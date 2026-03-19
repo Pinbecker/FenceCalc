@@ -17,7 +17,7 @@ const placedGateVisuals = resolveGatePlacements(
 );
 const placedBasketballPostVisuals = resolveBasketballPostPlacements(
   new Map(segments.map((segment) => [segment.id, segment] as const)),
-  [{ id: "bp1", segmentId: "s1", offsetMm: 2600, facing: "LEFT" }]
+  [{ id: "bp1", segmentId: "s1", offsetMm: 2525, facing: "LEFT" }]
 );
 const placedFloodlightColumnVisuals = resolveFloodlightColumnPlacements(
   new Map(segments.map((segment) => [segment.id, segment] as const)),
@@ -264,7 +264,7 @@ describe("useEditorInteractionPreviews", () => {
       useEditorInteractionPreviews({
         segments,
         interactionMode: "SELECT",
-        pointerWorld: { x: 2605, y: 15 },
+        pointerWorld: { x: 2535, y: 15 },
         drawStart: null,
         rectangleStart: null,
         drawAnchorNodes: [],
@@ -365,8 +365,8 @@ describe("useEditorInteractionPreviews", () => {
     const dragPostVisuals = resolveBasketballPostPlacements(
       new Map(parallelSegments.map((segment) => [segment.id, segment] as const)),
       [
-        { id: "bp-top", segmentId: "top", offsetMm: 2600, facing: "LEFT" },
-        { id: "bp-bottom", segmentId: "bottom", offsetMm: 1200, facing: "RIGHT" }
+        { id: "bp-top", segmentId: "top", offsetMm: 2525, facing: "LEFT" },
+        { id: "bp-bottom", segmentId: "bottom", offsetMm: 2525, facing: "RIGHT" }
       ]
     );
 
@@ -424,7 +424,7 @@ describe("useEditorInteractionPreviews", () => {
 
     expect(basketballResult.basketballPostPreview?.snapMeta.label).toBe("Aligned post");
     expect(basketballResult.basketballPostPreview?.segment.id).toBe("bottom");
-    expect(basketballResult.basketballPostPreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2600, y: 0 });
+    expect(basketballResult.basketballPostPreview?.alignmentGuide?.anchorPoint).toEqual({ x: 2525, y: 0 });
     expect(basketballResult.basketballPostPreview?.facing).toBe("RIGHT");
   });
 

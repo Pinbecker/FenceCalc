@@ -421,6 +421,119 @@ export function buildOptimization3DRenderData(
     strokes.push(...buildMeshStrokes(slice, project));
   }
 
+  for (const kickboard of scene.kickboards ?? []) {
+    const frontEdge = {
+      start: toGroundPoint(kickboard.start),
+      end: toGroundPoint(kickboard.end)
+    };
+    const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, kickboard.thicknessMm);
+    const frontBottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
+    const frontBottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
+    const frontTopEnd = project({ x: frontEdge.end.x, y: kickboard.heightMm, z: frontEdge.end.z });
+    const frontTopStart = project({ x: frontEdge.start.x, y: kickboard.heightMm, z: frontEdge.start.z });
+    const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
+    const outerTopEnd = project({ x: outerEdge.end.x, y: kickboard.heightMm, z: outerEdge.end.z });
+    const outerTopStart = project({ x: outerEdge.start.x, y: kickboard.heightMm, z: outerEdge.start.z });
+    const fill = kickboard.profile === "CHAMFERED" ? "rgba(151, 99, 56, 0.9)" : "rgba(122, 82, 50, 0.92)";
+
+    [
+      {
+        key: `${kickboard.key}-front`,
+        points: [frontBottomStart, frontBottomEnd, frontTopEnd, frontTopStart]
+      },
+      {
+        key: `${kickboard.key}-top`,
+        points: [frontTopStart, frontTopEnd, outerTopEnd, outerTopStart]
+      },
+      {
+        key: `${kickboard.key}-side`,
+        points: [frontBottomEnd, outerBottomEnd, outerTopEnd, frontTopEnd]
+      }
+    ].forEach((face) => {
+      faces.push({
+        key: face.key,
+        points: formatPolygonPoints(face.points),
+        fill,
+        stroke: "rgba(70, 44, 23, 0.84)",
+        strokeWidth: 0.9,
+        opacity: 1,
+        depth: getFaceDepth(face.points) + 0.04
+      });
+    });
+  }
+
+  for (const goalUnit of scene.goalUnits ?? []) {
+    const wallPaths = [
+      { key: `${goalUnit.key}-side-start`, start: goalUnit.entryPoint, end: goalUnit.recessEntryPoint },
+      { key: `${goalUnit.key}-rear`, start: goalUnit.recessEntryPoint, end: goalUnit.recessExitPoint },
+      { key: `${goalUnit.key}-side-end`, start: goalUnit.recessExitPoint, end: goalUnit.exitPoint }
+    ];
+
+    for (const wall of wallPaths) {
+      const frontEdge = {
+        start: toGroundPoint(wall.start),
+        end: toGroundPoint(wall.end)
+      };
+      const outerEdge = offsetEdge(frontEdge.start, frontEdge.end, 34);
+      const bottomStart = project({ x: frontEdge.start.x, y: 0, z: frontEdge.start.z });
+      const bottomEnd = project({ x: frontEdge.end.x, y: 0, z: frontEdge.end.z });
+      const topEnd = project({ x: frontEdge.end.x, y: goalUnit.enclosureHeightMm, z: frontEdge.end.z });
+      const topStart = project({ x: frontEdge.start.x, y: goalUnit.enclosureHeightMm, z: frontEdge.start.z });
+      const outerBottomEnd = project({ x: outerEdge.end.x, y: 0, z: outerEdge.end.z });
+      const outerTopEnd = project({ x: outerEdge.end.x, y: goalUnit.enclosureHeightMm, z: outerEdge.end.z });
+      const outerTopStart = project({ x: outerEdge.start.x, y: goalUnit.enclosureHeightMm, z: outerEdge.start.z });
+
+      [
+        {
+          key: `${wall.key}-front`,
+          points: [bottomStart, bottomEnd, topEnd, topStart]
+        },
+        {
+          key: `${wall.key}-top`,
+          points: [topStart, topEnd, outerTopEnd, outerTopStart]
+        },
+        {
+          key: `${wall.key}-side`,
+          points: [bottomEnd, outerBottomEnd, outerTopEnd, topEnd]
+        }
+      ].forEach((face) => {
+        faces.push({
+          key: face.key,
+          points: formatPolygonPoints(face.points),
+          fill: "rgba(121, 154, 173, 0.84)",
+          stroke: "rgba(50, 76, 92, 0.86)",
+          strokeWidth: 0.96,
+          opacity: 1,
+          depth: getFaceDepth(face.points) + 0.06
+        });
+      });
+    }
+
+    const lintelStart = project(toWorldPoint(goalUnit.entryPoint, goalUnit.enclosureHeightMm - 180));
+    const lintelEnd = project(toWorldPoint(goalUnit.exitPoint, goalUnit.enclosureHeightMm - 180));
+    strokes.push({
+      key: `${goalUnit.key}-lintel`,
+      kind: "polyline",
+      value: `${lintelStart.x},${lintelStart.y} ${lintelEnd.x},${lintelEnd.y}`,
+      stroke: "rgba(255, 215, 166, 0.94)",
+      strokeWidth: 2,
+      opacity: 1,
+      depth: (lintelStart.depth + lintelEnd.depth) / 2 + 0.1
+    });
+
+    const postTop = project(toWorldPoint(goalUnit.rearCenterPoint, goalUnit.enclosureHeightMm + 400));
+    const postBottom = project(toWorldPoint(goalUnit.rearCenterPoint, 0));
+    strokes.push({
+      key: `${goalUnit.key}-basketball-post`,
+      kind: "polyline",
+      value: `${postBottom.x},${postBottom.y} ${postTop.x},${postTop.y}`,
+      stroke: "rgba(38, 84, 183, 0.94)",
+      strokeWidth: 2.1,
+      opacity: 1,
+      depth: (postBottom.depth + postTop.depth) / 2 + 0.1
+    });
+  }
+
   for (const rail of scene.rails) {
     const frontEdge = {
       start: toGroundPoint(rail.start),
@@ -464,6 +577,74 @@ export function buildOptimization3DRenderData(
         strokeWidth: 0.86,
         opacity: 1,
         depth: getFaceDepth(face.points) + 0.06
+      });
+    });
+  }
+
+  for (const sideNetting of scene.sideNettings ?? []) {
+    const frontEdge = {
+      start: toGroundPoint(sideNetting.start),
+      end: toGroundPoint(sideNetting.end)
+    };
+    const topStart = project({ x: frontEdge.start.x, y: sideNetting.totalHeightMm, z: frontEdge.start.z });
+    const topEnd = project({ x: frontEdge.end.x, y: sideNetting.totalHeightMm, z: frontEdge.end.z });
+    const bottomEnd = project({ x: frontEdge.end.x, y: sideNetting.baseHeightMm, z: frontEdge.end.z });
+    const bottomStart = project({ x: frontEdge.start.x, y: sideNetting.baseHeightMm, z: frontEdge.start.z });
+    const netFace = [bottomStart, bottomEnd, topEnd, topStart];
+
+    faces.push({
+      key: `${sideNetting.key}-net`,
+      points: formatPolygonPoints(netFace),
+      fill: "rgba(111, 214, 230, 0.18)",
+      stroke: "rgba(92, 196, 215, 0.72)",
+      strokeWidth: 0.9,
+      opacity: 1,
+      depth: getFaceDepth(netFace) + 0.05
+    });
+
+    for (const point of sideNetting.extendedPostPoints) {
+      const bottom = project(toWorldPoint(point, 0));
+      const top = project(toWorldPoint(point, sideNetting.totalHeightMm));
+      strokes.push({
+        key: `${sideNetting.key}-post-${point.x}-${point.y}`,
+        kind: "polyline",
+        value: `${bottom.x},${bottom.y} ${top.x},${top.y}`,
+        stroke: "rgba(30, 40, 47, 0.9)",
+        strokeWidth: 2,
+        opacity: 1,
+        depth: (bottom.depth + top.depth) / 2 + 0.06
+      });
+    }
+  }
+
+  for (const pitchDivider of scene.pitchDividers ?? []) {
+    const bottomStart = project(toWorldPoint(pitchDivider.startPoint, 0));
+    const bottomEnd = project(toWorldPoint(pitchDivider.endPoint, 0));
+    const topEnd = project(toWorldPoint(pitchDivider.endPoint, pitchDivider.heightMm));
+    const topStart = project(toWorldPoint(pitchDivider.startPoint, pitchDivider.heightMm));
+    const dividerFace = [bottomStart, bottomEnd, topEnd, topStart];
+
+    faces.push({
+      key: `${pitchDivider.key}-net`,
+      points: formatPolygonPoints(dividerFace),
+      fill: "rgba(236, 245, 255, 0.12)",
+      stroke: "rgba(225, 241, 255, 0.64)",
+      strokeWidth: 0.92,
+      opacity: 1,
+      depth: getFaceDepth(dividerFace) + 0.05
+    });
+
+    [pitchDivider.startPoint, pitchDivider.endPoint, ...pitchDivider.supportPoints].forEach((point, index) => {
+      const bottom = project(toWorldPoint(point, 0));
+      const top = project(toWorldPoint(point, pitchDivider.heightMm));
+      strokes.push({
+        key: `${pitchDivider.key}-support-${index}`,
+        kind: "polyline",
+        value: `${bottom.x},${bottom.y} ${top.x},${top.y}`,
+        stroke: "rgba(220, 232, 244, 0.94)",
+        strokeWidth: 2,
+        opacity: 1,
+        depth: (bottom.depth + top.depth) / 2 + 0.08
       });
     });
   }

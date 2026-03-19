@@ -464,8 +464,7 @@ describe("useEditorCommands", () => {
     expect(harness.state.activeGateDrag?.gateId).toBe("g1");
 
     harness.state.layout.basketballPosts = [
-      { id: "bp-1", segmentId: "s1", offsetMm: 1500, facing: "LEFT" },
-      { id: "bp-2", segmentId: "s1", offsetMm: 2400, facing: "RIGHT" }
+      { id: "bp-1", segmentId: "s1", offsetMm: 2525, facing: "LEFT" }
     ];
     harness.state.selectedBasketballPostId = "bp-1";
     harness.rerender();
@@ -475,22 +474,22 @@ describe("useEditorCommands", () => {
     harness.state.basketballPostPreview = {
       segment: harness.state.layout.segments[0]!,
       segmentLengthMm: 5000,
-      offsetMm: 2400,
-      point: { x: 2400, y: 0 },
+      offsetMm: 2525,
+      point: { x: 2525, y: 0 },
       tangent: { x: 1, y: 0 },
       normal: { x: 0, y: -1 },
       facing: "LEFT",
-      targetPoint: { x: 2400, y: 0 },
+      targetPoint: { x: 2525, y: 0 },
       snapMeta: { kind: "ALIGNMENT", label: "Aligned post" },
       alignmentGuide: {
-        anchorPoint: { x: 2400, y: 0 },
-        targetPoint: { x: 2400, y: 0 }
+        anchorPoint: { x: 2525, y: 0 },
+        targetPoint: { x: 2525, y: 0 }
       }
     };
     harness.stage.pointer = { x: 1900, y: 0 };
     harness.rerender();
     harness.commands.onStageMouseMove();
-    expect(harness.state.layout.basketballPosts?.find((placement) => placement.id === "bp-1")?.offsetMm).toBe(2450);
+    expect(harness.state.layout.basketballPosts?.find((placement) => placement.id === "bp-1")?.offsetMm).toBe(2550);
 
     harness.state.activeBasketballPostDrag = null;
     harness.state.selectedBasketballPostId = null;
@@ -607,7 +606,7 @@ describe("useEditorCommands", () => {
     harness.state.layout = {
       segments: buildBaseSegments(),
       gates: [],
-      basketballPosts: [{ id: "bp-1", segmentId: "s1", offsetMm: 1500, facing: "LEFT" }],
+      basketballPosts: [{ id: "bp-1", segmentId: "s1", offsetMm: 2525, facing: "LEFT" }],
       floodlightColumns: []
     };
     harness.state.selectedGateId = null;

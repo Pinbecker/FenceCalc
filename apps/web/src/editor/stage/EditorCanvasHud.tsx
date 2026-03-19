@@ -13,11 +13,17 @@ type EditorCanvasHudProps = Pick<
   | "hoveredBasketballPostId"
   | "hoveredFloodlightColumnId"
   | "gatePreview"
+  | "goalUnitPreview"
   | "hoveredGateId"
   | "hoveredSegmentId"
   | "interactionMode"
   | "isPanning"
+  | "kickboardPreview"
+  | "pitchDividerAnchorPreview"
+  | "pitchDividerPreview"
   | "recessPreview"
+  | "sideNettingAnchorPreview"
+  | "sideNettingPreview"
   | "scaleBar"
 >;
 
@@ -31,11 +37,17 @@ export function EditorCanvasHud({
   hoveredBasketballPostId,
   hoveredFloodlightColumnId = null,
   gatePreview,
+  goalUnitPreview = null,
   hoveredGateId,
   hoveredSegmentId,
   interactionMode,
   isPanning,
+  kickboardPreview = null,
+  pitchDividerAnchorPreview = null,
+  pitchDividerPreview = null,
   recessPreview,
+  sideNettingAnchorPreview = null,
+  sideNettingPreview = null,
   scaleBar
 }: EditorCanvasHudProps) {
   const guide =
@@ -43,6 +55,11 @@ export function EditorCanvasHud({
     basketballPostPreview?.snapMeta.label ??
     floodlightColumnPreview?.snapMeta.label ??
     gatePreview?.snapMeta.label ??
+    goalUnitPreview?.snapMeta.label ??
+    kickboardPreview?.snapMeta.label ??
+    pitchDividerAnchorPreview?.snapMeta.label ??
+    sideNettingAnchorPreview?.snapMeta.label ??
+    sideNettingPreview?.snapMeta.label ??
     recessPreview?.snapMeta.label ??
     null;
   const modeLabel =
@@ -50,6 +67,12 @@ export function EditorCanvasHud({
       ? "Basketball Post"
       : interactionMode === "FLOODLIGHT_COLUMN"
         ? "Floodlight Column"
+      : interactionMode === "GOAL_UNIT"
+        ? "Goal Unit"
+        : interactionMode === "PITCH_DIVIDER"
+          ? "Pitch Divider"
+          : interactionMode === "SIDE_NETTING"
+            ? "Side Netting"
       : interactionMode.charAt(0) + interactionMode.slice(1).toLowerCase();
 
   const action =
@@ -63,9 +86,27 @@ export function EditorCanvasHud({
         ? recessPreview
           ? `Place recess on ${recessPreview.side === "LEFT" ? "left" : "right"}`
           : "Hover a run"
-        : interactionMode === "SELECT" && basketballPostPreview
-          ? `Drag post ${basketballPostPreview.facing.toLowerCase()}`
-          : interactionMode === "SELECT" && gatePreview
+        : interactionMode === "GOAL_UNIT"
+          ? goalUnitPreview
+            ? "Click to place goal unit"
+            : "Hover a valid run"
+          : interactionMode === "KICKBOARD"
+            ? kickboardPreview
+              ? "Click apply kickboard"
+              : "Hover a run"
+            : interactionMode === "PITCH_DIVIDER"
+              ? pitchDividerPreview
+                ? pitchDividerPreview.isValid
+                  ? "Click finish divider"
+                  : "Pick a closer end"
+                : "Click first anchor"
+              : interactionMode === "SIDE_NETTING"
+                ? sideNettingPreview
+                  ? "Click apply side netting"
+                  : "Hover a run"
+          : interactionMode === "SELECT" && basketballPostPreview
+            ? `Drag post ${basketballPostPreview.facing.toLowerCase()}`
+            : interactionMode === "SELECT" && gatePreview
             ? "Drag to slide gate"
             : interactionMode === "GATE"
               ? gatePreview
@@ -94,6 +135,8 @@ export function EditorCanvasHud({
       ? "Enter finish | Double-click finish"
       : interactionMode === "SELECT"
         ? "Wheel zoom | Space pan"
+        : interactionMode === "PITCH_DIVIDER"
+          ? "Click start, click end | Right-click cancel"
         : "Click place | Wheel zoom | Space pan";
 
   return (

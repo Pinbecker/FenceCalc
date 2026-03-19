@@ -78,9 +78,13 @@ export type InteractionMode =
   | "SELECT"
   | "RECTANGLE"
   | "RECESS"
+  | "GOAL_UNIT"
   | "GATE"
   | "BASKETBALL_POST"
-  | "FLOODLIGHT_COLUMN";
+  | "FLOODLIGHT_COLUMN"
+  | "KICKBOARD"
+  | "PITCH_DIVIDER"
+  | "SIDE_NETTING";
 
 export type RecessSide = "LEFT" | "RIGHT";
 export type RecessSidePreference = RecessSide | "AUTO";
@@ -169,6 +173,41 @@ export interface BasketballPostInsertionPreview {
   };
 }
 
+export interface GoalUnitInsertionPreview extends RecessInsertionPreview {
+  widthMm: number;
+  goalHeightMm: 3000 | 4000;
+}
+
+export interface SegmentAttachmentPreview {
+  segment: LayoutSegment;
+  snapMeta: PreviewSnapMeta;
+}
+
+export interface SegmentRangePreview {
+  segment: LayoutSegment;
+  startOffsetMm: number;
+  endOffsetMm: number;
+  startPoint: PointMm;
+  endPoint: PointMm;
+  lengthMm: number;
+  snapMeta: PreviewSnapMeta;
+}
+
+export interface PitchDividerAnchorPreview {
+  segment: LayoutSegment;
+  offsetMm: number;
+  point: PointMm;
+  snapMeta: PreviewSnapMeta;
+}
+
+export interface PitchDividerSpanPreview {
+  startAnchor: PitchDividerAnchorPreview;
+  endAnchor: PitchDividerAnchorPreview;
+  spanLengthMm: number;
+  supportPoints: PointMm[];
+  isValid: boolean;
+}
+
 export interface BasketballPostVisual {
   key: string;
   point: PointMm;
@@ -181,6 +220,12 @@ export interface ResolvedBasketballPostPlacement extends BasketballPostVisual {
   id: string;
   segmentId: string;
   offsetMm: number;
+  type?: NonNullable<BasketballPostPlacement["type"]> | undefined;
+  mountingMode?: NonNullable<BasketballPostPlacement["mountingMode"]> | undefined;
+  armLengthMm?: BasketballPostPlacement["armLengthMm"] | null | undefined;
+  pairedFeatureId?: string | null | undefined;
+  replacesIntermediatePost?: boolean | undefined;
+  hostPostIndex?: number | null | undefined;
   spec: FenceSpec;
   placement: BasketballPostPlacement;
 }

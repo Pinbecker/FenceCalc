@@ -2,6 +2,12 @@ import type { RefObject } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { GateType, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 
 import type { GridLine, Viewport, VisibleBounds } from "../canvasViewport";
 import type {
@@ -11,13 +17,18 @@ import type {
   FloodlightColumnInsertionPreview,
   GateInsertionPreview,
   GateVisual,
+  GoalUnitInsertionPreview,
   InteractionMode,
   LineSnapPreview,
+  PitchDividerSpanPreview,
+  PitchDividerAnchorPreview,
   RecessInsertionPreview,
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
   ScaleBarState,
+  SegmentAttachmentPreview,
+  SegmentRangePreview,
   SegmentLengthLabel,
   VisualPost
 } from "../types";
@@ -45,9 +56,17 @@ export interface EditorCanvasStageProps {
   drawSnapLabel: string | null;
   rectanglePreviewEnd: PointMm | null;
   recessPreview: RecessInsertionPreview | null;
+  goalUnitPreview?: GoalUnitInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
   basketballPostPreview: BasketballPostInsertionPreview | null;
   floodlightColumnPreview?: FloodlightColumnInsertionPreview | null;
+  kickboardPreview?: SegmentAttachmentPreview | null;
+  pitchDividerAnchorPreview?: PitchDividerAnchorPreview | null;
+  pitchDividerPreview?: PitchDividerSpanPreview | null;
+  pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
+  sideNettingAnchorPreview?: PitchDividerAnchorPreview | null;
+  sideNettingPreview?: SegmentRangePreview | null;
+  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   gatePreviewVisual: GateVisual | null;
   hoveredBasketballPostId: string | null;
   hoveredFloodlightColumnId?: string | null;
@@ -63,6 +82,10 @@ export interface EditorCanvasStageProps {
   gatesBySegmentId: Map<string, ResolvedGatePlacement[]>;
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   placedFloodlightColumnVisuals?: ResolvedFloodlightColumnPlacement[];
+  goalUnitVisuals?: ResolvedGoalUnitPlacement[];
+  kickboardVisuals?: ResolvedKickboardAttachment[];
+  pitchDividerVisuals?: ResolvedPitchDividerPlacement[];
+  sideNettingVisuals?: ResolvedSideNettingAttachment[];
   segmentLengthLabelsBySegmentId: Map<string, SegmentLengthLabel[]>;
   visibleSegmentLabelKeys: Set<string>;
   placedGateVisuals: ResolvedGatePlacement[];

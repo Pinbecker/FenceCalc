@@ -29,7 +29,11 @@ export function useEditorWorkspaceBridge({
         segments: drawing.layout.segments,
         gates: drawing.layout.gates ?? [],
         basketballPosts: drawing.layout.basketballPosts ?? [],
-        floodlightColumns: drawing.layout.floodlightColumns ?? []
+        floodlightColumns: drawing.layout.floodlightColumns ?? [],
+        goalUnits: drawing.layout.goalUnits ?? [],
+        kickboards: drawing.layout.kickboards ?? [],
+        pitchDividers: drawing.layout.pitchDividers ?? [],
+        sideNettings: drawing.layout.sideNettings ?? []
       });
       onResetEditorState();
       onRestoreViewport(drawing.savedViewport ?? null);

@@ -7,6 +7,12 @@ import type {
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement
 } from "./editor/types.js";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 import { Optimization3DCanvasStage } from "./Optimization3DCanvasStage.js";
 import { Optimization3DPlanSelector } from "./Optimization3DPlanSelector.js";
 import { Optimization3DPlanSteps } from "./Optimization3DPlanSteps.js";
@@ -24,6 +30,10 @@ interface Optimization3DViewProps {
   gates: ResolvedGatePlacement[];
   basketballPosts: ResolvedBasketballPostPlacement[];
   floodlightColumns: ResolvedFloodlightColumnPlacement[];
+  goalUnits?: ResolvedGoalUnitPlacement[];
+  kickboards?: ResolvedKickboardAttachment[];
+  pitchDividers?: ResolvedPitchDividerPlacement[];
+  sideNettings?: ResolvedSideNettingAttachment[];
   onSelectPlan: (planId: string) => void;
 }
 
@@ -48,6 +58,10 @@ export function Optimization3DView({
   gates,
   basketballPosts,
   floodlightColumns,
+  goalUnits = [],
+  kickboards = [],
+  pitchDividers = [],
+  sideNettings = [],
   onSelectPlan
 }: Optimization3DViewProps) {
   const orbitController = useOptimization3DOrbit();
@@ -59,9 +73,13 @@ export function Optimization3DView({
         segmentOrdinalById,
         gates,
         basketballPosts,
-        floodlightColumns
+        floodlightColumns,
+        goalUnits,
+        kickboards,
+        pitchDividers,
+        sideNettings
       ),
-    [activePlan, basketballPosts, estimateSegments, floodlightColumns, gates, segmentOrdinalById]
+    [activePlan, basketballPosts, estimateSegments, floodlightColumns, gates, goalUnits, kickboards, pitchDividers, segmentOrdinalById, sideNettings]
   );
   const freshCutCount = activePlan?.cuts.filter((cut) => cut.mode === "OPEN_STOCK_PANEL").length ?? 0;
   const reuseCutCount = activePlan?.cuts.filter((cut) => cut.mode === "REUSE_OFFCUT").length ?? 0;

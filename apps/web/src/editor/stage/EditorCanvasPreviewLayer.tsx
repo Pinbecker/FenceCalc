@@ -21,13 +21,21 @@ type EditorCanvasPreviewLayerProps = Pick<
   | "floodlightColumnPreview"
   | "gatePreview"
   | "gatePreviewVisual"
+  | "goalUnitPreview"
   | "ghostEnd"
   | "ghostLengthMm"
   | "interactionMode"
+  | "kickboardPreview"
   | "oppositeGateGuides"
+  | "pendingPitchDividerStart"
+  | "pendingSideNettingStart"
+  | "pitchDividerAnchorPreview"
+  | "pitchDividerPreview"
   | "rectanglePreviewEnd"
   | "rectangleStart"
   | "recessPreview"
+  | "sideNettingAnchorPreview"
+  | "sideNettingPreview"
   | "view"
   | "visibleBounds"
   | "closeLoopPoint"
@@ -260,13 +268,21 @@ export function EditorCanvasPreviewLayer({
   floodlightColumnPreview = null,
   gatePreview,
   gatePreviewVisual,
+  goalUnitPreview = null,
   ghostEnd,
   ghostLengthMm,
   interactionMode,
+  kickboardPreview = null,
   oppositeGateGuides,
+  pendingPitchDividerStart = null,
+  pendingSideNettingStart = null,
+  pitchDividerAnchorPreview = null,
+  pitchDividerPreview = null,
   rectanglePreviewEnd,
   rectangleStart,
   recessPreview,
+  sideNettingAnchorPreview = null,
+  sideNettingPreview = null,
   view,
   visibleBounds,
   closeLoopPoint
@@ -388,6 +404,83 @@ export function EditorCanvasPreviewLayer({
             stroke: "rgba(126, 229, 208, 0.38)",
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 92
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "GOAL_UNIT" && goalUnitPreview ? (
+        <Group key={`goal-unit-preview-${goalUnitPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            goalUnitPreview.segment.start,
+            goalUnitPreview.segment.end,
+            view.scale,
+            "#7db4ff"
+          )}
+          <Line
+            points={[
+              goalUnitPreview.segment.start.x,
+              goalUnitPreview.segment.start.y,
+              goalUnitPreview.entryPoint.x,
+              goalUnitPreview.entryPoint.y
+            ]}
+            stroke="#b8c7d9"
+            strokeWidth={4 / view.scale}
+            lineCap="round"
+          />
+          <Line
+            points={[
+              goalUnitPreview.entryPoint.x,
+              goalUnitPreview.entryPoint.y,
+              goalUnitPreview.recessEntryPoint.x,
+              goalUnitPreview.recessEntryPoint.y,
+              goalUnitPreview.recessExitPoint.x,
+              goalUnitPreview.recessExitPoint.y,
+              goalUnitPreview.exitPoint.x,
+              goalUnitPreview.exitPoint.y
+            ]}
+            stroke="#7db4ff"
+            strokeWidth={4 / view.scale}
+            dash={[12 / view.scale, 8 / view.scale]}
+            lineCap="round"
+            lineJoin="round"
+          />
+          <Line
+            points={[
+              goalUnitPreview.exitPoint.x,
+              goalUnitPreview.exitPoint.y,
+              goalUnitPreview.segment.end.x,
+              goalUnitPreview.segment.end.y
+            ]}
+            stroke="#b8c7d9"
+            strokeWidth={4 / view.scale}
+            lineCap="round"
+          />
+          <Circle
+            x={(goalUnitPreview.recessEntryPoint.x + goalUnitPreview.recessExitPoint.x) / 2}
+            y={(goalUnitPreview.recessEntryPoint.y + goalUnitPreview.recessExitPoint.y) / 2}
+            radius={6 / view.scale}
+            fill="#d6e7ff"
+            stroke="#2a4e83"
+            strokeWidth={1.4 / view.scale}
+          />
+          {renderCanvasLabel({
+            keyValue: `goal-unit-main-${goalUnitPreview.segment.id}`,
+            ...offsetPoint(
+              midpoint(goalUnitPreview.recessEntryPoint, goalUnitPreview.recessExitPoint),
+              deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).tangent,
+              goalUnitPreview.side === "LEFT" ? deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal : {
+                x: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.x,
+                y: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.y
+              },
+              view.scale,
+              28
+            ),
+            text: `Goal Unit ${formatLengthMm(goalUnitPreview.widthMm)} x ${formatLengthMm(goalUnitPreview.goalHeightMm)}`,
+            scale: view.scale,
+            fill: "rgba(16, 40, 76, 0.92)",
+            textColor: "#e6f0ff",
+            stroke: "rgba(125, 180, 255, 0.38)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 104
           })}
         </Group>
       ) : null}
@@ -606,6 +699,216 @@ export function EditorCanvasPreviewLayer({
             stroke: "rgba(255, 226, 122, 0.42)",
             fontSizePx: LABEL_FONT_SIZE_PX,
             minWidthPx: 102
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "KICKBOARD" && kickboardPreview ? (
+        <Group key={`kickboard-preview-${kickboardPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(kickboardPreview.segment.start, kickboardPreview.segment.end, view.scale, "#cb8640")}
+          {renderCanvasLabel({
+            keyValue: `kickboard-preview-label-${kickboardPreview.segment.id}`,
+            ...offsetPoint(
+              midpoint(kickboardPreview.segment.start, kickboardPreview.segment.end),
+              deriveSegmentAxes(kickboardPreview.segment.start, kickboardPreview.segment.end).tangent,
+              deriveSegmentAxes(kickboardPreview.segment.start, kickboardPreview.segment.end).normal,
+              view.scale,
+              24
+            ),
+            text: "Apply kickboard",
+            scale: view.scale,
+            fill: "rgba(72, 38, 11, 0.92)",
+            textColor: "#ffe7c8",
+            stroke: "rgba(234, 169, 102, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 92
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "SIDE_NETTING" && sideNettingAnchorPreview && !sideNettingPreview ? (
+        <Group key={`side-netting-anchor-preview-${sideNettingAnchorPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            sideNettingAnchorPreview.segment.start,
+            sideNettingAnchorPreview.segment.end,
+            view.scale,
+            "#69c6a3"
+          )}
+          {pendingSideNettingStart ? (
+            <Circle
+              x={pendingSideNettingStart.point.x}
+              y={pendingSideNettingStart.point.y}
+              radius={6 / view.scale}
+              fill="#dffff2"
+              stroke="#174236"
+              strokeWidth={1.2 / view.scale}
+            />
+          ) : null}
+          <Circle
+            x={sideNettingAnchorPreview.point.x}
+            y={sideNettingAnchorPreview.point.y}
+            radius={6 / view.scale}
+            fill="#dffff2"
+            stroke="#174236"
+            strokeWidth={1.2 / view.scale}
+          />
+          {renderCanvasLabel({
+            keyValue: `side-netting-anchor-label-${sideNettingAnchorPreview.segment.id}`,
+            ...offsetPoint(
+              sideNettingAnchorPreview.point,
+              deriveSegmentAxes(sideNettingAnchorPreview.segment.start, sideNettingAnchorPreview.segment.end).tangent,
+              deriveSegmentAxes(sideNettingAnchorPreview.segment.start, sideNettingAnchorPreview.segment.end).normal,
+              view.scale,
+              26
+            ),
+            text: pendingSideNettingStart ? "Choose end post" : `Start at ${formatLengthMm(sideNettingAnchorPreview.offsetMm)}`,
+            scale: view.scale,
+            fill: "rgba(12, 60, 44, 0.92)",
+            textColor: "#ddfff3",
+            stroke: "rgba(105, 198, 163, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 96
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "SIDE_NETTING" && sideNettingPreview ? (
+        <Group key={`side-netting-preview-${sideNettingPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(sideNettingPreview.startPoint, sideNettingPreview.endPoint, view.scale, "#69c6a3")}
+          <Circle
+            x={sideNettingPreview.startPoint.x}
+            y={sideNettingPreview.startPoint.y}
+            radius={5 / view.scale}
+            fill="#e4fff3"
+            stroke="#174236"
+            strokeWidth={1.1 / view.scale}
+          />
+          <Circle
+            x={sideNettingPreview.endPoint.x}
+            y={sideNettingPreview.endPoint.y}
+            radius={5 / view.scale}
+            fill="#e4fff3"
+            stroke="#174236"
+            strokeWidth={1.1 / view.scale}
+          />
+          {(() => {
+            const segmentAxes = deriveSegmentAxes(sideNettingPreview.segment.start, sideNettingPreview.segment.end);
+            return renderRunDistanceLabels({
+              keyPrefix: `side-netting-${sideNettingPreview.segment.id}`,
+              startPoint: sideNettingPreview.segment.start,
+              splitStartPoint: sideNettingPreview.startPoint,
+              splitEndPoint: sideNettingPreview.endPoint,
+              endPoint: sideNettingPreview.segment.end,
+              startDistanceMm: sideNettingPreview.startOffsetMm,
+              endDistanceMm: distanceMm(sideNettingPreview.endPoint, sideNettingPreview.segment.end),
+              tangent: segmentAxes.tangent,
+              startNormal: segmentAxes.normal,
+              endNormal: { x: -segmentAxes.normal.x, y: -segmentAxes.normal.y },
+              scale: view.scale,
+              fill: "rgba(12, 60, 44, 0.92)",
+              textColor: "#ddfff3",
+              stroke: "rgba(105, 198, 163, 0.42)"
+            });
+          })()}
+          {renderCanvasLabel({
+            keyValue: `side-netting-preview-label-${sideNettingPreview.segment.id}`,
+            ...offsetPoint(
+              midpoint(sideNettingPreview.startPoint, sideNettingPreview.endPoint),
+              deriveSegmentAxes(sideNettingPreview.startPoint, sideNettingPreview.endPoint).tangent,
+              deriveSegmentAxes(sideNettingPreview.startPoint, sideNettingPreview.endPoint).normal,
+              view.scale,
+              24
+            ),
+            text: `Side netting ${formatLengthMm(sideNettingPreview.lengthMm)}`,
+            scale: view.scale,
+            fill: "rgba(12, 60, 44, 0.92)",
+            textColor: "#ddfff3",
+            stroke: "rgba(105, 198, 163, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 104
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "PITCH_DIVIDER" && pitchDividerAnchorPreview && !pitchDividerPreview ? (
+        <Group key={`pitch-divider-anchor-preview-${pitchDividerAnchorPreview.segment.id}`} listening={false}>
+          {renderTargetSegmentHighlight(
+            pitchDividerAnchorPreview.segment.start,
+            pitchDividerAnchorPreview.segment.end,
+            view.scale,
+            "#d5ebff"
+          )}
+          {pendingPitchDividerStart ? (
+            <Circle
+              x={pendingPitchDividerStart.point.x}
+              y={pendingPitchDividerStart.point.y}
+              radius={5 / view.scale}
+              fill="#f1f8ff"
+              stroke="#274660"
+              strokeWidth={1.2 / view.scale}
+            />
+          ) : null}
+          <Circle
+            x={pitchDividerAnchorPreview.point.x}
+            y={pitchDividerAnchorPreview.point.y}
+            radius={5 / view.scale}
+            fill="#f1f8ff"
+            stroke="#274660"
+            strokeWidth={1.2 / view.scale}
+          />
+          {renderCanvasLabel({
+            keyValue: `pitch-divider-anchor-label-${pitchDividerAnchorPreview.segment.id}`,
+            ...offsetPoint(
+              pitchDividerAnchorPreview.point,
+              deriveSegmentAxes(pitchDividerAnchorPreview.segment.start, pitchDividerAnchorPreview.segment.end).tangent,
+              deriveSegmentAxes(pitchDividerAnchorPreview.segment.start, pitchDividerAnchorPreview.segment.end).normal,
+              view.scale,
+              26
+            ),
+            text: pendingPitchDividerStart ? "Choose opposite anchor" : "Pitch divider anchor",
+            scale: view.scale,
+            fill: "rgba(20, 43, 64, 0.92)",
+            textColor: "#e9f4ff",
+            stroke: "rgba(144, 194, 245, 0.38)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 112
+          })}
+        </Group>
+      ) : null}
+      {interactionMode === "PITCH_DIVIDER" && pitchDividerPreview ? (
+        <Group key={`pitch-divider-preview-${pitchDividerPreview.startAnchor.segment.id}-${pitchDividerPreview.endAnchor.segment.id}`} listening={false}>
+          <Line
+            points={[
+              pitchDividerPreview.startAnchor.point.x,
+              pitchDividerPreview.startAnchor.point.y,
+              pitchDividerPreview.endAnchor.point.x,
+              pitchDividerPreview.endAnchor.point.y
+            ]}
+            stroke={pitchDividerPreview.isValid ? "#d5ebff" : "#ff8d8d"}
+            strokeWidth={2.4 / view.scale}
+            dash={[10 / view.scale, 8 / view.scale]}
+            lineCap="round"
+          />
+          <Circle x={pitchDividerPreview.startAnchor.point.x} y={pitchDividerPreview.startAnchor.point.y} radius={5 / view.scale} fill="#f1f8ff" />
+          <Circle x={pitchDividerPreview.endAnchor.point.x} y={pitchDividerPreview.endAnchor.point.y} radius={5 / view.scale} fill="#f1f8ff" />
+          {pitchDividerPreview.supportPoints.map((point, index) => (
+            <Circle
+              key={`pitch-divider-preview-support-${index}`}
+              x={point.x}
+              y={point.y}
+              radius={4 / view.scale}
+              fill={pitchDividerPreview.isValid ? "#d8efff" : "#ffd5d5"}
+            />
+          ))}
+          {renderCanvasLabel({
+            keyValue: "pitch-divider-preview-label",
+            x: (pitchDividerPreview.startAnchor.point.x + pitchDividerPreview.endAnchor.point.x) / 2,
+            y: (pitchDividerPreview.startAnchor.point.y + pitchDividerPreview.endAnchor.point.y) / 2 - 18 / view.scale,
+            text: pitchDividerPreview.isValid
+              ? `Pitch divider ${formatLengthMm(pitchDividerPreview.spanLengthMm)}`
+              : "Pitch divider exceeds 70m",
+            scale: view.scale,
+            fill: pitchDividerPreview.isValid ? "rgba(20, 43, 64, 0.92)" : "rgba(86, 22, 22, 0.92)",
+            textColor: pitchDividerPreview.isValid ? "#e9f4ff" : "#ffe3e3",
+            stroke: pitchDividerPreview.isValid ? "rgba(144, 194, 245, 0.38)" : "rgba(255, 141, 141, 0.42)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 112
           })}
         </Group>
       ) : null}

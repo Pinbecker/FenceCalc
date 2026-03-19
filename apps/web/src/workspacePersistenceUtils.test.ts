@@ -13,7 +13,18 @@ describe("workspacePersistenceUtils", () => {
   });
 
   it("detects whether a layout is empty", () => {
-    expect(isEmptyLayout({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] })).toBe(true);
+    expect(
+      isEmptyLayout({
+        segments: [],
+        gates: [],
+        basketballPosts: [],
+        floodlightColumns: [],
+        goalUnits: [],
+        kickboards: [],
+        pitchDividers: [],
+        sideNettings: []
+      })
+    ).toBe(true);
     expect(
       isEmptyLayout({
         segments: [
@@ -51,7 +62,11 @@ describe("workspacePersistenceUtils", () => {
       ],
       gates: [],
       basketballPosts: [],
-      floodlightColumns: []
+      floodlightColumns: [],
+      goalUnits: [],
+      kickboards: [],
+      pitchDividers: [],
+      sideNettings: []
     });
   });
 });

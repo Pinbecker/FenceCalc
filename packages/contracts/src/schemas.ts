@@ -1,6 +1,36 @@
 import { z } from "zod";
-import { FENCE_HEIGHT_KEYS, ROLL_FORM_HEIGHT_KEYS, TWIN_BAR_HEIGHT_KEYS } from "./domain.js";
+import {
+  BASKETBALL_ARM_LENGTHS_MM,
+  FENCE_HEIGHT_KEYS,
+  GOAL_UNIT_HEIGHTS_MM,
+  GOAL_UNIT_WIDTHS_MM,
+  KICKBOARD_SECTION_HEIGHTS_MM,
+  PITCH_DIVIDER_MAX_SPAN_MM,
+  ROLL_FORM_HEIGHT_KEYS,
+  SIDE_NETTING_EXTENDED_POST_INTERVAL,
+  SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM,
+  TWIN_BAR_HEIGHT_KEYS
+} from "./domain.js";
 import { PRICING_ITEM_CATEGORIES } from "./estimating.js";
+
+const goalUnitWidthMmSchema = z.union([
+  z.literal(GOAL_UNIT_WIDTHS_MM[0]),
+  z.literal(GOAL_UNIT_WIDTHS_MM[1]),
+  z.literal(GOAL_UNIT_WIDTHS_MM[2])
+]);
+const goalUnitHeightMmSchema = z.union([
+  z.literal(GOAL_UNIT_HEIGHTS_MM[0]),
+  z.literal(GOAL_UNIT_HEIGHTS_MM[1])
+]);
+const basketballArmLengthMmSchema = z.union([
+  z.literal(BASKETBALL_ARM_LENGTHS_MM[0]),
+  z.literal(BASKETBALL_ARM_LENGTHS_MM[1])
+]);
+const kickboardSectionHeightMmSchema = z.union([
+  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[0]),
+  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[1]),
+  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[2])
+]);
 
 export const pointMmSchema = z.object({
   x: z.number().finite(),
@@ -62,11 +92,69 @@ export const gatePlacementSchema = z.object({
 });
 
 export const inlineFeatureFacingSchema = z.enum(["LEFT", "RIGHT"]);
-export const basketballPostPlacementSchema = z.object({
+export const goalUnitPlacementSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  centerOffsetMm: z.number().finite().nonnegative(),
+  side: inlineFeatureFacingSchema,
+  widthMm: goalUnitWidthMmSchema,
+  depthMm: z.number().finite().positive(),
+  goalHeightMm: goalUnitHeightMmSchema
+});
+export const basketballFeaturePlacementSchema = z.object({
   id: z.string().min(1),
   segmentId: z.string().min(1),
   offsetMm: z.number().finite().nonnegative(),
-  facing: inlineFeatureFacingSchema
+  facing: inlineFeatureFacingSchema,
+  type: z.enum(["DEDICATED_POST", "MOUNTED_TO_EXISTING_POST", "GOAL_UNIT_INTEGRATED"]).default("DEDICATED_POST"),
+  mountingMode: z.enum(["PROJECTING_ARM", "POST_MOUNTED", "GOAL_UNIT_REAR_CENTER"]).default("PROJECTING_ARM"),
+  armLengthMm: basketballArmLengthMmSchema.optional(),
+  pairedFeatureId: z.string().min(1).nullable().optional(),
+  replacesIntermediatePost: z.boolean().default(true),
+  goalUnitId: z.string().min(1).nullable().optional()
+}).superRefine((feature, context) => {
+  if (feature.type === "DEDICATED_POST") {
+    if (feature.armLengthMm === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Dedicated basketball posts require an arm length"
+      });
+    }
+    if (feature.mountingMode !== "PROJECTING_ARM") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Dedicated basketball posts must use projecting-arm mounting"
+      });
+    }
+  }
+  if (feature.type === "MOUNTED_TO_EXISTING_POST") {
+    if (feature.armLengthMm !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Mounted basketball assemblies cannot define an arm length"
+      });
+    }
+    if (feature.mountingMode !== "POST_MOUNTED") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Mounted basketball assemblies must use post-mounted mode"
+      });
+    }
+  }
+  if (feature.type === "GOAL_UNIT_INTEGRATED") {
+    if (!feature.goalUnitId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Goal-unit integrated basketball assemblies must reference a goal unit"
+      });
+    }
+    if (feature.mountingMode !== "GOAL_UNIT_REAR_CENTER") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Goal-unit integrated basketball assemblies must use goal-unit rear-centre mounting"
+      });
+    }
+  }
 });
 export const floodlightColumnPlacementSchema = z.object({
   id: z.string().min(1),
@@ -74,22 +162,78 @@ export const floodlightColumnPlacementSchema = z.object({
   offsetMm: z.number().finite().nonnegative(),
   facing: inlineFeatureFacingSchema
 });
+export const kickboardAttachmentSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  sectionHeightMm: kickboardSectionHeightMmSchema,
+  thicknessMm: z.literal(50),
+  profile: z.enum(["SQUARE", "CHAMFERED"]),
+  boardLengthMm: z.literal(2500)
+});
+export const segmentAnchorSchema = z.object({
+  segmentId: z.string().min(1),
+  offsetMm: z.number().finite().nonnegative()
+});
+export const pitchDividerPlacementSchema = z.object({
+  id: z.string().min(1),
+  startAnchor: segmentAnchorSchema,
+  endAnchor: segmentAnchorSchema
+});
+export const sideNettingAttachmentSchema = z.object({
+  id: z.string().min(1),
+  segmentId: z.string().min(1),
+  additionalHeightMm: z.number().finite().positive().max(SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM),
+  startOffsetMm: z.number().finite().nonnegative().optional(),
+  endOffsetMm: z.number().finite().nonnegative().optional(),
+  extendedPostInterval: z.literal(SIDE_NETTING_EXTENDED_POST_INTERVAL)
+});
 
 const MAX_LAYOUT_SEGMENTS = 2_000;
 const MAX_LAYOUT_GATES = 500;
-const MAX_LAYOUT_BASKETBALL_POSTS = 500;
+const MAX_LAYOUT_BASKETBALL_FEATURES = 500;
 const MAX_LAYOUT_FLOODLIGHT_COLUMNS = 500;
+const MAX_LAYOUT_GOAL_UNITS = 200;
+const MAX_LAYOUT_KICKBOARDS = 500;
+const MAX_LAYOUT_PITCH_DIVIDERS = 200;
+const MAX_LAYOUT_SIDE_NETTINGS = 500;
+
+function fenceHeightToMm(heightKey: string): number {
+  return Number.parseFloat(heightKey) * 1000;
+}
+
+function interpolatePoint(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  offsetMm: number,
+  lengthMm: number
+) {
+  if (lengthMm <= 0) {
+    return start;
+  }
+  const ratio = Math.max(0, Math.min(1, offsetMm / lengthMm));
+  return {
+    x: start.x + (end.x - start.x) * ratio,
+    y: start.y + (end.y - start.y) * ratio
+  };
+}
 
 export const layoutModelSchema = z
   .object({
     segments: z.array(layoutSegmentSchema).max(MAX_LAYOUT_SEGMENTS),
     gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([]),
-    basketballPosts: z.array(basketballPostPlacementSchema).max(MAX_LAYOUT_BASKETBALL_POSTS).default([]),
-    floodlightColumns: z.array(floodlightColumnPlacementSchema).max(MAX_LAYOUT_FLOODLIGHT_COLUMNS).default([])
+    basketballFeatures: z.array(basketballFeaturePlacementSchema).max(MAX_LAYOUT_BASKETBALL_FEATURES).default([]),
+    basketballPosts: z.array(basketballFeaturePlacementSchema).max(MAX_LAYOUT_BASKETBALL_FEATURES).default([]),
+    floodlightColumns: z.array(floodlightColumnPlacementSchema).max(MAX_LAYOUT_FLOODLIGHT_COLUMNS).default([]),
+    goalUnits: z.array(goalUnitPlacementSchema).max(MAX_LAYOUT_GOAL_UNITS).default([]),
+    kickboards: z.array(kickboardAttachmentSchema).max(MAX_LAYOUT_KICKBOARDS).default([]),
+    pitchDividers: z.array(pitchDividerPlacementSchema).max(MAX_LAYOUT_PITCH_DIVIDERS).default([]),
+    sideNettings: z.array(sideNettingAttachmentSchema).max(MAX_LAYOUT_SIDE_NETTINGS).default([])
   })
   .superRefine((layout, context) => {
+    const basketballFeatures = [...(layout.basketballFeatures ?? []), ...(layout.basketballPosts ?? [])];
     const seenSegmentIds = new Set<string>();
     const segmentLengthById = new Map<string, number>();
+    const segmentsById = new Map<string, z.infer<typeof layoutSegmentSchema>>();
 
     for (const segment of layout.segments) {
       if (seenSegmentIds.has(segment.id)) {
@@ -102,6 +246,7 @@ export const layoutModelSchema = z
 
       const lengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
       segmentLengthById.set(segment.id, lengthMm);
+      segmentsById.set(segment.id, segment);
       if (lengthMm <= 0) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -160,29 +305,72 @@ export const layoutModelSchema = z
       }
     }
 
-    const seenBasketballPostIds = new Set<string>();
-    for (const basketballPost of layout.basketballPosts ?? []) {
-      if (seenBasketballPostIds.has(basketballPost.id)) {
+    const seenGoalUnitIds = new Set<string>();
+    for (const goalUnit of layout.goalUnits ?? []) {
+      if (seenGoalUnitIds.has(goalUnit.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate basketball post id: ${basketballPost.id}`
+          message: `Duplicate goal unit id: ${goalUnit.id}`
         });
       }
-      seenBasketballPostIds.add(basketballPost.id);
+      seenGoalUnitIds.add(goalUnit.id);
 
-      const segmentLengthMm = segmentLengthById.get(basketballPost.segmentId);
+      const segmentLengthMm = segmentLengthById.get(goalUnit.segmentId);
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Basketball post ${basketballPost.id} references missing segment ${basketballPost.segmentId}`
+          message: `Goal unit ${goalUnit.id} references missing segment ${goalUnit.segmentId}`
         });
         continue;
       }
 
-      if (basketballPost.offsetMm > segmentLengthMm) {
+      const halfWidthMm = goalUnit.widthMm / 2;
+      if (goalUnit.centerOffsetMm - halfWidthMm < 0 || goalUnit.centerOffsetMm + halfWidthMm > segmentLengthMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Basketball post ${basketballPost.id} exceeds segment ${basketballPost.segmentId} length`
+          message: `Goal unit ${goalUnit.id} exceeds segment ${goalUnit.segmentId} length`
+        });
+      }
+    }
+
+    const seenBasketballFeatureIds = new Set<string>();
+    for (const basketballFeature of basketballFeatures) {
+      if (seenBasketballFeatureIds.has(basketballFeature.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate basketball feature id: ${basketballFeature.id}`
+        });
+      }
+      seenBasketballFeatureIds.add(basketballFeature.id);
+
+      const segmentLengthMm = segmentLengthById.get(basketballFeature.segmentId);
+      const segment = segmentsById.get(basketballFeature.segmentId);
+      if (segmentLengthMm === undefined || !segment) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Basketball feature ${basketballFeature.id} references missing segment ${basketballFeature.segmentId}`
+        });
+        continue;
+      }
+
+      if (basketballFeature.offsetMm > segmentLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Basketball feature ${basketballFeature.id} exceeds segment ${basketballFeature.segmentId} length`
+        });
+      }
+
+      const fenceHeightMm = fenceHeightToMm(segment.spec.height);
+      if (basketballFeature.type === "DEDICATED_POST" && fenceHeightMm !== 3000 && fenceHeightMm !== 4000) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Dedicated basketball feature ${basketballFeature.id} requires a 3.0m or 4.0m fence line`
+        });
+      }
+      if (basketballFeature.type === "MOUNTED_TO_EXISTING_POST" && fenceHeightMm < 3000) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Mounted basketball feature ${basketballFeature.id} requires a fence line at least 3.0m high`
         });
       }
     }
@@ -213,6 +401,125 @@ export const layoutModelSchema = z
         });
       }
     }
+
+    const seenKickboardIds = new Set<string>();
+    const kickboardSegmentIds = new Set<string>();
+    for (const kickboard of layout.kickboards ?? []) {
+      if (seenKickboardIds.has(kickboard.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate kickboard id: ${kickboard.id}`
+        });
+      }
+      seenKickboardIds.add(kickboard.id);
+
+      if (kickboardSegmentIds.has(kickboard.segmentId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Kickboard segment ${kickboard.segmentId} can only have one kickboard attachment`
+        });
+      }
+      kickboardSegmentIds.add(kickboard.segmentId);
+
+      if (!segmentLengthById.has(kickboard.segmentId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Kickboard ${kickboard.id} references missing segment ${kickboard.segmentId}`
+        });
+      }
+    }
+
+    const seenSideNettingIds = new Set<string>();
+    const sideNettingSegmentIds = new Set<string>();
+    for (const sideNetting of layout.sideNettings ?? []) {
+      if (seenSideNettingIds.has(sideNetting.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate side netting id: ${sideNetting.id}`
+        });
+      }
+      seenSideNettingIds.add(sideNetting.id);
+
+      if (sideNettingSegmentIds.has(sideNetting.segmentId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Side netting segment ${sideNetting.segmentId} can only have one side-netting attachment`
+        });
+      }
+      sideNettingSegmentIds.add(sideNetting.segmentId);
+
+      if (!segmentLengthById.has(sideNetting.segmentId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Side netting ${sideNetting.id} references missing segment ${sideNetting.segmentId}`
+        });
+        continue;
+      }
+
+      const segmentLengthMm = segmentLengthById.get(sideNetting.segmentId) ?? 0;
+      const startOffsetMm = sideNetting.startOffsetMm ?? 0;
+      const endOffsetMm = sideNetting.endOffsetMm ?? segmentLengthMm;
+
+      if (startOffsetMm >= endOffsetMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Side netting ${sideNetting.id} must have a positive covered range`
+        });
+      }
+
+      if (endOffsetMm > segmentLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Side netting ${sideNetting.id} exceeds segment ${sideNetting.segmentId} length`
+        });
+      }
+    }
+
+    const seenPitchDividerIds = new Set<string>();
+    for (const pitchDivider of layout.pitchDividers ?? []) {
+      if (seenPitchDividerIds.has(pitchDivider.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate pitch divider id: ${pitchDivider.id}`
+        });
+      }
+      seenPitchDividerIds.add(pitchDivider.id);
+
+      const startSegment = segmentsById.get(pitchDivider.startAnchor.segmentId);
+      const endSegment = segmentsById.get(pitchDivider.endAnchor.segmentId);
+      const startLengthMm = segmentLengthById.get(pitchDivider.startAnchor.segmentId);
+      const endLengthMm = segmentLengthById.get(pitchDivider.endAnchor.segmentId);
+      if (!startSegment || !endSegment || startLengthMm === undefined || endLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Pitch divider ${pitchDivider.id} references missing fence-line anchors`
+        });
+        continue;
+      }
+
+      if (pitchDivider.startAnchor.offsetMm > startLengthMm || pitchDivider.endAnchor.offsetMm > endLengthMm) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Pitch divider ${pitchDivider.id} exceeds one of its host fence-line lengths`
+        });
+        continue;
+      }
+
+      const startPoint = interpolatePoint(
+        startSegment.start,
+        startSegment.end,
+        pitchDivider.startAnchor.offsetMm,
+        startLengthMm
+      );
+      const endPoint = interpolatePoint(endSegment.start, endSegment.end, pitchDivider.endAnchor.offsetMm, endLengthMm);
+      const spanMm = Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+      if (spanMm > PITCH_DIVIDER_MAX_SPAN_MM) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Pitch divider ${pitchDivider.id} exceeds the maximum 70m span`
+        });
+      }
+    }
   });
 
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
@@ -233,6 +540,15 @@ const rollFenceBreakdownSchema = z.object({
   roll2100: nonNegativeIntegerSchema,
   roll900: nonNegativeIntegerSchema,
   total: nonNegativeIntegerSchema
+});
+const featureQuantityLineSchema = z.object({
+  key: z.string().trim().min(1).max(160),
+  kind: z.enum(["GOAL_UNIT", "BASKETBALL", "KICKBOARD", "PITCH_DIVIDER", "SIDE_NETTING"]),
+  component: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(240),
+  quantity: z.number().finite().min(0),
+  unit: z.enum(["item", "panel", "post", "assembly", "board", "m", "m2"]),
+  relatedIds: z.array(z.string().trim().min(1).max(160)).max(20).optional()
 });
 const twinBarCutSectionSchema = z.object({
   segmentId: z.string().min(1),
@@ -305,6 +621,7 @@ export const estimateResultSchema = z.object({
     totalRolls: nonNegativeIntegerSchema,
     rollsByFenceHeight: z.record(z.string(), rollFenceBreakdownSchema)
   }),
+  featureQuantities: z.array(featureQuantityLineSchema).max(2_000).default([]),
   optimization: z.object({
     strategy: z.literal("CHAINED_CUT_PLANNER"),
     twinBar: z.object({

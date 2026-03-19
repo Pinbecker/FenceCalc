@@ -37,10 +37,23 @@ export function EditorCanvasStage({
       : props.interactionMode === "DRAW"
         ? DRAW_CURSOR
         : props.interactionMode === "RECESS" ||
+            props.interactionMode === "GOAL_UNIT" ||
             props.interactionMode === "GATE" ||
             props.interactionMode === "BASKETBALL_POST" ||
-            props.interactionMode === "FLOODLIGHT_COLUMN"
-          ? props.recessPreview || props.gatePreview || props.basketballPostPreview || props.floodlightColumnPreview
+            props.interactionMode === "FLOODLIGHT_COLUMN" ||
+            props.interactionMode === "KICKBOARD" ||
+            props.interactionMode === "PITCH_DIVIDER" ||
+            props.interactionMode === "SIDE_NETTING"
+          ? props.recessPreview ||
+            props.goalUnitPreview ||
+            props.gatePreview ||
+            props.basketballPostPreview ||
+            props.floodlightColumnPreview ||
+            props.kickboardPreview ||
+            props.pitchDividerAnchorPreview ||
+            props.pitchDividerPreview ||
+            props.sideNettingAnchorPreview ||
+            props.sideNettingPreview
             ? "crosshair"
             : "default"
           : props.hoveredBasketballPostId || props.hoveredFloodlightColumnId || props.hoveredGateId || props.hoveredSegmentId
@@ -106,6 +119,10 @@ export function EditorCanvasStage({
           gatesBySegmentId={props.gatesBySegmentId}
           placedBasketballPostVisuals={props.placedBasketballPostVisuals}
           placedFloodlightColumnVisuals={props.placedFloodlightColumnVisuals ?? []}
+          goalUnitVisuals={props.goalUnitVisuals ?? []}
+          kickboardVisuals={props.kickboardVisuals ?? []}
+          pitchDividerVisuals={props.pitchDividerVisuals ?? []}
+          sideNettingVisuals={props.sideNettingVisuals ?? []}
           segmentLengthLabelsBySegmentId={props.segmentLengthLabelsBySegmentId}
           visibleSegmentLabelKeys={props.visibleSegmentLabelKeys}
           placedGateVisuals={props.placedGateVisuals}
@@ -137,9 +154,17 @@ export function EditorCanvasStage({
           drawHoverSnap={props.drawHoverSnap}
           rectanglePreviewEnd={props.rectanglePreviewEnd}
           recessPreview={props.recessPreview}
+          goalUnitPreview={props.goalUnitPreview ?? null}
           gatePreview={props.gatePreview}
           basketballPostPreview={props.basketballPostPreview}
           floodlightColumnPreview={props.floodlightColumnPreview ?? null}
+          kickboardPreview={props.kickboardPreview ?? null}
+          pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
+          pitchDividerPreview={props.pitchDividerPreview ?? null}
+          pendingPitchDividerStart={props.pendingPitchDividerStart ?? null}
+          sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
+          sideNettingPreview={props.sideNettingPreview ?? null}
+          pendingSideNettingStart={props.pendingSideNettingStart ?? null}
           gatePreviewVisual={props.gatePreviewVisual}
           closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}
@@ -163,6 +188,12 @@ export function EditorCanvasStage({
         basketballPostPreview={props.basketballPostPreview}
         floodlightColumnPreview={props.floodlightColumnPreview ?? null}
         recessPreview={props.recessPreview}
+        goalUnitPreview={props.goalUnitPreview ?? null}
+        kickboardPreview={props.kickboardPreview ?? null}
+        pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
+        pitchDividerPreview={props.pitchDividerPreview ?? null}
+        sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
+        sideNettingPreview={props.sideNettingPreview ?? null}
       />
     </main>
   );

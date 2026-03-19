@@ -3,9 +3,19 @@ import type {
   BasketballPostPlacement,
   FloodlightColumnPlacement,
   GatePlacement,
+  GoalUnitPlacement,
+  KickboardAttachment,
   LayoutSegment
 } from "@fence-estimator/contracts";
-import { buildDerivedFenceTopology, estimateDrawingLayout } from "@fence-estimator/rules-engine";
+import type { PitchDividerPlacement, SideNettingAttachment } from "@fence-estimator/contracts";
+import {
+  buildDerivedFenceTopology,
+  estimateDrawingLayout,
+  resolveGoalUnitPlacements,
+  resolveKickboardAttachments,
+  resolvePitchDividerPlacements,
+  resolveSideNettingAttachments
+} from "@fence-estimator/rules-engine";
 
 import { buildOptimizationPlanVisual } from "../optimizationVisual";
 import type { OptimizationPlanVisual } from "../optimizationVisual";
@@ -37,6 +47,10 @@ interface EditorDerivedStateOptions {
   gatePlacements: GatePlacement[];
   basketballPostPlacements: BasketballPostPlacement[];
   floodlightColumnPlacements?: FloodlightColumnPlacement[];
+  goalUnitPlacements?: GoalUnitPlacement[];
+  kickboardAttachments?: KickboardAttachment[];
+  pitchDividerPlacements?: PitchDividerPlacement[];
+  sideNettingAttachments?: SideNettingAttachment[];
   selectedSegmentId: string | null;
   selectedPlanId: string | null;
   activeSpecSystem: "TWIN_BAR" | "ROLL_FORM";
@@ -56,6 +70,10 @@ function buildOptimizationState(
   gatePlacements: GatePlacement[],
   basketballPostPlacements: BasketballPostPlacement[],
   floodlightColumnPlacements: FloodlightColumnPlacement[],
+  goalUnitPlacements: GoalUnitPlacement[],
+  kickboardAttachments: KickboardAttachment[],
+  pitchDividerPlacements: PitchDividerPlacement[],
+  sideNettingAttachments: SideNettingAttachment[],
   selectedPlanId: string | null,
   estimateSegmentsById: Map<string, LayoutSegment>
 ): FrozenOptimizationState {
@@ -63,7 +81,11 @@ function buildOptimizationState(
     segments,
     gates: gatePlacements,
     basketballPosts: basketballPostPlacements,
-    floodlightColumns: floodlightColumnPlacements
+    floodlightColumns: floodlightColumnPlacements,
+    goalUnits: goalUnitPlacements,
+    kickboards: kickboardAttachments,
+    pitchDividers: pitchDividerPlacements,
+    sideNettings: sideNettingAttachments
   });
   const highlightableOptimizationPlans = getVisibleOptimizationPlans(estimate.optimization);
   const selectedPlan =
@@ -81,6 +103,10 @@ export function useEditorDerivedState({
   gatePlacements,
   basketballPostPlacements,
   floodlightColumnPlacements = [],
+  goalUnitPlacements = [],
+  kickboardAttachments = [],
+  pitchDividerPlacements = [],
+  sideNettingAttachments = [],
   selectedSegmentId,
   selectedPlanId,
   activeSpecSystem,
@@ -89,6 +115,22 @@ export function useEditorDerivedState({
   freezeOptimization = false
 }: EditorDerivedStateOptions) {
   const segmentsById = useMemo(() => buildSegmentMap(segments), [segments]);
+  const resolvedGoalUnits = useMemo(
+    () => resolveGoalUnitPlacements(segmentsById, goalUnitPlacements),
+    [goalUnitPlacements, segmentsById]
+  );
+  const resolvedKickboards = useMemo(
+    () => resolveKickboardAttachments(segmentsById, kickboardAttachments),
+    [kickboardAttachments, segmentsById]
+  );
+  const resolvedPitchDividers = useMemo(
+    () => resolvePitchDividerPlacements(segmentsById, pitchDividerPlacements),
+    [pitchDividerPlacements, segmentsById]
+  );
+  const resolvedSideNettings = useMemo(
+    () => resolveSideNettingAttachments(segmentsById, sideNettingAttachments),
+    [segmentsById, sideNettingAttachments]
+  );
   const resolvedGatePlacements = useMemo(
     () => resolveGatePlacements(segmentsById, gatePlacements),
     [gatePlacements, segmentsById]
@@ -119,9 +161,22 @@ export function useEditorDerivedState({
         segments,
         gates: gatePlacements,
         basketballPosts: basketballPostPlacements,
-        floodlightColumns: floodlightColumnPlacements
+        floodlightColumns: floodlightColumnPlacements,
+        goalUnits: goalUnitPlacements,
+        kickboards: kickboardAttachments,
+        pitchDividers: pitchDividerPlacements,
+        sideNettings: sideNettingAttachments
       }),
-    [basketballPostPlacements, floodlightColumnPlacements, gatePlacements, segments]
+    [
+      basketballPostPlacements,
+      floodlightColumnPlacements,
+      gatePlacements,
+      goalUnitPlacements,
+      kickboardAttachments,
+      pitchDividerPlacements,
+      segments,
+      sideNettingAttachments
+    ]
   );
   const estimateSegments = useMemo(
     () => derivedFenceTopology.estimateSegments,
@@ -141,10 +196,26 @@ export function useEditorDerivedState({
       gatePlacements,
       basketballPostPlacements,
       floodlightColumnPlacements,
+      goalUnitPlacements,
+      kickboardAttachments,
+      pitchDividerPlacements,
+      sideNettingAttachments,
       selectedPlanId,
       estimateSegmentsById
     );
-  }, [basketballPostPlacements, estimateSegmentsById, floodlightColumnPlacements, freezeOptimization, gatePlacements, segments, selectedPlanId]);
+  }, [
+    basketballPostPlacements,
+    estimateSegmentsById,
+    floodlightColumnPlacements,
+    freezeOptimization,
+    gatePlacements,
+    goalUnitPlacements,
+    kickboardAttachments,
+    pitchDividerPlacements,
+    segments,
+    selectedPlanId,
+    sideNettingAttachments
+  ]);
   const frozenOptimizationRef = useRef<FrozenOptimizationState | null>(null);
 
   if (liveOptimizationState) {
@@ -158,6 +229,10 @@ export function useEditorDerivedState({
       gatePlacements,
       basketballPostPlacements,
       floodlightColumnPlacements,
+      goalUnitPlacements,
+      kickboardAttachments,
+      pitchDividerPlacements,
+      sideNettingAttachments,
       selectedPlanId,
       estimateSegmentsById
     );
@@ -282,8 +357,12 @@ export function useEditorDerivedState({
     recessAlignmentAnchors,
     resolvedBasketballPostPlacements,
     resolvedFloodlightColumnPlacements,
+    resolvedGoalUnits,
+    resolvedKickboards,
     resolvedGateById,
     resolvedGatePlacements,
+    resolvedPitchDividers,
+    resolvedSideNettings,
     scaleBar,
     segmentLengthLabelsBySegmentId,
     segmentOrdinalById,

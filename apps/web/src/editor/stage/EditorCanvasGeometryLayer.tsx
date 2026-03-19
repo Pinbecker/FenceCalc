@@ -1,5 +1,11 @@
 import { Circle, Group, Layer, Line, Rect, RegularPolygon } from "react-konva";
 import { distanceMm } from "@fence-estimator/geometry";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 
 import { formatLengthMm } from "../../formatters";
 import {
@@ -14,7 +20,6 @@ import {
 import { getBasketballPostArmEnd, renderBasketballPostSymbol } from "../basketballPostGeometry";
 import { renderFloodlightColumnSymbol } from "../floodlightColumnGeometry";
 import { renderGateSymbol } from "../gateGeometry";
-import { buildSegmentRuns } from "../segmentTopology";
 import type { VisualPost } from "../types";
 import { renderCanvasLabel } from "./canvasLabel";
 import type { EditorCanvasStageProps } from "./types";
@@ -22,7 +27,9 @@ import type { EditorCanvasStageProps } from "./types";
 type EditorCanvasGeometryLayerProps = Pick<
   EditorCanvasStageProps,
   | "gatesBySegmentId"
+  | "goalUnitVisuals"
   | "interactionMode"
+  | "kickboardVisuals"
   | "onOpenSegmentLengthEditor"
   | "onSelectBasketballPost"
   | "onSelectFloodlightColumn"
@@ -38,8 +45,10 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "placedBasketballPostVisuals"
   | "placedFloodlightColumnVisuals"
   | "placedGateVisuals"
+  | "pitchDividerVisuals"
   | "segmentLengthLabelsBySegmentId"
   | "segments"
+  | "sideNettingVisuals"
   | "hoveredBasketballPostId"
   | "hoveredFloodlightColumnId"
   | "hoveredGateId"
@@ -301,9 +310,204 @@ function renderPostSymbol(post: VisualPost, scale: number) {
   );
 }
 
+function renderGoalUnitPlan(goalUnit: ResolvedGoalUnitPlacement, scale: number) {
+  const strokeWidth = 1.8 / scale;
+  const detailWidth = 1.2 / scale;
+  const basketballNormal = { x: -goalUnit.normal.x, y: -goalUnit.normal.y };
+
+  return (
+    <Group key={`goal-unit-${goalUnit.id}`} listening={false}>
+      <Line
+        points={[goalUnit.entryPoint.x, goalUnit.entryPoint.y, goalUnit.exitPoint.x, goalUnit.exitPoint.y]}
+        stroke="rgba(8, 12, 16, 0.92)"
+        strokeWidth={6.6 / scale}
+        lineCap="round"
+      />
+      <Line
+        points={[
+          goalUnit.entryPoint.x,
+          goalUnit.entryPoint.y,
+          goalUnit.recessEntryPoint.x,
+          goalUnit.recessEntryPoint.y,
+          goalUnit.recessExitPoint.x,
+          goalUnit.recessExitPoint.y,
+          goalUnit.exitPoint.x,
+          goalUnit.exitPoint.y
+        ]}
+        stroke="#c7eff7"
+        strokeWidth={strokeWidth}
+        lineCap="round"
+        lineJoin="round"
+      />
+      <Line
+        points={[goalUnit.entryPoint.x, goalUnit.entryPoint.y, goalUnit.exitPoint.x, goalUnit.exitPoint.y]}
+        stroke="rgba(199, 239, 247, 0.54)"
+        strokeWidth={detailWidth}
+        dash={[14 / scale, 10 / scale]}
+        lineCap="round"
+      />
+      <Circle
+        x={goalUnit.rearCenterPoint.x}
+        y={goalUnit.rearCenterPoint.y}
+        radius={7 / scale}
+        fill="#0a3447"
+        stroke="#effcff"
+        strokeWidth={detailWidth}
+      />
+      <Line
+        points={[
+          goalUnit.rearCenterPoint.x,
+          goalUnit.rearCenterPoint.y,
+          goalUnit.rearCenterPoint.x + basketballNormal.x * 280,
+          goalUnit.rearCenterPoint.y + basketballNormal.y * 280
+        ]}
+        stroke="#ffb769"
+        strokeWidth={detailWidth}
+        lineCap="round"
+      />
+    </Group>
+  );
+}
+
+function renderKickboardPlan(kickboard: ResolvedKickboardAttachment, scale: number) {
+  const points = [kickboard.start.x, kickboard.start.y, kickboard.end.x, kickboard.end.y];
+  return (
+    <Group key={`kickboard-${kickboard.id}`} listening={false}>
+      <Line
+        points={points}
+        stroke="rgba(48, 29, 15, 0.45)"
+        strokeWidth={8 / scale}
+        lineCap="round"
+      />
+      <Line
+        points={points}
+        stroke={kickboard.placement.profile === "CHAMFERED" ? "#9a6338" : "#7a5232"}
+        strokeWidth={4.2 / scale}
+        opacity={0.96}
+        lineCap="round"
+      />
+      <Line
+        points={points}
+        stroke="rgba(255, 232, 207, 0.46)"
+        strokeWidth={1.1 / scale}
+        {...(kickboard.placement.profile === "CHAMFERED" ? { dash: [10 / scale, 6 / scale] } : {})}
+        lineCap="round"
+      />
+    </Group>
+  );
+}
+
+function renderPitchDividerPlan(pitchDivider: ResolvedPitchDividerPlacement, scale: number) {
+  if (!pitchDivider.isValid) {
+    return null;
+  }
+  return (
+    <Group key={`pitch-divider-${pitchDivider.id}`} listening={false}>
+      <Line
+        points={[pitchDivider.startPoint.x, pitchDivider.startPoint.y, pitchDivider.endPoint.x, pitchDivider.endPoint.y]}
+        stroke="#f4fbff"
+        strokeWidth={1.4 / scale}
+        dash={[12 / scale, 8 / scale]}
+        opacity={0.9}
+      />
+      <Circle x={pitchDivider.startPoint.x} y={pitchDivider.startPoint.y} radius={5 / scale} fill="#c1ebff" />
+      <Circle x={pitchDivider.endPoint.x} y={pitchDivider.endPoint.y} radius={5 / scale} fill="#c1ebff" />
+      {pitchDivider.supportPoints.map((point, index) => (
+        <Rect
+          key={`${pitchDivider.id}-support-${index}`}
+          x={point.x - 4 / scale}
+          y={point.y - 4 / scale}
+          width={8 / scale}
+          height={8 / scale}
+          fill="#dff5ff"
+        />
+      ))}
+    </Group>
+  );
+}
+
+function renderSideNettingPlan(sideNetting: ResolvedSideNettingAttachment, scale: number) {
+  const points = [sideNetting.start.x, sideNetting.start.y, sideNetting.end.x, sideNetting.end.y];
+
+  return (
+    <Group key={`side-netting-${sideNetting.id}`} listening={false}>
+      <Line
+        points={points}
+        stroke="rgba(22, 65, 71, 0.34)"
+        strokeWidth={8 / scale}
+        lineCap="round"
+      />
+      <Line
+        points={points}
+        stroke="#7cd5ea"
+        strokeWidth={3.2 / scale}
+        dash={[10 / scale, 8 / scale]}
+        opacity={0.95}
+        lineCap="round"
+      />
+      {sideNetting.extendedPostPoints.map((point, index) => (
+        <Circle
+          key={`${sideNetting.id}-extended-${index}`}
+          x={point.x}
+          y={point.y}
+          radius={4.5 / scale}
+          fill="#79e6f7"
+          stroke="#10303a"
+          strokeWidth={1 / scale}
+        />
+      ))}
+    </Group>
+  );
+}
+
+function buildSegmentRunsWithOpenings(
+  segment: EditorCanvasGeometryLayerProps["segments"][number],
+  gateSpans: EditorCanvasGeometryLayerProps["placedGateVisuals"],
+  goalUnits: ResolvedGoalUnitPlacement[]
+) {
+  const openings = [
+    ...gateSpans.map((gate) => ({ startOffsetMm: gate.startOffsetMm, endOffsetMm: gate.endOffsetMm })),
+    ...goalUnits.map((goalUnit) => ({ startOffsetMm: goalUnit.startOffsetMm, endOffsetMm: goalUnit.endOffsetMm }))
+  ]
+    .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+  const segmentLengthMm = distanceMm(segment.start, segment.end);
+  const boundaries = [0, segmentLengthMm, ...openings.flatMap((opening) => [opening.startOffsetMm, opening.endOffsetMm])]
+    .sort((left, right) => left - right);
+  const runs: Array<{ start: { x: number; y: number }; end: { x: number; y: number } }> = [];
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const startOffsetMm = boundaries[index] ?? 0;
+    const endOffsetMm = boundaries[index + 1] ?? 0;
+    if (endOffsetMm - startOffsetMm < 50) {
+      continue;
+    }
+    const midpointMm = startOffsetMm + (endOffsetMm - startOffsetMm) / 2;
+    const insideOpening = openings.some(
+      (opening) => midpointMm >= opening.startOffsetMm - 0.001 && midpointMm <= opening.endOffsetMm + 0.001
+    );
+    if (insideOpening) {
+      continue;
+    }
+    const startRatio = startOffsetMm / Math.max(segmentLengthMm, 1);
+    const endRatio = endOffsetMm / Math.max(segmentLengthMm, 1);
+    runs.push({
+      start: {
+        x: segment.start.x + (segment.end.x - segment.start.x) * startRatio,
+        y: segment.start.y + (segment.end.y - segment.start.y) * startRatio
+      },
+      end: {
+        x: segment.start.x + (segment.end.x - segment.start.x) * endRatio,
+        y: segment.start.y + (segment.end.y - segment.start.y) * endRatio
+      }
+    });
+  }
+  return runs;
+}
+
 export function EditorCanvasGeometryLayer({
   gatesBySegmentId,
+  goalUnitVisuals = [],
   interactionMode,
+  kickboardVisuals = [],
   onOpenSegmentLengthEditor,
   onSelectBasketballPost,
   onSelectFloodlightColumn = () => undefined,
@@ -319,8 +523,10 @@ export function EditorCanvasGeometryLayer({
   placedBasketballPostVisuals,
   placedFloodlightColumnVisuals = [],
   placedGateVisuals,
+  pitchDividerVisuals = [],
   segmentLengthLabelsBySegmentId,
   segments,
+  sideNettingVisuals = [],
   hoveredBasketballPostId,
   hoveredFloodlightColumnId = null,
   hoveredGateId,
@@ -336,12 +542,19 @@ export function EditorCanvasGeometryLayer({
 }: EditorCanvasGeometryLayerProps) {
   return (
     <Layer>
+      {pitchDividerVisuals.map((pitchDivider) => renderPitchDividerPlan(pitchDivider, view.scale))}
       {visualPosts.map((post) => renderPostSymbol(post, view.scale))}
       {segments.map((segment) => {
         const isSelected = segment.id === selectedSegmentId;
         const isHovered = segment.id === hoveredSegmentId;
         const lengthLabels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
-        const segmentRuns = buildSegmentRuns(segment, gatesBySegmentId.get(segment.id) ?? []);
+        const segmentGoalUnits = goalUnitVisuals.filter((goalUnit) => goalUnit.segmentId === segment.id);
+        const gateSpans = gatesBySegmentId.get(segment.id) ?? [];
+        const segmentRuns = buildSegmentRunsWithOpenings(
+          segment,
+          gateSpans,
+          segmentGoalUnits
+        );
         const color = getSegmentColor(segment.spec);
 
         return (
@@ -503,6 +716,9 @@ export function EditorCanvasGeometryLayer({
           </Group>
         );
       })}
+      {goalUnitVisuals.map((goalUnit) => renderGoalUnitPlan(goalUnit, view.scale))}
+      {kickboardVisuals.map((kickboard) => renderKickboardPlan(kickboard, view.scale))}
+      {sideNettingVisuals.map((sideNetting) => renderSideNettingPlan(sideNetting, view.scale))}
       {placedBasketballPostVisuals.map((basketballPost) => {
         const isBasketballPostSelected =
           interactionMode === "SELECT" && basketballPost.id === selectedBasketballPostId;

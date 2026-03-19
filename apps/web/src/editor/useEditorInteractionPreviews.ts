@@ -1,6 +1,16 @@
 import { useCallback, useMemo } from "react";
-import type { GateType, InlineFeatureFacing, LayoutSegment, PointMm } from "@fence-estimator/contracts";
+import type {
+  BasketballArmLengthMm,
+  GateType,
+  GoalUnitHeightMm,
+  GoalUnitWidthMm,
+  InlineFeatureFacing,
+  LayoutSegment,
+  PointMm
+} from "@fence-estimator/contracts";
 import { distanceMm, snapPointToAngle } from "@fence-estimator/geometry";
+import { PITCH_DIVIDER_MAX_SPAN_MM, PITCH_DIVIDER_SUPPORT_INTERVAL_MM } from "@fence-estimator/contracts";
+import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
 
 import {
   AXIS_GUIDE_SNAP_PX,
@@ -43,15 +53,21 @@ import type {
   DrawResolveResult,
   FloodlightColumnInsertionPreview,
   GateVisual,
+  GoalUnitInsertionPreview,
   InteractionMode,
   LineSnapPreview,
+  PitchDividerAnchorPreview,
+  PitchDividerSpanPreview,
   PreviewSnapMeta,
   RecessAlignmentAnchor,
+  RecessInsertionPreview,
   RecessSide,
   RecessSidePreference,
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
-  ResolvedGatePlacement
+  ResolvedGatePlacement,
+  SegmentAttachmentPreview,
+  SegmentRangePreview
 } from "./types";
 
 interface EditorInteractionPreviewsOptions {
@@ -68,12 +84,19 @@ interface EditorInteractionPreviewsOptions {
   recessWidthMm: number;
   recessDepthMm: number;
   recessSide: RecessSidePreference;
+  goalUnitWidthMm?: GoalUnitWidthMm;
+  goalUnitDepthMm?: number;
+  goalUnitHeightMm?: GoalUnitHeightMm;
   gateType: GateType;
   customGateWidthMm: number;
+  basketballPlacementType?: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST";
+  basketballArmLengthMm?: BasketballArmLengthMm;
   placedGateVisuals: ResolvedGatePlacement[];
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   placedFloodlightColumnVisuals?: ResolvedFloodlightColumnPlacement[];
   drawChainStart: PointMm | null;
+  pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
+  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   activeGateDragId?: string | null;
   activeBasketballPostDragId?: string | null;
   activeFloodlightColumnDragId?: string | null;
@@ -81,6 +104,31 @@ interface EditorInteractionPreviewsOptions {
 
 function buildSnapMeta(kind: PreviewSnapMeta["kind"], label: string): PreviewSnapMeta {
   return { kind, label };
+}
+
+function getFenceHeightMm(segment: LayoutSegment): number {
+  switch (segment.spec.height) {
+    case "1.2m":
+      return 1200;
+    case "1.8m":
+      return 1800;
+    case "2m":
+      return 2000;
+    case "2.4m":
+      return 2400;
+    case "3m":
+      return 3000;
+    case "4m":
+      return 4000;
+    case "4.5m":
+      return 4500;
+    case "5m":
+      return 5000;
+    case "6m":
+      return 6000;
+    default:
+      return 0;
+  }
 }
 
 function findNearestPreDrawHoverSnap(
@@ -128,6 +176,63 @@ function findNearestPreDrawHoverSnap(
   };
 }
 
+function findNearestProjectedSegment(
+  point: PointMm,
+  segments: LayoutSegment[],
+  maxDistanceMm: number,
+  predicate?: (segment: LayoutSegment) => boolean
+): {
+  segment: LayoutSegment;
+  offsetMm: number;
+  distanceMm: number;
+  signedDistanceMm: number;
+} | null {
+  let best:
+    | {
+        segment: LayoutSegment;
+        offsetMm: number;
+        distanceMm: number;
+        signedDistanceMm: number;
+      }
+    | null = null;
+
+  for (const segment of segments) {
+    if (predicate && !predicate(segment)) {
+      continue;
+    }
+    const projection = projectPointOntoSegment(point, segment);
+    if (projection.distanceMm > maxDistanceMm) {
+      continue;
+    }
+    if (!best || projection.distanceMm < best.distanceMm) {
+      best = {
+        segment,
+        offsetMm: projection.offsetMm,
+        distanceMm: projection.distanceMm,
+        signedDistanceMm: projection.signedDistanceMm
+      };
+    }
+  }
+
+  return best;
+}
+
+function findNearestSegmentPostOffsetMm(segment: LayoutSegment, targetOffsetMm: number): number | null {
+  const postOffsetsMm = getSegmentPostOffsets(segment);
+  let bestOffsetMm: number | null = null;
+  let bestDeltaMm = Number.POSITIVE_INFINITY;
+
+  for (const offsetMm of postOffsetsMm) {
+    const deltaMm = Math.abs(offsetMm - targetOffsetMm);
+    if (deltaMm < bestDeltaMm) {
+      bestDeltaMm = deltaMm;
+      bestOffsetMm = offsetMm;
+    }
+  }
+
+  return bestOffsetMm;
+}
+
 export function useEditorInteractionPreviews({
   segments,
   lineSnapSegments = [],
@@ -142,12 +247,19 @@ export function useEditorInteractionPreviews({
   recessWidthMm,
   recessDepthMm,
   recessSide,
+  goalUnitWidthMm = 3000,
+  goalUnitDepthMm = 1200,
+  goalUnitHeightMm = 3000,
   gateType,
   customGateWidthMm,
+  basketballPlacementType = "DEDICATED_POST",
+  basketballArmLengthMm: _basketballArmLengthMm,
   placedGateVisuals,
   placedBasketballPostVisuals,
   placedFloodlightColumnVisuals = [],
   drawChainStart,
+  pendingPitchDividerStart = null,
+  pendingSideNettingStart = null,
   activeGateDragId = null,
   activeBasketballPostDragId = null,
   activeFloodlightColumnDragId = null
@@ -162,6 +274,7 @@ export function useEditorInteractionPreviews({
   const floodlightColumnPointerSnapMm = Math.max(650, 48 / viewScale);
   const hoverSegmentSnapMm = Math.max(180, 16 / viewScale);
   const hoverGateSnapMm = Math.max(180, 22 / viewScale);
+  const pitchDividerPointerSnapMm = Math.max(650, 42 / viewScale);
   const requestedGateWidthMm = useMemo(
     () => resolveGateWidthMm(gateType, customGateWidthMm),
     [customGateWidthMm, gateType]
@@ -478,6 +591,151 @@ export function useEditorInteractionPreviews({
     [cornerNodeKeys, placedFloodlightColumnVisuals, segments]
   );
 
+  const resolveRecessLikePreview = useCallback(
+    (widthMm: number, depthMm: number): RecessInsertionPreview | null => {
+      if (!pointerWorld) {
+        return null;
+      }
+
+      const best = findNearestProjectedSegment(pointerWorld, segments, recessPointerSnapMm);
+      if (!best) {
+        return null;
+      }
+
+      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+      if (widthMm > segmentLengthMm + 0.001) {
+        return null;
+      }
+      const baseOffsetMm = best.offsetMm;
+      let snappedOffsetMm = baseOffsetMm;
+      let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+      let snapMeta = buildSnapMeta("FREE", "Free placement");
+
+      const midpointMm = segmentLengthMm / 2;
+      const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
+      const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
+      if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = midpointMm;
+        bestSnapDistanceMm = midpointDistanceMm;
+        snapMeta = buildSnapMeta("MIDPOINT", "Centered");
+      }
+
+      const fractionWindowMm = recessFractionSnapWindowMm(segmentLengthMm);
+      for (const targetOffsetMm of recessSnapTargetsMm(segmentLengthMm)) {
+        const distanceToTargetMm = Math.abs(baseOffsetMm - targetOffsetMm);
+        if (distanceToTargetMm <= fractionWindowMm && distanceToTargetMm < bestSnapDistanceMm) {
+          snappedOffsetMm = targetOffsetMm;
+          bestSnapDistanceMm = distanceToTargetMm;
+          snapMeta = buildSnapMeta("FRACTION", "Run fraction");
+        }
+      }
+
+      const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
+      const segmentTangent = normalizeVector({
+        x: best.segment.end.x - best.segment.start.x,
+        y: best.segment.end.y - best.segment.start.y
+      });
+      const alignmentAnchors = !segmentTangent
+        ? []
+        : recessAlignmentAnchors
+            .filter(
+              (anchor) =>
+                anchor.sourceSegmentId !== best.segment.id && Math.abs(dot(segmentTangent, anchor.tangent)) >= 0.9
+            )
+            .map((anchor) => anchor.point);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
+      const anchorSnappedOffsetMm = anchorSnapResult.offsetMm;
+      const anchorSnapDistanceMm = Math.abs(anchorSnappedOffsetMm - baseOffsetMm);
+      let selectedAnchorPoint: PointMm | null = null;
+      if (anchorSnapDistanceMm <= anchorWindowMm && anchorSnapDistanceMm < bestSnapDistanceMm) {
+        snappedOffsetMm = anchorSnappedOffsetMm;
+        selectedAnchorPoint = anchorSnapResult.anchorPoint;
+        snapMeta = buildSnapMeta("ALIGNMENT", "Aligned recess");
+      }
+
+      snappedOffsetMm = Math.max(
+        widthMm / 2,
+        Math.min(segmentLengthMm - widthMm / 2, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
+      );
+
+      const inferredSide: RecessSide = best.signedDistanceMm >= 0 ? "LEFT" : "RIGHT";
+      const previewSide = recessSide === "AUTO" ? inferredSide : recessSide;
+      const preview = buildRecessPreview(
+        best.segment,
+        snappedOffsetMm,
+        widthMm,
+        depthMm,
+        previewSide,
+        recessSide === "AUTO" ? "AUTO" : "MANUAL",
+        snapMeta
+      );
+      if (!preview || !selectedAnchorPoint) {
+        return preview;
+      }
+
+      return {
+        ...preview,
+        alignmentGuide: {
+          anchorPoint: selectedAnchorPoint,
+          targetPoint: preview.targetPoint
+        }
+      };
+    },
+    [pointerWorld, recessAlignmentAnchors, recessPointerSnapMm, recessSide, segments]
+  );
+
+  const resolvePitchDividerAnchorPreview = useCallback(
+    (worldPoint: PointMm): PitchDividerAnchorPreview | null => {
+      const best = findNearestProjectedSegment(worldPoint, segments, pitchDividerPointerSnapMm);
+      if (!best) {
+        return null;
+      }
+      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+      const midpointMm = segmentLengthMm / 2;
+      let offsetMm = Math.max(0, Math.min(segmentLengthMm, Math.round(best.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM));
+      let snapMeta = buildSnapMeta("SEGMENT", "Fence line");
+      if (Math.abs(best.offsetMm - midpointMm) <= recessMidpointSnapWindowMm(segmentLengthMm)) {
+        offsetMm = Math.round(midpointMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+        snapMeta = buildSnapMeta("CENTERED", "Centered");
+      }
+      return {
+        segment: best.segment,
+        offsetMm,
+        point: interpolateAlongSegment(best.segment, offsetMm),
+        snapMeta
+      };
+    },
+    [pitchDividerPointerSnapMm, segments]
+  );
+
+  const buildPitchDividerSpanPreview = useCallback(
+    (startAnchor: PitchDividerAnchorPreview, endAnchor: PitchDividerAnchorPreview): PitchDividerSpanPreview => {
+      const spanLengthMm = distanceMm(startAnchor.point, endAnchor.point);
+      const supportPoints: PointMm[] = [];
+      if (spanLengthMm <= PITCH_DIVIDER_MAX_SPAN_MM) {
+        for (
+          let distanceFromStartMm = PITCH_DIVIDER_SUPPORT_INTERVAL_MM;
+          distanceFromStartMm < spanLengthMm - 0.001;
+          distanceFromStartMm += PITCH_DIVIDER_SUPPORT_INTERVAL_MM
+        ) {
+          const ratio = distanceFromStartMm / spanLengthMm;
+          supportPoints.push({
+            x: startAnchor.point.x + (endAnchor.point.x - startAnchor.point.x) * ratio,
+            y: startAnchor.point.y + (endAnchor.point.y - startAnchor.point.y) * ratio
+          });
+        }
+      }
+      return {
+        startAnchor,
+        endAnchor,
+        spanLengthMm,
+        supportPoints,
+        isValid: startAnchor.segment.id !== endAnchor.segment.id && spanLengthMm <= PITCH_DIVIDER_MAX_SPAN_MM
+      };
+    },
+    []
+  );
+
   const resolveDrawPoint = useCallback(
     (worldPoint: PointMm): DrawResolveResult => {
       const angleCandidate =
@@ -600,122 +858,26 @@ export function useEditorInteractionPreviews({
   }, [drawChainStart, drawStart, ghostEnd]);
 
   const recessPreview = useMemo(() => {
-    if (interactionMode !== "RECESS" || !pointerWorld) {
+    if (interactionMode !== "RECESS") {
       return null;
     }
+    return resolveRecessLikePreview(recessWidthMm, recessDepthMm);
+  }, [interactionMode, recessDepthMm, recessWidthMm, resolveRecessLikePreview]);
 
-    let best:
-      | {
-          segment: LayoutSegment;
-          offsetMm: number;
-          distanceMm: number;
-          signedDistanceMm: number;
-        }
-      | null = null;
-    for (const segment of segments) {
-      const projection = projectPointOntoSegment(pointerWorld, segment);
-      if (projection.distanceMm > recessPointerSnapMm) {
-        continue;
-      }
-      if (!best || projection.distanceMm < best.distanceMm) {
-        best = {
-          segment,
-          offsetMm: projection.offsetMm,
-          distanceMm: projection.distanceMm,
-          signedDistanceMm: projection.signedDistanceMm
-        };
-      }
-    }
-
-    if (!best) {
+  const goalUnitPreview = useMemo<GoalUnitInsertionPreview | null>(() => {
+    if (interactionMode !== "GOAL_UNIT") {
       return null;
     }
-
-    const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
-    const baseOffsetMm = best.offsetMm;
-    let snappedOffsetMm = baseOffsetMm;
-    let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
-    let snapMeta = buildSnapMeta("FREE", "Free placement");
-
-    const midpointMm = segmentLengthMm / 2;
-    const midpointWindowMm = recessMidpointSnapWindowMm(segmentLengthMm);
-    const midpointDistanceMm = Math.abs(baseOffsetMm - midpointMm);
-    if (midpointDistanceMm <= midpointWindowMm && midpointDistanceMm < bestSnapDistanceMm) {
-      snappedOffsetMm = midpointMm;
-      bestSnapDistanceMm = midpointDistanceMm;
-      snapMeta = buildSnapMeta("MIDPOINT", "Centered");
+    const preview = resolveRecessLikePreview(goalUnitWidthMm, goalUnitDepthMm);
+    if (!preview) {
+      return null;
     }
-
-    const fractionWindowMm = recessFractionSnapWindowMm(segmentLengthMm);
-    for (const targetOffsetMm of recessSnapTargetsMm(segmentLengthMm)) {
-      const distanceToTargetMm = Math.abs(baseOffsetMm - targetOffsetMm);
-      if (distanceToTargetMm <= fractionWindowMm && distanceToTargetMm < bestSnapDistanceMm) {
-        snappedOffsetMm = targetOffsetMm;
-        bestSnapDistanceMm = distanceToTargetMm;
-        snapMeta = buildSnapMeta("FRACTION", "Run fraction");
-      }
-    }
-
-    const anchorWindowMm = recessAnchorSnapWindowMm(segmentLengthMm);
-    const segmentTangent = normalizeVector({
-      x: best.segment.end.x - best.segment.start.x,
-      y: best.segment.end.y - best.segment.start.y
-    });
-    const alignmentAnchors = !segmentTangent
-      ? []
-      : recessAlignmentAnchors
-          .filter(
-            (anchor) =>
-              anchor.sourceSegmentId !== best.segment.id && Math.abs(dot(segmentTangent, anchor.tangent)) >= 0.9
-          )
-          .map((anchor) => anchor.point);
-    const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
-    const anchorSnappedOffsetMm = anchorSnapResult.offsetMm;
-    const anchorSnapDistanceMm = Math.abs(anchorSnappedOffsetMm - baseOffsetMm);
-    let selectedAnchorPoint: PointMm | null = null;
-    if (anchorSnapDistanceMm <= anchorWindowMm && anchorSnapDistanceMm < bestSnapDistanceMm) {
-      snappedOffsetMm = anchorSnappedOffsetMm;
-      selectedAnchorPoint = anchorSnapResult.anchorPoint;
-      snapMeta = buildSnapMeta("ALIGNMENT", "Aligned recess");
-    }
-
-    snappedOffsetMm = Math.max(
-      0,
-      Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
-    );
-
-    const inferredSide: RecessSide = best.signedDistanceMm >= 0 ? "LEFT" : "RIGHT";
-    const previewSide = recessSide === "AUTO" ? inferredSide : recessSide;
-    const preview = buildRecessPreview(
-      best.segment,
-      snappedOffsetMm,
-      recessWidthMm,
-      recessDepthMm,
-      previewSide,
-      recessSide === "AUTO" ? "AUTO" : "MANUAL",
-      snapMeta
-    );
-    if (!preview || !selectedAnchorPoint) {
-      return preview;
-    }
-
     return {
       ...preview,
-      alignmentGuide: {
-        anchorPoint: selectedAnchorPoint,
-        targetPoint: preview.targetPoint
-      }
+      widthMm: goalUnitWidthMm,
+      goalHeightMm: goalUnitHeightMm
     };
-  }, [
-    interactionMode,
-    pointerWorld,
-    recessAlignmentAnchors,
-    recessDepthMm,
-    recessPointerSnapMm,
-    recessSide,
-    recessWidthMm,
-    segments
-  ]);
+  }, [goalUnitDepthMm, goalUnitHeightMm, goalUnitWidthMm, interactionMode, resolveRecessLikePreview]);
 
   const placedGateVisualById = useMemo(
     () => new Map(placedGateVisuals.map((gate) => [gate.id, gate] as const)),
@@ -794,28 +956,17 @@ export function useEditorInteractionPreviews({
 
   const resolveBasketballPostPreview = useCallback(
     (worldPoint: PointMm): BasketballPostInsertionPreview | null => {
-      let best:
-        | {
-            segment: LayoutSegment;
-            offsetMm: number;
-            distanceMm: number;
-            signedDistanceMm: number;
-          }
-        | null = null;
-      for (const segment of segments) {
-        const projection = projectPointOntoSegment(worldPoint, segment);
-        if (projection.distanceMm > basketballPostPointerSnapMm) {
-          continue;
+      const best = findNearestProjectedSegment(
+        worldPoint,
+        segments,
+        basketballPostPointerSnapMm,
+        (segment) => {
+          const fenceHeightMm = getFenceHeightMm(segment);
+          return basketballPlacementType === "DEDICATED_POST"
+            ? fenceHeightMm === 3000 || fenceHeightMm === 4000
+            : fenceHeightMm >= 3000;
         }
-        if (!best || projection.distanceMm < best.distanceMm) {
-          best = {
-            segment,
-            offsetMm: projection.offsetMm,
-            distanceMm: projection.distanceMm,
-            signedDistanceMm: projection.signedDistanceMm
-          };
-        }
-      }
+      );
 
       if (!best) {
         return null;
@@ -823,7 +974,7 @@ export function useEditorInteractionPreviews({
 
       return buildSnappedBasketballPostPreview(best.segment, best.offsetMm, best.signedDistanceMm);
     },
-    [basketballPostPointerSnapMm, buildSnappedBasketballPostPreview, segments]
+    [basketballPlacementType, basketballPostPointerSnapMm, buildSnappedBasketballPostPreview, segments]
   );
 
   const placementBasketballPostPreview = useMemo(() => {
@@ -926,6 +1077,89 @@ export function useEditorInteractionPreviews({
   ]);
 
   const floodlightColumnPreview = selectDragFloodlightColumnPreview ?? placementFloodlightColumnPreview;
+
+  const kickboardPreview = useMemo<SegmentAttachmentPreview | null>(() => {
+    if (interactionMode !== "KICKBOARD" || !pointerWorld) {
+      return null;
+    }
+    const best = findNearestProjectedSegment(pointerWorld, segments, hoverSegmentSnapMm);
+    if (!best) {
+      return null;
+    }
+    return {
+      segment: best.segment,
+      snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+    };
+  }, [hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
+
+  const resolveSideNettingAnchorPreview = useCallback(
+    (worldPoint: PointMm): PitchDividerAnchorPreview | null => {
+      const best = findNearestProjectedSegment(worldPoint, segments, pitchDividerPointerSnapMm);
+      if (!best) {
+        return null;
+      }
+      const snappedOffsetMm = findNearestSegmentPostOffsetMm(best.segment, best.offsetMm);
+      if (snappedOffsetMm === null) {
+        return null;
+      }
+      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
+      const isEndpoint = snappedOffsetMm <= 0.001 || Math.abs(snappedOffsetMm - segmentLengthMm) <= 0.001;
+      return {
+        segment: best.segment,
+        offsetMm: snappedOffsetMm,
+        point: interpolateAlongSegment(best.segment, snappedOffsetMm),
+        snapMeta: buildSnapMeta(isEndpoint ? "NODE" : "SEGMENT", isEndpoint ? "End post" : "Existing post")
+      };
+    },
+    [pitchDividerPointerSnapMm, segments]
+  );
+
+  const sideNettingAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
+    if (interactionMode !== "SIDE_NETTING" || !pointerWorld) {
+      return null;
+    }
+    return resolveSideNettingAnchorPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolveSideNettingAnchorPreview]);
+
+  const sideNettingPreview = useMemo<SegmentRangePreview | null>(() => {
+    if (interactionMode !== "SIDE_NETTING" || !pendingSideNettingStart || !sideNettingAnchorPreview) {
+      return null;
+    }
+
+    if (pendingSideNettingStart.segment.id !== sideNettingAnchorPreview.segment.id) {
+      return null;
+    }
+
+    const startOffsetMm = Math.min(pendingSideNettingStart.offsetMm, sideNettingAnchorPreview.offsetMm);
+    const endOffsetMm = Math.max(pendingSideNettingStart.offsetMm, sideNettingAnchorPreview.offsetMm);
+    if (endOffsetMm - startOffsetMm <= DRAW_INCREMENT_MM * 0.5) {
+      return null;
+    }
+
+    return {
+      segment: sideNettingAnchorPreview.segment,
+      startOffsetMm,
+      endOffsetMm,
+      startPoint: interpolateAlongSegment(sideNettingAnchorPreview.segment, startOffsetMm),
+      endPoint: interpolateAlongSegment(sideNettingAnchorPreview.segment, endOffsetMm),
+      lengthMm: endOffsetMm - startOffsetMm,
+      snapMeta: buildSnapMeta("SEGMENT", "Fence line")
+    };
+  }, [interactionMode, pendingSideNettingStart, sideNettingAnchorPreview]);
+
+  const pitchDividerAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
+    if (interactionMode !== "PITCH_DIVIDER" || !pointerWorld) {
+      return null;
+    }
+    return resolvePitchDividerAnchorPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolvePitchDividerAnchorPreview]);
+
+  const pitchDividerPreview = useMemo<PitchDividerSpanPreview | null>(() => {
+    if (interactionMode !== "PITCH_DIVIDER" || !pendingPitchDividerStart || !pitchDividerAnchorPreview) {
+      return null;
+    }
+    return buildPitchDividerSpanPreview(pendingPitchDividerStart, pitchDividerAnchorPreview);
+  }, [buildPitchDividerSpanPreview, interactionMode, pendingPitchDividerStart, pitchDividerAnchorPreview]);
 
   const drawHoverSnap = useMemo(() => {
     if (interactionMode !== "DRAW" || !pointerWorld || drawStart) {
@@ -1044,6 +1278,7 @@ export function useEditorInteractionPreviews({
     axisGuide,
     drawHoverSnap,
     basketballPostPreview,
+    goalUnitPreview,
     floodlightColumnPreview,
     drawSnapLabel: effectiveDrawSnapLabel,
     gatePreview,
@@ -1054,10 +1289,17 @@ export function useEditorInteractionPreviews({
     hoveredFloodlightColumnId,
     hoveredGateId,
     hoveredSegmentId,
+    kickboardPreview,
+    pitchDividerAnchorPreview,
+    pitchDividerPreview,
     rectanglePreviewEnd,
     recessPreview,
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
+    resolvePitchDividerAnchorPreview,
+    resolveSideNettingAnchorPreview,
+    sideNettingAnchorPreview,
+    sideNettingPreview,
     closeLoopPoint,
     resolveDrawPoint
   };

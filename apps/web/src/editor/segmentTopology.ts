@@ -7,6 +7,7 @@ import type {
   PointMm
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
+import { getSegmentIntermediatePostOffsets } from "@fence-estimator/rules-engine";
 
 import { MIN_SEGMENT_MM, quantize } from "./constants.js";
 import {
@@ -196,13 +197,19 @@ export function resolveBasketballPostPlacements(
     if (!tangent) {
       continue;
     }
-    const offsetMm = Math.max(0, Math.min(segmentLengthMm, placement.offsetMm));
+    const validOffsetsMm = getSegmentIntermediatePostOffsets(segment);
+    const offsetMm = validOffsetsMm.find((candidateOffsetMm) => Math.abs(candidateOffsetMm - placement.offsetMm) <= 25);
+    if (offsetMm === undefined) {
+      continue;
+    }
     const point = interpolateAlongSegment(segment, offsetMm);
     const leftNormal = { x: -tangent.y, y: tangent.x };
     const normal =
       placement.facing === "RIGHT"
         ? { x: -leftNormal.x, y: -leftNormal.y }
         : leftNormal;
+    const type = placement.type ?? "DEDICATED_POST";
+    const mountingMode = placement.mountingMode ?? "PROJECTING_ARM";
 
     resolved.push({
       id: placement.id,
@@ -213,6 +220,12 @@ export function resolveBasketballPostPlacements(
       tangent,
       normal,
       facing: placement.facing,
+      type,
+      mountingMode,
+      armLengthMm: placement.armLengthMm ?? (type === "DEDICATED_POST" ? 1800 : null),
+      pairedFeatureId: placement.pairedFeatureId ?? null,
+      replacesIntermediatePost: type === "DEDICATED_POST" && (placement.replacesIntermediatePost ?? true),
+      hostPostIndex: validOffsetsMm.findIndex((candidateOffsetMm) => candidateOffsetMm === offsetMm) + 1 || null,
       spec: segment.spec,
       placement: {
         ...placement,

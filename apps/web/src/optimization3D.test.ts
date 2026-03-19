@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { LayoutSegment, TwinBarOptimizationPlan } from "@fence-estimator/contracts";
 import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement } from "./editor/types.js";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 
 import { buildOptimization3DScene } from "./optimization3D.js";
 
@@ -98,6 +104,114 @@ describe("buildOptimization3DScene", () => {
     expect(scene.posts.some((post) => post.point.x === 1200 && post.point.y === 0)).toBe(false);
     expect(scene.posts.some((post) => post.point.x === 2200 && post.point.y === 0)).toBe(false);
     expect(scene.bounds.maxHeightMm).toBeGreaterThan(5000);
+  });
+
+  it("includes goal units, kickboards, pitch dividers, and side netting in the 3D scene", () => {
+    const segment: LayoutSegment = {
+      id: "seg-features-2",
+      start: { x: 0, y: 0 },
+      end: { x: 10100, y: 0 },
+      spec: { system: "TWIN_BAR", height: "3m", twinBarVariant: "STANDARD" }
+    };
+    const goalUnit: ResolvedGoalUnitPlacement = {
+      id: "goal-1",
+      segmentId: "seg-features-2",
+      centerOffsetMm: 5050,
+      startOffsetMm: 3550,
+      endOffsetMm: 6550,
+      widthMm: 3000,
+      depthMm: 1200,
+      goalHeightMm: 3000,
+      enclosureHeightMm: 3000,
+      entryPoint: { x: 3550, y: 0 },
+      exitPoint: { x: 6550, y: 0 },
+      recessEntryPoint: { x: 3550, y: 1200 },
+      recessExitPoint: { x: 6550, y: 1200 },
+      rearCenterPoint: { x: 5050, y: 1200 },
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: 1 },
+      spec: segment.spec,
+      enclosureSpec: segment.spec,
+      placement: {
+        id: "goal-1",
+        segmentId: "seg-features-2",
+        centerOffsetMm: 5050,
+        side: "LEFT",
+        widthMm: 3000,
+        depthMm: 1200,
+        goalHeightMm: 3000
+      }
+    };
+    const kickboard: ResolvedKickboardAttachment = {
+      id: "kb-1",
+      segmentId: "seg-features-2",
+      start: segment.start,
+      end: segment.end,
+      lengthMm: 10100,
+      boardCount: 5,
+      placement: {
+        id: "kb-1",
+        segmentId: "seg-features-2",
+        sectionHeightMm: 200,
+        thicknessMm: 50,
+        profile: "SQUARE",
+        boardLengthMm: 2500
+      }
+    };
+    const pitchDivider: ResolvedPitchDividerPlacement = {
+      id: "divider-1",
+      startPoint: { x: 0, y: 5000 },
+      endPoint: { x: 30000, y: 5000 },
+      spanMm: 30000,
+      supportPoints: [{ x: 15000, y: 5000 }],
+      supportPostCount: 1,
+      isValid: true,
+      validationMessage: null,
+      placement: {
+        id: "divider-1",
+        startAnchor: { segmentId: "left", offsetMm: 0 },
+        endAnchor: { segmentId: "right", offsetMm: 0 }
+      }
+    };
+    const sideNetting: ResolvedSideNettingAttachment = {
+      id: "net-1",
+      segmentId: "seg-features-2",
+      startOffsetMm: 0,
+      endOffsetMm: 10100,
+      start: segment.start,
+      end: segment.end,
+      lengthMm: 10100,
+      baseFenceHeightMm: 3000,
+      additionalHeightMm: 2000,
+      totalHeightMm: 5000,
+      extendedPostIndices: [2],
+      extendedPostPoints: [{ x: 5050, y: 0 }],
+      placement: {
+        id: "net-1",
+        segmentId: "seg-features-2",
+        additionalHeightMm: 2000,
+        extendedPostInterval: 3
+      }
+    };
+
+    const scene = buildOptimization3DScene(
+      [segment],
+      [],
+      new Map(),
+      [],
+      [],
+      [],
+      [goalUnit],
+      [kickboard],
+      [pitchDivider],
+      [sideNetting]
+    );
+
+    expect(scene.goalUnits).toHaveLength(1);
+    expect(scene.kickboards).toHaveLength(1);
+    expect(scene.pitchDividers).toHaveLength(1);
+    expect(scene.sideNettings).toHaveLength(1);
+    expect(scene.bounds.maxHeightMm).toBeGreaterThanOrEqual(5000);
   });
 
   it("renders 1.2m twin bar as a 1.0m panel with a top rail", () => {

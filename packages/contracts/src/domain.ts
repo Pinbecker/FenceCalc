@@ -38,12 +38,52 @@ export interface GatePlacement {
 
 export type InlineFeatureFacing = "LEFT" | "RIGHT";
 
-export interface BasketballPostPlacement {
+export const GOAL_UNIT_WIDTHS_MM = [3000, 3600, 4800] as const;
+export const GOAL_UNIT_HEIGHTS_MM = [3000, 4000] as const;
+export const BASKETBALL_ARM_LENGTHS_MM = [1200, 1800] as const;
+export const KICKBOARD_SECTION_HEIGHTS_MM = [200, 225, 250] as const;
+export const SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM = 2000;
+export const SIDE_NETTING_EXTENDED_POST_INTERVAL = 3;
+export const PITCH_DIVIDER_MAX_SPAN_MM = 70000;
+export const PITCH_DIVIDER_SUPPORT_INTERVAL_MM = 15000;
+
+export type GoalUnitWidthMm = (typeof GOAL_UNIT_WIDTHS_MM)[number];
+export type GoalUnitHeightMm = (typeof GOAL_UNIT_HEIGHTS_MM)[number];
+export type BasketballArmLengthMm = (typeof BASKETBALL_ARM_LENGTHS_MM)[number];
+export type KickboardSectionHeightMm = (typeof KICKBOARD_SECTION_HEIGHTS_MM)[number];
+export type KickboardProfile = "SQUARE" | "CHAMFERED";
+export type BasketballFeatureType = "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST" | "GOAL_UNIT_INTEGRATED";
+export type BasketballMountingMode = "PROJECTING_ARM" | "POST_MOUNTED" | "GOAL_UNIT_REAR_CENTER";
+
+export interface SegmentAnchor {
+  segmentId: string;
+  offsetMm: number;
+}
+
+export interface GoalUnitPlacement {
+  id: string;
+  segmentId: string;
+  centerOffsetMm: number;
+  side: InlineFeatureFacing;
+  widthMm: GoalUnitWidthMm;
+  depthMm: number;
+  goalHeightMm: GoalUnitHeightMm;
+}
+
+export interface BasketballFeaturePlacement {
   id: string;
   segmentId: string;
   offsetMm: number;
   facing: InlineFeatureFacing;
+  type?: BasketballFeatureType | undefined;
+  mountingMode?: BasketballMountingMode | undefined;
+  armLengthMm?: BasketballArmLengthMm | undefined;
+  pairedFeatureId?: string | null | undefined;
+  replacesIntermediatePost?: boolean | undefined;
+  goalUnitId?: string | null | undefined;
 }
+
+export type BasketballPostPlacement = BasketballFeaturePlacement;
 
 export interface FloodlightColumnPlacement {
   id: string;
@@ -52,11 +92,40 @@ export interface FloodlightColumnPlacement {
   facing: InlineFeatureFacing;
 }
 
+export interface KickboardAttachment {
+  id: string;
+  segmentId: string;
+  sectionHeightMm: KickboardSectionHeightMm;
+  thicknessMm: 50;
+  profile: KickboardProfile;
+  boardLengthMm: 2500;
+}
+
+export interface PitchDividerPlacement {
+  id: string;
+  startAnchor: SegmentAnchor;
+  endAnchor: SegmentAnchor;
+}
+
+export interface SideNettingAttachment {
+  id: string;
+  segmentId: string;
+  additionalHeightMm: number;
+  startOffsetMm?: number;
+  endOffsetMm?: number;
+  extendedPostInterval: 3;
+}
+
 export interface LayoutModel {
   segments: LayoutSegment[];
   gates?: GatePlacement[];
-  basketballPosts?: BasketballPostPlacement[];
+  basketballFeatures?: BasketballFeaturePlacement[];
+  basketballPosts?: BasketballFeaturePlacement[] | undefined;
   floodlightColumns?: FloodlightColumnPlacement[];
+  goalUnits?: GoalUnitPlacement[];
+  kickboards?: KickboardAttachment[];
+  pitchDividers?: PitchDividerPlacement[];
+  sideNettings?: SideNettingAttachment[];
 }
 
 export interface DrawingCanvasViewport {
@@ -91,6 +160,19 @@ export interface MaterialSummary {
   roll900: number;
   totalRolls: number;
   rollsByFenceHeight: Record<string, { roll2100: number; roll900: number; total: number }>;
+}
+
+export type FeatureQuantityKind = "GOAL_UNIT" | "BASKETBALL" | "KICKBOARD" | "PITCH_DIVIDER" | "SIDE_NETTING";
+export type FeatureQuantityUnit = "item" | "panel" | "post" | "assembly" | "board" | "m" | "m2";
+
+export interface FeatureQuantityLine {
+  key: string;
+  kind: FeatureQuantityKind;
+  component: string;
+  description: string;
+  quantity: number;
+  unit: FeatureQuantityUnit;
+  relatedIds?: string[] | undefined;
 }
 
 export interface TwinBarCutSection {
@@ -185,6 +267,7 @@ export interface EstimateResult {
   posts: PostSummary;
   corners: CornerSummary;
   materials: MaterialSummary;
+  featureQuantities?: FeatureQuantityLine[] | undefined;
   optimization: OptimizationSummary;
   segments: SegmentEstimate[];
 }

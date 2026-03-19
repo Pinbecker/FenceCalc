@@ -4,9 +4,13 @@ import type {
   FloodlightColumnPlacement,
   GatePlacement,
   GateType,
+  GoalUnitPlacement,
+  KickboardAttachment,
   LayoutModel,
   LayoutSegment,
-  PointMm
+  PitchDividerPlacement,
+  PointMm,
+  SideNettingAttachment
 } from "@fence-estimator/contracts";
 import { areOpposite, distanceMm } from "@fence-estimator/geometry";
 
@@ -445,6 +449,106 @@ export function sameFloodlightColumnPlacementList(
   return true;
 }
 
+export function sameGoalUnitPlacement(left: GoalUnitPlacement, right: GoalUnitPlacement): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.centerOffsetMm === right.centerOffsetMm &&
+    left.side === right.side &&
+    left.widthMm === right.widthMm &&
+    left.depthMm === right.depthMm &&
+    left.goalHeightMm === right.goalHeightMm
+  );
+}
+
+export function sameGoalUnitPlacementList(left: GoalUnitPlacement[], right: GoalUnitPlacement[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftGoalUnit = left[index];
+    const rightGoalUnit = right[index];
+    if (!leftGoalUnit || !rightGoalUnit || !sameGoalUnitPlacement(leftGoalUnit, rightGoalUnit)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function sameKickboardAttachment(left: KickboardAttachment, right: KickboardAttachment): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.sectionHeightMm === right.sectionHeightMm &&
+    left.thicknessMm === right.thicknessMm &&
+    left.profile === right.profile &&
+    left.boardLengthMm === right.boardLengthMm
+  );
+}
+
+export function sameKickboardAttachmentList(left: KickboardAttachment[], right: KickboardAttachment[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftKickboard = left[index];
+    const rightKickboard = right[index];
+    if (!leftKickboard || !rightKickboard || !sameKickboardAttachment(leftKickboard, rightKickboard)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function samePitchDividerPlacement(left: PitchDividerPlacement, right: PitchDividerPlacement): boolean {
+  return (
+    left.id === right.id &&
+    left.startAnchor.segmentId === right.startAnchor.segmentId &&
+    left.startAnchor.offsetMm === right.startAnchor.offsetMm &&
+    left.endAnchor.segmentId === right.endAnchor.segmentId &&
+    left.endAnchor.offsetMm === right.endAnchor.offsetMm
+  );
+}
+
+export function samePitchDividerPlacementList(left: PitchDividerPlacement[], right: PitchDividerPlacement[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftPitchDivider = left[index];
+    const rightPitchDivider = right[index];
+    if (!leftPitchDivider || !rightPitchDivider || !samePitchDividerPlacement(leftPitchDivider, rightPitchDivider)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function sameSideNettingAttachment(left: SideNettingAttachment, right: SideNettingAttachment): boolean {
+  return (
+    left.id === right.id &&
+    left.segmentId === right.segmentId &&
+    left.additionalHeightMm === right.additionalHeightMm &&
+    (left.startOffsetMm ?? null) === (right.startOffsetMm ?? null) &&
+    (left.endOffsetMm ?? null) === (right.endOffsetMm ?? null) &&
+    left.extendedPostInterval === right.extendedPostInterval
+  );
+}
+
+export function sameSideNettingAttachmentList(left: SideNettingAttachment[], right: SideNettingAttachment[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftSideNetting = left[index];
+    const rightSideNetting = right[index];
+    if (!leftSideNetting || !rightSideNetting || !sameSideNettingAttachment(leftSideNetting, rightSideNetting)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function samePointApprox(left: PointMm, right: PointMm, epsilon = 0.001): boolean {
   return Math.abs(left.x - right.x) <= epsilon && Math.abs(left.y - right.y) <= epsilon;
 }
@@ -479,7 +583,11 @@ export function sameLayoutModel(left: LayoutModel, right: LayoutModel): boolean 
     sameSegmentList(left.segments, right.segments) &&
     sameGatePlacementList(left.gates ?? [], right.gates ?? []) &&
     sameBasketballPostPlacementList(left.basketballPosts ?? [], right.basketballPosts ?? []) &&
-    sameFloodlightColumnPlacementList(left.floodlightColumns ?? [], right.floodlightColumns ?? [])
+    sameFloodlightColumnPlacementList(left.floodlightColumns ?? [], right.floodlightColumns ?? []) &&
+    sameGoalUnitPlacementList(left.goalUnits ?? [], right.goalUnits ?? []) &&
+    sameKickboardAttachmentList(left.kickboards ?? [], right.kickboards ?? []) &&
+    samePitchDividerPlacementList(left.pitchDividers ?? [], right.pitchDividers ?? []) &&
+    sameSideNettingAttachmentList(left.sideNettings ?? [], right.sideNettings ?? [])
   );
 }
 

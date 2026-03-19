@@ -1,13 +1,48 @@
-import type { GateType } from "@fence-estimator/contracts";
+import type { BasketballArmLengthMm, GateType, GoalUnitHeightMm, GoalUnitWidthMm, KickboardProfile, KickboardSectionHeightMm } from "@fence-estimator/contracts";
 
 interface EditorInteractionPanelProps {
-  interactionMode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
+  interactionMode:
+    | "DRAW"
+    | "SELECT"
+    | "RECTANGLE"
+    | "RECESS"
+    | "GOAL_UNIT"
+    | "GATE"
+    | "BASKETBALL_POST"
+    | "FLOODLIGHT_COLUMN"
+    | "KICKBOARD"
+    | "PITCH_DIVIDER"
+    | "SIDE_NETTING";
   recessWidthInputM: string;
   recessDepthInputM: string;
+  goalUnitWidthMm?: GoalUnitWidthMm;
+  goalUnitHeightMm?: GoalUnitHeightMm;
+  basketballPlacementType?: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST";
+  basketballArmLengthMm?: BasketballArmLengthMm;
+  kickboardSectionHeightMm?: KickboardSectionHeightMm;
+  kickboardProfile?: KickboardProfile;
+  sideNettingHeightMm?: number;
+  pendingPitchDividerStart?:
+    | {
+        segmentId: string;
+        offsetMm: number;
+      }
+    | null;
+  pendingSideNettingStart?:
+    | {
+        segmentId: string;
+        offsetMm: number;
+      }
+    | null;
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
   recessDepthOptionsMm: readonly number[];
+  goalUnitWidthOptionsMm?: readonly GoalUnitWidthMm[];
+  goalUnitHeightOptionsMm?: readonly GoalUnitHeightMm[];
+  basketballArmLengthOptionsMm?: readonly BasketballArmLengthMm[];
+  kickboardSectionHeightOptionsMm?: readonly KickboardSectionHeightMm[];
+  sideNettingHeightOptionsMm?: readonly number[];
   gateWidthOptionsMm: readonly number[];
   recessPreview:
     | {
@@ -50,13 +85,66 @@ interface EditorInteractionPanelProps {
         };
       }
     | null;
+  goalUnitPreview?:
+    | {
+        widthMm: number;
+        depthMm: number;
+        goalHeightMm: number;
+        side: "LEFT" | "RIGHT";
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
+  kickboardPreview?:
+    | {
+        segmentId: string;
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
+  pitchDividerPreview?:
+    | {
+        spanLengthMm: number;
+        isValid: boolean;
+      }
+    | null;
+  sideNettingPreview?:
+    | {
+        lengthMm: number;
+        snapMeta: {
+          label: string;
+        };
+      }
+    | null;
   formatLengthMm: (value: number) => string;
   formatMetersInputFromMm: (value: number) => string;
-  onSetInteractionMode: (mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN") => void;
+  onSetInteractionMode: (
+    mode:
+      | "DRAW"
+      | "SELECT"
+      | "RECTANGLE"
+      | "RECESS"
+      | "GOAL_UNIT"
+      | "GATE"
+      | "BASKETBALL_POST"
+      | "FLOODLIGHT_COLUMN"
+      | "KICKBOARD"
+      | "PITCH_DIVIDER"
+      | "SIDE_NETTING"
+  ) => void;
   onRecessWidthInputChange: (value: string) => void;
   onRecessDepthInputChange: (value: string) => void;
   onNormalizeRecessInputs: () => void;
+  onSetGoalUnitWidthMm?: (value: GoalUnitWidthMm) => void;
+  onSetGoalUnitHeightMm?: (value: GoalUnitHeightMm) => void;
   onSetGateType: (type: GateType) => void;
+  onSetBasketballPlacementType?: (value: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST") => void;
+  onSetBasketballArmLengthMm?: (value: BasketballArmLengthMm) => void;
+  onSetKickboardSectionHeightMm?: (value: KickboardSectionHeightMm) => void;
+  onSetKickboardProfile?: (value: KickboardProfile) => void;
+  onSetSideNettingHeightMm?: (value: number) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;
 }
@@ -65,22 +153,47 @@ export function EditorInteractionPanel({
   interactionMode,
   recessWidthInputM,
   recessDepthInputM,
+  goalUnitWidthMm = 3000,
+  goalUnitHeightMm = 3000,
+  basketballPlacementType = "DEDICATED_POST",
+  basketballArmLengthMm = 1800,
+  kickboardSectionHeightMm = 200,
+  kickboardProfile = "SQUARE",
+  sideNettingHeightMm = 2000,
+  pendingPitchDividerStart = null,
+  pendingSideNettingStart = null,
   gateType,
   customGateWidthInputM,
   recessWidthOptionsMm,
   recessDepthOptionsMm,
+  goalUnitWidthOptionsMm = [3000, 3600, 4800] as const,
+  goalUnitHeightOptionsMm = [3000, 4000] as const,
+  basketballArmLengthOptionsMm = [1200, 1800] as const,
+  kickboardSectionHeightOptionsMm = [200, 225, 250] as const,
+  sideNettingHeightOptionsMm = [500, 1000, 1500, 2000] as const,
   gateWidthOptionsMm,
   recessPreview,
   gatePreview,
   basketballPostPreview,
   floodlightColumnPreview = null,
+  goalUnitPreview = null,
+  kickboardPreview = null,
+  pitchDividerPreview = null,
+  sideNettingPreview = null,
   formatLengthMm,
   formatMetersInputFromMm,
   onSetInteractionMode,
   onRecessWidthInputChange,
   onRecessDepthInputChange,
   onNormalizeRecessInputs,
+  onSetGoalUnitWidthMm = () => undefined,
+  onSetGoalUnitHeightMm = () => undefined,
   onSetGateType,
+  onSetBasketballPlacementType = () => undefined,
+  onSetBasketballArmLengthMm = () => undefined,
+  onSetKickboardSectionHeightMm = () => undefined,
+  onSetKickboardProfile = () => undefined,
+  onSetSideNettingHeightMm = () => undefined,
   onCustomGateWidthInputChange,
   onNormalizeGateInputs
 }: EditorInteractionPanelProps) {
@@ -92,7 +205,7 @@ export function EditorInteractionPanel({
           <p className="muted-line">Choose the canvas task first, then adjust the mode-specific settings below.</p>
         </div>
       </div>
-      <div className="mode-toggle-row mode-toggle-row-6" role="tablist" aria-label="Interaction mode">
+      <div className="mode-toggle-row" role="tablist" aria-label="Interaction mode" style={{ flexWrap: "wrap" }}>
         <button type="button" className={`mode-toggle-btn${interactionMode === "DRAW" ? " active" : ""}`} onClick={() => onSetInteractionMode("DRAW")}>
           Draw
         </button>
@@ -108,6 +221,9 @@ export function EditorInteractionPanel({
         </button>
         <button type="button" className={`mode-toggle-btn${interactionMode === "RECESS" ? " active" : ""}`} onClick={() => onSetInteractionMode("RECESS")}>
           Recess
+        </button>
+        <button type="button" className={`mode-toggle-btn${interactionMode === "GOAL_UNIT" ? " active" : ""}`} onClick={() => onSetInteractionMode("GOAL_UNIT")}>
+          Goal Unit
         </button>
         <button type="button" className={`mode-toggle-btn${interactionMode === "GATE" ? " active" : ""}`} onClick={() => onSetInteractionMode("GATE")}>
           Gate
@@ -125,6 +241,15 @@ export function EditorInteractionPanel({
           onClick={() => onSetInteractionMode("FLOODLIGHT_COLUMN")}
         >
           Floodlight
+        </button>
+        <button type="button" className={`mode-toggle-btn${interactionMode === "KICKBOARD" ? " active" : ""}`} onClick={() => onSetInteractionMode("KICKBOARD")}>
+          Kickboard
+        </button>
+        <button type="button" className={`mode-toggle-btn${interactionMode === "PITCH_DIVIDER" ? " active" : ""}`} onClick={() => onSetInteractionMode("PITCH_DIVIDER")}>
+          Pitch Divider
+        </button>
+        <button type="button" className={`mode-toggle-btn${interactionMode === "SIDE_NETTING" ? " active" : ""}`} onClick={() => onSetInteractionMode("SIDE_NETTING")}>
+          Side Netting
         </button>
       </div>
       {interactionMode === "DRAW" ? (
@@ -180,6 +305,40 @@ export function EditorInteractionPanel({
           )}
         </>
       ) : null}
+      {interactionMode === "GOAL_UNIT" ? (
+        <>
+          <label>
+            Goal Unit Width
+            <select value={goalUnitWidthMm} onChange={(event) => onSetGoalUnitWidthMm(Number(event.target.value) as GoalUnitWidthMm)}>
+              {goalUnitWidthOptionsMm.map((value) => (
+                <option key={value} value={value}>
+                  {formatLengthMm(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Goal Unit Height
+            <select value={goalUnitHeightMm} onChange={(event) => onSetGoalUnitHeightMm(Number(event.target.value) as GoalUnitHeightMm)}>
+              {goalUnitHeightOptionsMm.map((value) => (
+                <option key={value} value={value}>
+                  {formatLengthMm(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {goalUnitPreview ? (
+            <>
+              <p className="muted-line">
+                Goal unit {formatLengthMm(goalUnitPreview.widthMm)} x {formatLengthMm(goalUnitPreview.goalHeightMm)} at {formatLengthMm(goalUnitPreview.depthMm)} deep.
+              </p>
+              <p className="muted-line">Snap {goalUnitPreview.snapMeta.label}. Side: {goalUnitPreview.side.toLowerCase()}.</p>
+            </>
+          ) : (
+            <p className="muted-line">Hover near a fence line and click to place a predefined recessed goal unit.</p>
+          )}
+        </>
+      ) : null}
       {interactionMode === "GATE" ? (
         <>
           <div className="mode-toggle-row mode-toggle-row-3">
@@ -226,16 +385,37 @@ export function EditorInteractionPanel({
         </>
       ) : null}
       {interactionMode === "BASKETBALL_POST" ? (
-        basketballPostPreview ? (
-          <>
-            <p className="muted-line">
-              Basketball post at {formatLengthMm(basketballPostPreview.offsetMm)} facing {basketballPostPreview.facing.toLowerCase()}.
-            </p>
-            <p className="muted-line">Snap {basketballPostPreview.snapMeta.label}. Hover either side of the run to flip the arm.</p>
-          </>
-        ) : (
-          <p className="muted-line">Hover either side of a fence line and click to place a basketball post with the arm facing that side.</p>
-        )
+        <>
+          <label>
+            Basketball Type
+            <select value={basketballPlacementType} onChange={(event) => onSetBasketballPlacementType(event.target.value as "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST")}>
+              <option value="DEDICATED_POST">Dedicated post</option>
+              <option value="MOUNTED_TO_EXISTING_POST">Mounted to existing post</option>
+            </select>
+          </label>
+          {basketballPlacementType === "DEDICATED_POST" ? (
+            <label>
+              Arm Length
+              <select value={basketballArmLengthMm} onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value) as BasketballArmLengthMm)}>
+                {basketballArmLengthOptionsMm.map((value) => (
+                  <option key={value} value={value}>
+                    {formatLengthMm(value)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {basketballPostPreview ? (
+            <>
+              <p className="muted-line">
+                Basketball {basketballPlacementType === "DEDICATED_POST" ? "post" : "mount"} at {formatLengthMm(basketballPostPreview.offsetMm)} facing {basketballPostPreview.facing.toLowerCase()}.
+              </p>
+              <p className="muted-line">Snap {basketballPostPreview.snapMeta.label}. Hover either side of the run to flip orientation.</p>
+            </>
+          ) : (
+            <p className="muted-line">Hover either side of a valid fence line and click to place basketball equipment on an intermediate post.</p>
+          )}
+        </>
       ) : null}
       {interactionMode === "FLOODLIGHT_COLUMN" ? (
         floodlightColumnPreview ? (
@@ -248,6 +428,70 @@ export function EditorInteractionPanel({
         ) : (
           <p className="muted-line">Hover a fence line and click to place a floodlight column. Nearby corners snap automatically.</p>
         )
+      ) : null}
+      {interactionMode === "KICKBOARD" ? (
+        <>
+          <label>
+            Kickboard Section
+            <select value={kickboardSectionHeightMm} onChange={(event) => onSetKickboardSectionHeightMm(Number(event.target.value) as KickboardSectionHeightMm)}>
+              {kickboardSectionHeightOptionsMm.map((value) => (
+                <option key={value} value={value}>
+                  {value} x 50
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Profile
+            <select value={kickboardProfile} onChange={(event) => onSetKickboardProfile(event.target.value as KickboardProfile)}>
+              <option value="SQUARE">Square</option>
+              <option value="CHAMFERED">Chamfered</option>
+            </select>
+          </label>
+          {kickboardPreview ? (
+            <p className="muted-line">Click to apply kickboards to the hovered fence line. Click again in this mode to replace the existing kickboard on that line.</p>
+          ) : (
+            <p className="muted-line">Hover a fence line and click to apply kickboards.</p>
+          )}
+        </>
+      ) : null}
+      {interactionMode === "PITCH_DIVIDER" ? (
+        <>
+          {pendingPitchDividerStart ? (
+            <p className="muted-line">Start anchor set at {formatLengthMm(pendingPitchDividerStart.offsetMm)}. Hover another fence line and click to finish the divider.</p>
+          ) : (
+            <p className="muted-line">Click the first fence-line anchor, then click the second fence-line anchor to create a divider.</p>
+          )}
+          {pitchDividerPreview ? (
+            <p className="muted-line">
+              Span {formatLengthMm(pitchDividerPreview.spanLengthMm)}. {pitchDividerPreview.isValid ? "Valid divider." : "Invalid: exceeds 70m."}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      {interactionMode === "SIDE_NETTING" ? (
+        <>
+          <label>
+            Additional Height
+            <select value={sideNettingHeightMm} onChange={(event) => onSetSideNettingHeightMm(Number(event.target.value))}>
+              {sideNettingHeightOptionsMm.map((value) => (
+                <option key={value} value={value}>
+                  {formatLengthMm(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {pendingSideNettingStart ? (
+            <p className="muted-line">Start post set at {formatLengthMm(pendingSideNettingStart.offsetMm)}. Click a second existing post on the same fence line to finish the side-netting run.</p>
+          ) : (
+            <p className="muted-line">Click a start post on the fence line, then click the end post to define the covered run.</p>
+          )}
+          {sideNettingPreview ? (
+            <p className="muted-line">Side-netting run {formatLengthMm(sideNettingPreview.lengthMm)}. Click to apply.</p>
+          ) : (
+            <p className="muted-line">Hover a fence line to snap the next point.</p>
+          )}
+        </>
       ) : null}
     </section>
   );

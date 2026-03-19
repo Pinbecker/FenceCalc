@@ -8,11 +8,16 @@ import type {
   FloodlightColumnPlacement,
   GatePlacement,
   GateType,
+  GoalUnitPlacement,
+  KickboardAttachment,
   LayoutModel,
   LayoutSegment,
-  PointMm
+  PitchDividerPlacement,
+  PointMm,
+  SideNettingAttachment
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
+import { findOppositeBasketballPairCandidate } from "@fence-estimator/rules-engine";
 
 import { formatMetersInputFromMm } from "../formatters";
 import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, parseMetersInputToMm, quantize } from "./constants";
@@ -37,11 +42,16 @@ import type {
   DrawResolveResult,
   FloodlightColumnInsertionPreview,
   GateInsertionPreview,
+  GoalUnitInsertionPreview,
   InteractionMode,
+  PitchDividerAnchorPreview,
+  PitchDividerSpanPreview,
   RecessInsertionPreview,
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
+  SegmentAttachmentPreview,
+  SegmentRangePreview,
   SegmentConnectivity
 } from "./types";
 
@@ -86,6 +96,7 @@ interface UseEditorCommandsOptions {
   applyGatePlacements: (updater: (previous: GatePlacement[]) => GatePlacement[]) => void;
   applyBasketballPostPlacements: (updater: (previous: BasketballPostPlacement[]) => BasketballPostPlacement[]) => void;
   applyFloodlightColumnPlacements?: (updater: (previous: FloodlightColumnPlacement[]) => FloodlightColumnPlacement[]) => void;
+  segments?: LayoutSegment[];
   segmentsById: Map<string, LayoutSegment>;
   resolvedGateById: Map<string, ResolvedGatePlacement>;
   resolvedBasketballPostById: Map<string, ResolvedBasketballPostPlacement>;
@@ -93,7 +104,16 @@ interface UseEditorCommandsOptions {
   connectivity: SegmentConnectivity;
   activeSpec: FenceSpec;
   interactionMode: InteractionMode;
+  goalUnitDepthMm?: number;
+  goalUnitHeightMm?: 3000 | 4000;
   gateType: GateType;
+  basketballPlacementType?: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST";
+  basketballArmLengthMm?: 1200 | 1800;
+  kickboardSectionHeightMm?: 200 | 225 | 250;
+  kickboardProfile?: "SQUARE" | "CHAMFERED";
+  sideNettingHeightMm?: number;
+  pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
+  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   drawStart: PointMm | null;
   drawChainStart: PointMm | null;
   rectangleStart: PointMm | null;
@@ -112,11 +132,19 @@ interface UseEditorCommandsOptions {
   recessDepthMm: number;
   customGateWidthMm: number;
   recessPreview: RecessInsertionPreview | null;
+  goalUnitPreview?: GoalUnitInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
   basketballPostPreview: BasketballPostInsertionPreview | null;
   floodlightColumnPreview?: FloodlightColumnInsertionPreview | null;
+  kickboardPreview?: SegmentAttachmentPreview | null;
+  pitchDividerAnchorPreview?: PitchDividerAnchorPreview | null;
+  pitchDividerPreview?: PitchDividerSpanPreview | null;
+  sideNettingAnchorPreview?: PitchDividerAnchorPreview | null;
+  sideNettingPreview?: SegmentRangePreview | null;
   resolveBasketballPostPreview: (worldPoint: PointMm) => BasketballPostInsertionPreview | null;
   resolveFloodlightColumnPreview?: (worldPoint: PointMm) => FloodlightColumnInsertionPreview | null;
+  resolvePitchDividerAnchorPreview?: (worldPoint: PointMm) => PitchDividerAnchorPreview | null;
+  resolveSideNettingAnchorPreview?: (worldPoint: PointMm) => PitchDividerAnchorPreview | null;
   resolveDrawPoint: (worldPoint: PointMm) => DrawResolveResult;
   toWorld: (screenPoint: PointerScreenPoint) => PointMm;
   beginPan: (pointer: PointerScreenPoint) => void;
@@ -144,6 +172,8 @@ interface UseEditorCommandsOptions {
   setRecessDepthInputM: Dispatch<SetStateAction<string>>;
   setCustomGateWidthMm: Dispatch<SetStateAction<number>>;
   setCustomGateWidthInputM: Dispatch<SetStateAction<string>>;
+  setPendingPitchDividerStart?: Dispatch<SetStateAction<PitchDividerAnchorPreview | null>>;
+  setPendingSideNettingStart?: Dispatch<SetStateAction<PitchDividerAnchorPreview | null>>;
 }
 
 export function useEditorCommands({
@@ -153,6 +183,7 @@ export function useEditorCommands({
   applyGatePlacements,
   applyBasketballPostPlacements,
   applyFloodlightColumnPlacements = () => undefined,
+  segments,
   segmentsById,
   resolvedGateById,
   resolvedBasketballPostById,
@@ -160,7 +191,16 @@ export function useEditorCommands({
   connectivity,
   activeSpec,
   interactionMode,
+  goalUnitDepthMm = 1200,
+  goalUnitHeightMm = 3000,
   gateType,
+  basketballPlacementType = "DEDICATED_POST",
+  basketballArmLengthMm = 1800,
+  kickboardSectionHeightMm = 200,
+  kickboardProfile = "SQUARE",
+  sideNettingHeightMm = 2000,
+  pendingPitchDividerStart = null,
+  pendingSideNettingStart = null,
   drawStart,
   drawChainStart,
   rectangleStart,
@@ -179,11 +219,19 @@ export function useEditorCommands({
   recessDepthMm,
   customGateWidthMm,
   recessPreview,
+  goalUnitPreview = null,
   gatePreview,
   basketballPostPreview,
   floodlightColumnPreview = null,
+  kickboardPreview = null,
+  pitchDividerAnchorPreview = null,
+  pitchDividerPreview = null,
+  sideNettingAnchorPreview = null,
+  sideNettingPreview = null,
   resolveBasketballPostPreview,
   resolveFloodlightColumnPreview = () => null,
+  resolvePitchDividerAnchorPreview = () => null,
+  resolveSideNettingAnchorPreview = () => null,
   resolveDrawPoint,
   toWorld,
   beginPan,
@@ -210,8 +258,11 @@ export function useEditorCommands({
   setRecessWidthInputM,
   setRecessDepthInputM,
   setCustomGateWidthMm,
-  setCustomGateWidthInputM
+  setCustomGateWidthInputM,
+  setPendingPitchDividerStart = () => null,
+  setPendingSideNettingStart = () => null
 }: UseEditorCommandsOptions) {
+  const availableSegments = segments ?? [...segmentsById.values()];
   const updateSegment = useCallback(
     (segmentId: string, updater: (segment: LayoutSegment) => LayoutSegment): void => {
       applySegments((previous) =>
@@ -620,6 +671,7 @@ export function useEditorCommands({
           nextSegments.push(...replacement);
         }
         return {
+          ...previous,
           segments: nextSegments,
           gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById, replacement),
           basketballPosts: remapBasketballPostPlacementsForRecess(previous.basketballPosts ?? [], preview, replacement),
@@ -678,23 +730,39 @@ export function useEditorCommands({
     [applyGatePlacements, gateType, setDrawChainStart, setDrawStart, setSelectedBasketballPostId, setSelectedFloodlightColumnId, setSelectedSegmentId]
   );
 
-  const insertBasketballPost = useCallback(
-    (preview: BasketballPostInsertionPreview): void => {
-      applyBasketballPostPlacements((previous) => {
-        const nextBasketballPost: BasketballPostPlacement = {
+  const insertGoalUnit = useCallback(
+    (preview: GoalUnitInsertionPreview): void => {
+      applyLayout((previous) => {
+        const nextGoalUnit: GoalUnitPlacement = {
           id: crypto.randomUUID(),
           segmentId: preview.segment.id,
-          offsetMm: preview.offsetMm,
-          facing: preview.facing
+          centerOffsetMm: (preview.startOffsetMm + preview.endOffsetMm) / 2,
+          side: preview.side,
+          widthMm: preview.widthMm as GoalUnitPlacement["widthMm"],
+          depthMm: goalUnitDepthMm,
+          goalHeightMm: goalUnitHeightMm
         };
-        const next = previous.filter(
-          (placement) =>
-            placement.segmentId !== nextBasketballPost.segmentId ||
-            Math.abs(placement.offsetMm - nextBasketballPost.offsetMm) > DRAW_INCREMENT_MM * 0.5
-        );
-        next.push(nextBasketballPost);
-        next.sort((left, right) => left.id.localeCompare(right.id));
-        return next;
+        const nextStartOffsetMm = nextGoalUnit.centerOffsetMm - nextGoalUnit.widthMm / 2;
+        const nextEndOffsetMm = nextGoalUnit.centerOffsetMm + nextGoalUnit.widthMm / 2;
+        const goalUnits = (previous.goalUnits ?? []).filter((placement) => {
+          if (placement.segmentId !== nextGoalUnit.segmentId) {
+            return true;
+          }
+          const placementStartOffsetMm = placement.centerOffsetMm - placement.widthMm / 2;
+          const placementEndOffsetMm = placement.centerOffsetMm + placement.widthMm / 2;
+          return !rangesOverlap(
+            placementStartOffsetMm,
+            placementEndOffsetMm,
+            nextStartOffsetMm,
+            nextEndOffsetMm
+          );
+        });
+        goalUnits.push(nextGoalUnit);
+        goalUnits.sort((left, right) => left.id.localeCompare(right.id));
+        return {
+          ...previous,
+          goalUnits
+        };
       });
       setSelectedSegmentId(null);
       setSelectedGateId(null);
@@ -703,7 +771,101 @@ export function useEditorCommands({
       setDrawStart(null);
       setDrawChainStart(null);
     },
-    [applyBasketballPostPlacements, setDrawChainStart, setDrawStart, setSelectedBasketballPostId, setSelectedFloodlightColumnId, setSelectedGateId, setSelectedSegmentId]
+    [
+      applyLayout,
+      goalUnitDepthMm,
+      goalUnitHeightMm,
+      setDrawChainStart,
+      setDrawStart,
+      setSelectedBasketballPostId,
+      setSelectedFloodlightColumnId,
+      setSelectedGateId,
+      setSelectedSegmentId
+    ]
+  );
+
+  const insertBasketballPost = useCallback(
+    (preview: BasketballPostInsertionPreview): void => {
+      const pairCandidate = findOppositeBasketballPairCandidate(
+        availableSegments,
+        preview.segment.id,
+        preview.offsetMm,
+        preview.facing
+      );
+      applyBasketballPostPlacements((previous) => {
+        const nextBasketballPostId = crypto.randomUUID();
+        const basePlacement: BasketballPostPlacement = {
+          id: nextBasketballPostId,
+          segmentId: preview.segment.id,
+          offsetMm: preview.offsetMm,
+          facing: preview.facing,
+          type: basketballPlacementType,
+          mountingMode: basketballPlacementType === "DEDICATED_POST" ? "PROJECTING_ARM" : "POST_MOUNTED",
+          armLengthMm: basketballPlacementType === "DEDICATED_POST" ? basketballArmLengthMm : undefined,
+          replacesIntermediatePost: basketballPlacementType === "DEDICATED_POST"
+        };
+        const pairedBasketballPostId = pairCandidate ? crypto.randomUUID() : null;
+        const nextBasketballPost: BasketballPostPlacement = pairCandidate
+          ? {
+              ...basePlacement,
+              pairedFeatureId: pairedBasketballPostId
+            }
+          : basePlacement;
+        const pairedPlacement =
+          pairCandidate && pairedBasketballPostId
+            ? ({
+                id: pairedBasketballPostId,
+                segmentId: pairCandidate.segmentId,
+                offsetMm: pairCandidate.offsetMm,
+                facing: pairCandidate.facing,
+                type: basketballPlacementType,
+                mountingMode: basketballPlacementType === "DEDICATED_POST" ? "PROJECTING_ARM" : "POST_MOUNTED",
+                armLengthMm: basketballPlacementType === "DEDICATED_POST" ? basketballArmLengthMm : undefined,
+                pairedFeatureId: nextBasketballPostId,
+                replacesIntermediatePost: basketballPlacementType === "DEDICATED_POST"
+              } satisfies BasketballPostPlacement)
+            : null;
+        const next = previous.filter((placement) => {
+          const conflictsWithSource =
+            placement.segmentId === nextBasketballPost.segmentId &&
+            Math.abs(placement.offsetMm - nextBasketballPost.offsetMm) <= DRAW_INCREMENT_MM * 0.5;
+          const conflictsWithPair =
+            pairedPlacement !== null &&
+            placement.segmentId === pairedPlacement.segmentId &&
+            Math.abs(placement.offsetMm - pairedPlacement.offsetMm) <= DRAW_INCREMENT_MM * 0.5;
+          return !conflictsWithSource && !conflictsWithPair;
+        });
+        next.push(nextBasketballPost);
+        if (pairedPlacement) {
+          next.push(pairedPlacement);
+        }
+        next.sort((left, right) => left.id.localeCompare(right.id));
+        return next;
+      });
+      if (!pairCandidate) {
+        globalThis.window?.alert?.(
+          "No valid opposite basketball location was found. The first set was placed; partner selection UI is still TODO."
+        );
+      }
+      setSelectedSegmentId(null);
+      setSelectedGateId(null);
+      setSelectedBasketballPostId(null);
+      setSelectedFloodlightColumnId(null);
+      setDrawStart(null);
+      setDrawChainStart(null);
+    },
+    [
+      applyBasketballPostPlacements,
+      basketballArmLengthMm,
+      basketballPlacementType,
+      availableSegments,
+      setDrawChainStart,
+      setDrawStart,
+      setSelectedBasketballPostId,
+      setSelectedFloodlightColumnId,
+      setSelectedGateId,
+      setSelectedSegmentId
+    ]
   );
 
   const insertFloodlightColumn = useCallback(
@@ -740,6 +902,82 @@ export function useEditorCommands({
       setSelectedGateId,
       setSelectedSegmentId
     ]
+  );
+
+  const applyKickboardAttachment = useCallback(
+    (preview: SegmentAttachmentPreview): void => {
+      applyLayout((previous) => {
+        const nextKickboard: KickboardAttachment = {
+          id: crypto.randomUUID(),
+          segmentId: preview.segment.id,
+          sectionHeightMm: kickboardSectionHeightMm,
+          thicknessMm: 50,
+          profile: kickboardProfile,
+          boardLengthMm: 2500
+        };
+        const kickboards = (previous.kickboards ?? []).filter((attachment) => attachment.segmentId !== nextKickboard.segmentId);
+        kickboards.push(nextKickboard);
+        kickboards.sort((left, right) => left.id.localeCompare(right.id));
+        return {
+          ...previous,
+          kickboards
+        };
+      });
+    },
+    [applyLayout, kickboardProfile, kickboardSectionHeightMm]
+  );
+
+  const applySideNettingAttachment = useCallback(
+    (preview: SegmentRangePreview): void => {
+      applyLayout((previous) => {
+        const nextSideNetting: SideNettingAttachment = {
+          id: crypto.randomUUID(),
+          segmentId: preview.segment.id,
+          additionalHeightMm: sideNettingHeightMm,
+          startOffsetMm: preview.startOffsetMm,
+          endOffsetMm: preview.endOffsetMm,
+          extendedPostInterval: 3
+        };
+        const sideNettings = (previous.sideNettings ?? []).filter((attachment) => attachment.segmentId !== nextSideNetting.segmentId);
+        sideNettings.push(nextSideNetting);
+        sideNettings.sort((left, right) => left.id.localeCompare(right.id));
+        return {
+          ...previous,
+          sideNettings
+        };
+      });
+    },
+    [applyLayout, sideNettingHeightMm]
+  );
+
+  const applyPitchDividerPlacement = useCallback(
+    (preview: PitchDividerSpanPreview): void => {
+      if (!preview.isValid) {
+        return;
+      }
+      applyLayout((previous) => {
+        const nextPitchDivider: PitchDividerPlacement = {
+          id: crypto.randomUUID(),
+          startAnchor: {
+            segmentId: preview.startAnchor.segment.id,
+            offsetMm: preview.startAnchor.offsetMm
+          },
+          endAnchor: {
+            segmentId: preview.endAnchor.segment.id,
+            offsetMm: preview.endAnchor.offsetMm
+          }
+        };
+        const pitchDividers = [...(previous.pitchDividers ?? []), nextPitchDivider].sort((left, right) =>
+          left.id.localeCompare(right.id)
+        );
+        return {
+          ...previous,
+          pitchDividers
+        };
+      });
+      setPendingPitchDividerStart(null);
+    },
+    [applyLayout, setPendingPitchDividerStart]
   );
 
   const onStageMouseDown = useCallback(
@@ -793,6 +1031,13 @@ export function useEditorCommands({
         return;
       }
 
+      if (interactionMode === "GOAL_UNIT") {
+        if (goalUnitPreview) {
+          insertGoalUnit(goalUnitPreview);
+        }
+        return;
+      }
+
       if (interactionMode === "GATE") {
         if (gatePreview) {
           insertGate(gatePreview);
@@ -816,6 +1061,50 @@ export function useEditorCommands({
         return;
       }
 
+      if (interactionMode === "KICKBOARD") {
+        if (kickboardPreview) {
+          applyKickboardAttachment(kickboardPreview);
+        }
+        return;
+      }
+
+      if (interactionMode === "SIDE_NETTING") {
+        const resolvedAnchor = sideNettingAnchorPreview ?? resolveSideNettingAnchorPreview(world);
+        if (!pendingSideNettingStart) {
+          if (resolvedAnchor) {
+            setPendingSideNettingStart(resolvedAnchor);
+          }
+          return;
+        }
+        if (sideNettingPreview) {
+          applySideNettingAttachment(sideNettingPreview);
+          setPendingSideNettingStart(null);
+          return;
+        }
+        if (resolvedAnchor) {
+          setPendingSideNettingStart(resolvedAnchor);
+        }
+        return;
+      }
+
+      if (interactionMode === "PITCH_DIVIDER") {
+        const resolvedAnchor = pitchDividerAnchorPreview ?? resolvePitchDividerAnchorPreview(world);
+        if (!pendingPitchDividerStart) {
+          if (resolvedAnchor) {
+            setPendingPitchDividerStart(resolvedAnchor);
+          }
+          return;
+        }
+        if (pitchDividerPreview?.isValid) {
+          applyPitchDividerPlacement(pitchDividerPreview);
+          return;
+        }
+        if (resolvedAnchor) {
+          setPendingPitchDividerStart(resolvedAnchor);
+        }
+        return;
+      }
+
       if (interactionMode === "RECTANGLE") {
         startOrCommitRectangle(world);
         return;
@@ -829,16 +1118,32 @@ export function useEditorCommands({
       floodlightColumnPreview,
       insertBasketballPost,
       insertFloodlightColumn,
+      insertGoalUnit,
       gatePreview,
       insertGate,
+      goalUnitPreview,
+      kickboardPreview,
+      applyKickboardAttachment,
+      applyPitchDividerPlacement,
       insertRecess,
       interactionMode,
       isSpacePressed,
+      pendingPitchDividerStart,
+      pendingSideNettingStart,
+      pitchDividerAnchorPreview,
+      pitchDividerPreview,
       recessPreview,
+      resolvePitchDividerAnchorPreview,
+      resolveSideNettingAnchorPreview,
+      setPendingPitchDividerStart,
+      setPendingSideNettingStart,
       setSelectedBasketballPostId,
       setSelectedFloodlightColumnId,
       setSelectedGateId,
       setSelectedSegmentId,
+      sideNettingAnchorPreview,
+      sideNettingPreview,
+      applySideNettingAttachment,
       resolveBasketballPostPreview,
       resolveFloodlightColumnPreview,
       stageRef,
@@ -1057,8 +1362,10 @@ export function useEditorCommands({
       setDrawStart(null);
       setRectangleStart(null);
       setDrawChainStart(null);
+      setPendingPitchDividerStart(null);
+      setPendingSideNettingStart(null);
     },
-    [setDrawChainStart, setDrawStart, setRectangleStart]
+    [setDrawChainStart, setDrawStart, setPendingPitchDividerStart, setPendingSideNettingStart, setRectangleStart]
   );
 
   const deleteSelectedGate = useCallback((): boolean => {
@@ -1107,15 +1414,36 @@ export function useEditorCommands({
     setDrawStart(null);
     setRectangleStart(null);
     setDrawChainStart(null);
+    setPendingPitchDividerStart(null);
+    setPendingSideNettingStart(null);
     setSelectedBasketballPostId(null);
     setSelectedFloodlightColumnId(null);
-  }, [setDrawChainStart, setDrawStart, setRectangleStart, setSelectedBasketballPostId, setSelectedFloodlightColumnId]);
+  }, [
+    setDrawChainStart,
+    setDrawStart,
+    setPendingPitchDividerStart,
+    setPendingSideNettingStart,
+    setRectangleStart,
+    setSelectedBasketballPostId,
+    setSelectedFloodlightColumnId
+  ]);
 
   const resetWorkspaceCanvas = useCallback((): void => {
-    applyLayout(() => ({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] }));
+    applyLayout(() => ({
+      segments: [],
+      gates: [],
+      basketballPosts: [],
+      floodlightColumns: [],
+      goalUnits: [],
+      kickboards: [],
+      pitchDividers: [],
+      sideNettings: []
+    }));
     setDrawStart(null);
     setDrawChainStart(null);
     setRectangleStart(null);
+    setPendingPitchDividerStart(null);
+    setPendingSideNettingStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
@@ -1127,6 +1455,8 @@ export function useEditorCommands({
     setDrawChainStart,
     setDrawStart,
     setIsLengthEditorOpen,
+    setPendingPitchDividerStart,
+    setPendingSideNettingStart,
     setRectangleStart,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId,
@@ -1149,9 +1479,20 @@ export function useEditorCommands({
   }, [deleteSelectedBasketballPost, deleteSelectedFloodlightColumn, deleteSelectedGate, deleteSelectedSegment]);
 
   const handleClearLayout = useCallback((): void => {
-    applyLayout(() => ({ segments: [], gates: [], basketballPosts: [], floodlightColumns: [] }));
+    applyLayout(() => ({
+      segments: [],
+      gates: [],
+      basketballPosts: [],
+      floodlightColumns: [],
+      goalUnits: [],
+      kickboards: [],
+      pitchDividers: [],
+      sideNettings: []
+    }));
     setDrawStart(null);
     setDrawChainStart(null);
+    setPendingPitchDividerStart(null);
+    setPendingSideNettingStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
@@ -1160,6 +1501,8 @@ export function useEditorCommands({
     applyLayout,
     setDrawChainStart,
     setDrawStart,
+    setPendingPitchDividerStart,
+    setPendingSideNettingStart,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId,
     setSelectedGateId,

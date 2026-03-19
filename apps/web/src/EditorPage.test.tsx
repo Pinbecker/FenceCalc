@@ -3,7 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
 
-type InteractionMode = "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN";
+type InteractionMode =
+  | "DRAW"
+  | "SELECT"
+  | "RECTANGLE"
+  | "RECESS"
+  | "GOAL_UNIT"
+  | "GATE"
+  | "BASKETBALL_POST"
+  | "FLOODLIGHT_COLUMN"
+  | "KICKBOARD"
+  | "PITCH_DIVIDER"
+  | "SIDE_NETTING";
 
 const mockSelectionState = {
   drawStart: null,
@@ -41,6 +52,15 @@ const mockShellState = {
   recessWidthMm: 1500,
   recessDepthMm: 1000,
   recessSide: "AUTO" as const,
+  goalUnitWidthMm: 3000 as const,
+  goalUnitHeightMm: 3000 as const,
+  goalUnitDepthMm: 1200,
+  basketballPlacementType: "DEDICATED_POST" as const,
+  basketballArmLengthMm: 1800 as const,
+  kickboardSectionHeightMm: 200 as const,
+  kickboardProfile: "SQUARE" as const,
+  sideNettingHeightMm: 2000,
+  pendingPitchDividerStart: null,
   gateType: "SINGLE_LEAF" as const,
   customGateWidthMm: 1200,
   customGateWidthInputM: "1.20",
@@ -65,6 +85,14 @@ const mockShellState = {
   setCustomGateWidthMm: vi.fn(),
   setCustomGateWidthInputM: vi.fn(),
   setRecessSide: vi.fn(),
+  setGoalUnitWidthMm: vi.fn(),
+  setGoalUnitHeightMm: vi.fn(),
+  setBasketballPlacementType: vi.fn(),
+  setBasketballArmLengthMm: vi.fn(),
+  setKickboardSectionHeightMm: vi.fn(),
+  setKickboardProfile: vi.fn(),
+  setSideNettingHeightMm: vi.fn(),
+  setPendingPitchDividerStart: vi.fn(),
   setGateType: vi.fn(),
   setActiveSpec: vi.fn(),
   setIsOptimizationInspectorOpen: vi.fn(),
@@ -274,6 +302,7 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
     axisGuide: null,
     drawHoverSnap: null,
     basketballPostPreview: null,
+    goalUnitPreview: null,
     floodlightColumnPreview: null,
     drawSnapLabel: null,
     gatePreview: null,
@@ -284,10 +313,15 @@ vi.mock("./editor/useEditorInteractionPreviews", () => ({
     hoveredFloodlightColumnId: null,
     hoveredGateId: null,
     hoveredSegmentId: null,
+    kickboardPreview: null,
+    pitchDividerAnchorPreview: null,
+    pitchDividerPreview: null,
     rectanglePreviewEnd: null,
     recessPreview: null,
     resolveBasketballPostPreview: vi.fn(),
     resolveFloodlightColumnPreview: vi.fn(),
+    resolvePitchDividerAnchorPreview: vi.fn(),
+    sideNettingPreview: null,
     closeLoopPoint: null,
     resolveDrawPoint: vi.fn()
   })
@@ -342,10 +376,14 @@ vi.mock("./editor", () => ({
   formatHeightLabelFromMm: (value: number) => `${value}mm`,
   formatLengthMm: (value: number) => `${value} mm`,
   formatMetersInputFromMm: (value: number) => `${(value / 1000).toFixed(2)}`,
+  GOAL_UNIT_WIDTH_OPTIONS_MM: [3000, 3600, 4800],
+  GOAL_UNIT_HEIGHT_OPTIONS_MM: [3000, 4000],
+  BASKETBALL_ARM_LENGTH_OPTIONS_MM: [1200, 1800],
   GATE_WIDTH_OPTIONS_MM: [1200, 1800],
   getSegmentColor: () => "#a9d6ff",
   historyReducer: (state: unknown) => state,
   INITIAL_VISIBLE_WIDTH_MM: 150000,
+  KICKBOARD_SECTION_HEIGHT_OPTIONS_MM: [200, 225, 250],
   MAX_SCALE: 3,
   MIN_SCALE: 0.003,
   OptimizationPlanner: ({ canInspect }: { canInspect: boolean }) => <div>{`OptimizationPlanner ${canInspect}`}</div>,
@@ -354,6 +392,7 @@ vi.mock("./editor", () => ({
   RECESS_WIDTH_OPTIONS_MM: [500, 1000],
   ROLL_FORM_HEIGHT_OPTIONS: ["2m", "3m"],
   samePointApprox: () => true,
+  SIDE_NETTING_HEIGHT_OPTIONS_MM: [500, 1000, 1500, 2000],
   TWIN_BAR_HEIGHT_OPTIONS: ["2m", "2.4m"],
   useEditorKeyboardShortcuts: vi.fn()
 }));

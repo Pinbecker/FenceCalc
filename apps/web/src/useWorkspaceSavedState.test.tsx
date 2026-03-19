@@ -9,7 +9,11 @@ const emptyLayout: LayoutModel = {
   segments: [],
   gates: [],
   basketballPosts: [],
-  floodlightColumns: []
+  floodlightColumns: [],
+  goalUnits: [],
+  kickboards: [],
+  pitchDividers: [],
+  sideNettings: []
 };
 
 describe("useWorkspaceSavedState", () => {

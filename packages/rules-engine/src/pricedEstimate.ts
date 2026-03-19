@@ -137,7 +137,8 @@ export function buildPricedEstimate(
   const warnings: EstimateWarning[] = [];
   const gateCounts = countGateTypes(drawing.layout);
   const floodlightColumnCount = drawing.layout.floodlightColumns?.length ?? 0;
-  const basketballPostCount = drawing.layout.basketballPosts?.length ?? 0;
+  const basketballFeatures = drawing.layout.basketballFeatures ?? drawing.layout.basketballPosts ?? [];
+  const basketballPostCount = basketballFeatures.filter((feature) => (feature.type ?? "DEDICATED_POST") === "DEDICATED_POST").length;
   const fenceConcreteVolumeM3 = calculateFenceConcreteVolumeM3(drawing.estimate.posts.byHeightMm);
   const floodlightConcreteVolumeM3 =
     floodlightColumnCount * calculateConcreteVolumeFromDimensionsMm(FLOODLIGHT_COLUMN_BASE_MM);

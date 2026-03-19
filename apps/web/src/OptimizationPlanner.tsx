@@ -14,6 +14,12 @@ import type {
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement
 } from "./editor/types.js";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 
 interface OptimizationPlannerProps {
   summary: OptimizationSummary;
@@ -21,6 +27,10 @@ interface OptimizationPlannerProps {
   gates: ResolvedGatePlacement[];
   basketballPosts: ResolvedBasketballPostPlacement[];
   floodlightColumns: ResolvedFloodlightColumnPlacement[];
+  goalUnits?: ResolvedGoalUnitPlacement[];
+  kickboards?: ResolvedKickboardAttachment[];
+  pitchDividers?: ResolvedPitchDividerPlacement[];
+  sideNettings?: ResolvedSideNettingAttachment[];
   canInspect: boolean;
   isOpen: boolean;
   selectedPlanId: string | null;
@@ -101,6 +111,10 @@ export function OptimizationPlanner({
   gates,
   basketballPosts,
   floodlightColumns,
+  goalUnits = [],
+  kickboards = [],
+  pitchDividers = [],
+  sideNettings = [],
   canInspect,
   isOpen,
   selectedPlanId,
@@ -177,6 +191,10 @@ export function OptimizationPlanner({
               gates={gates}
               basketballPosts={basketballPosts}
               floodlightColumns={floodlightColumns}
+              goalUnits={goalUnits}
+              kickboards={kickboards}
+              pitchDividers={pitchDividers}
+              sideNettings={sideNettings}
               onSelectPlan={onSelectPlan}
             />
 

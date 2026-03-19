@@ -12,7 +12,11 @@ export function isEmptyLayout(layout: LayoutModel): boolean {
     layout.segments.length === 0 &&
     (layout.gates?.length ?? 0) === 0 &&
     (layout.basketballPosts?.length ?? 0) === 0 &&
-    (layout.floodlightColumns?.length ?? 0) === 0
+    (layout.floodlightColumns?.length ?? 0) === 0 &&
+    (layout.goalUnits?.length ?? 0) === 0 &&
+    (layout.kickboards?.length ?? 0) === 0 &&
+    (layout.pitchDividers?.length ?? 0) === 0 &&
+    (layout.sideNettings?.length ?? 0) === 0
   );
 }
 
@@ -21,6 +25,10 @@ export function normalizeLayout(layout: LayoutModel): LayoutModel {
     segments: layout.segments,
     gates: layout.gates ?? [],
     basketballPosts: layout.basketballPosts ?? [],
-    floodlightColumns: layout.floodlightColumns ?? []
+    floodlightColumns: layout.floodlightColumns ?? [],
+    goalUnits: layout.goalUnits ?? [],
+    kickboards: layout.kickboards ?? [],
+    pitchDividers: layout.pitchDividers ?? [],
+    sideNettings: layout.sideNettings ?? []
   };
 }

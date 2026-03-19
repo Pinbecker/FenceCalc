@@ -440,6 +440,7 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
       totalRolls: roll2100 + roll900,
       rollsByFenceHeight
     },
+    featureQuantities: [],
     optimization,
     segments: segmentEstimates
   };

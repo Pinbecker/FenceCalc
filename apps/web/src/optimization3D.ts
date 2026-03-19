@@ -2,6 +2,12 @@ import type { LayoutSegment, PointMm, TwinBarOptimizationPlan, TwinBarVariant } 
 import { distanceMm } from "@fence-estimator/geometry";
 import { getSpecConfig } from "@fence-estimator/rules-engine";
 import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
+import type {
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement
@@ -61,6 +67,43 @@ export interface Optimization3DFloodlightColumn {
   barWidthMm: number;
 }
 
+export interface Optimization3DGoalUnit {
+  key: string;
+  entryPoint: PointMm;
+  exitPoint: PointMm;
+  recessEntryPoint: PointMm;
+  recessExitPoint: PointMm;
+  rearCenterPoint: PointMm;
+  normal: { x: number; y: number };
+  enclosureHeightMm: number;
+}
+
+export interface Optimization3DKickboard {
+  key: string;
+  start: PointMm;
+  end: PointMm;
+  heightMm: number;
+  thicknessMm: number;
+  profile: "SQUARE" | "CHAMFERED";
+}
+
+export interface Optimization3DPitchDivider {
+  key: string;
+  startPoint: PointMm;
+  endPoint: PointMm;
+  supportPoints: PointMm[];
+  heightMm: number;
+}
+
+export interface Optimization3DSideNetting {
+  key: string;
+  start: PointMm;
+  end: PointMm;
+  baseHeightMm: number;
+  totalHeightMm: number;
+  extendedPostPoints: PointMm[];
+}
+
 export interface Optimization3DCutOverlay {
   key: string;
   cutId: string;
@@ -93,6 +136,10 @@ export interface Optimization3DScene {
   gates: Optimization3DGate[];
   basketballPosts: Optimization3DBasketballPost[];
   floodlightColumns: Optimization3DFloodlightColumn[];
+  goalUnits?: Optimization3DGoalUnit[];
+  kickboards?: Optimization3DKickboard[];
+  pitchDividers?: Optimization3DPitchDivider[];
+  sideNettings?: Optimization3DSideNetting[];
   cutOverlays: Optimization3DCutOverlay[];
   reuseLinks: Optimization3DReuseLink[];
   bounds: {
@@ -330,6 +377,53 @@ function buildFloodlightColumns(
   }));
 }
 
+function buildGoalUnits(placements: ResolvedGoalUnitPlacement[]): Optimization3DGoalUnit[] {
+  return placements.map((placement) => ({
+    key: placement.id,
+    entryPoint: placement.entryPoint,
+    exitPoint: placement.exitPoint,
+    recessEntryPoint: placement.recessEntryPoint,
+    recessExitPoint: placement.recessExitPoint,
+    rearCenterPoint: placement.rearCenterPoint,
+    normal: placement.normal,
+    enclosureHeightMm: placement.enclosureHeightMm
+  }));
+}
+
+function buildKickboards(attachments: ResolvedKickboardAttachment[]): Optimization3DKickboard[] {
+  return attachments.map((attachment) => ({
+    key: attachment.id,
+    start: attachment.start,
+    end: attachment.end,
+    heightMm: attachment.placement.sectionHeightMm,
+    thicknessMm: attachment.placement.thicknessMm,
+    profile: attachment.placement.profile
+  }));
+}
+
+function buildPitchDividers(placements: ResolvedPitchDividerPlacement[]): Optimization3DPitchDivider[] {
+  return placements
+    .filter((placement) => placement.isValid)
+    .map((placement) => ({
+      key: placement.id,
+      startPoint: placement.startPoint,
+      endPoint: placement.endPoint,
+      supportPoints: placement.supportPoints,
+      heightMm: 4000
+    }));
+}
+
+function buildSideNettings(attachments: ResolvedSideNettingAttachment[]): Optimization3DSideNetting[] {
+  return attachments.map((attachment) => ({
+    key: attachment.id,
+    start: attachment.start,
+    end: attachment.end,
+    baseHeightMm: attachment.baseFenceHeightMm,
+    totalHeightMm: attachment.totalHeightMm,
+    extendedPostPoints: attachment.extendedPostPoints
+  }));
+}
+
 function resolveOverlayLayer(segment: LayoutSegment, stockPanelHeightMm: number) {
   const layers = buildVisualLayers(segment);
   return (
@@ -421,7 +515,11 @@ export function buildOptimization3DScene(
   segmentOrdinalById: Map<string, number>,
   gatePlacements: ResolvedGatePlacement[] = [],
   basketballPostPlacements: ResolvedBasketballPostPlacement[] = [],
-  floodlightColumnPlacements: ResolvedFloodlightColumnPlacement[] = []
+  floodlightColumnPlacements: ResolvedFloodlightColumnPlacement[] = [],
+  goalUnitPlacements: ResolvedGoalUnitPlacement[] = [],
+  kickboardAttachments: ResolvedKickboardAttachment[] = [],
+  pitchDividerPlacements: ResolvedPitchDividerPlacement[] = [],
+  sideNettingAttachments: ResolvedSideNettingAttachment[] = []
 ): Optimization3DScene {
   const panelSlices = buildPanelSlices(estimateSegments);
   const replacementNodeKeys = new Set(
@@ -434,6 +532,10 @@ export function buildOptimization3DScene(
   const gates = buildGates(gatePlacements);
   const basketballPosts = buildBasketballPosts(basketballPostPlacements);
   const floodlightColumns = buildFloodlightColumns(floodlightColumnPlacements);
+  const goalUnits = buildGoalUnits(goalUnitPlacements);
+  const kickboards = buildKickboards(kickboardAttachments);
+  const pitchDividers = buildPitchDividers(pitchDividerPlacements);
+  const sideNettings = buildSideNettings(sideNettingAttachments);
   const estimateSegmentsById = new Map(estimateSegments.map((segment) => [segment.id, segment] as const));
   const cutOverlays = buildCutOverlays(plans, estimateSegmentsById, segmentOrdinalById);
   const reuseLinks = buildReuseLinks(cutOverlays);
@@ -444,7 +546,17 @@ export function buildOptimization3DScene(
     ...rails.flatMap((rail) => [rail.start, rail.end]),
     ...gates.flatMap((gate) => [gate.start, gate.end, gate.center]),
     ...basketballPosts.map((post) => post.point),
-    ...floodlightColumns.map((column) => column.point)
+    ...floodlightColumns.map((column) => column.point),
+    ...goalUnits.flatMap((goalUnit) => [
+      goalUnit.entryPoint,
+      goalUnit.exitPoint,
+      goalUnit.recessEntryPoint,
+      goalUnit.recessExitPoint,
+      goalUnit.rearCenterPoint
+    ]),
+    ...kickboards.flatMap((kickboard) => [kickboard.start, kickboard.end]),
+    ...pitchDividers.flatMap((pitchDivider) => [pitchDivider.startPoint, pitchDivider.endPoint, ...pitchDivider.supportPoints]),
+    ...sideNettings.flatMap((sideNetting) => [sideNetting.start, sideNetting.end, ...sideNetting.extendedPostPoints])
   ];
   const bounds = {
     minX: allGroundPoints.length > 0 ? Math.min(...allGroundPoints.map((point) => point.x)) : -2000,
@@ -458,6 +570,10 @@ export function buildOptimization3DScene(
       ...gates.map((gate) => gate.heightMm),
       ...basketballPosts.map((post) => post.heightMm),
       ...floodlightColumns.map((column) => column.heightMm),
+      ...goalUnits.map((goalUnit) => goalUnit.enclosureHeightMm),
+      ...kickboards.map((kickboard) => kickboard.heightMm),
+      ...pitchDividers.map((pitchDivider) => pitchDivider.heightMm),
+      ...sideNettings.map((sideNetting) => sideNetting.totalHeightMm),
       ...panelSlices.map((slice) => slice.baseHeightMm + slice.heightMm),
       ...cutOverlays.map((overlay) => overlay.baseHeightMm + overlay.heightMm + 520)
     )
@@ -470,6 +586,10 @@ export function buildOptimization3DScene(
     gates,
     basketballPosts,
     floodlightColumns,
+    goalUnits,
+    kickboards,
+    pitchDividers,
+    sideNettings,
     cutOverlays,
     reuseLinks,
     bounds
