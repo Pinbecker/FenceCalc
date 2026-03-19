@@ -1,8 +1,13 @@
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
 
+import { workspaceAliases } from "../../workspaceAliases";
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: workspaceAliases
+  },
   server: {
     port: 5173,
     strictPort: true,
