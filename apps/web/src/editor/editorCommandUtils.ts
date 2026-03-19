@@ -3,8 +3,12 @@ import type {
   FenceSpec,
   FloodlightColumnPlacement,
   GatePlacement,
+  GoalUnitPlacement,
+  KickboardAttachment,
   LayoutSegment,
-  PointMm
+  PitchDividerPlacement,
+  PointMm,
+  SideNettingAttachment
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
@@ -94,6 +98,47 @@ function findPathSegmentForOffset(
     }
   }
   return null;
+}
+
+function mapOffsetOntoReplacementSegment(
+  pathSegments: RecessReplacementPathSegment[],
+  pathOffsetMm: number
+): { segment: LayoutSegment; offsetMm: number; lengthMm: number } | null {
+  const pathSegment = findPathSegmentForOffset(pathSegments, pathOffsetMm);
+  if (!pathSegment) {
+    return null;
+  }
+  return {
+    segment: pathSegment.segment,
+    offsetMm: Math.max(0, Math.min(pathSegment.lengthMm, pathOffsetMm - pathSegment.pathStartMm)),
+    lengthMm: pathSegment.lengthMm
+  };
+}
+
+function mapRangeToReplacementSegments(
+  pathSegments: RecessReplacementPathSegment[],
+  startPathOffsetMm: number,
+  endPathOffsetMm: number
+): Array<{ segment: LayoutSegment; startOffsetMm: number; endOffsetMm: number; lengthMm: number }> {
+  const rangeStartMm = Math.min(startPathOffsetMm, endPathOffsetMm);
+  const rangeEndMm = Math.max(startPathOffsetMm, endPathOffsetMm);
+  const mappedRanges: Array<{ segment: LayoutSegment; startOffsetMm: number; endOffsetMm: number; lengthMm: number }> = [];
+
+  for (const pathSegment of pathSegments) {
+    const overlapStartMm = Math.max(rangeStartMm, pathSegment.pathStartMm);
+    const overlapEndMm = Math.min(rangeEndMm, pathSegment.pathEndMm);
+    if (overlapEndMm - overlapStartMm <= 0.001) {
+      continue;
+    }
+    mappedRanges.push({
+      segment: pathSegment.segment,
+      startOffsetMm: Math.max(0, overlapStartMm - pathSegment.pathStartMm),
+      endOffsetMm: Math.min(pathSegment.lengthMm, overlapEndMm - pathSegment.pathStartMm),
+      lengthMm: pathSegment.lengthMm
+    });
+  }
+
+  return mappedRanges;
 }
 
 function resolveNearestGateStartOffsetMm(
@@ -858,6 +903,176 @@ export function remapFloodlightColumnPlacementsForRecess(
       ...placement,
       segmentId: pathSegment.segment.id,
       offsetMm: Math.max(0, Math.min(pathSegment.lengthMm, mappedPathOffsetMm - pathSegment.pathStartMm))
+    });
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapGoalUnitPlacementsForRecess(
+  previous: GoalUnitPlacement[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): GoalUnitPlacement[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const next: GoalUnitPlacement[] = [];
+  for (const placement of previous) {
+    if (placement.segmentId !== preview.segment.id) {
+      next.push(placement);
+      continue;
+    }
+
+    const mappedPathOffsetMm = mapOffsetToRecessPath(placement.centerOffsetMm, preview);
+    const exactSegment = mapOffsetOntoReplacementSegment(pathSegments, mappedPathOffsetMm);
+    const viableSegments = exactSegment
+      ? [exactSegment, ...pathSegments
+          .filter((pathSegment) => pathSegment.segment.id !== exactSegment.segment.id)
+          .map((pathSegment) => ({
+            segment: pathSegment.segment,
+            offsetMm: pathSegment.lengthMm / 2,
+            lengthMm: pathSegment.lengthMm
+          }))]
+      : pathSegments.map((pathSegment) => ({
+          segment: pathSegment.segment,
+          offsetMm: pathSegment.lengthMm / 2,
+          lengthMm: pathSegment.lengthMm
+        }));
+
+    const resolvedSegment = viableSegments.find((candidate) => candidate.lengthMm + 0.001 >= placement.widthMm);
+    if (!resolvedSegment) {
+      continue;
+    }
+
+    const minCenterOffsetMm = placement.widthMm / 2;
+    const maxCenterOffsetMm = Math.max(minCenterOffsetMm, resolvedSegment.lengthMm - placement.widthMm / 2);
+    next.push({
+      ...placement,
+      segmentId: resolvedSegment.segment.id,
+      centerOffsetMm: Math.max(minCenterOffsetMm, Math.min(maxCenterOffsetMm, resolvedSegment.offsetMm))
+    });
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapKickboardAttachmentsForRecess(
+  previous: KickboardAttachment[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): KickboardAttachment[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const originalSegmentLengthMm = distanceMm(preview.segment.start, preview.segment.end);
+  const next: KickboardAttachment[] = [];
+  for (const attachment of previous) {
+    if (attachment.segmentId !== preview.segment.id) {
+      next.push(attachment);
+      continue;
+    }
+
+    const mappedRanges = mapRangeToReplacementSegments(
+      pathSegments,
+      mapOffsetToRecessPath(0, preview),
+      mapOffsetToRecessPath(originalSegmentLengthMm, preview)
+    );
+    mappedRanges.forEach((mappedRange, index) => {
+      next.push({
+        ...attachment,
+        id: index === 0 ? attachment.id : crypto.randomUUID(),
+        segmentId: mappedRange.segment.id
+      });
+    });
+  }
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapPitchDividerPlacementsForRecess(
+  previous: PitchDividerPlacement[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): PitchDividerPlacement[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const next = previous.flatMap((placement) => {
+    const startAnchor =
+      placement.startAnchor.segmentId === preview.segment.id
+        ? mapOffsetOntoReplacementSegment(pathSegments, mapOffsetToRecessPath(placement.startAnchor.offsetMm, preview))
+        : null;
+    const endAnchor =
+      placement.endAnchor.segmentId === preview.segment.id
+        ? mapOffsetOntoReplacementSegment(pathSegments, mapOffsetToRecessPath(placement.endAnchor.offsetMm, preview))
+        : null;
+
+    if (placement.startAnchor.segmentId === preview.segment.id && !startAnchor) {
+      return [];
+    }
+    if (placement.endAnchor.segmentId === preview.segment.id && !endAnchor) {
+      return [];
+    }
+
+    return [{
+      ...placement,
+      startAnchor: startAnchor
+        ? { segmentId: startAnchor.segment.id, offsetMm: startAnchor.offsetMm }
+        : placement.startAnchor,
+      endAnchor: endAnchor
+        ? { segmentId: endAnchor.segment.id, offsetMm: endAnchor.offsetMm }
+        : placement.endAnchor
+    }];
+  });
+
+  next.sort((left, right) => left.id.localeCompare(right.id));
+  return next;
+}
+
+export function remapSideNettingAttachmentsForRecess(
+  previous: SideNettingAttachment[],
+  preview: RecessInsertionPreview,
+  replacement: LayoutSegment[] = buildRecessReplacementSegments(preview)
+): SideNettingAttachment[] {
+  const pathSegments = buildRecessReplacementPath(replacement);
+  if (pathSegments.length === 0) {
+    return previous;
+  }
+
+  const originalSegmentLengthMm = distanceMm(preview.segment.start, preview.segment.end);
+  const next: SideNettingAttachment[] = [];
+  for (const attachment of previous) {
+    if (attachment.segmentId !== preview.segment.id) {
+      next.push(attachment);
+      continue;
+    }
+
+    const sourceStartOffsetMm = attachment.startOffsetMm ?? 0;
+    const sourceEndOffsetMm = attachment.endOffsetMm ?? originalSegmentLengthMm;
+    const mappedRanges = mapRangeToReplacementSegments(
+      pathSegments,
+      mapOffsetToRecessPath(sourceStartOffsetMm, preview),
+      mapOffsetToRecessPath(sourceEndOffsetMm, preview)
+    );
+
+    mappedRanges.forEach((mappedRange, index) => {
+      next.push({
+        ...attachment,
+        id: index === 0 ? attachment.id : crypto.randomUUID(),
+        segmentId: mappedRange.segment.id,
+        startOffsetMm: mappedRange.startOffsetMm,
+        endOffsetMm: mappedRange.endOffsetMm
+      });
     });
   }
 

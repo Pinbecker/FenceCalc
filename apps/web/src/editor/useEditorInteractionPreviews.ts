@@ -94,6 +94,12 @@ interface EditorInteractionPreviewsOptions {
   placedGateVisuals: ResolvedGatePlacement[];
   placedBasketballPostVisuals: ResolvedBasketballPostPlacement[];
   placedFloodlightColumnVisuals?: ResolvedFloodlightColumnPlacement[];
+  placedGoalUnitVisuals?: Array<{
+    segmentId: string;
+    entryPoint: PointMm;
+    exitPoint: PointMm;
+    tangent: { x: number; y: number };
+  }>;
   drawChainStart: PointMm | null;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
   pendingSideNettingStart?: PitchDividerAnchorPreview | null;
@@ -257,6 +263,7 @@ export function useEditorInteractionPreviews({
   placedGateVisuals,
   placedBasketballPostVisuals,
   placedFloodlightColumnVisuals = [],
+  placedGoalUnitVisuals = [],
   drawChainStart,
   pendingPitchDividerStart = null,
   pendingSideNettingStart = null,
@@ -592,7 +599,7 @@ export function useEditorInteractionPreviews({
   );
 
   const resolveRecessLikePreview = useCallback(
-    (widthMm: number, depthMm: number): RecessInsertionPreview | null => {
+    (widthMm: number, depthMm: number, alignmentAnchors: RecessAlignmentAnchor[] = recessAlignmentAnchors): RecessInsertionPreview | null => {
       if (!pointerWorld) {
         return null;
       }
@@ -635,15 +642,15 @@ export function useEditorInteractionPreviews({
         x: best.segment.end.x - best.segment.start.x,
         y: best.segment.end.y - best.segment.start.y
       });
-      const alignmentAnchors = !segmentTangent
+      const candidateAlignmentAnchors = !segmentTangent
         ? []
-        : recessAlignmentAnchors
+        : alignmentAnchors
             .filter(
               (anchor) =>
                 anchor.sourceSegmentId !== best.segment.id && Math.abs(dot(segmentTangent, anchor.tangent)) >= 0.9
             )
             .map((anchor) => anchor.point);
-      const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, alignmentAnchors, anchorWindowMm);
+      const anchorSnapResult = snapOffsetToAnchorAlongSegment(best.segment, baseOffsetMm, candidateAlignmentAnchors, anchorWindowMm);
       const anchorSnappedOffsetMm = anchorSnapResult.offsetMm;
       const anchorSnapDistanceMm = Math.abs(anchorSnappedOffsetMm - baseOffsetMm);
       let selectedAnchorPoint: PointMm | null = null;
@@ -868,7 +875,18 @@ export function useEditorInteractionPreviews({
     if (interactionMode !== "GOAL_UNIT") {
       return null;
     }
-    const preview = resolveRecessLikePreview(goalUnitWidthMm, goalUnitDepthMm);
+    const goalUnitAlignmentAnchors: RecessAlignmentAnchor[] = [
+      ...recessAlignmentAnchors,
+      ...placedGoalUnitVisuals.map((goalUnit) => ({
+        sourceSegmentId: goalUnit.segmentId,
+        point: {
+          x: (goalUnit.entryPoint.x + goalUnit.exitPoint.x) / 2,
+          y: (goalUnit.entryPoint.y + goalUnit.exitPoint.y) / 2
+        },
+        tangent: goalUnit.tangent
+      }))
+    ];
+    const preview = resolveRecessLikePreview(goalUnitWidthMm, goalUnitDepthMm, goalUnitAlignmentAnchors);
     if (!preview) {
       return null;
     }
@@ -877,7 +895,7 @@ export function useEditorInteractionPreviews({
       widthMm: goalUnitWidthMm,
       goalHeightMm: goalUnitHeightMm
     };
-  }, [goalUnitDepthMm, goalUnitHeightMm, goalUnitWidthMm, interactionMode, resolveRecessLikePreview]);
+  }, [goalUnitDepthMm, goalUnitHeightMm, goalUnitWidthMm, interactionMode, placedGoalUnitVisuals, recessAlignmentAnchors, resolveRecessLikePreview]);
 
   const placedGateVisualById = useMemo(
     () => new Map(placedGateVisuals.map((gate) => [gate.id, gate] as const)),

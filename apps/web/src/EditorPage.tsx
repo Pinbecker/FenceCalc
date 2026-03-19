@@ -439,7 +439,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     gateCountsByHeight,
     basketballPostCountsByHeight,
     floodlightColumnCountsByHeight,
-    twinBarFenceRows
+    twinBarFenceRows,
+    featureCounts,
+    featureRowsByKind
   } = editorSummary;
   const optimizationSummary = estimate.optimization;
   const panelCount = estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
@@ -532,6 +534,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     placedGateVisuals,
     placedBasketballPostVisuals: resolvedBasketballPostPlacements,
     placedFloodlightColumnVisuals: resolvedFloodlightColumnPlacements,
+    placedGoalUnitVisuals: resolvedGoalUnits,
     pendingPitchDividerStart: shellState.pendingPitchDividerStart,
     pendingSideNettingStart: shellState.pendingSideNettingStart,
     activeGateDragId: selectionState.activeGateDrag?.gateId ?? null,
@@ -1074,6 +1077,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
               basketballPostCountsByHeight={basketballPostCountsByHeight}
               floodlightColumnCountsByHeight={floodlightColumnCountsByHeight}
               twinBarFenceRows={twinBarFenceRows}
+              featureCounts={featureCounts}
+              featureRowsByKind={featureRowsByKind}
               postTypeCounts={postTypeCounts}
               panelCount={panelCount}
               fenceRunCount={fenceRunCount}

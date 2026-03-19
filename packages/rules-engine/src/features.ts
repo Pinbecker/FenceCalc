@@ -303,8 +303,14 @@ export function buildGoalUnitEstimateSegments(goalUnit: ResolvedGoalUnitPlacemen
       spec: goalUnit.enclosureSpec
     },
     {
-      id: `${goalUnit.id}::rear`,
+      id: `${goalUnit.id}::rear-start`,
       start: goalUnit.recessEntryPoint,
+      end: goalUnit.rearCenterPoint,
+      spec: goalUnit.enclosureSpec
+    },
+    {
+      id: `${goalUnit.id}::rear-end`,
+      start: goalUnit.rearCenterPoint,
       end: goalUnit.recessExitPoint,
       spec: goalUnit.enclosureSpec
     },

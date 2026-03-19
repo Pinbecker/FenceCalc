@@ -405,13 +405,13 @@ function renderPitchDividerPlan(pitchDivider: ResolvedPitchDividerPlacement, sca
     <Group key={`pitch-divider-${pitchDivider.id}`} listening={false}>
       <Line
         points={[pitchDivider.startPoint.x, pitchDivider.startPoint.y, pitchDivider.endPoint.x, pitchDivider.endPoint.y]}
-        stroke="#f4fbff"
-        strokeWidth={1.4 / scale}
+        stroke="#51c8ff"
+        strokeWidth={2.2 / scale}
         dash={[12 / scale, 8 / scale]}
-        opacity={0.9}
+        opacity={0.96}
       />
-      <Circle x={pitchDivider.startPoint.x} y={pitchDivider.startPoint.y} radius={5 / scale} fill="#c1ebff" />
-      <Circle x={pitchDivider.endPoint.x} y={pitchDivider.endPoint.y} radius={5 / scale} fill="#c1ebff" />
+      <Circle x={pitchDivider.startPoint.x} y={pitchDivider.startPoint.y} radius={5 / scale} fill="#8be0ff" />
+      <Circle x={pitchDivider.endPoint.x} y={pitchDivider.endPoint.y} radius={5 / scale} fill="#8be0ff" />
       {pitchDivider.supportPoints.map((point, index) => (
         <Rect
           key={`${pitchDivider.id}-support-${index}`}
@@ -419,7 +419,7 @@ function renderPitchDividerPlan(pitchDivider: ResolvedPitchDividerPlacement, sca
           y={point.y - 4 / scale}
           width={8 / scale}
           height={8 / scale}
-          fill="#dff5ff"
+          fill="#b8ecff"
         />
       ))}
     </Group>

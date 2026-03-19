@@ -34,6 +34,10 @@ import {
   remapBasketballPostPlacementsForRecess,
   remapFloodlightColumnPlacementsForRecess,
   remapGatePlacementsForRecess,
+  remapGoalUnitPlacementsForRecess,
+  remapKickboardAttachmentsForRecess,
+  remapPitchDividerPlacementsForRecess,
+  remapSideNettingAttachmentsForRecess,
   resizeSegmentCollection
 } from "./editorCommandUtils";
 import { buildRecessReplacementSegments } from "./recess";
@@ -675,7 +679,11 @@ export function useEditorCommands({
           segments: nextSegments,
           gates: remapGatePlacementsForRecess(previous.gates ?? [], preview, resolvedGateById, replacement),
           basketballPosts: remapBasketballPostPlacementsForRecess(previous.basketballPosts ?? [], preview, replacement),
-          floodlightColumns: remapFloodlightColumnPlacementsForRecess(previous.floodlightColumns ?? [], preview, replacement)
+          floodlightColumns: remapFloodlightColumnPlacementsForRecess(previous.floodlightColumns ?? [], preview, replacement),
+          goalUnits: remapGoalUnitPlacementsForRecess(previous.goalUnits ?? [], preview, replacement),
+          kickboards: remapKickboardAttachmentsForRecess(previous.kickboards ?? [], preview, replacement),
+          pitchDividers: remapPitchDividerPlacementsForRecess(previous.pitchDividers ?? [], preview, replacement),
+          sideNettings: remapSideNettingAttachmentsForRecess(previous.sideNettings ?? [], preview, replacement)
         };
       });
       setSelectedSegmentId(null);

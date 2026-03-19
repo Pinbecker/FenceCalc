@@ -431,6 +431,7 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
   }
 
   resolvedGoalUnits.forEach((goalUnit) => {
+    replacementNodeKeys.add(pointKey(goalUnit.rearCenterPoint));
     derived.push(...buildGoalUnitEstimateSegments(goalUnit));
   });
 

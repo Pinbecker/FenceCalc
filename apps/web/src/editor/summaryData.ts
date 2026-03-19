@@ -1,4 +1,10 @@
 import type { EstimateResult, GatePlacement } from "@fence-estimator/contracts";
+import type {
+  ResolvedGoalUnitPlacement,
+  ResolvedKickboardAttachment,
+  ResolvedPitchDividerPlacement,
+  ResolvedSideNettingAttachment
+} from "@fence-estimator/rules-engine";
 
 import type {
   HeightCountRow,
@@ -43,6 +49,23 @@ export interface EditorSummaryData {
   basketballPostCountsByHeight: HeightLabelCountRow[];
   floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: Array<{ height: string; standard: number; superRebound: number }>;
+  featureCounts: {
+    goalUnits: number;
+    kickboards: number;
+    pitchDividers: number;
+    sideNettings: number;
+  };
+  featureRowsByKind: {
+    goalUnits: Array<{ label: string; value: string }>;
+    kickboards: Array<{ label: string; value: string }>;
+    pitchDividers: Array<{ label: string; value: string }>;
+    sideNettings: Array<{ label: string; value: string }>;
+  };
+}
+
+function formatFeatureQuantity(value: number, unit: string): string {
+  const normalized = Number.isInteger(value) ? value.toString() : value.toFixed(3).replace(/\.?0+$/, "");
+  return `${normalized} ${unit}`;
 }
 
 export function buildEditorSummaryData(input: {
@@ -50,6 +73,10 @@ export function buildEditorSummaryData(input: {
   resolvedGatePlacements: ResolvedGateSummary[];
   resolvedBasketballPostPlacements: ResolvedBasketballPostPlacement[];
   resolvedFloodlightColumnPlacements: ResolvedFloodlightColumnPlacement[];
+  resolvedGoalUnits: ResolvedGoalUnitPlacement[];
+  resolvedKickboards: ResolvedKickboardAttachment[];
+  resolvedPitchDividers: ResolvedPitchDividerPlacement[];
+  resolvedSideNettings: ResolvedSideNettingAttachment[];
   estimate: EstimateResult;
 }): EditorSummaryData {
   const rowsForType = (typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin") =>
@@ -97,6 +124,21 @@ export function buildEditorSummaryData(input: {
     .map(([height, counts]) => ({ height, ...counts }))
     .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
 
+  const featureRowsByKind = {
+    goalUnits: (input.estimate.featureQuantities ?? [])
+      .filter((line) => line.kind === "GOAL_UNIT" || (line.kind === "BASKETBALL" && line.component === "GOAL_UNIT_INTEGRATED"))
+      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
+    kickboards: (input.estimate.featureQuantities ?? [])
+      .filter((line) => line.kind === "KICKBOARD")
+      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
+    pitchDividers: (input.estimate.featureQuantities ?? [])
+      .filter((line) => line.kind === "PITCH_DIVIDER")
+      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
+    sideNettings: (input.estimate.featureQuantities ?? [])
+      .filter((line) => line.kind === "SIDE_NETTING")
+      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) }))
+  };
+
   return {
     postRowsByType: {
       end: rowsForType("end"),
@@ -114,6 +156,13 @@ export function buildEditorSummaryData(input: {
     gateCountsByHeight,
     basketballPostCountsByHeight,
     floodlightColumnCountsByHeight,
-    twinBarFenceRows
+    twinBarFenceRows,
+    featureCounts: {
+      goalUnits: input.resolvedGoalUnits.length,
+      kickboards: input.resolvedKickboards.length,
+      pitchDividers: input.resolvedPitchDividers.length,
+      sideNettings: input.resolvedSideNettings.length
+    },
+    featureRowsByKind
   };
 }

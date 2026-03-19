@@ -51,7 +51,41 @@ const estimate: EstimateResult = {
       buckets: []
     }
   },
-  segments: []
+  segments: [],
+  featureQuantities: [
+    {
+      key: "goal-1::goal-unit",
+      kind: "GOAL_UNIT",
+      component: "GOAL_UNIT",
+      description: "Goal unit 3m x 3m",
+      quantity: 1,
+      unit: "item"
+    },
+    {
+      key: "kick-1::boards",
+      kind: "KICKBOARD",
+      component: "BOARDS",
+      description: "200 x 50 square kickboards",
+      quantity: 2,
+      unit: "board"
+    },
+    {
+      key: "divider-1::netting",
+      kind: "PITCH_DIVIDER",
+      component: "NETTING_RUN",
+      description: "Pitch-divider netting run",
+      quantity: 12,
+      unit: "m"
+    },
+    {
+      key: "net-1::run",
+      kind: "SIDE_NETTING",
+      component: "NETTING_RUN",
+      description: "Side-netting run length",
+      quantity: 10.1,
+      unit: "m"
+    }
+  ]
 };
 
 describe("buildEditorSummaryData", () => {
@@ -105,6 +139,94 @@ describe("buildEditorSummaryData", () => {
           placement: { id: "fc-1", segmentId: "segment-3", offsetMm: 2400, facing: "LEFT" }
         }
       ],
+      resolvedGoalUnits: [
+        {
+          id: "goal-1",
+          segmentId: "segment-4",
+          centerOffsetMm: 3000,
+          startOffsetMm: 1500,
+          endOffsetMm: 4500,
+          widthMm: 3000,
+          depthMm: 1200,
+          goalHeightMm: 3000,
+          enclosureHeightMm: 3000,
+          entryPoint: { x: 1500, y: 0 },
+          exitPoint: { x: 4500, y: 0 },
+          recessEntryPoint: { x: 1500, y: 1200 },
+          recessExitPoint: { x: 4500, y: 1200 },
+          rearCenterPoint: { x: 3000, y: 1200 },
+          tangent: { x: 1, y: 0 },
+          normal: { x: 0, y: 1 },
+          spec: { system: "TWIN_BAR", height: "2m" },
+          enclosureSpec: { system: "TWIN_BAR", height: "3m" },
+          placement: {
+            id: "goal-1",
+            segmentId: "segment-4",
+            centerOffsetMm: 3000,
+            side: "LEFT",
+            widthMm: 3000,
+            depthMm: 1200,
+            goalHeightMm: 3000
+          }
+        }
+      ],
+      resolvedKickboards: [
+        {
+          id: "kick-1",
+          segmentId: "segment-1",
+          start: { x: 0, y: 0 },
+          end: { x: 5000, y: 0 },
+          lengthMm: 5000,
+          boardCount: 2,
+          placement: {
+            id: "kick-1",
+            segmentId: "segment-1",
+            sectionHeightMm: 200,
+            thicknessMm: 50,
+            profile: "SQUARE",
+            boardLengthMm: 2500
+          }
+        }
+      ],
+      resolvedPitchDividers: [
+        {
+          id: "divider-1",
+          startPoint: { x: 0, y: 0 },
+          endPoint: { x: 0, y: 12000 },
+          spanMm: 12000,
+          supportPoints: [],
+          supportPostCount: 0,
+          isValid: true,
+          validationMessage: null,
+          placement: {
+            id: "divider-1",
+            startAnchor: { segmentId: "segment-1", offsetMm: 0 },
+            endAnchor: { segmentId: "segment-2", offsetMm: 0 }
+          }
+        }
+      ],
+      resolvedSideNettings: [
+        {
+          id: "net-1",
+          segmentId: "segment-1",
+          startOffsetMm: 0,
+          endOffsetMm: 10100,
+          start: { x: 0, y: 0 },
+          end: { x: 10100, y: 0 },
+          lengthMm: 10100,
+          baseFenceHeightMm: 3000,
+          additionalHeightMm: 2000,
+          totalHeightMm: 5000,
+          extendedPostIndices: [0, 2, 4],
+          extendedPostPoints: [{ x: 0, y: 0 }, { x: 5050, y: 0 }, { x: 10100, y: 0 }],
+          placement: {
+            id: "net-1",
+            segmentId: "segment-1",
+            additionalHeightMm: 2000,
+            extendedPostInterval: 3
+          }
+        }
+      ],
       estimate
     });
 
@@ -123,5 +245,12 @@ describe("buildEditorSummaryData", () => {
       { height: "2m", standard: 4, superRebound: 1, total: 5 },
       { height: "3m", standard: 2, superRebound: 0, total: 2 }
     ]);
+    expect(summary.featureCounts).toEqual({
+      goalUnits: 1,
+      kickboards: 1,
+      pitchDividers: 1,
+      sideNettings: 1
+    });
+    expect(summary.featureRowsByKind.goalUnits).toEqual([{ label: "Goal unit 3m x 3m", value: "1 item" }]);
   });
 });

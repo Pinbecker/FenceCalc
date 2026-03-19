@@ -322,9 +322,23 @@ export function useEditorDerivedState({
         resolvedGatePlacements,
         resolvedBasketballPostPlacements,
         resolvedFloodlightColumnPlacements,
+        resolvedGoalUnits,
+        resolvedKickboards,
+        resolvedPitchDividers,
+        resolvedSideNettings,
         estimate
       }),
-    [estimate, postHeightRows, resolvedBasketballPostPlacements, resolvedFloodlightColumnPlacements, resolvedGatePlacements]
+    [
+      estimate,
+      postHeightRows,
+      resolvedBasketballPostPlacements,
+      resolvedFloodlightColumnPlacements,
+      resolvedGatePlacements,
+      resolvedGoalUnits,
+      resolvedKickboards,
+      resolvedPitchDividers,
+      resolvedSideNettings
+    ]
   );
   const selectedSegment = useMemo(() => {
     if (!selectedSegmentId) {

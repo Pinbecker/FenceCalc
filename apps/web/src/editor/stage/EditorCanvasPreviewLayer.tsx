@@ -415,6 +415,32 @@ export function EditorCanvasPreviewLayer({
             view.scale,
             "#7db4ff"
           )}
+          {goalUnitPreview.alignmentGuide
+            ? renderPlacementGuide({
+                targetPoint: goalUnitPreview.targetPoint,
+                guideDirection: goalUnitPreview.side === "LEFT"
+                  ? deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal
+                  : {
+                      x: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.x,
+                      y: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.y
+                    },
+                visibleBounds,
+                scale: view.scale,
+                anchorPoint: goalUnitPreview.alignmentGuide.anchorPoint
+              })
+            : goalUnitPreview.snapMeta.kind === "MIDPOINT" || goalUnitPreview.snapMeta.kind === "FRACTION" || goalUnitPreview.snapMeta.kind === "ALIGNMENT"
+              ? renderPlacementGuide({
+                  targetPoint: goalUnitPreview.targetPoint,
+                  guideDirection: goalUnitPreview.side === "LEFT"
+                    ? deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal
+                    : {
+                        x: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.x,
+                        y: -deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end).normal.y
+                      },
+                  visibleBounds,
+                  scale: view.scale
+                })
+              : null}
           <Line
             points={[
               goalUnitPreview.segment.start.x,
@@ -462,6 +488,28 @@ export function EditorCanvasPreviewLayer({
             stroke="#2a4e83"
             strokeWidth={1.4 / view.scale}
           />
+          {(() => {
+            const segmentAxes = deriveSegmentAxes(goalUnitPreview.segment.start, goalUnitPreview.segment.end);
+            const goalNormal = goalUnitPreview.side === "LEFT"
+              ? segmentAxes.normal
+              : { x: -segmentAxes.normal.x, y: -segmentAxes.normal.y };
+            return renderRunDistanceLabels({
+              keyPrefix: `goal-unit-${goalUnitPreview.segment.id}`,
+              startPoint: goalUnitPreview.segment.start,
+              splitStartPoint: goalUnitPreview.entryPoint,
+              splitEndPoint: goalUnitPreview.exitPoint,
+              endPoint: goalUnitPreview.segment.end,
+              startDistanceMm: goalUnitPreview.startOffsetMm,
+              endDistanceMm: goalUnitPreview.segmentLengthMm - goalUnitPreview.endOffsetMm,
+              tangent: segmentAxes.tangent,
+              startNormal: { x: -goalNormal.x, y: -goalNormal.y },
+              endNormal: { x: -goalNormal.x, y: -goalNormal.y },
+              scale: view.scale,
+              fill: "rgba(16, 40, 76, 0.92)",
+              textColor: "#e6f0ff",
+              stroke: "rgba(125, 180, 255, 0.38)"
+            });
+          })()}
           {renderCanvasLabel({
             keyValue: `goal-unit-main-${goalUnitPreview.segment.id}`,
             ...offsetPoint(

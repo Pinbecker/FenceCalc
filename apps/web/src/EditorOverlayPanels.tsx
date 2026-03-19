@@ -35,6 +35,18 @@ interface EditorOverlayPanelsProps {
   basketballPostCountsByHeight: HeightLabelCountRow[];
   floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: TwinBarFenceRow[];
+  featureCounts: {
+    goalUnits: number;
+    kickboards: number;
+    pitchDividers: number;
+    sideNettings: number;
+  };
+  featureRowsByKind: {
+    goalUnits: Array<{ label: string; value: string }>;
+    kickboards: Array<{ label: string; value: string }>;
+    pitchDividers: Array<{ label: string; value: string }>;
+    sideNettings: Array<{ label: string; value: string }>;
+  };
   postTypeCounts: PostTypeCounts;
   panelCount: number;
   fenceRunCount: number;
@@ -71,6 +83,8 @@ export function EditorOverlayPanels({
   basketballPostCountsByHeight,
   floodlightColumnCountsByHeight,
   twinBarFenceRows,
+  featureCounts,
+  featureRowsByKind,
   postTypeCounts,
   panelCount,
   fenceRunCount,
@@ -123,6 +137,22 @@ export function EditorOverlayPanels({
           <article className="editor-summary-metric">
             <span>Floodlights</span>
             <strong>{floodlightColumnCount}</strong>
+          </article>
+          <article className="editor-summary-metric">
+            <span>Goal Units</span>
+            <strong>{featureCounts.goalUnits}</strong>
+          </article>
+          <article className="editor-summary-metric">
+            <span>Kickboards</span>
+            <strong>{featureCounts.kickboards}</strong>
+          </article>
+          <article className="editor-summary-metric">
+            <span>Pitch Dividers</span>
+            <strong>{featureCounts.pitchDividers}</strong>
+          </article>
+          <article className="editor-summary-metric">
+            <span>Side Netting</span>
+            <strong>{featureCounts.sideNettings}</strong>
           </article>
           <article className="editor-summary-metric">
             <span>Panels</span>
@@ -237,6 +267,38 @@ export function EditorOverlayPanels({
                       value: row.count
                     }))
                   ].filter((row) => row.value > 0)}
+                />
+              </div>
+
+              <div className="count-group">
+                <h3>Goal Units</h3>
+                <CountList
+                  empty="No goal units placed."
+                  rows={featureRowsByKind.goalUnits}
+                />
+              </div>
+
+              <div className="count-group">
+                <h3>Kickboards</h3>
+                <CountList
+                  empty="No kickboards applied."
+                  rows={featureRowsByKind.kickboards}
+                />
+              </div>
+
+              <div className="count-group">
+                <h3>Pitch Dividers</h3>
+                <CountList
+                  empty="No pitch dividers placed."
+                  rows={featureRowsByKind.pitchDividers}
+                />
+              </div>
+
+              <div className="count-group">
+                <h3>Side Netting</h3>
+                <CountList
+                  empty="No side netting applied."
+                  rows={featureRowsByKind.sideNettings}
                 />
               </div>
 

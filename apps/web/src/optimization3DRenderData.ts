@@ -509,8 +509,52 @@ export function buildOptimization3DRenderData(
       });
     }
 
-    const lintelStart = project(toWorldPoint(goalUnit.entryPoint, goalUnit.enclosureHeightMm - 180));
-    const lintelEnd = project(toWorldPoint(goalUnit.exitPoint, goalUnit.enclosureHeightMm - 180));
+    const frontEdge = {
+      start: toGroundPoint(goalUnit.entryPoint),
+      end: toGroundPoint(goalUnit.exitPoint)
+    };
+    const frontMidpoint = {
+      x: (goalUnit.entryPoint.x + goalUnit.exitPoint.x) / 2,
+      y: (goalUnit.entryPoint.y + goalUnit.exitPoint.y) / 2
+    };
+    const goalMouthHeightMm = 1800;
+    const lintelSlotWidthMm = 240;
+    const frontWidthMm = Math.hypot(frontEdge.end.x - frontEdge.start.x, frontEdge.end.z - frontEdge.start.z) || 1;
+    const frontTangent = {
+      x: (goalUnit.exitPoint.x - goalUnit.entryPoint.x) / frontWidthMm,
+      y: (goalUnit.exitPoint.y - goalUnit.entryPoint.y) / frontWidthMm
+    };
+    const leftSlotPoint = {
+      x: frontMidpoint.x - frontTangent.x * (lintelSlotWidthMm / 2),
+      y: frontMidpoint.y - frontTangent.y * (lintelSlotWidthMm / 2)
+    };
+    const rightSlotPoint = {
+      x: frontMidpoint.x + frontTangent.x * (lintelSlotWidthMm / 2),
+      y: frontMidpoint.y + frontTangent.y * (lintelSlotWidthMm / 2)
+    };
+
+    const frontPanelFaces = [
+      { key: `${goalUnit.key}-front-panel-left`, start: goalUnit.entryPoint, end: leftSlotPoint },
+      { key: `${goalUnit.key}-front-panel-right`, start: rightSlotPoint, end: goalUnit.exitPoint }
+    ];
+    for (const face of frontPanelFaces) {
+      const bottomStart = project(toWorldPoint(face.start, goalMouthHeightMm));
+      const bottomEnd = project(toWorldPoint(face.end, goalMouthHeightMm));
+      const topEnd = project(toWorldPoint(face.end, goalUnit.enclosureHeightMm));
+      const topStart = project(toWorldPoint(face.start, goalUnit.enclosureHeightMm));
+      faces.push({
+        key: face.key,
+        points: formatPolygonPoints([bottomStart, bottomEnd, topEnd, topStart]),
+        fill: "rgba(197, 205, 212, 0.82)",
+        stroke: "rgba(92, 104, 118, 0.88)",
+        strokeWidth: 0.94,
+        opacity: 1,
+        depth: getFaceDepth([bottomStart, bottomEnd, topEnd, topStart]) + 0.08
+      });
+    }
+
+    const lintelStart = project(toWorldPoint(goalUnit.entryPoint, goalMouthHeightMm));
+    const lintelEnd = project(toWorldPoint(goalUnit.exitPoint, goalMouthHeightMm));
     strokes.push({
       key: `${goalUnit.key}-lintel`,
       kind: "polyline",
@@ -521,6 +565,7 @@ export function buildOptimization3DRenderData(
       depth: (lintelStart.depth + lintelEnd.depth) / 2 + 0.1
     });
 
+    const armHeightMm = Math.max(goalMouthHeightMm + 350, goalUnit.enclosureHeightMm - 260);
     const postTop = project(toWorldPoint(goalUnit.rearCenterPoint, goalUnit.enclosureHeightMm + 400));
     const postBottom = project(toWorldPoint(goalUnit.rearCenterPoint, 0));
     strokes.push({
@@ -531,6 +576,73 @@ export function buildOptimization3DRenderData(
       strokeWidth: 2.1,
       opacity: 1,
       depth: (postBottom.depth + postTop.depth) / 2 + 0.1
+    });
+
+    const armExitPoint = {
+      x: frontMidpoint.x - goalUnit.normal.x * 420,
+      y: frontMidpoint.y - goalUnit.normal.y * 420
+    };
+    const armStart = project(toWorldPoint(goalUnit.rearCenterPoint, armHeightMm));
+    const armEnd = project(toWorldPoint(armExitPoint, armHeightMm));
+    strokes.push({
+      key: `${goalUnit.key}-basketball-arm`,
+      kind: "polyline",
+      value: `${armStart.x},${armStart.y} ${armEnd.x},${armEnd.y}`,
+      stroke: "rgba(255, 183, 89, 0.96)",
+      strokeWidth: 2.1,
+      opacity: 1,
+      depth: (armStart.depth + armEnd.depth) / 2 + 0.11
+    });
+
+    const boardCenter = {
+      x: armExitPoint.x - goalUnit.normal.x * 140,
+      y: armExitPoint.y - goalUnit.normal.y * 140
+    };
+    const boardHalfWidthMm = 420;
+    const boardHalfHeightMm = 300;
+    const boardTopLeft = project(toWorldPoint({
+      x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
+      y: boardCenter.y - frontTangent.y * boardHalfWidthMm
+    }, armHeightMm + boardHalfHeightMm));
+    const boardTopRight = project(toWorldPoint({
+      x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
+      y: boardCenter.y + frontTangent.y * boardHalfWidthMm
+    }, armHeightMm + boardHalfHeightMm));
+    const boardBottomRight = project(toWorldPoint({
+      x: boardCenter.x + frontTangent.x * boardHalfWidthMm,
+      y: boardCenter.y + frontTangent.y * boardHalfWidthMm
+    }, armHeightMm - boardHalfHeightMm));
+    const boardBottomLeft = project(toWorldPoint({
+      x: boardCenter.x - frontTangent.x * boardHalfWidthMm,
+      y: boardCenter.y - frontTangent.y * boardHalfWidthMm
+    }, armHeightMm - boardHalfHeightMm));
+    faces.push({
+      key: `${goalUnit.key}-backboard`,
+      points: formatPolygonPoints([boardBottomLeft, boardBottomRight, boardTopRight, boardTopLeft]),
+      fill: "rgba(244, 250, 255, 0.88)",
+      stroke: "rgba(87, 104, 121, 0.9)",
+      strokeWidth: 0.9,
+      opacity: 1,
+      depth: getFaceDepth([boardBottomLeft, boardBottomRight, boardTopRight, boardTopLeft]) + 0.12
+    });
+
+    const hoopAnchor = project(toWorldPoint({
+      x: boardCenter.x - goalUnit.normal.x * 110,
+      y: boardCenter.y - goalUnit.normal.y * 110
+    }, armHeightMm - 40));
+    faces.push({
+      key: `${goalUnit.key}-hoop`,
+      points: formatPolygonPoints([
+        { x: hoopAnchor.x - 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x + 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x + 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x - 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth }
+      ]),
+      fill: "rgba(255, 151, 70, 0.98)",
+      stroke: "rgba(168, 92, 33, 0.92)",
+      strokeWidth: 0.8,
+      opacity: 1,
+      depth: hoopAnchor.depth + 0.13
     });
   }
 
