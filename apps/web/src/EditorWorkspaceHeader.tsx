@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { AuthSessionEnvelope, CustomerSummary } from "@fence-estimator/contracts";
 
@@ -69,7 +69,9 @@ export function EditorWorkspaceHeader({
       ? "Save the drawing before opening its estimate."
       : "Open estimate"
     : "Save this drawing first to open its estimate.";
-  const [customerSearch, setCustomerSearch] = useState(currentCustomerName);
+  const workspaceSummary = session
+    ? `${session.company.name} workspace. Keep the canvas central and use the surrounding rails only when you need tooling or estimate detail.`
+    : "Review the drawing canvas and sign in when you need to save or reopen company work.";
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [newCustomerDraft, setNewCustomerDraft] = useState({
     name: "",
@@ -80,17 +82,11 @@ export function EditorWorkspaceHeader({
     notes: ""
   });
 
-  useEffect(() => {
-    setCustomerSearch(currentCustomerName);
-  }, [currentCustomerName]);
-
-  const filteredCustomers = useMemo(() => {
-    const normalizedSearch = customerSearch.trim().toLowerCase();
+  const activeCustomers = useMemo(() => {
     return customers
       .filter((customer) => !customer.isArchived)
-      .filter((customer) => normalizedSearch.length === 0 || customer.name.toLowerCase().includes(normalizedSearch))
-      .slice(0, 8);
-  }, [customerSearch, customers]);
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [customers]);
 
   const handleCreateCustomer = async () => {
     const created = await onSaveCustomer({
@@ -117,15 +113,56 @@ export function EditorWorkspaceHeader({
 
   return (
     <header className="editor-header">
+      <div className="portal-topbar editor-workspace-topbar">
+        <div className="portal-topbar-main">
+          <div className="portal-brand-block">
+            <span className="portal-logo">FE</span>
+            <div className="portal-brand-copy">
+              <strong>{session?.company.name ?? "Fence Estimator"}</strong>
+              <span>{session?.user.displayName ?? "Guest workspace"}</span>
+            </div>
+          </div>
+          <nav className="portal-nav-links editor-route-nav" aria-label="Editor navigation">
+            <button type="button" onClick={onNavigateDashboard}>
+              Dashboard
+            </button>
+            <button type="button" onClick={onNavigateCustomers}>
+              Customers
+            </button>
+            <button type="button" className="is-active">
+              Editor
+            </button>
+            <button type="button" disabled={!currentDrawingId || isDirty} title={estimateTitle} onClick={onNavigateEstimate}>
+              Estimate
+            </button>
+            {canManagePricing ? (
+              <button type="button" onClick={onNavigatePricing}>
+                Pricing
+              </button>
+            ) : null}
+            {canManageAdmin ? (
+              <button type="button" onClick={onNavigateAdmin}>
+                Admin
+              </button>
+            ) : null}
+          </nav>
+        </div>
+        <div className="portal-topbar-actions">
+          {session ? <span className={`editor-save-pill${isDirty ? " dirty" : ""}`}>{isDirty ? "Unsaved changes" : "All changes saved"}</span> : null}
+          {session ? <span className="portal-user-chip">{session.user.role}</span> : null}
+          {!session ? (
+            <button type="button" className="portal-logout-button" onClick={onGoToLogin}>
+              Go To Login
+            </button>
+          ) : null}
+        </div>
+      </div>
+
       <div className="editor-header-main">
         <div className="editor-header-copy">
-          <span className="portal-eyebrow">Workspace Editor</span>
+          <span className="portal-section-kicker">Workspace Editor</span>
           <h1>{drawingTitle}</h1>
-          <p>
-            {session
-              ? `${session.company.name} workspace. Keep the canvas central and use the surrounding rails only when you need tooling or estimate detail.`
-              : "Review the drawing canvas and sign in when you need to save or reopen company work."}
-          </p>
+          <p>{workspaceSummary}</p>
         </div>
         {session ? (
           <div className="editor-document-bar">
@@ -133,24 +170,23 @@ export function EditorWorkspaceHeader({
               <label className="editor-document-name">
                 <span>Customer</span>
                 <div className="editor-customer-picker">
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    placeholder="Search customers"
-                    onChange={(event) => setCustomerSearch(event.target.value)}
-                  />
                   <select
                     value={currentCustomerId ?? ""}
+                    title={currentCustomerName || "No customer selected"}
                     onChange={(event) => onSetCurrentCustomerId(event.target.value || null)}
                   >
                     <option value="">Select customer</option>
-                    {filteredCustomers.map((customer) => (
+                    {activeCustomers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="ghost" onClick={() => setIsCreatingCustomer((current) => !current)}>
+                  <button
+                    type="button"
+                    className="portal-secondary-button"
+                    onClick={() => setIsCreatingCustomer((current) => !current)}
+                  >
                     {isCreatingCustomer ? "Cancel" : "New Customer"}
                   </button>
                 </div>
@@ -193,72 +229,43 @@ export function EditorWorkspaceHeader({
                   placeholder="Phone"
                   onChange={(event) => setNewCustomerDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
                 />
-                <button type="button" onClick={() => void handleCreateCustomer()} disabled={isSavingCustomer}>
+                <button
+                  type="button"
+                  className="portal-primary-button"
+                  onClick={() => void handleCreateCustomer()}
+                  disabled={isSavingCustomer}
+                >
                   {isSavingCustomer ? "Creating..." : "Create Customer"}
                 </button>
               </div>
             ) : null}
             <div className="editor-document-actions-compact">
-              <button type="button" onClick={onSaveDrawing} disabled={isSavingDrawing}>
+              <button type="button" className="portal-primary-button" onClick={onSaveDrawing} disabled={isSavingDrawing}>
                 {currentDrawingId ? "Save" : "Save New"}
               </button>
-              <button type="button" className="ghost" onClick={onSaveDrawingAsNew} disabled={isSavingDrawing}>
+              <button
+                type="button"
+                className="portal-secondary-button"
+                onClick={onSaveDrawingAsNew}
+                disabled={isSavingDrawing}
+              >
                 Save As
               </button>
-              <button type="button" className="ghost" onClick={onExportPdf}>
+              <button type="button" className="portal-secondary-button" onClick={onExportPdf}>
                 Export PDF
               </button>
-              <button type="button" className="ghost" onClick={onStartNewDraft}>
+              <button type="button" className="portal-secondary-button" onClick={onStartNewDraft}>
                 New Draft
               </button>
             </div>
           </div>
         ) : (
-          <div className="editor-document-bar">
-            <button type="button" className="ghost" onClick={onExportPdf}>
+          <div className="editor-document-bar editor-document-bar-guest">
+            <button type="button" className="portal-secondary-button" onClick={onExportPdf}>
               Export PDF
-            </button>
-            <button type="button" onClick={onGoToLogin}>
-              Go To Login
             </button>
           </div>
         )}
-      </div>
-      <div className="editor-header-meta">
-        {session ? (
-          <>
-            <span className="editor-session-chip">{session.user.displayName}</span>
-            <span className="portal-user-chip">{session.user.role}</span>
-            <span className={`editor-save-pill${isDirty ? " dirty" : ""}`}>{isDirty ? "Unsaved changes" : "All changes saved"}</span>
-          </>
-        ) : null}
-        <nav className="editor-route-nav" aria-label="Editor navigation">
-          <button type="button" className="ghost editor-link-btn" onClick={onNavigateDashboard}>
-            Dashboard
-          </button>
-          <button type="button" className="ghost editor-link-btn" onClick={onNavigateCustomers}>
-            Customers
-          </button>
-          <button
-            type="button"
-            className="ghost editor-link-btn"
-            disabled={!currentDrawingId || isDirty}
-            title={estimateTitle}
-            onClick={onNavigateEstimate}
-          >
-            Estimate
-          </button>
-          {canManagePricing ? (
-            <button type="button" className="ghost editor-link-btn" onClick={onNavigatePricing}>
-              Pricing
-            </button>
-          ) : null}
-          {canManageAdmin ? (
-            <button type="button" className="ghost editor-link-btn" onClick={onNavigateAdmin}>
-              Admin
-            </button>
-          ) : null}
-        </nav>
       </div>
     </header>
   );

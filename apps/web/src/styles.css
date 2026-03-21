@@ -5569,3 +5569,264 @@ button:disabled {
     padding: 12px;
   }
 }
+
+/* Editor topbar alignment with portal theme */
+.editor-page {
+  --editor-stage-top: 58px;
+  gap: 10px;
+  padding: 12px clamp(12px, 2vw, 20px);
+  background:
+    radial-gradient(circle at top left, rgba(179, 112, 76, 0.11), transparent 30%),
+    radial-gradient(circle at right 24%, rgba(68, 110, 94, 0.09), transparent 28%),
+    linear-gradient(180deg, #f0e9de 0%, #e7ded1 52%, #ddd3c5 100%);
+}
+
+.editor-header {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editor-stage-shell {
+  border: 1px solid rgba(91, 103, 96, 0.26);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(77, 95, 88, 0.16), rgba(61, 76, 71, 0.22));
+  box-shadow: 0 16px 30px rgba(60, 49, 35, 0.12);
+}
+
+.editor-stage-shell .canvas-wrap {
+  background:
+    radial-gradient(circle at top left, rgba(205, 143, 104, 0.1), transparent 30%),
+    linear-gradient(180deg, #30413e 0%, #263532 100%);
+}
+
+.editor-workspace-topbar {
+  position: relative;
+  top: auto;
+  z-index: 5;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+.editor-workspace-topbar .portal-topbar-main {
+  gap: 10px;
+}
+
+.editor-workspace-topbar .portal-topbar-actions {
+  gap: 8px;
+}
+
+.editor-workspace-topbar .portal-nav-links {
+  flex-wrap: wrap;
+}
+
+.editor-route-nav button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editor-header-main {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.95fr) minmax(0, 2.05fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(96, 119, 109, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(248, 242, 234, 0.94)),
+    radial-gradient(circle at top right, rgba(62, 116, 97, 0.08), transparent 42%);
+  box-shadow: 0 14px 28px rgba(66, 56, 42, 0.1);
+}
+
+.editor-header-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-header-copy h1 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(1.22rem, 1.8vw, 1.62rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: #26342f;
+}
+
+.editor-header-copy p {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.45;
+  color: #5f6d64;
+}
+
+.editor-document-bar {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-document-fields {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 1fr);
+  gap: 10px;
+}
+
+.editor-document-name {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: #56655c;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.editor-document-name input,
+.editor-document-name select,
+.editor-customer-picker input,
+.editor-customer-picker select,
+.editor-customer-create input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(103, 115, 103, 0.2);
+  border-radius: 11px;
+  background: rgba(255, 252, 247, 0.96);
+  color: #22302a;
+  box-shadow: inset 0 1px 1px rgba(49, 43, 35, 0.04);
+}
+
+.editor-customer-picker {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.editor-customer-picker .portal-secondary-button {
+  width: auto;
+  min-height: 38px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.editor-customer-create {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 8px;
+}
+
+.editor-customer-create .portal-primary-button {
+  width: auto;
+  min-height: 38px;
+  margin: 0;
+}
+
+.editor-document-actions-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-document-actions-compact > * {
+  width: auto;
+  margin: 0;
+}
+
+.editor-document-bar-guest {
+  align-items: start;
+}
+
+.editor-save-pill {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 93, 80, 0.14);
+  background: rgba(47, 93, 80, 0.09);
+  color: #2a5a4d;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.editor-save-pill.dirty {
+  border-color: rgba(179, 92, 60, 0.18);
+  background: rgba(179, 92, 60, 0.12);
+  color: #8a482d;
+}
+
+@media (max-width: 1220px) {
+  .editor-header-main {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-document-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .editor-page {
+    --editor-stage-top: 0px;
+    padding: 10px;
+  }
+
+  .editor-workspace-topbar {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .editor-workspace-topbar,
+  .editor-workspace-topbar .portal-topbar-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .editor-workspace-topbar .portal-topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .editor-header-main {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .editor-customer-picker,
+  .editor-customer-create {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-document-actions-compact > * {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-header-copy p {
+    display: none;
+  }
+
+  .editor-workspace-topbar .portal-topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .editor-workspace-topbar .portal-user-chip {
+    display: inline-flex;
+  }
+
+  .editor-document-actions-compact > * {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+}
