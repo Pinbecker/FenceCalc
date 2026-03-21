@@ -126,21 +126,30 @@ export function CustomerPage({
     ? (customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "Unassigned")
     : "Unassigned";
 
-  const handleSave = async () => {
-    if (!customer || !draft) {
+  const updateDraftField = (field: keyof CustomerDraft, value: string) => {
+    if (!customer) {
       return;
     }
 
+    setDraft((current) => ({ ...(current ?? buildDraft(customer)), [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!customer) {
+      return;
+    }
+
+    const customerDraft = draft ?? buildDraft(customer);
     await onSaveCustomer({
       mode: "update",
       customerId: customer.id,
       customer: {
-        name: draft.name.trim(),
-        primaryContactName: draft.primaryContactName.trim(),
-        primaryEmail: draft.primaryEmail.trim(),
-        primaryPhone: draft.primaryPhone.trim(),
-        siteAddress: draft.siteAddress.trim(),
-        notes: draft.notes.trim(),
+        name: customerDraft.name.trim(),
+        primaryContactName: customerDraft.primaryContactName.trim(),
+        primaryEmail: customerDraft.primaryEmail.trim(),
+        primaryPhone: customerDraft.primaryPhone.trim(),
+        siteAddress: customerDraft.siteAddress.trim(),
+        notes: customerDraft.notes.trim(),
       },
     });
   };
@@ -175,6 +184,7 @@ export function CustomerPage({
       </section>
     );
   }
+  const customerDraft = draft ?? buildDraft(customer);
 
   return (
     <section className="portal-page portal-customer-page">
@@ -183,23 +193,35 @@ export function CustomerPage({
           <div className="portal-customer-page-heading">
             <span className="portal-eyebrow">Customer workspace</span>
             <h1>{customer.name}</h1>
-            <p>Keep customer information and that customer's drawings together so the team can reopen the right work without scanning the whole company library.</p>
+            <p>Customer information</p>
           </div>
-          <aside className="portal-customer-snapshot" aria-label="Customer snapshot">
-            <span className="portal-section-kicker">Snapshot</span>
-            <div className="portal-customer-snapshot-grid">
-              <article>
-                <span>Primary contact</span>
-                <strong>{primaryContact}</strong>
-              </article>
-              <article>
-                <span>Last activity</span>
-                <strong>{formatTimestamp(customer.lastActivityAtIso)}</strong>
-              </article>
-              <article>
-                <span>Drawings total</span>
-                <strong>{totalCustomerDrawings.length}</strong>
-              </article>
+          <aside className="portal-customer-top-form" aria-label="Customer information">
+            <div className="portal-customer-top-form-head">
+              <span className="portal-section-kicker">Customer information</span>
+              <span className={`portal-customer-status${customer.isArchived ? " is-archived" : ""}`}>
+                {customer.isArchived ? "Archived" : "Active"}
+              </span>
+            </div>
+            <div className="portal-customer-top-form-grid">
+              <label className="drawing-library-customer-filter">
+                <span>Name</span>
+                <input value={customerDraft.name} onChange={(event) => updateDraftField("name", event.target.value)} />
+              </label>
+              <label className="drawing-library-customer-filter">
+                <span>Primary Contact</span>
+                <input
+                  value={customerDraft.primaryContactName}
+                  onChange={(event) => updateDraftField("primaryContactName", event.target.value)}
+                />
+              </label>
+              <label className="drawing-library-customer-filter">
+                <span>Phone</span>
+                <input value={customerDraft.primaryPhone} onChange={(event) => updateDraftField("primaryPhone", event.target.value)} />
+              </label>
+              <label className="drawing-library-customer-filter">
+                <span>Email</span>
+                <input value={customerDraft.primaryEmail} onChange={(event) => updateDraftField("primaryEmail", event.target.value)} />
+              </label>
             </div>
           </aside>
         </div>
@@ -244,55 +266,11 @@ export function CustomerPage({
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Customer details</span>
-              <h2>Customer information</h2>
+              <h2>Site and notes</h2>
             </div>
           </div>
 
-          {draft ? (
-            <div className="portal-customer-detail-body">
-              <section className="portal-customer-form-section">
-                <div className="portal-customer-form-section-head">
-                  <span className="portal-section-kicker">Customer</span>
-                  <h3>Core details</h3>
-                </div>
-                <div className="portal-customer-form-grid">
-                  <label className="drawing-library-customer-filter">
-                    <span>Name</span>
-                    <input value={draft.name} onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)} />
-                  </label>
-                </div>
-              </section>
-
-              <section className="portal-customer-form-section">
-                <div className="portal-customer-form-section-head">
-                  <span className="portal-section-kicker">Primary contact</span>
-                  <h3>Contact channels</h3>
-                </div>
-                <div className="portal-customer-form-grid portal-customer-form-grid-two-column">
-                  <label className="drawing-library-customer-filter">
-                    <span>Primary Contact</span>
-                    <input
-                      value={draft.primaryContactName}
-                      onChange={(event) => setDraft((current) => current ? { ...current, primaryContactName: event.target.value } : current)}
-                    />
-                  </label>
-                  <label className="drawing-library-customer-filter">
-                    <span>Phone</span>
-                    <input
-                      value={draft.primaryPhone}
-                      onChange={(event) => setDraft((current) => current ? { ...current, primaryPhone: event.target.value } : current)}
-                    />
-                  </label>
-                  <label className="drawing-library-customer-filter portal-customer-form-grid-span">
-                    <span>Email</span>
-                    <input
-                      value={draft.primaryEmail}
-                      onChange={(event) => setDraft((current) => current ? { ...current, primaryEmail: event.target.value } : current)}
-                    />
-                  </label>
-                </div>
-              </section>
-
+          <div className="portal-customer-detail-body">
               <section className="portal-customer-form-section">
                 <div className="portal-customer-form-section-head">
                   <span className="portal-section-kicker">Site</span>
@@ -302,8 +280,8 @@ export function CustomerPage({
                   <label className="drawing-library-customer-filter">
                     <span>Site Address</span>
                     <textarea
-                      value={draft.siteAddress}
-                      onChange={(event) => setDraft((current) => current ? { ...current, siteAddress: event.target.value } : current)}
+                      value={customerDraft.siteAddress}
+                      onChange={(event) => updateDraftField("siteAddress", event.target.value)}
                     />
                   </label>
                 </div>
@@ -318,8 +296,8 @@ export function CustomerPage({
                   <label className="drawing-library-customer-filter">
                     <span>Notes</span>
                     <textarea
-                      value={draft.notes}
-                      onChange={(event) => setDraft((current) => current ? { ...current, notes: event.target.value } : current)}
+                      value={customerDraft.notes}
+                      onChange={(event) => updateDraftField("notes", event.target.value)}
                     />
                   </label>
                 </div>
@@ -342,7 +320,6 @@ export function CustomerPage({
                 </button>
               </div>
             </div>
-          ) : null}
         </section>
 
         <section className="portal-surface-card portal-customer-drawings-panel">

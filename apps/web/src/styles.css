@@ -5185,7 +5185,7 @@ button:disabled {
 }
 
 .portal-dashboard-snapshot,
-.portal-customer-snapshot,
+.portal-customer-top-form,
 .portal-drawings-snapshot {
   display: grid;
   gap: 10px;
@@ -5198,17 +5198,17 @@ button:disabled {
 }
 
 .portal-dashboard-snapshot-grid,
-.portal-customer-snapshot-grid,
+.portal-customer-top-form-grid,
 .portal-drawings-snapshot-grid {
   display: grid;
   gap: 8px;
 }
 
 .portal-dashboard-snapshot-grid article,
-.portal-customer-snapshot-grid article,
+.portal-customer-top-form-grid label,
 .portal-drawings-snapshot-grid article {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   padding: 10px;
   border: 1px solid rgba(94, 114, 105, 0.14);
   border-radius: 12px;
@@ -5216,7 +5216,7 @@ button:disabled {
 }
 
 .portal-dashboard-snapshot-grid article span,
-.portal-customer-snapshot-grid article span,
+.portal-customer-top-form .drawing-library-customer-filter > span,
 .portal-drawings-snapshot-grid article span {
   font-size: 0.66rem;
   font-weight: 800;
@@ -5226,11 +5226,55 @@ button:disabled {
 }
 
 .portal-dashboard-snapshot-grid article strong,
-.portal-customer-snapshot-grid article strong,
 .portal-drawings-snapshot-grid article strong {
   font-size: 0.88rem;
   line-height: 1.35;
   color: #27342f;
+}
+
+.portal-customer-page-heading-shell {
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.6fr);
+  align-items: start;
+}
+
+.portal-customer-page .portal-page-header h1 {
+  font-size: clamp(1.45rem, 2.3vw, 2.15rem);
+  line-height: 1.03;
+}
+
+.portal-customer-page .portal-page-header p {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.portal-customer-top-form {
+  gap: 8px;
+  padding: 12px;
+}
+
+.portal-customer-top-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.portal-customer-top-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portal-customer-top-form .drawing-library-customer-filter {
+  min-width: 0;
+  color: #6c786f;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.portal-customer-top-form .drawing-library-customer-filter input {
+  min-height: 37px;
+  padding: 8px 10px;
 }
 
 .portal-dashboard-actions,
@@ -5456,7 +5500,6 @@ button:disabled {
   }
 
   .portal-dashboard-snapshot-grid,
-  .portal-customer-snapshot-grid,
   .portal-drawings-snapshot-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -5470,8 +5513,11 @@ button:disabled {
   }
 
   .portal-dashboard-snapshot-grid,
-  .portal-customer-snapshot-grid,
   .portal-drawings-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-customer-top-form-grid {
     grid-template-columns: 1fr;
   }
 
