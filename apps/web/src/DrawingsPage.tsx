@@ -164,66 +164,68 @@ export function DrawingsPage({
 
       <section className="portal-surface-card drawing-library-toolbar">
         <div className="drawing-library-toolbar-main">
-          <div className="portal-filter-row" role="tablist" aria-label="Drawing status filter">
-            {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingStatusFilter[]).map((option) => (
-              <button
-                type="button"
-                key={option}
-                className={statusFilter === option ? "is-active" : undefined}
-                onClick={() => setStatusFilter(option)}
-              >
-                {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
-              </button>
-            ))}
-          </div>
-
-          <div className="portal-filter-row drawing-library-ownership-filter" role="tablist" aria-label="Drawing ownership filter">
-            {(["COMPANY", "MINE"] as DrawingOwnershipFilter[]).map((option) => (
-              <button
-                type="button"
-                key={option}
-                className={ownershipFilter === option ? "is-active" : undefined}
-                onClick={() => setOwnershipFilter(option)}
-              >
-                {option === "COMPANY" ? "Company" : "Mine"}
-              </button>
-            ))}
-          </div>
-
-          <label className="drawing-library-customer-filter">
-            <span>Customer View</span>
-            <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
-              <option value="ALL_CUSTOMERS">All customers</option>
-              {customerOptions.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
+          <div className="drawing-library-toolbar-filters">
+            <div className="portal-filter-row" role="tablist" aria-label="Drawing status filter">
+              {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingStatusFilter[]).map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={statusFilter === option ? "is-active" : undefined}
+                  onClick={() => setStatusFilter(option)}
+                >
+                  {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
+                </button>
               ))}
-            </select>
-          </label>
-        </div>
+            </div>
 
-        <div className="drawing-library-toolbar-summary">
-          <article className="drawing-library-overview-metric">
-            <span>Visible</span>
-            <strong>{visibleDrawings.length}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Mine</span>
-            <strong>{mineCount}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Customers</span>
-            <strong>{visibleCustomerCount}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Active</span>
-            <strong>{activeCount}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Archived</span>
-            <strong>{archivedCount}</strong>
-          </article>
+            <div className="portal-filter-row drawing-library-ownership-filter" role="tablist" aria-label="Drawing ownership filter">
+              {(["COMPANY", "MINE"] as DrawingOwnershipFilter[]).map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={ownershipFilter === option ? "is-active" : undefined}
+                  onClick={() => setOwnershipFilter(option)}
+                >
+                  {option === "COMPANY" ? "Company" : "Mine"}
+                </button>
+              ))}
+            </div>
+
+            <label className="drawing-library-customer-filter">
+              <span>Customer view</span>
+              <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
+                <option value="ALL_CUSTOMERS">All customers</option>
+                {customerOptions.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="drawing-library-toolbar-summary" aria-label="Drawing library summary">
+            <article className="drawing-library-overview-metric">
+              <span>Visible</span>
+              <strong>{visibleDrawings.length}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Mine</span>
+              <strong>{mineCount}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Customers</span>
+              <strong>{visibleCustomerCount}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Active</span>
+              <strong>{activeCount}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Archived</span>
+              <strong>{archivedCount}</strong>
+            </article>
+          </div>
         </div>
 
         <p className="drawing-library-toolbar-copy">
@@ -261,7 +263,10 @@ export function DrawingsPage({
                 const isMine = drawing.contributorUserIds.includes(session.user.id);
 
                 return (
-                  <article key={drawing.id} className={`drawing-library-row${expandedDrawingId === drawing.id ? " is-expanded" : ""}`}>
+                  <article
+                    key={drawing.id}
+                    className={`drawing-library-row${expandedDrawingId === drawing.id ? " is-expanded" : ""}${drawing.isArchived ? " is-archived" : ""}`}
+                  >
                     <div className="drawing-library-row-main">
                       <div className="drawing-library-row-preview">
                         <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="inline" />
@@ -269,7 +274,7 @@ export function DrawingsPage({
 
                       <div className="drawing-library-row-copy">
                         <div className="drawing-library-row-head">
-                          <div className="drawing-library-card-header">
+                          <div className="drawing-library-card-header drawing-library-row-header">
                             <div>
                               <h2>{drawing.name}</h2>
                               <p>
@@ -302,21 +307,31 @@ export function DrawingsPage({
                         <button type="button" className="portal-secondary-button" onClick={() => onOpenEstimate(drawing.id)}>
                           Estimate
                         </button>
-                        <button
-                          type="button"
-                          className="portal-secondary-button"
-                          onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
-                        >
-                          {drawing.isArchived ? "Unarchive" : "Archive"}
-                        </button>
-                        <button type="button" className="portal-secondary-button" onClick={() => void handleToggleHistory(drawing.id)}>
-                          {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
-                        </button>
+                        <div className="drawing-library-row-utility-actions">
+                          <button
+                            type="button"
+                            className="portal-secondary-button drawing-library-utility-button"
+                            onClick={() => void onToggleArchive(drawing.id, !drawing.isArchived)}
+                          >
+                            {drawing.isArchived ? "Unarchive" : "Archive"}
+                          </button>
+                          <button
+                            type="button"
+                            className="portal-secondary-button drawing-library-utility-button"
+                            onClick={() => void handleToggleHistory(drawing.id)}
+                          >
+                            {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
                     {expandedDrawingId === drawing.id ? (
                       <div className="drawing-history-panel">
+                        <div className="drawing-history-panel-heading">
+                          <span className="portal-section-kicker">History</span>
+                          <strong>{drawing.name}</strong>
+                        </div>
                         {isLoadingVersions ? <p className="portal-empty-copy">Loading versions...</p> : null}
                         {versions.map((version) => (
                           <div key={version.id} className="drawing-history-row">

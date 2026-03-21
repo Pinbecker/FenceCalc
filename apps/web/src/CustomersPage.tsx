@@ -167,10 +167,10 @@ export function CustomersPage({
   return (
     <section className="portal-page portal-customers-page">
       <header className="portal-page-header">
-        <div>
+        <div className="portal-customers-heading">
           <span className="portal-eyebrow">Customers</span>
           <h1>Customer directory</h1>
-          <p>Keep customer records reusable, searchable, and linked to the current drawing library.</p>
+          <p>Keep customer records searchable, reusable, and tied cleanly to the drawing library without making the directory feel like a second dashboard.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>
@@ -192,91 +192,97 @@ export function CustomersPage({
 
       <section className="portal-surface-card drawing-library-toolbar">
         <div className="drawing-library-toolbar-main">
-          <div className="portal-filter-row" role="tablist" aria-label="Customer filter">
-            {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerFilter[]).map((option) => (
-              <button
-                type="button"
-                key={option}
-                className={filter === option ? "is-active" : undefined}
-                onClick={() => setFilter(option)}
-              >
-                {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
-              </button>
-            ))}
+          <div className="drawing-library-toolbar-filters">
+            <div className="portal-filter-row" role="tablist" aria-label="Customer filter">
+              {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerFilter[]).map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={filter === option ? "is-active" : undefined}
+                  onClick={() => setFilter(option)}
+                >
+                  {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
+                </button>
+              ))}
+            </div>
+
+            <label className="drawing-library-customer-filter">
+              <span>Search</span>
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer records" />
+            </label>
           </div>
 
-          <label className="drawing-library-customer-filter">
-            <span>Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer records" />
-          </label>
-        </div>
-
-        <div className="drawing-library-toolbar-summary">
-          <article className="drawing-library-overview-metric">
-            <span>Visible</span>
-            <strong>{visibleCustomers.length}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Active</span>
-            <strong>{activeCount}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>Archived</span>
-            <strong>{archivedCount}</strong>
-          </article>
-          <article className="drawing-library-overview-metric">
-            <span>With Work</span>
-            <strong>{activeWorkCount}</strong>
-          </article>
+          <div className="drawing-library-toolbar-summary" aria-label="Customer directory summary">
+            <article className="drawing-library-overview-metric">
+              <span>Visible</span>
+              <strong>{visibleCustomers.length}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Active</span>
+              <strong>{activeCount}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>Archived</span>
+              <strong>{archivedCount}</strong>
+            </article>
+            <article className="drawing-library-overview-metric">
+              <span>With Work</span>
+              <strong>{activeWorkCount}</strong>
+            </article>
+          </div>
         </div>
       </section>
 
-      <div className="portal-dashboard-layout">
-        <section className="portal-surface-card portal-dashboard-primary">
+      <div className="portal-customers-layout">
+        <section className="portal-surface-card portal-customers-directory">
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Directory</span>
               <h2>Company customers</h2>
             </div>
           </div>
-          {visibleCustomers.length === 0 ? <p className="portal-empty-copy">No customers match this view.</p> : null}
-          <div className="portal-dashboard-list">
+          {visibleCustomers.length === 0 ? (
+            <div className="portal-empty-state portal-customers-empty-state">
+              <h2>No customers match this search</h2>
+              <p>Adjust the filter or search terms to bring records back into view.</p>
+            </div>
+          ) : null}
+          <div className="portal-customers-directory-list">
             {visibleCustomers.map((customer) => (
               <button
                 type="button"
                 key={customer.id}
-                className="portal-dashboard-row"
-                onClick={() => onNavigate("drawings", { customerId: customer.id, scope: customer.isArchived ? "all" : "active" })}
+                className={`portal-customer-row${!isCreating && selectedCustomerId === customer.id ? " is-selected" : ""}`}
+                onClick={() => {
+                  setIsCreating(false);
+                  setSelectedCustomerId(customer.id);
+                }}
+                aria-pressed={!isCreating && selectedCustomerId === customer.id}
               >
-                <div className="portal-dashboard-row-copy">
-                  <div className="portal-dashboard-row-head">
-                    <strong>{customer.name}</strong>
-                    <span className="portal-dashboard-row-version">{customer.isArchived ? "Archived" : "Active"}</span>
+                <div className="portal-customer-row-main">
+                  <div className="portal-customer-row-head">
+                    <div className="portal-customer-row-title">
+                      <strong>{customer.name}</strong>
+                      <p>{customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "No contact details yet"}</p>
+                    </div>
+                    <span className={`portal-customer-status${customer.isArchived ? " is-archived" : ""}`}>
+                      {customer.isArchived ? "Archived" : "Active"}
+                    </span>
                   </div>
-                  <p>{customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "No contact details yet"}</p>
-                  <div className="portal-dashboard-row-meta">
+                  <div className="portal-customer-row-meta">
                     <span>{customer.activeDrawingCount} active drawings</span>
                     <span>{customer.archivedDrawingCount} archived drawings</span>
-                    <span>{formatTimestamp(customer.lastActivityAtIso)}</span>
+                    <span>Last activity {formatTimestamp(customer.lastActivityAtIso)}</span>
                   </div>
                 </div>
-                <span
-                  className="portal-dashboard-row-cta"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setIsCreating(false);
-                    setSelectedCustomerId(customer.id);
-                  }}
-                >
-                  Edit
-                </span>
+                <span className="portal-customer-row-cta">{!isCreating && selectedCustomerId === customer.id ? "Selected" : "Open"}</span>
               </button>
             ))}
           </div>
         </section>
 
-        <div className="portal-dashboard-side">
-          <section className="portal-surface-card portal-dashboard-customers">
+        <div className="portal-customers-detail-column">
+          <section className="portal-surface-card portal-customer-detail">
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">{isCreating ? "Create" : "Details"}</span>
@@ -284,72 +290,115 @@ export function CustomersPage({
               </div>
             </div>
 
-            {!isCreating && !selectedCustomer ? <p className="portal-empty-copy">Choose a customer to edit details.</p> : null}
+            {!isCreating && !selectedCustomer ? (
+              <div className="portal-empty-state portal-customers-empty-state">
+                <h2>No customer selected</h2>
+                <p>Select a customer from the directory or start a new record to edit details here.</p>
+              </div>
+            ) : null}
 
             {isCreating || selectedCustomer ? (
-              <div className="portal-dashboard-action-grid">
-                <label className="drawing-library-customer-filter">
-                  <span>Name</span>
-                  <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
-                </label>
-                <label className="drawing-library-customer-filter">
-                  <span>Primary Contact</span>
-                  <input
-                    value={draft.primaryContactName}
-                    onChange={(event) => setDraft((current) => ({ ...current, primaryContactName: event.target.value }))}
-                  />
-                </label>
-                <label className="drawing-library-customer-filter">
-                  <span>Email</span>
-                  <input
-                    value={draft.primaryEmail}
-                    onChange={(event) => setDraft((current) => ({ ...current, primaryEmail: event.target.value }))}
-                  />
-                </label>
-                <label className="drawing-library-customer-filter">
-                  <span>Phone</span>
-                  <input
-                    value={draft.primaryPhone}
-                    onChange={(event) => setDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
-                  />
-                </label>
-                <label className="drawing-library-customer-filter">
-                  <span>Site Address</span>
-                  <textarea
-                    value={draft.siteAddress}
-                    onChange={(event) => setDraft((current) => ({ ...current, siteAddress: event.target.value }))}
-                  />
-                </label>
-                <label className="drawing-library-customer-filter">
-                  <span>Notes</span>
-                  <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} />
-                </label>
-                <button type="button" className="portal-primary-button" onClick={() => void handleSave()} disabled={isSavingCustomer}>
-                  {isSavingCustomer ? "Saving..." : isCreating ? "Create Customer" : "Save Changes"}
-                </button>
-                {!isCreating && selectedCustomer ? (
-                  <button
-                    type="button"
-                    className="portal-secondary-button"
-                    onClick={() => void onSetCustomerArchived(selectedCustomer.id, !selectedCustomer.isArchived)}
-                    disabled={isArchivingCustomerId === selectedCustomer.id}
-                  >
-                    {isArchivingCustomerId === selectedCustomer.id
-                      ? "Updating..."
-                      : selectedCustomer.isArchived
-                        ? "Restore Customer"
-                        : "Archive Customer"}
+              <div className="portal-customer-detail-body">
+                <section className="portal-customer-form-section">
+                  <div className="portal-customer-form-section-head">
+                    <span className="portal-section-kicker">Customer</span>
+                    <h3>Core details</h3>
+                  </div>
+                  <div className="portal-customer-form-grid">
+                    <label className="drawing-library-customer-filter">
+                      <span>Name</span>
+                      <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="portal-customer-form-section">
+                  <div className="portal-customer-form-section-head">
+                    <span className="portal-section-kicker">Primary contact</span>
+                    <h3>Contact channels</h3>
+                  </div>
+                  <div className="portal-customer-form-grid portal-customer-form-grid-two-column">
+                    <label className="drawing-library-customer-filter">
+                      <span>Primary Contact</span>
+                      <input
+                        value={draft.primaryContactName}
+                        onChange={(event) => setDraft((current) => ({ ...current, primaryContactName: event.target.value }))}
+                      />
+                    </label>
+                    <label className="drawing-library-customer-filter">
+                      <span>Phone</span>
+                      <input
+                        value={draft.primaryPhone}
+                        onChange={(event) => setDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
+                      />
+                    </label>
+                    <label className="drawing-library-customer-filter portal-customer-form-grid-span">
+                      <span>Email</span>
+                      <input
+                        value={draft.primaryEmail}
+                        onChange={(event) => setDraft((current) => ({ ...current, primaryEmail: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="portal-customer-form-section">
+                  <div className="portal-customer-form-section-head">
+                    <span className="portal-section-kicker">Site</span>
+                    <h3>Address information</h3>
+                  </div>
+                  <div className="portal-customer-form-grid">
+                    <label className="drawing-library-customer-filter">
+                      <span>Site Address</span>
+                      <textarea
+                        value={draft.siteAddress}
+                        onChange={(event) => setDraft((current) => ({ ...current, siteAddress: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="portal-customer-form-section">
+                  <div className="portal-customer-form-section-head">
+                    <span className="portal-section-kicker">Notes</span>
+                    <h3>Internal context</h3>
+                  </div>
+                  <div className="portal-customer-form-grid">
+                    <label className="drawing-library-customer-filter">
+                      <span>Notes</span>
+                      <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} />
+                    </label>
+                  </div>
+                </section>
+
+                <div className="portal-customer-detail-footer">
+                  <button type="button" className="portal-primary-button" onClick={() => void handleSave()} disabled={isSavingCustomer}>
+                    {isSavingCustomer ? "Saving..." : isCreating ? "Create Customer" : "Save Changes"}
                   </button>
-                ) : null}
-                {!isCreating && selectedCustomer ? (
-                  <button
-                    type="button"
-                    className="portal-secondary-button"
-                    onClick={() => onNavigate("drawings", { customerId: selectedCustomer.id, scope: selectedCustomer.isArchived ? "all" : "active" })}
-                  >
-                    Open Drawings
-                  </button>
-                ) : null}
+                  {!isCreating && selectedCustomer ? (
+                    <button
+                      type="button"
+                      className="portal-secondary-button"
+                      onClick={() => onNavigate("drawings", { customerId: selectedCustomer.id, scope: selectedCustomer.isArchived ? "all" : "active" })}
+                    >
+                      Open Drawings
+                    </button>
+                  ) : null}
+                  {!isCreating && selectedCustomer ? (
+                    <button
+                      type="button"
+                      className="portal-secondary-button"
+                      onClick={() => void onSetCustomerArchived(selectedCustomer.id, !selectedCustomer.isArchived)}
+                      disabled={isArchivingCustomerId === selectedCustomer.id}
+                    >
+                      {isArchivingCustomerId === selectedCustomer.id
+                        ? "Updating..."
+                        : selectedCustomer.isArchived
+                          ? "Restore Customer"
+                          : "Archive Customer"}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </section>

@@ -132,7 +132,7 @@ const versions: DrawingVersionRecord[] = [
 ];
 
 describe("DrawingsPage", () => {
-  it("renders drawing management controls", () => {
+  it("renders the denser grouped drawing worklist", () => {
     const html = renderToStaticMarkup(
       <DrawingsPage
         customers={customers}
@@ -150,6 +150,8 @@ describe("DrawingsPage", () => {
     );
 
     expect(html).toContain("Saved drawings");
+    expect(html).toContain("Drawing library summary");
+    expect(html).toContain("Company view includes every drawing stored for the current company workspace.");
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Mine");
     expect(html).toContain("Version History");

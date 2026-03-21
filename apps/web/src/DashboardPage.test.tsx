@@ -90,11 +90,16 @@ const customers: CustomerSummary[] = [
 ];
 
 describe("DashboardPage", () => {
-  it("renders recent drawing previews beside the drawing names", () => {
+  it("renders the refreshed work queue and customer activity layout", () => {
     const html = renderToStaticMarkup(
       <DashboardPage session={session} customers={customers} drawings={drawings} onNavigate={() => undefined} />
     );
 
+    expect(html).toContain("Workspace overview");
+    expect(html).toContain("Recent drawings");
+    expect(html).toContain("Active customers");
+    expect(html).toContain("Useful routes");
+    expect(html).toContain("Jane Doe");
     expect(html).toContain("Front perimeter");
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Drawing preview for Front perimeter");

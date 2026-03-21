@@ -1,18 +1,35 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("covers bootstrap, admin user setup, drawing save/version restore, and archive flows", async ({ page }) => {
-  test.setTimeout(60_000);
-
+async function bootstrapOrLoginOwner(page: Page, companyName = "Acme Fencing") {
   await page.goto("/");
 
-  await page.getByLabel("Bootstrap Secret").fill("test-bootstrap-secret");
-  await page.getByLabel("Company Name").fill("Acme Fencing");
-  await page.getByLabel("Your Name").fill("Owner User");
-  await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Password").fill("supersecure123");
-  await page.getByRole("button", { name: "Create Owner" }).click();
+  const bootstrapButton = page.getByRole("button", { name: "Create Owner" });
+  const loginButton = page.getByRole("button", { name: "Log In" });
 
-  await expect(page.getByRole("heading", { name: "Acme Fencing" })).toBeVisible();
+  await expect(bootstrapButton.or(loginButton)).toBeVisible();
+
+  if (await bootstrapButton.isVisible()) {
+    await page.getByLabel("Bootstrap Secret").fill("test-bootstrap-secret");
+    await page.getByLabel("Company Name").fill(companyName);
+    await page.getByLabel("Your Name").fill("Owner User");
+    await page.getByLabel("Email").fill("owner@example.com");
+    await page.getByLabel("Password").fill("supersecure123");
+    await bootstrapButton.click();
+  } else {
+    await page.getByLabel("Email").fill("owner@example.com");
+    await page.getByLabel("Password").fill("supersecure123");
+    await loginButton.click();
+  }
+
+  await expect(page.getByRole("heading", { name: companyName })).toBeVisible();
+}
+
+test("covers bootstrap, admin user setup, drawing save/version restore, archive flows, and the refreshed portal views", async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await bootstrapOrLoginOwner(page);
+  await expect(page.getByText("Active customers", { exact: true })).toBeVisible();
+  await expect(page.getByText("Useful routes", { exact: true })).toBeVisible();
 
   let primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Admin" }).click();
@@ -49,9 +66,18 @@ test("covers bootstrap, admin user setup, drawing save/version restore, and arch
   await expect(page.getByRole("heading", { name: "New drawing draft" })).toBeVisible();
   await expect(page.getByText("Workspace Editor", { exact: true })).toBeVisible();
 
-  await page.getByLabel("Customer").fill("Operations Yard");
   await page.getByLabel("Drawing Name").fill("Operations Yard");
+  await page.getByRole("button", { name: "New Customer" }).click();
+  await page.getByPlaceholder("Customer name").fill("Operations Yard");
+  await page.getByRole("button", { name: "Create Customer" }).click();
   await page.getByRole("button", { name: "Save New" }).click();
+
+  await page.getByRole("button", { name: "Drawings" }).click();
+  await expect(page.getByRole("heading", { name: "Saved drawings" })).toBeVisible();
+
+  const initialRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" });
+  await expect(initialRow).toContainText("Active");
+  await initialRow.getByRole("button", { name: "Open In Editor" }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
 
   await page.getByLabel("Drawing Name").fill("Operations Yard v2");
@@ -61,8 +87,6 @@ test("covers bootstrap, admin user setup, drawing save/version restore, and arch
   await expect(page.getByRole("button", { name: "Estimate" })).toBeEnabled();
 
   await page.getByRole("button", { name: "Drawings" }).click();
-  await expect(page.getByRole("heading", { name: "Saved drawings" })).toBeVisible();
-
   const drawingRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard v2" });
   await expect(drawingRow).toContainText("Active");
 
@@ -84,4 +108,37 @@ test("covers bootstrap, admin user setup, drawing save/version restore, and arch
 
   await page.getByRole("button", { name: "Active" }).click();
   await expect(page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Customers" }).click();
+  await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
+
+  const customerRow = page.locator(".portal-customer-row").filter({ hasText: "Operations Yard" });
+  await customerRow.click();
+  await expect(customerRow).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("heading", { name: "Operations Yard" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Drawings" })).toBeVisible();
+
+  await page.getByRole("button", { name: "New Customer" }).click();
+  await expect(page.getByRole("heading", { name: "New customer" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create Customer" })).toBeVisible();
+});
+
+test("keeps dashboard, drawings, and customers usable on a mobile viewport", async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await bootstrapOrLoginOwner(page);
+
+  await expect(page.getByRole("heading", { name: "Acme Fencing" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Library" })).toBeVisible();
+
+  const primaryNav = page.getByRole("navigation", { name: "Primary" });
+  await primaryNav.getByRole("button", { name: "Drawings" }).click();
+  await expect(page.getByRole("heading", { name: "Saved drawings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New Drawing" })).toBeVisible();
+
+  await primaryNav.getByRole("button", { name: "Customers" }).click();
+  await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New Customer" })).toBeVisible();
+  await expect(page.locator(".portal-customer-row").filter({ hasText: "Operations Yard" })).toBeVisible();
 });
