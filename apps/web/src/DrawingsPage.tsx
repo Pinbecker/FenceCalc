@@ -126,6 +126,11 @@ export function DrawingsPage({
   const visibleCustomerCount = new Set(
     visibleDrawings.map((drawing) => drawing.customerName.trim() || "Unassigned customer"),
   ).size;
+  const scopeSummary = statusFilter === "ACTIVE"
+    ? "Showing active drawings only."
+    : statusFilter === "ARCHIVED"
+      ? "Showing archived drawings only."
+      : "Showing active and archived drawings.";
 
   const handleToggleHistory = async (drawingId: string) => {
     if (expandedDrawingId === drawingId) {
@@ -147,10 +152,29 @@ export function DrawingsPage({
   return (
     <section className="portal-page portal-drawings-page">
       <header className="portal-page-header portal-drawings-header">
-        <div className="portal-drawings-heading">
-          <span className="portal-eyebrow">Drawing Library</span>
-          <h1>Saved drawings</h1>
-          <p>Filter the library quickly, then scan by customer and open the exact drawing you need without fighting oversized cards.</p>
+        <div className="portal-drawings-heading-shell">
+          <div className="portal-drawings-heading">
+            <span className="portal-eyebrow">Drawing Library</span>
+            <h1>Saved drawings</h1>
+            <p>Filter the library quickly, then scan by customer and open the exact drawing you need without fighting oversized cards.</p>
+          </div>
+          <aside className="portal-drawings-snapshot" aria-label="Drawing library snapshot">
+            <span className="portal-section-kicker">View snapshot</span>
+            <div className="portal-drawings-snapshot-grid">
+              <article>
+                <span>Current scope</span>
+                <strong>{scopeSummary}</strong>
+              </article>
+              <article>
+                <span>Visible groups</span>
+                <strong>{groupedDrawings.length}</strong>
+              </article>
+              <article>
+                <span>Visible drawings</span>
+                <strong>{visibleDrawings.length}</strong>
+              </article>
+            </div>
+          </aside>
         </div>
         <div className="portal-header-actions portal-drawings-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>

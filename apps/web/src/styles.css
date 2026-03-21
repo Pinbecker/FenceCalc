@@ -5086,3 +5086,440 @@ button:disabled {
     display: none;
   }
 }
+
+/* Portal visual refresh for dashboard, customer page, and drawings page */
+
+:root {
+  --portal-hero-border: rgba(90, 112, 105, 0.2);
+  --portal-hero-shadow: 0 28px 56px rgba(62, 52, 39, 0.14);
+  --portal-card-border: rgba(96, 119, 109, 0.16);
+  --portal-card-shadow: 0 16px 34px rgba(66, 56, 42, 0.1);
+  --portal-pill-bg: rgba(42, 83, 72, 0.09);
+  --portal-pill-text: #294f45;
+}
+
+.portal-dashboard-page,
+.portal-customer-page,
+.portal-drawings-page {
+  position: relative;
+  isolation: isolate;
+  gap: 20px;
+}
+
+.portal-dashboard-page::before,
+.portal-customer-page::before,
+.portal-drawings-page::before {
+  content: "";
+  position: absolute;
+  inset: -24px -12px auto;
+  height: 240px;
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at 12% 24%, rgba(208, 125, 88, 0.16), transparent 36%),
+    radial-gradient(circle at 86% 24%, rgba(68, 119, 102, 0.14), transparent 32%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.portal-dashboard-page .portal-page-header,
+.portal-customer-page .portal-page-header,
+.portal-drawings-page .portal-page-header {
+  position: relative;
+  align-items: flex-start;
+  gap: 18px;
+  padding: clamp(18px, 2.3vw, 30px);
+  border: 1px solid var(--portal-hero-border);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.96), rgba(248, 242, 234, 0.93)),
+    radial-gradient(circle at top right, rgba(211, 126, 85, 0.14), transparent 44%);
+  box-shadow: var(--portal-hero-shadow);
+  overflow: hidden;
+}
+
+.portal-dashboard-page .portal-page-header::after,
+.portal-customer-page .portal-page-header::after,
+.portal-drawings-page .portal-page-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(189, 102, 68, 0.88), rgba(62, 116, 97, 0.86));
+}
+
+.portal-dashboard-heading-shell,
+.portal-customer-page-heading-shell,
+.portal-drawings-heading-shell {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.95fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.portal-dashboard-heading,
+.portal-customer-page-heading,
+.portal-drawings-heading {
+  display: grid;
+  gap: 10px;
+}
+
+.portal-dashboard-page .portal-page-header h1,
+.portal-customer-page .portal-page-header h1,
+.portal-drawings-page .portal-page-header h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2rem, 3.4vw, 3.05rem);
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+}
+
+.portal-dashboard-page .portal-page-header p,
+.portal-customer-page .portal-page-header p,
+.portal-drawings-page .portal-page-header p {
+  margin: 0;
+  color: #5e6b62;
+  max-width: 68ch;
+}
+
+.portal-dashboard-snapshot,
+.portal-customer-snapshot,
+.portal-drawings-snapshot {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--portal-card-border);
+  border-radius: 18px;
+  background: rgba(255, 251, 245, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.portal-dashboard-snapshot-grid,
+.portal-customer-snapshot-grid,
+.portal-drawings-snapshot-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.portal-dashboard-snapshot-grid article,
+.portal-customer-snapshot-grid article,
+.portal-drawings-snapshot-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(94, 114, 105, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.portal-dashboard-snapshot-grid article span,
+.portal-customer-snapshot-grid article span,
+.portal-drawings-snapshot-grid article span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #6a766c;
+}
+
+.portal-dashboard-snapshot-grid article strong,
+.portal-customer-snapshot-grid article strong,
+.portal-drawings-snapshot-grid article strong {
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: #27342f;
+}
+
+.portal-dashboard-actions,
+.portal-customer-page-actions,
+.portal-drawings-header-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-dashboard-page .portal-primary-button,
+.portal-dashboard-page .portal-secondary-button,
+.portal-customer-page .portal-primary-button,
+.portal-customer-page .portal-secondary-button,
+.portal-drawings-page .portal-primary-button,
+.portal-drawings-page .portal-secondary-button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 11px;
+}
+
+.portal-dashboard-strip {
+  gap: 12px;
+}
+
+.portal-dashboard-page .portal-dashboard-metric,
+.portal-customer-page .portal-dashboard-metric {
+  padding: 16px;
+  border-radius: 18px;
+  border-color: var(--portal-card-border);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(250, 245, 236, 0.96)),
+    radial-gradient(circle at top right, rgba(65, 114, 97, 0.08), transparent 46%);
+  box-shadow: var(--portal-card-shadow);
+}
+
+.portal-dashboard-page .portal-dashboard-metric strong,
+.portal-customer-page .portal-dashboard-metric strong {
+  font-size: 1.58rem;
+}
+
+.portal-dashboard-layout,
+.portal-customer-page-layout {
+  gap: 18px;
+}
+
+.portal-dashboard-primary,
+.portal-dashboard-customers,
+.portal-dashboard-quick-actions,
+.portal-customer-detail,
+.portal-customer-drawings-panel,
+.drawing-library-toolbar,
+.drawing-library-group {
+  border-color: var(--portal-card-border);
+  border-radius: 22px;
+  box-shadow: var(--portal-card-shadow);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(248, 242, 234, 0.96)),
+    radial-gradient(circle at top right, rgba(56, 104, 89, 0.08), transparent 40%);
+}
+
+.portal-dashboard-row,
+.portal-dashboard-customer-row,
+.portal-dashboard-action,
+.drawing-library-row,
+.portal-customer-row {
+  border: 1px solid rgba(90, 112, 103, 0.14);
+  border-radius: 16px;
+  transition: transform 160ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.portal-dashboard-row:hover,
+.portal-dashboard-customer-row:hover,
+.portal-dashboard-action:hover,
+.drawing-library-row:hover,
+.portal-customer-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(171, 94, 61, 0.26);
+  box-shadow: 0 14px 28px rgba(73, 60, 43, 0.14);
+}
+
+.portal-dashboard-row-meta span,
+.drawing-library-row-details span,
+.portal-customer-row-meta span,
+.drawing-library-group-meta span {
+  background: var(--portal-pill-bg);
+  color: var(--portal-pill-text);
+}
+
+.drawing-library-toolbar {
+  padding: 16px;
+}
+
+.drawing-library-toolbar-main {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+  gap: 16px;
+}
+
+.drawing-library-toolbar-filters {
+  gap: 10px;
+}
+
+.drawing-library-customer-filter {
+  gap: 6px;
+}
+
+.drawing-library-customer-filter input,
+.drawing-library-customer-filter select,
+.drawing-library-customer-filter textarea {
+  min-height: 40px;
+  border-radius: 12px;
+}
+
+.drawing-library-toolbar .drawing-library-overview-metric {
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.drawing-library-group {
+  padding: 16px;
+}
+
+.drawing-library-group-header h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.36rem;
+  letter-spacing: -0.02em;
+}
+
+.drawing-library-row {
+  padding: 12px;
+}
+
+.drawing-library-row-main {
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+}
+
+.drawing-library-row-preview .drawing-preview-inline,
+.portal-dashboard-preview .drawing-preview-inline {
+  min-height: 82px;
+  border-radius: 14px;
+}
+
+.drawing-library-row-actions {
+  gap: 8px;
+}
+
+.portal-customer-detail,
+.portal-customer-drawings-panel {
+  padding: 18px;
+}
+
+.portal-customer-page-layout {
+  grid-template-columns: minmax(340px, 0.92fr) minmax(0, 1.4fr);
+}
+
+.portal-customer-detail-footer {
+  margin-top: 6px;
+  padding-top: 14px;
+}
+
+.portal-customer-form-section {
+  padding-top: 12px;
+}
+
+.portal-customer-form-section-head h3 {
+  font-size: 0.94rem;
+}
+
+.drawing-history-panel {
+  padding-top: 12px;
+}
+
+.drawing-history-row {
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.94);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .portal-dashboard-strip > *,
+  .portal-dashboard-list > *,
+  .portal-dashboard-customer-list > *,
+  .portal-dashboard-action-grid > *,
+  .drawing-library-list > *,
+  .portal-customers-directory-list > * {
+    animation: portal-rise-in 420ms ease both;
+  }
+
+  .portal-dashboard-strip > *:nth-child(2),
+  .portal-dashboard-list > *:nth-child(2),
+  .portal-dashboard-customer-list > *:nth-child(2),
+  .portal-dashboard-action-grid > *:nth-child(2),
+  .drawing-library-list > *:nth-child(2),
+  .portal-customers-directory-list > *:nth-child(2) {
+    animation-delay: 50ms;
+  }
+
+  .portal-dashboard-strip > *:nth-child(3),
+  .portal-dashboard-list > *:nth-child(3),
+  .portal-dashboard-customer-list > *:nth-child(3),
+  .portal-dashboard-action-grid > *:nth-child(3),
+  .drawing-library-list > *:nth-child(3),
+  .portal-customers-directory-list > *:nth-child(3) {
+    animation-delay: 95ms;
+  }
+}
+
+@keyframes portal-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1220px) {
+  .portal-dashboard-heading-shell,
+  .portal-customer-page-heading-shell,
+  .portal-drawings-heading-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-dashboard-snapshot-grid,
+  .portal-customer-snapshot-grid,
+  .portal-drawings-snapshot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  .portal-dashboard-page .portal-page-header,
+  .portal-customer-page .portal-page-header,
+  .portal-drawings-page .portal-page-header {
+    border-radius: 24px;
+  }
+
+  .portal-dashboard-snapshot-grid,
+  .portal-customer-snapshot-grid,
+  .portal-drawings-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-dashboard-layout,
+  .portal-customer-page-layout,
+  .drawing-library-toolbar-main {
+    grid-template-columns: 1fr;
+  }
+
+  .drawing-library-row-main,
+  .portal-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+
+  .drawing-library-row-actions,
+  .drawing-library-row-utility-actions {
+    justify-items: start;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 680px) {
+  .portal-dashboard-page,
+  .portal-customer-page,
+  .portal-drawings-page {
+    gap: 14px;
+  }
+
+  .portal-dashboard-page .portal-page-header,
+  .portal-customer-page .portal-page-header,
+  .portal-drawings-page .portal-page-header {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .portal-dashboard-primary,
+  .portal-dashboard-customers,
+  .portal-dashboard-quick-actions,
+  .portal-customer-detail,
+  .portal-customer-drawings-panel,
+  .drawing-library-toolbar,
+  .drawing-library-group {
+    border-radius: 18px;
+    padding: 12px;
+  }
+
+  .portal-dashboard-page .portal-dashboard-metric,
+  .portal-customer-page .portal-dashboard-metric {
+    padding: 12px;
+  }
+}

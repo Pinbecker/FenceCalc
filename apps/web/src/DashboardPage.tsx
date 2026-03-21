@@ -22,6 +22,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
   const archivedDrawings = drawings.filter((drawing) => drawing.isArchived);
   const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
   const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
+  const latestDrawing = [...activeDrawings].sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))[0] ?? null;
   const activeCustomers = customers.filter((customer) => !customer.isArchived && customer.activeDrawingCount > 0);
   const topCustomers = [...activeCustomers]
     .map((customer) => {
@@ -48,20 +49,39 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
   return (
     <section className="portal-page portal-dashboard-page">
       <header className="portal-page-header portal-dashboard-header">
-        <div className="portal-dashboard-heading">
-          <span className="portal-eyebrow">Workspace overview</span>
-          <h1>{session.company.name}</h1>
-          <p>Start from the current workload, reopen active drawings quickly, and move into customer-specific pages when you need customer context or drawing history.</p>
-          <div className="portal-dashboard-context">
-            <div className="portal-dashboard-context-item">
-              <span className="portal-section-kicker">Signed in</span>
-              <strong>{session.user.displayName}</strong>
-            </div>
-            <div className="portal-dashboard-context-item">
-              <span className="portal-section-kicker">Access</span>
-              <strong>{session.user.role.toLowerCase()}</strong>
+        <div className="portal-dashboard-heading-shell">
+          <div className="portal-dashboard-heading">
+            <span className="portal-eyebrow">Workspace overview</span>
+            <h1>{session.company.name}</h1>
+            <p>Start from the current workload, reopen active drawings quickly, and move into customer-specific pages when you need customer context or drawing history.</p>
+            <div className="portal-dashboard-context">
+              <div className="portal-dashboard-context-item">
+                <span className="portal-section-kicker">Signed in</span>
+                <strong>{session.user.displayName}</strong>
+              </div>
+              <div className="portal-dashboard-context-item">
+                <span className="portal-section-kicker">Access</span>
+                <strong>{session.user.role.toLowerCase()}</strong>
+              </div>
             </div>
           </div>
+          <aside className="portal-dashboard-snapshot" aria-label="Operations snapshot">
+            <span className="portal-section-kicker">Operations snapshot</span>
+            <div className="portal-dashboard-snapshot-grid">
+              <article>
+                <span>Latest update</span>
+                <strong>{latestDrawing ? formatTimestamp(latestDrawing.updatedAtIso) : "No activity"}</strong>
+              </article>
+              <article>
+                <span>Most active customer</span>
+                <strong>{topCustomers[0]?.customerName ?? "No active customers"}</strong>
+              </article>
+              <article>
+                <span>Drawings in focus</span>
+                <strong>{recent.length}</strong>
+              </article>
+            </div>
+          </aside>
         </div>
         <div className="portal-header-actions portal-dashboard-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>

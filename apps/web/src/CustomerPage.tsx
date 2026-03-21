@@ -122,6 +122,9 @@ export function CustomerPage({
   );
   const activeDrawings = totalCustomerDrawings.filter((drawing) => !drawing.isArchived);
   const archivedDrawings = totalCustomerDrawings.filter((drawing) => drawing.isArchived);
+  const primaryContact = customer
+    ? (customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "Unassigned")
+    : "Unassigned";
 
   const handleSave = async () => {
     if (!customer || !draft) {
@@ -176,10 +179,29 @@ export function CustomerPage({
   return (
     <section className="portal-page portal-customer-page">
       <header className="portal-page-header portal-customer-page-header">
-        <div className="portal-customer-page-heading">
-          <span className="portal-eyebrow">Customer workspace</span>
-          <h1>{customer.name}</h1>
-          <p>Keep customer information and that customer’s drawings together so the team can reopen the right work without scanning the whole company library.</p>
+        <div className="portal-customer-page-heading-shell">
+          <div className="portal-customer-page-heading">
+            <span className="portal-eyebrow">Customer workspace</span>
+            <h1>{customer.name}</h1>
+            <p>Keep customer information and that customer's drawings together so the team can reopen the right work without scanning the whole company library.</p>
+          </div>
+          <aside className="portal-customer-snapshot" aria-label="Customer snapshot">
+            <span className="portal-section-kicker">Snapshot</span>
+            <div className="portal-customer-snapshot-grid">
+              <article>
+                <span>Primary contact</span>
+                <strong>{primaryContact}</strong>
+              </article>
+              <article>
+                <span>Last activity</span>
+                <strong>{formatTimestamp(customer.lastActivityAtIso)}</strong>
+              </article>
+              <article>
+                <span>Drawings total</span>
+                <strong>{totalCustomerDrawings.length}</strong>
+              </article>
+            </div>
+          </aside>
         </div>
         <div className="portal-header-actions portal-customer-page-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>
@@ -212,7 +234,7 @@ export function CustomerPage({
         </article>
         <article className="portal-dashboard-metric">
           <span>Primary Contact</span>
-          <strong>{customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "Unassigned"}</strong>
+          <strong>{primaryContact}</strong>
           <small>{customer.siteAddress || "No site address recorded"}</small>
         </article>
       </div>
