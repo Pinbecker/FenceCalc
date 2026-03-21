@@ -88,15 +88,16 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawings (
-              id, company_id, name, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
+              id, company_id, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
               created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
           input.id,
           input.companyId,
           input.name,
+          input.customerId,
           input.customerName,
           JSON.stringify(input.layout),
           input.savedViewport ? JSON.stringify(input.savedViewport) : null,
@@ -116,8 +117,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -129,6 +130,7 @@ export class SqliteDrawingStore {
           1,
           "CREATE",
           input.name,
+          input.customerId,
           input.customerName,
           JSON.stringify(input.layout),
           input.savedViewport ? JSON.stringify(input.savedViewport) : null,
@@ -148,9 +150,16 @@ export class SqliteDrawingStore {
   }
 
   public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE") {
-    const whereClause = scope === "ACTIVE" ? "AND is_archived = 0" : scope === "ARCHIVED" ? "AND is_archived = 1" : "";
+    const whereClause =
+      scope === "ACTIVE" ? "AND d.is_archived = 0" : scope === "ARCHIVED" ? "AND d.is_archived = 1" : "";
     const rows = this.database
-      .prepare(`SELECT * FROM drawings WHERE company_id = ? ${whereClause} ORDER BY updated_at_iso DESC`)
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.company_id = ? ${whereClause}
+        ORDER BY d.updated_at_iso DESC
+      `)
       .all(companyId) as DrawingRow[];
     const metadata = this.buildContributorMetadata(
       companyId,
@@ -179,14 +188,24 @@ export class SqliteDrawingStore {
 
   public getDrawingById(drawingId: string, companyId: string): DrawingRecord | null {
     const row = this.database
-      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
       .get(drawingId, companyId) as DrawingRow | undefined;
     return row ? this.tryReadDrawing(row) : null;
   }
 
   public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
     const existing = this.database
-      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
       .get(input.drawingId, input.companyId) as DrawingRow | undefined;
     if (!existing) {
       return null;
@@ -202,12 +221,13 @@ export class SqliteDrawingStore {
         .prepare(
           `
             UPDATE drawings
-            SET name = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+            SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
             WHERE id = ? AND company_id = ?
           `,
         )
         .run(
           input.name,
+          input.customerId,
           input.customerName,
           JSON.stringify(input.layout),
           input.savedViewport ? JSON.stringify(input.savedViewport) : null,
@@ -224,8 +244,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -237,6 +257,7 @@ export class SqliteDrawingStore {
           nextVersionNumber,
           "UPDATE",
           input.name,
+          input.customerId,
           input.customerName,
           JSON.stringify(input.layout),
           input.savedViewport ? JSON.stringify(input.savedViewport) : null,
@@ -250,6 +271,7 @@ export class SqliteDrawingStore {
     return {
       ...current,
       name: input.name,
+      customerId: input.customerId,
       customerName: input.customerName,
       layout: input.layout,
       savedViewport: input.savedViewport ?? null,
@@ -264,7 +286,12 @@ export class SqliteDrawingStore {
 
   public setDrawingArchivedState(input: SetDrawingArchivedStateInput): DrawingRecord | null {
     const existing = this.database
-      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
       .get(input.drawingId, input.companyId) as DrawingRow | undefined;
     if (!existing) {
       return null;
@@ -293,7 +320,8 @@ export class SqliteDrawingStore {
         id: existing.id,
         companyId: existing.company_id,
         name: existing.name,
-        customerName: existing.customer_name,
+        customerId: existing.customer_id,
+        customerName: existing.resolved_customer_name ?? existing.customer_name,
         layout: { segments: [] },
         estimate: {
           posts: {
@@ -380,7 +408,12 @@ export class SqliteDrawingStore {
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput): DrawingRecord | null {
     const existing = this.database
-      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
       .get(input.drawingId, input.companyId) as DrawingRow | undefined;
     if (!existing) {
       return null;
@@ -408,13 +441,14 @@ export class SqliteDrawingStore {
         .prepare(
           `
             UPDATE drawings
-            SET name = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+            SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
             WHERE id = ? AND company_id = ?
           `,
         )
         .run(
           version.name,
-          version.customer_name,
+          input.customerId,
+          input.customerName,
           version.layout_json,
           version.viewport_json ?? null,
           version.estimate_json,
@@ -430,8 +464,8 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -443,7 +477,8 @@ export class SqliteDrawingStore {
           restoredVersionNumber,
           "RESTORE",
           version.name,
-          version.customer_name,
+          input.customerId,
+          input.customerName,
           version.layout_json,
           version.viewport_json ?? null,
           version.estimate_json,
@@ -456,7 +491,8 @@ export class SqliteDrawingStore {
     return {
       ...current,
       name: restoredVersion.name,
-      customerName: restoredVersion.customerName,
+      customerId: input.customerId,
+      customerName: input.customerName,
       layout: restoredVersion.layout,
       savedViewport: restoredVersion.savedViewport ?? null,
       estimate: restoredVersion.estimate,

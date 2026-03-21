@@ -1,7 +1,7 @@
 ﻿import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { AuthSessionEnvelope, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingsPage } from "./DrawingsPage.js";
 
@@ -13,6 +13,7 @@ const drawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front perimeter",
+    customerId: "customer-1",
     customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 8,
@@ -31,6 +32,27 @@ const drawings: DrawingSummary[] = [
     contributorDisplayNames: ["Jane Doe"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T12:00:00.000Z"
+  }
+];
+
+const customers: CustomerSummary[] = [
+  {
+    id: "customer-1",
+    companyId: "company-1",
+    name: "Cleveland Land Services",
+    primaryContactName: "",
+    primaryEmail: "",
+    primaryPhone: "",
+    siteAddress: "",
+    notes: "",
+    isArchived: false,
+    createdByUserId: "user-1",
+    updatedByUserId: "user-1",
+    createdAtIso: "2026-03-10T10:00:00.000Z",
+    updatedAtIso: "2026-03-10T12:00:00.000Z",
+    activeDrawingCount: 1,
+    archivedDrawingCount: 0,
+    lastActivityAtIso: "2026-03-10T12:00:00.000Z"
   }
 ];
 
@@ -67,6 +89,7 @@ const versions: DrawingVersionRecord[] = [
     versionNumber: 2,
     source: "UPDATE",
     name: "Front perimeter",
+    customerId: "customer-1",
     customerName: "Cleveland Land Services",
     layout: { segments: [], gates: [] },
     estimate: {
@@ -112,6 +135,7 @@ describe("DrawingsPage", () => {
   it("renders drawing management controls", () => {
     const html = renderToStaticMarkup(
       <DrawingsPage
+        customers={customers}
         session={session}
         drawings={drawings}
         isLoading={false}

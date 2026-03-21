@@ -313,10 +313,33 @@ export interface AuthSessionEnvelope {
   session: AuthSessionRecord;
 }
 
+export interface CustomerRecord {
+  id: string;
+  companyId: string;
+  name: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  siteAddress: string;
+  notes: string;
+  isArchived: boolean;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface CustomerSummary extends CustomerRecord {
+  activeDrawingCount: number;
+  archivedDrawingCount: number;
+  lastActivityAtIso: string | null;
+}
+
 export interface DrawingRecord {
   id: string;
   companyId: string;
   name: string;
+  customerId: string | null;
   customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
@@ -337,6 +360,7 @@ export interface DrawingSummary {
   id: string;
   companyId: string;
   name: string;
+  customerId: string | null;
   customerName: string;
   previewLayout: LayoutModel;
   segmentCount: number;
@@ -368,6 +392,7 @@ export interface DrawingVersionRecord {
   versionNumber: number;
   source: DrawingVersionSource;
   name: string;
+  customerId: string | null;
   customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
@@ -376,7 +401,7 @@ export interface DrawingVersionRecord {
   createdAtIso: string;
 }
 
-export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE";
+export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER";
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
   | "LOGIN_SUCCEEDED"
@@ -390,7 +415,11 @@ export type AuditAction =
   | "DRAWING_ARCHIVED"
   | "DRAWING_UNARCHIVED"
   | "DRAWING_VERSION_RESTORED"
-  | "QUOTE_CREATED";
+  | "QUOTE_CREATED"
+  | "CUSTOMER_CREATED"
+  | "CUSTOMER_UPDATED"
+  | "CUSTOMER_ARCHIVED"
+  | "CUSTOMER_UNARCHIVED";
 
 export interface AuditLogRecord {
   id: string;

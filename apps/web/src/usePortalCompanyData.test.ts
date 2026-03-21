@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AuditLogRecord, AuthSessionEnvelope, CompanyUserRecord, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuditLogRecord, AuthSessionEnvelope, CompanyUserRecord, CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
 const sampleSession: AuthSessionEnvelope = {
   company: {
@@ -30,6 +30,7 @@ const sampleDrawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front boundary",
+    customerId: "customer-1",
     customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 4,
@@ -48,6 +49,27 @@ const sampleDrawings: DrawingSummary[] = [
     contributorDisplayNames: ["Owner"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
     updatedAtIso: "2026-03-10T11:00:00.000Z"
+  }
+];
+
+const sampleCustomers: CustomerSummary[] = [
+  {
+    id: "customer-1",
+    companyId: "company-1",
+    name: "Cleveland Land Services",
+    primaryContactName: "",
+    primaryEmail: "",
+    primaryPhone: "",
+    siteAddress: "",
+    notes: "",
+    isArchived: false,
+    createdByUserId: "user-1",
+    updatedByUserId: "user-1",
+    createdAtIso: "2026-03-10T10:00:00.000Z",
+    updatedAtIso: "2026-03-10T11:00:00.000Z",
+    activeDrawingCount: 1,
+    archivedDrawingCount: 0,
+    lastActivityAtIso: "2026-03-10T11:00:00.000Z"
   }
 ];
 
@@ -91,9 +113,13 @@ async function loadUsePortalCompanyData(options?: {
   const stateValues = options?.stateValues ?? [];
   const stateSetters = {
     drawings: vi.fn(),
+    customers: vi.fn(),
     users: vi.fn(),
     auditLog: vi.fn(),
     isLoadingDrawings: vi.fn(),
+    isLoadingCustomers: vi.fn(),
+    isSavingCustomer: vi.fn(),
+    isArchivingCustomerId: vi.fn(),
     isLoadingUsers: vi.fn(),
     isLoadingAuditLog: vi.fn(),
     isSavingUser: vi.fn(),
@@ -101,8 +127,12 @@ async function loadUsePortalCompanyData(options?: {
   };
   const setterOrder = [
     stateSetters.drawings,
+    stateSetters.customers,
     stateSetters.users,
     stateSetters.auditLog,
+    stateSetters.isLoadingCustomers,
+    stateSetters.isSavingCustomer,
+    stateSetters.isArchivingCustomerId,
     stateSetters.isLoadingDrawings,
     stateSetters.isLoadingUsers,
     stateSetters.isLoadingAuditLog,
@@ -131,6 +161,7 @@ async function loadUsePortalCompanyData(options?: {
         versionNumber: 1,
         source: "CREATE",
         name: "Front boundary",
+        customerId: "customer-1",
         customerName: "Cleveland Land Services",
         layout: { segments: [], gates: [] },
         estimate: {
@@ -194,11 +225,13 @@ async function loadUsePortalCompanyData(options?: {
   };
   const portalSessionData = {
     EMPTY_PORTAL_COMPANY_DATA: {
+      customers: [],
       drawings: [],
       users: [],
       auditLog: []
     },
     loadPortalCompanyData: vi.fn(() => Promise.resolve({
+      customers: sampleCustomers,
       drawings: sampleDrawings,
       users: sampleUsers,
       auditLog: sampleAuditLog
@@ -207,6 +240,7 @@ async function loadUsePortalCompanyData(options?: {
       id: drawing.id,
       companyId: "company-1",
       name: drawing.name,
+      customerId: "customer-1",
       customerName: "Cleveland Land Services",
       previewLayout: { segments: [], gates: [] },
       segmentCount: 0,
@@ -265,7 +299,7 @@ describe("usePortalCompanyData", () => {
 
   it("refreshes company datasets and manages user operations for an authenticated session", async () => {
     const { usePortalCompanyData, apiClient, portalSessionData, stateSetters } = await loadUsePortalCompanyData({
-      stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null]
+      stateValues: [sampleDrawings, sampleCustomers, sampleUsers, sampleAuditLog, false, false, null, false, false, false, false, null]
     });
     const clearMessages = vi.fn();
     const setErrorMessage = vi.fn();
@@ -353,7 +387,7 @@ describe("usePortalCompanyData", () => {
 
   it("updates drawing summaries for archive and restore actions", async () => {
     const { usePortalCompanyData, portalSessionData, stateSetters } = await loadUsePortalCompanyData({
-      stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null]
+      stateValues: [sampleDrawings, sampleCustomers, sampleUsers, sampleAuditLog, false, false, null, false, false, false, false, null]
     });
     const setErrorMessage = vi.fn();
     const setNoticeMessage = vi.fn();
@@ -391,7 +425,7 @@ describe("usePortalCompanyData", () => {
   it("handles unauthenticated and stale-version failure paths", async () => {
     const staleError = new Error("stale");
     const { usePortalCompanyData, stateSetters } = await loadUsePortalCompanyData({
-      stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null],
+      stateValues: [sampleDrawings, sampleCustomers, sampleUsers, sampleAuditLog, false, false, null, false, false, false, false, null],
       apiOverrides: {
         setDrawingArchivedState: vi.fn(() => {
           throw staleError;
@@ -426,7 +460,7 @@ describe("usePortalCompanyData", () => {
     expect(stateSetters.auditLog).toHaveBeenCalledWith([]);
 
     const authenticatedLoad = await loadUsePortalCompanyData({
-      stateValues: [sampleDrawings, sampleUsers, sampleAuditLog, false, false, false, false, null],
+      stateValues: [sampleDrawings, sampleCustomers, sampleUsers, sampleAuditLog, false, false, null, false, false, false, false, null],
       apiOverrides: {
         setDrawingArchivedState: vi.fn(() => {
           throw staleError;

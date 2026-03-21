@@ -18,6 +18,11 @@ const DrawingsPage = lazy(async () => {
   return { default: module.DrawingsPage };
 });
 
+const CustomersPage = lazy(async () => {
+  const module = await import("./CustomersPage");
+  return { default: module.CustomersPage };
+});
+
 const EstimatePage = lazy(async () => {
   const module = await import("./EstimatePage");
   return { default: module.EstimatePage };
@@ -43,7 +48,7 @@ function PortalNav(props: {
   userName: string;
   userRole: string;
   currentRoute: string;
-  onNavigate: (route: "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin") => void;
+  onNavigate: (route: "dashboard" | "drawings" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
   onLogout: () => void;
   showAdmin: boolean;
   showPricing: boolean;
@@ -72,6 +77,13 @@ function PortalNav(props: {
             onClick={() => props.onNavigate("drawings")}
           >
             Drawings
+          </button>
+          <button
+            type="button"
+            className={props.currentRoute === "customers" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("customers")}
+          >
+            Customers
           </button>
           <button
             type="button"
@@ -154,7 +166,7 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "drawings" || route === "estimate";
+  return route === "dashboard" || route === "drawings" || route === "customers" || route === "estimate" || route === "editor";
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
@@ -189,6 +201,7 @@ export function App() {
     }
 
     if (shouldRefreshPortalDrawings(route)) {
+      void portal.refreshCustomers();
       void portal.refreshDrawings();
     }
 
@@ -256,11 +269,13 @@ export function App() {
       <main className="portal-main">
         <Suspense fallback={<PortalLoadingCard label="Loading page..." />}>
           {route === "dashboard" ? (
-            <DashboardPage session={portal.session} drawings={portal.drawings} onNavigate={navigate} />
+            <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
           ) : null}
           {route === "drawings" ? (
             <DrawingsPage
+              query={query}
               session={portal.session}
+              customers={portal.customers}
               drawings={portal.drawings}
               isLoading={portal.isLoadingDrawings}
               onRefresh={portal.refreshDrawings}
@@ -270,6 +285,19 @@ export function App() {
               onToggleArchive={portal.setDrawingArchived}
               onLoadVersions={portal.loadDrawingVersions}
               onRestoreVersion={portal.restoreDrawingVersion}
+            />
+          ) : null}
+          {route === "customers" ? (
+            <CustomersPage
+              query={query}
+              customers={portal.customers}
+              isLoading={portal.isLoadingCustomers}
+              isSavingCustomer={portal.isSavingCustomer}
+              isArchivingCustomerId={portal.isArchivingCustomerId}
+              onRefresh={portal.refreshCustomers}
+              onSaveCustomer={portal.saveCustomer}
+              onSetCustomerArchived={portal.setCustomerArchived}
+              onNavigate={navigate}
             />
           ) : null}
           {route === "estimate" ? (

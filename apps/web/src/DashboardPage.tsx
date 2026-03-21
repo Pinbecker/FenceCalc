@@ -1,10 +1,11 @@
-import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
 
 interface DashboardPageProps {
   session: AuthSessionEnvelope;
+  customers: CustomerSummary[];
   drawings: DrawingSummary[];
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
@@ -16,20 +17,21 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
-export function DashboardPage({ session, drawings, onNavigate }: DashboardPageProps) {
+export function DashboardPage({ session, customers, drawings, onNavigate }: DashboardPageProps) {
   const activeDrawings = drawings.filter((drawing) => !drawing.isArchived);
   const archivedDrawings = drawings.filter((drawing) => drawing.isArchived);
   const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
   const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
-  const activeCustomers = [...new Set(activeDrawings.map((drawing) => drawing.customerName.trim()).filter(Boolean))];
+  const activeCustomers = customers.filter((customer) => !customer.isArchived && customer.activeDrawingCount > 0);
   const topCustomers = [...activeCustomers]
-    .map((customerName) => {
+    .map((customer) => {
       const customerDrawings = activeDrawings
-        .filter((drawing) => drawing.customerName.trim() === customerName)
+        .filter((drawing) => drawing.customerId === customer.id)
         .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
 
       return {
-        customerName,
+        customerId: customer.id,
+        customerName: customer.name,
         drawingCount: customerDrawings.length,
         latestDrawingName: customerDrawings[0]?.name ?? "",
         updatedAtIso: customerDrawings[0]?.updatedAtIso ?? ""
@@ -145,7 +147,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
                   type="button"
                   key={customer.customerName}
                   className="portal-dashboard-customer-row"
-                  onClick={() => onNavigate("drawings", { customer: customer.customerName, scope: "active" })}
+                  onClick={() => onNavigate("drawings", { customerId: customer.customerId, scope: "active" })}
                 >
                   <div>
                     <strong>{customer.customerName}</strong>
@@ -172,7 +174,7 @@ export function DashboardPage({ session, drawings, onNavigate }: DashboardPagePr
                 <strong>My drawings</strong>
                 <span>Jump straight to the drawings you have contributed to.</span>
               </button>
-              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("drawings")}>
+              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("customers")}>
                 <strong>Customer library</strong>
                 <span>Browse by client and reopen older company work quickly.</span>
               </button>

@@ -39,6 +39,7 @@ function buildDrawing(): DrawingRecord {
     id: "drawing-1",
     companyId: "company-1",
     name: "Court Perimeter",
+    customerId: "customer-1",
     customerName: "Town Club",
     layout,
     estimate: estimateDrawingLayout(layout),
@@ -98,9 +99,9 @@ describe("buildEstimateFromDrawing", () => {
     expect(panelsGroup?.rows[0]?.totalCost).toBe(36);
 
     expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_END")?.quantity).toBe(2);
-    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")).toBeUndefined();
+    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")?.quantity).toBe(1);
 
-    expect(concreteGroup?.rows[0]?.quantity).toBeCloseTo(0.153, 3);
+    expect(concreteGroup?.rows[0]?.quantity).toBeCloseTo(0.229, 3);
     expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.quantity).toBe(4);
     expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX")?.quantity).toBe(8);
     expect(basketballGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_BASKETBALL_POST")?.quantity).toBe(1);

@@ -29,16 +29,22 @@ interface DrawingInvalidLayout {
   message: string;
 }
 
+interface DrawingInvalidCustomer {
+  kind: "invalid_customer";
+  message: string;
+}
+
 export type DrawingMutationResult =
   | DrawingMutationSuccess
   | DrawingConflict
   | DrawingNotFound
   | DrawingVersionNotFound
-  | DrawingInvalidLayout;
+  | DrawingInvalidLayout
+  | DrawingInvalidCustomer;
 
 interface DrawingCreateInput {
   name: string;
-  customerName: string;
+  customerId: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -46,7 +52,7 @@ interface DrawingCreateInput {
 interface DrawingUpdateInput {
   expectedVersionNumber: number;
   name?: string | undefined;
-  customerName?: string | undefined;
+  customerId?: string | undefined;
   layout?: LayoutModel | undefined;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -56,19 +62,35 @@ interface DrawingArchiveInput {
   expectedVersionNumber: number;
 }
 
+async function resolveCustomerForWrite(repository: AppRepository, companyId: string, customerId: string) {
+  const customer = await repository.getCustomerById(customerId, companyId);
+  if (!customer) {
+    return { kind: "invalid_customer" as const, message: "Customer not found" };
+  }
+  if (customer.isArchived) {
+    return { kind: "invalid_customer" as const, message: "Archived customers cannot be used for new drawing saves" };
+  }
+  return { kind: "success" as const, customer };
+}
+
 export async function createDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   input: DrawingCreateInput,
 ): Promise<DrawingMutationResult> {
   try {
+    const customerResult = await resolveCustomerForWrite(repository, authenticated.company.id, input.customerId);
+    if (customerResult.kind !== "success") {
+      return customerResult;
+    }
     const result = buildEstimate(input.layout);
     const nowIso = new Date().toISOString();
     const drawing = await repository.createDrawing({
       id: randomUUID(),
       companyId: authenticated.company.id,
       name: input.name,
-      customerName: input.customerName,
+      customerId: customerResult.customer.id,
+      customerName: customerResult.customer.name,
       layout: result.layout,
       savedViewport: input.savedViewport ?? null,
       estimate: result.estimate,
@@ -114,6 +136,13 @@ export async function updateDrawingForCompany(
   }
 
   try {
+    const nextCustomer =
+      input.customerId !== undefined
+        ? await resolveCustomerForWrite(repository, authenticated.company.id, input.customerId)
+        : null;
+    if (nextCustomer && nextCustomer.kind !== "success") {
+      return nextCustomer;
+    }
     const nextLayout = input.layout
       ? buildEstimate(input.layout)
       : {
@@ -126,7 +155,8 @@ export async function updateDrawingForCompany(
       drawingId: existing.id,
       companyId: authenticated.company.id,
       name: input.name ?? existing.name,
-      customerName: input.customerName ?? existing.customerName,
+      customerId: nextCustomer?.customer.id ?? existing.customerId,
+      customerName: nextCustomer?.customer.name ?? existing.customerName,
       layout: nextLayout.layout,
       savedViewport: input.savedViewport ?? existing.savedViewport ?? null,
       estimate: nextLayout.estimate,
@@ -213,10 +243,20 @@ export async function restoreDrawingVersionForCompany(
     return { kind: "conflict", currentVersionNumber: existing.versionNumber };
   }
 
+  const versions = await repository.listDrawingVersions(drawingId, authenticated.company.id);
+  const version = versions.find((entry) => entry.versionNumber === versionNumber);
+  if (!version) {
+    return { kind: "version_not_found" };
+  }
+
+  const restoredCustomer =
+    version.customerId !== null ? await repository.getCustomerById(version.customerId, authenticated.company.id) : null;
   const drawing = await repository.restoreDrawingVersion({
     drawingId,
     companyId: authenticated.company.id,
     versionNumber,
+    customerId: restoredCustomer?.id ?? version.customerId,
+    customerName: restoredCustomer?.name ?? version.customerName,
     restoredByUserId: authenticated.user.id,
     restoredAtIso: new Date().toISOString()
   });

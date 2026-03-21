@@ -30,6 +30,7 @@ const sampleDrawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front boundary",
+    customerId: "customer-1",
     customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 4,
@@ -62,16 +63,20 @@ async function loadUseWorkspaceSessionState(options?: {
   const stateValues = options?.stateValues ?? [];
   const stateSetters = {
     session: vi.fn(),
+    customers: vi.fn(),
     drawings: vi.fn(),
     isRestoringSession: vi.fn(),
     isAuthenticating: vi.fn(),
+    isLoadingCustomers: vi.fn(),
     isLoadingDrawings: vi.fn()
   };
   const setterOrder = [
     stateSetters.session,
+    stateSetters.customers,
     stateSetters.drawings,
     stateSetters.isRestoringSession,
     stateSetters.isAuthenticating,
+    stateSetters.isLoadingCustomers,
     stateSetters.isLoadingDrawings
   ];
   let stateIndex = 0;
@@ -79,6 +84,7 @@ async function loadUseWorkspaceSessionState(options?: {
 
   const apiClient = {
     getAuthenticatedUser: vi.fn(() => Promise.resolve(sampleSession)),
+    listCustomers: vi.fn(() => Promise.resolve([])),
     listDrawings: vi.fn(() => Promise.resolve(sampleDrawings)),
     login: vi.fn(() => Promise.resolve(sampleSession)),
     logout: vi.fn(() => Promise.resolve()),
@@ -133,7 +139,7 @@ describe("useWorkspaceSessionState", () => {
 
   it("restores the stored session and loads authenticated drawings on startup", async () => {
     const { useWorkspaceSessionState, apiClient, sessionStore, stateSetters } = await loadUseWorkspaceSessionState({
-      stateValues: [null, [], true, false, false]
+      stateValues: [null, [], [], true, false, false, false]
     });
     const clearMessages = vi.fn();
     const setErrorMessage = vi.fn();
@@ -147,11 +153,14 @@ describe("useWorkspaceSessionState", () => {
 
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(sessionStore.readStoredSession).toHaveBeenCalled();
     expect(apiClient.getAuthenticatedUser).toHaveBeenCalled();
+    expect(apiClient.listCustomers).toHaveBeenCalled();
     expect(apiClient.listDrawings).toHaveBeenCalled();
     expect(stateSetters.session).toHaveBeenCalledWith(sampleSession);
+    expect(stateSetters.customers).toHaveBeenCalledWith([]);
     expect(stateSetters.drawings).toHaveBeenCalledWith([]);
     expect(stateSetters.drawings).toHaveBeenCalledWith(sampleDrawings);
     expect(sessionStore.writeStoredSession).toHaveBeenCalledWith(sampleSession);
@@ -162,7 +171,7 @@ describe("useWorkspaceSessionState", () => {
 
   it("refreshes drawings and drives register, login, and logout flows", async () => {
     const { useWorkspaceSessionState, apiClient, sessionStore, stateSetters } = await loadUseWorkspaceSessionState({
-      stateValues: [sampleSession, sampleDrawings, true, false, false]
+      stateValues: [sampleSession, [], sampleDrawings, true, false, false, false]
     });
     const clearMessages = vi.fn();
     const setErrorMessage = vi.fn();
@@ -182,6 +191,7 @@ describe("useWorkspaceSessionState", () => {
     await state.login({ email: "owner@example.com", password: "Secret123!" });
     state.logout(vi.fn());
 
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -204,7 +214,7 @@ describe("useWorkspaceSessionState", () => {
   it("clears session state when authentication restoration fails", async () => {
     const authError = new Error("no session");
     const { useWorkspaceSessionState, apiErrors, sessionStore, stateSetters } = await loadUseWorkspaceSessionState({
-      stateValues: [null, [], true, false, false],
+      stateValues: [null, [], [], true, false, false, false],
       apiOverrides: {
         getAuthenticatedUser: vi.fn(() => {
           throw authError;

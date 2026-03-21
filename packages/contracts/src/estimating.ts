@@ -106,6 +106,7 @@ export interface EstimatePricingSnapshot {
 export interface DrawingEstimateInput {
   drawingId: string;
   drawingName: string;
+  customerId: string | null;
   customerName: string;
 }
 
@@ -121,6 +122,7 @@ export interface PricedEstimateResult {
 export interface QuoteDrawingSnapshot {
   drawingId: string;
   drawingName: string;
+  customerId: string | null;
   customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;

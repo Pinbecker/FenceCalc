@@ -3,19 +3,25 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerRecord,
+  CustomerSummary,
   DrawingSummary,
   DrawingVersionRecord
 } from "@fence-estimator/contracts";
 
 import {
+  createCustomer,
   createUser,
+  listCustomers,
   listAuditLog,
   listDrawingVersions,
   listDrawings,
   listUsers,
   restoreDrawingVersion,
+  setCustomerArchivedState,
   setDrawingArchivedState,
   setUserPassword,
+  updateCustomer,
   type CreateCompanyUserInput
 } from "./apiClient";
 import { extractApiErrorMessage, extractCurrentVersionNumber } from "./apiErrors";
@@ -46,8 +52,12 @@ export function usePortalCompanyData({
   setNoticeMessage
 }: UsePortalCompanyDataOptions) {
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [users, setUsers] = useState<CompanyUserRecord[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogRecord[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [isArchivingCustomerId, setIsArchivingCustomerId] = useState<string | null>(null);
   const [isLoadingDrawings, setIsLoadingDrawings] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingAuditLog, setIsLoadingAuditLog] = useState(false);
@@ -55,6 +65,7 @@ export function usePortalCompanyData({
   const [isResettingUserId, setIsResettingUserId] = useState<string | null>(null);
 
   const clearCompanyData = useCallback(() => {
+    setCustomers(EMPTY_PORTAL_COMPANY_DATA.customers);
     setDrawings(EMPTY_PORTAL_COMPANY_DATA.drawings);
     setUsers(EMPTY_PORTAL_COMPANY_DATA.users);
     setAuditLog(EMPTY_PORTAL_COMPANY_DATA.auditLog);
@@ -62,10 +73,27 @@ export function usePortalCompanyData({
 
   const loadCompanyData = useCallback(async (nextSession: AuthSessionEnvelope) => {
     const nextData = await loadPortalCompanyData(nextSession);
+    setCustomers(nextData.customers);
     setDrawings(nextData.drawings);
     setUsers(nextData.users);
     setAuditLog(nextData.auditLog);
   }, []);
+
+  const refreshCustomers = useCallback(async () => {
+    if (!session) {
+      setCustomers([]);
+      return;
+    }
+
+    setIsLoadingCustomers(true);
+    try {
+      setCustomers(await listCustomers());
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  }, [session, setErrorMessage]);
 
   const refreshDrawings = useCallback(async () => {
     if (!session) {
@@ -263,20 +291,86 @@ export function usePortalCompanyData({
     [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
   );
 
+  const createOrUpdateCustomer = useCallback(
+    async (
+      input:
+        | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
+        | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; siteAddress?: string; notes?: string } },
+    ): Promise<CustomerRecord | null> => {
+      if (!session) {
+        return null;
+      }
+
+      setIsSavingCustomer(true);
+      clearMessages();
+      try {
+        const customer =
+          input.mode === "create"
+            ? await createCustomer(input.customer)
+            : await updateCustomer(input.customerId, input.customer);
+        const [nextCustomers, nextAuditLog] = await Promise.all([listCustomers(), listAuditLog()]);
+        setCustomers(nextCustomers);
+        setAuditLog(nextAuditLog);
+        setNoticeMessage(
+          input.mode === "create" ? `Added customer ${customer.name}` : `Updated customer ${customer.name}`,
+        );
+        return customer;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return null;
+      } finally {
+        setIsSavingCustomer(false);
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const archiveCustomer = useCallback(
+    async (customerId: string, archived: boolean) => {
+      if (!session) {
+        return false;
+      }
+
+      setIsArchivingCustomerId(customerId);
+      clearMessages();
+      try {
+        const customer = await setCustomerArchivedState(customerId, archived);
+        const [nextCustomers, nextAuditLog] = await Promise.all([listCustomers(), listAuditLog()]);
+        setCustomers(nextCustomers);
+        setAuditLog(nextAuditLog);
+        setNoticeMessage(archived ? `Archived customer ${customer.name}` : `Restored customer ${customer.name}`);
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      } finally {
+        setIsArchivingCustomerId(null);
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
   return {
+    customers,
     drawings,
     users,
     auditLog,
+    isLoadingCustomers,
     isLoadingDrawings,
     isLoadingUsers,
     isLoadingAuditLog,
+    isSavingCustomer,
     isSavingUser,
+    isArchivingCustomerId,
     isResettingUserId,
     clearCompanyData,
     loadCompanyData,
+    refreshCustomers,
     refreshDrawings,
     refreshUsers,
     refreshAuditLog,
+    saveCustomer: createOrUpdateCustomer,
+    setCustomerArchived: archiveCustomer,
     createUser: createCompanyUser,
     resetUserPassword: resetCompanyUserPassword,
     setDrawingArchived,

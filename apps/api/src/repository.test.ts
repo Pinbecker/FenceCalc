@@ -12,6 +12,8 @@ import { InMemoryAppRepository, SqliteAppRepository } from "./repository.js";
 const emptyLayout: LayoutModel = {
   segments: []
 };
+const TEST_CUSTOMER_ID = "customer-1";
+const TEST_CUSTOMER_NAME = "Cleveland Land Services";
 
 const featureRichLayout: LayoutModel = {
   segments: [
@@ -146,6 +148,27 @@ const emptyEstimate: EstimateResult = {
   segments: []
 };
 
+async function createTestCustomer(
+  repository: InMemoryAppRepository | SqliteAppRepository,
+  companyId: string,
+  userId: string,
+) {
+  return repository.createCustomer({
+    id: TEST_CUSTOMER_ID,
+    companyId,
+    name: TEST_CUSTOMER_NAME,
+    primaryContactName: "",
+    primaryEmail: "",
+    primaryPhone: "",
+    siteAddress: "",
+    notes: "",
+    createdByUserId: userId,
+    updatedByUserId: userId,
+    createdAtIso: "2026-03-10T00:00:00.000Z",
+    updatedAtIso: "2026-03-10T00:00:00.000Z"
+  });
+}
+
 describe("InMemoryAppRepository", () => {
   it("stores owner accounts and retrieves users by email", async () => {
     const repository = new InMemoryAppRepository();
@@ -209,12 +232,14 @@ describe("InMemoryAppRepository", () => {
       passwordSalt: "salt",
       createdAtIso: "2026-03-10T00:00:00.000Z"
     });
+    await createTestCustomer(repository, "company-1", "user-1");
 
     await repository.createDrawing({
       id: "drawing-1",
       companyId: "company-1",
       name: "Initial",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: { x: 120, y: 90, scale: 0.2 },
       estimate: emptyEstimate,
@@ -243,7 +268,8 @@ describe("InMemoryAppRepository", () => {
       drawingId: "drawing-1",
       companyId: "company-1",
       name: "Updated",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: { x: 320, y: 160, scale: 0.35 },
       estimate: emptyEstimate,
@@ -271,12 +297,14 @@ describe("InMemoryAppRepository", () => {
       passwordSalt: "salt",
       createdAtIso: "2026-03-10T00:00:00.000Z"
     });
+    await createTestCustomer(repository, "company-1", "user-1");
 
     await repository.createDrawing({
       id: "drawing-1",
       companyId: "company-1",
       name: "Quoted drawing",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: null,
       estimate: emptyEstimate,
@@ -297,7 +325,8 @@ describe("InMemoryAppRepository", () => {
         drawing: {
           drawingId: "drawing-1",
           drawingName: "Quoted drawing",
-          customerName: "Cleveland Land Services"
+          customerId: TEST_CUSTOMER_ID,
+          customerName: TEST_CUSTOMER_NAME
         },
         groups: [],
         ancillaryItems: [],
@@ -316,7 +345,8 @@ describe("InMemoryAppRepository", () => {
       drawingSnapshot: {
         drawingId: "drawing-1",
         drawingName: "Quoted drawing",
-        customerName: "Cleveland Land Services",
+        customerId: TEST_CUSTOMER_ID,
+        customerName: TEST_CUSTOMER_NAME,
         layout: emptyLayout,
         estimate: emptyEstimate,
         schemaVersion: DRAWING_SCHEMA_VERSION,
@@ -422,11 +452,13 @@ describe("InMemoryAppRepository", () => {
       passwordSalt: "salt",
       createdAtIso: "2026-03-10T00:00:00.000Z"
     });
+    await createTestCustomer(repository, "company-1", "user-1");
     await repository.createDrawing({
       id: "drawing-1",
       companyId: "company-1",
       name: "Initial",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: { x: 120, y: 90, scale: 0.2 },
       estimate: emptyEstimate,
@@ -441,7 +473,8 @@ describe("InMemoryAppRepository", () => {
       drawingId: "drawing-1",
       companyId: "company-1",
       name: "Updated",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: { x: 440, y: 210, scale: 0.45 },
       estimate: emptyEstimate,
@@ -468,6 +501,8 @@ describe("InMemoryAppRepository", () => {
       drawingId: "drawing-1",
       companyId: "company-1",
       versionNumber: 1,
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       restoredByUserId: "user-1",
       restoredAtIso: "2026-03-13T00:00:00.000Z"
     });
@@ -508,6 +543,7 @@ describe("SqliteAppRepository", () => {
     if (!account) {
       throw new Error("Expected bootstrap account");
     }
+    await createTestCustomer(repository, account.company.id, account.user.id);
     await repository.createSession({
       id: "session-1",
       companyId: account.company.id,
@@ -520,7 +556,8 @@ describe("SqliteAppRepository", () => {
       id: "drawing-1",
       companyId: account.company.id,
       name: "Stored drawing",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: { x: 250, y: 125, scale: 0.3 },
       estimate: emptyEstimate,
@@ -571,12 +608,14 @@ describe("SqliteAppRepository", () => {
     if (!account) {
       throw new Error("Expected bootstrap account");
     }
+    await createTestCustomer(repository, account.company.id, account.user.id);
 
     await repository.createDrawing({
       id: "drawing-1",
       companyId: account.company.id,
       name: "Feature drawing",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: featureRichLayout,
       savedViewport: { x: 250, y: 125, scale: 0.3 },
       estimate: emptyEstimate,
@@ -629,12 +668,14 @@ describe("SqliteAppRepository", () => {
     if (!account) {
       throw new Error("Expected bootstrap account");
     }
+    await createTestCustomer(repository, account.company.id, account.user.id);
 
     await repository.createDrawing({
       id: "drawing-1",
       companyId: account.company.id,
       name: "Stored quote drawing",
-      customerName: "Cleveland Land Services",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
       layout: emptyLayout,
       savedViewport: null,
       estimate: emptyEstimate,
@@ -655,7 +696,8 @@ describe("SqliteAppRepository", () => {
         drawing: {
           drawingId: "drawing-1",
           drawingName: "Stored quote drawing",
-          customerName: "Cleveland Land Services"
+          customerId: TEST_CUSTOMER_ID,
+          customerName: TEST_CUSTOMER_NAME
         },
         groups: [],
         ancillaryItems: [],
@@ -674,7 +716,8 @@ describe("SqliteAppRepository", () => {
       drawingSnapshot: {
         drawingId: "drawing-1",
         drawingName: "Stored quote drawing",
-        customerName: "Cleveland Land Services",
+        customerId: TEST_CUSTOMER_ID,
+        customerName: TEST_CUSTOMER_NAME,
         layout: emptyLayout,
         estimate: emptyEstimate,
         schemaVersion: DRAWING_SCHEMA_VERSION,

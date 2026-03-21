@@ -122,15 +122,38 @@ const baseSession: AuthSessionEnvelope = {
   }
 };
 
+const baseCustomer = {
+  id: "customer-1",
+  companyId: "company-1",
+  name: "Cleveland Land Services",
+  primaryContactName: "",
+  primaryEmail: "",
+  primaryPhone: "",
+  siteAddress: "",
+  notes: "",
+  isArchived: false,
+  createdByUserId: "user-1",
+  updatedByUserId: "user-1",
+  createdAtIso: "2026-03-10T10:00:00.000Z",
+  updatedAtIso: "2026-03-10T11:00:00.000Z",
+  activeDrawingCount: 1,
+  archivedDrawingCount: 0,
+  lastActivityAtIso: "2026-03-10T11:00:00.000Z"
+};
+
 const mockWorkspace = {
   session: baseSession as AuthSessionEnvelope | null,
+  customers: [baseCustomer],
   currentDrawingId: "drawing-1" as string | null,
   currentDrawingName: "Perimeter A",
+  currentCustomerId: "customer-1" as string | null,
   currentCustomerName: "Cleveland Land Services",
   isDirty: false,
+  isSavingCustomer: false,
   isSavingDrawing: false,
   setCurrentDrawingName: vi.fn(),
-  setCurrentCustomerName: vi.fn(),
+  setCurrentCustomerId: vi.fn(),
+  saveCustomer: vi.fn(() => Promise.resolve({ id: "customer-2" })),
   saveDrawing: vi.fn(() => Promise.resolve()),
   saveDrawingAsNew: vi.fn(() => Promise.resolve()),
   startNewDraft: vi.fn(),
@@ -404,8 +427,10 @@ describe("EditorPage", () => {
     vi.clearAllMocks();
     mockShellState.interactionMode = "SELECT";
     mockWorkspace.session = baseSession;
+    mockWorkspace.customers = [baseCustomer];
     mockWorkspace.currentDrawingId = "drawing-1";
     mockWorkspace.currentDrawingName = "Perimeter A";
+    mockWorkspace.currentCustomerId = "customer-1";
     mockWorkspace.currentCustomerName = "Cleveland Land Services";
     mockWorkspace.isDirty = false;
     mockSelectionState.selectedSegmentId = null;

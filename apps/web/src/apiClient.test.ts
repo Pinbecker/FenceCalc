@@ -403,11 +403,11 @@ describe("apiClient", () => {
     await listUsers();
     await listAuditLog();
     await logout();
-    await createDrawing({ name: "Yard", customerName: "Cleveland Land Services", layout: { segments: [], gates: [] } });
+    await createDrawing({ name: "Yard", customerId: "customer-1", layout: { segments: [], gates: [] } });
     await updateDrawing("drawing-1", {
       expectedVersionNumber: 1,
       name: "Updated yard",
-      customerName: "Cleveland Land Services",
+      customerId: "customer-1",
       layout: { segments: [], gates: [] }
     });
     await setDrawingArchivedState("drawing-1", true, 2);

@@ -4,6 +4,8 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerRecord,
+  CustomerSummary,
   DrawingSummary,
   DrawingVersionRecord
 } from "@fence-estimator/contracts";
@@ -27,24 +29,35 @@ import { usePortalFeedbackState } from "./usePortalFeedbackState";
 export interface PortalSessionState {
   session: AuthSessionEnvelope | null;
   setupStatus: SetupStatus | null;
+  customers: CustomerSummary[];
   drawings: DrawingSummary[];
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
   isRestoringSession: boolean;
   isAuthenticating: boolean;
+  isLoadingCustomers: boolean;
   isLoadingDrawings: boolean;
   isLoadingUsers: boolean;
   isLoadingAuditLog: boolean;
+  isSavingCustomer: boolean;
   isSavingUser: boolean;
+  isArchivingCustomerId: string | null;
   isResettingUserId: string | null;
   errorMessage: string | null;
   noticeMessage: string | null;
   bootstrapOwner: (input: RegisterAccountInput) => Promise<boolean>;
   login: (input: LoginInput) => Promise<boolean>;
   logout: () => void;
+  refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
   refreshUsers: () => Promise<void>;
   refreshAuditLog: () => Promise<void>;
+  saveCustomer: (
+    input:
+      | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
+      | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; siteAddress?: string; notes?: string } },
+  ) => Promise<CustomerRecord | null>;
+  setCustomerArchived: (customerId: string, archived: boolean) => Promise<boolean>;
   createUser: (input: CreateCompanyUserInput) => Promise<boolean>;
   resetUserPassword: (userId: string, password: string) => Promise<boolean>;
   setDrawingArchived: (drawingId: string, archived: boolean) => Promise<boolean>;
@@ -67,22 +80,29 @@ export function usePortalSession(): PortalSessionState {
     setNoticeMessage: feedback.setNoticeMessage
   });
   const {
+    customers,
     clearCompanyData,
     createUser,
     drawings,
     auditLog,
+    isArchivingCustomerId,
     isLoadingAuditLog,
+    isLoadingCustomers,
     isLoadingDrawings,
     isLoadingUsers,
+    isSavingCustomer,
     isResettingUserId,
     isSavingUser,
     loadCompanyData,
+    refreshCustomers,
     loadDrawingVersions,
     refreshAuditLog,
     refreshDrawings,
     refreshUsers,
     resetUserPassword,
     restoreDrawingVersion,
+    saveCustomer,
+    setCustomerArchived,
     setDrawingArchived,
     users
   } = companyData;
@@ -248,24 +268,31 @@ export function usePortalSession(): PortalSessionState {
   return {
     session,
     setupStatus,
+    customers,
     drawings,
     users,
     auditLog,
     isRestoringSession,
     isAuthenticating,
+    isLoadingCustomers,
     isLoadingDrawings,
     isLoadingUsers,
     isLoadingAuditLog,
+    isSavingCustomer,
     isSavingUser,
+    isArchivingCustomerId,
     isResettingUserId,
     errorMessage,
     noticeMessage,
     bootstrapOwner: bootstrap,
     login: loginToPortal,
     logout,
+    refreshCustomers,
     refreshDrawings,
     refreshUsers,
     refreshAuditLog,
+    saveCustomer,
+    setCustomerArchived,
     createUser,
     resetUserPassword,
     setDrawingArchived,

@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 
 import { migrateSqliteDatabase } from "./sqliteSchema.js";
+import { SqliteCustomerStore } from "./sqliteCustomerStore.js";
 import { SqliteDrawingStore } from "./sqliteDrawingStore.js";
 import { SqlitePricingStore } from "./sqlitePricingStore.js";
 import { SqliteQuoteStore } from "./sqliteQuoteStore.js";
@@ -12,20 +13,25 @@ import type {
   AppRepository,
   BootstrapOwnerAccountInput,
   CreateAuditLogInput,
+  CreateCustomerInput,
   CreateDrawingInput,
   CreatePasswordResetTokenInput,
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   RestoreDrawingVersionInput,
+  CustomerScope,
+  SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
   UpsertPricingConfigInput,
+  UpdateCustomerInput,
   UpdateDrawingInput
 } from "./types.js";
 
 export class SqliteAppRepository implements AppRepository {
   private readonly database: Database.Database;
   private readonly userSessions: SqliteUserSessionStore;
+  private readonly customers: SqliteCustomerStore;
   private readonly drawings: SqliteDrawingStore;
   private readonly pricing: SqlitePricingStore;
   private readonly quotes: SqliteQuoteStore;
@@ -38,6 +44,7 @@ export class SqliteAppRepository implements AppRepository {
     this.database.pragma("foreign_keys = ON");
     migrateSqliteDatabase(this.database);
     this.userSessions = new SqliteUserSessionStore(this.database);
+    this.customers = new SqliteCustomerStore(this.database);
     this.drawings = new SqliteDrawingStore(this.database);
     this.pricing = new SqlitePricingStore(this.database);
     this.quotes = new SqliteQuoteStore(this.database);
@@ -98,6 +105,26 @@ export class SqliteAppRepository implements AppRepository {
 
   public getAuthenticatedSession(tokenHash: string) {
     return Promise.resolve(this.userSessions.getAuthenticatedSession(tokenHash));
+  }
+
+  public createCustomer(input: CreateCustomerInput) {
+    return Promise.resolve(this.customers.createCustomer(input));
+  }
+
+  public listCustomers(companyId: string, scope: CustomerScope = "ACTIVE", search = "") {
+    return Promise.resolve(this.customers.listCustomers(companyId, scope, search));
+  }
+
+  public getCustomerById(customerId: string, companyId: string) {
+    return Promise.resolve(this.customers.getCustomerById(customerId, companyId));
+  }
+
+  public updateCustomer(input: UpdateCustomerInput) {
+    return Promise.resolve(this.customers.updateCustomer(input));
+  }
+
+  public setCustomerArchivedState(input: SetCustomerArchivedStateInput) {
+    return Promise.resolve(this.customers.setCustomerArchivedState(input));
   }
 
   public createDrawing(input: CreateDrawingInput) {

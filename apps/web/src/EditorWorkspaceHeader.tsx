@@ -1,17 +1,30 @@
-import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
+import { useEffect, useMemo, useState } from "react";
+
+import type { AuthSessionEnvelope, CustomerSummary } from "@fence-estimator/contracts";
 
 interface EditorWorkspaceHeaderProps {
   session: AuthSessionEnvelope | null;
+  customers: CustomerSummary[];
   drawingTitle: string;
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentCustomerId: string | null;
   currentCustomerName: string;
   isDirty: boolean;
+  isSavingCustomer: boolean;
   isSavingDrawing: boolean;
   canManagePricing: boolean;
   canManageAdmin: boolean;
   onSetCurrentDrawingName: (name: string) => void;
-  onSetCurrentCustomerName: (name: string) => void;
+  onSetCurrentCustomerId: (customerId: string | null) => void;
+  onSaveCustomer: (input: {
+    name: string;
+    primaryContactName: string;
+    primaryEmail: string;
+    primaryPhone: string;
+    siteAddress: string;
+    notes: string;
+  }) => Promise<{ id: string } | null>;
   onSaveDrawing: () => void;
   onSaveDrawingAsNew: () => void;
   onExportPdf: () => void;
@@ -26,16 +39,20 @@ interface EditorWorkspaceHeaderProps {
 
 export function EditorWorkspaceHeader({
   session,
+  customers,
   drawingTitle,
   currentDrawingId,
   currentDrawingName,
+  currentCustomerId,
   currentCustomerName,
   isDirty,
+  isSavingCustomer,
   isSavingDrawing,
   canManagePricing,
   canManageAdmin,
   onSetCurrentDrawingName,
-  onSetCurrentCustomerName,
+  onSetCurrentCustomerId,
+  onSaveCustomer,
   onSaveDrawing,
   onSaveDrawingAsNew,
   onExportPdf,
@@ -52,6 +69,51 @@ export function EditorWorkspaceHeader({
       ? "Save the drawing before opening its estimate."
       : "Open estimate"
     : "Save this drawing first to open its estimate.";
+  const [customerSearch, setCustomerSearch] = useState(currentCustomerName);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustomerDraft, setNewCustomerDraft] = useState({
+    name: "",
+    primaryContactName: "",
+    primaryEmail: "",
+    primaryPhone: "",
+    siteAddress: "",
+    notes: ""
+  });
+
+  useEffect(() => {
+    setCustomerSearch(currentCustomerName);
+  }, [currentCustomerName]);
+
+  const filteredCustomers = useMemo(() => {
+    const normalizedSearch = customerSearch.trim().toLowerCase();
+    return customers
+      .filter((customer) => !customer.isArchived)
+      .filter((customer) => normalizedSearch.length === 0 || customer.name.toLowerCase().includes(normalizedSearch))
+      .slice(0, 8);
+  }, [customerSearch, customers]);
+
+  const handleCreateCustomer = async () => {
+    const created = await onSaveCustomer({
+      name: newCustomerDraft.name.trim(),
+      primaryContactName: newCustomerDraft.primaryContactName.trim(),
+      primaryEmail: newCustomerDraft.primaryEmail.trim(),
+      primaryPhone: newCustomerDraft.primaryPhone.trim(),
+      siteAddress: newCustomerDraft.siteAddress.trim(),
+      notes: newCustomerDraft.notes.trim()
+    });
+    if (!created) {
+      return;
+    }
+    setIsCreatingCustomer(false);
+    setNewCustomerDraft({
+      name: "",
+      primaryContactName: "",
+      primaryEmail: "",
+      primaryPhone: "",
+      siteAddress: "",
+      notes: ""
+    });
+  };
 
   return (
     <header className="editor-header">
@@ -70,12 +132,28 @@ export function EditorWorkspaceHeader({
             <div className="editor-document-fields">
               <label className="editor-document-name">
                 <span>Customer</span>
-                <input
-                  type="text"
-                  value={currentCustomerName}
-                  placeholder="Customer name"
-                  onChange={(event) => onSetCurrentCustomerName(event.target.value)}
-                />
+                <div className="editor-customer-picker">
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    placeholder="Search customers"
+                    onChange={(event) => setCustomerSearch(event.target.value)}
+                  />
+                  <select
+                    value={currentCustomerId ?? ""}
+                    onChange={(event) => onSetCurrentCustomerId(event.target.value || null)}
+                  >
+                    <option value="">Select customer</option>
+                    {filteredCustomers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="ghost" onClick={() => setIsCreatingCustomer((current) => !current)}>
+                    {isCreatingCustomer ? "Cancel" : "New Customer"}
+                  </button>
+                </div>
               </label>
               <label className="editor-document-name">
                 <span>Drawing Name</span>
@@ -87,6 +165,39 @@ export function EditorWorkspaceHeader({
                 />
               </label>
             </div>
+            {isCreatingCustomer ? (
+              <div className="editor-customer-create">
+                <input
+                  type="text"
+                  value={newCustomerDraft.name}
+                  placeholder="Customer name"
+                  onChange={(event) => setNewCustomerDraft((current) => ({ ...current, name: event.target.value }))}
+                />
+                <input
+                  type="text"
+                  value={newCustomerDraft.primaryContactName}
+                  placeholder="Primary contact"
+                  onChange={(event) =>
+                    setNewCustomerDraft((current) => ({ ...current, primaryContactName: event.target.value }))
+                  }
+                />
+                <input
+                  type="email"
+                  value={newCustomerDraft.primaryEmail}
+                  placeholder="Email"
+                  onChange={(event) => setNewCustomerDraft((current) => ({ ...current, primaryEmail: event.target.value }))}
+                />
+                <input
+                  type="text"
+                  value={newCustomerDraft.primaryPhone}
+                  placeholder="Phone"
+                  onChange={(event) => setNewCustomerDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
+                />
+                <button type="button" onClick={() => void handleCreateCustomer()} disabled={isSavingCustomer}>
+                  {isSavingCustomer ? "Creating..." : "Create Customer"}
+                </button>
+              </div>
+            ) : null}
             <div className="editor-document-actions-compact">
               <button type="button" onClick={onSaveDrawing} disabled={isSavingDrawing}>
                 {currentDrawingId ? "Save" : "Save New"}

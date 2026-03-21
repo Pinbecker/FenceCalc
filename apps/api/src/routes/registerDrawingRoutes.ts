@@ -32,7 +32,8 @@ function sendDrawingMutationFailure(
     | { kind: "conflict"; currentVersionNumber: number }
     | { kind: "drawing_not_found" }
     | { kind: "version_not_found" }
-    | { kind: "invalid_layout"; message: string },
+    | { kind: "invalid_layout"; message: string }
+    | { kind: "invalid_customer"; message: string },
 ) {
   if (result.kind === "conflict") {
     return reply.code(409).send({
@@ -50,6 +51,13 @@ function sendDrawingMutationFailure(
   if (result.kind === "invalid_layout") {
     return reply.code(400).send({
       error: "Invalid layout configuration",
+      details: result.message
+    });
+  }
+
+  if (result.kind === "invalid_customer") {
+    return reply.code(400).send({
+      error: "Invalid customer selection",
       details: result.message
     });
   }
@@ -218,8 +226,8 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     if (parsed.data.name !== undefined) {
       updateInput.name = parsed.data.name;
     }
-    if (parsed.data.customerName !== undefined) {
-      updateInput.customerName = parsed.data.customerName;
+    if (parsed.data.customerId !== undefined) {
+      updateInput.customerId = parsed.data.customerId;
     }
     if (parsed.data.savedViewport !== undefined) {
       updateInput.savedViewport = parsed.data.savedViewport;

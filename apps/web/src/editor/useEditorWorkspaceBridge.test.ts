@@ -13,13 +13,18 @@ const baseLayout: LayoutModel = {
   ],
   gates: [],
   basketballPosts: [],
-  floodlightColumns: []
+  floodlightColumns: [],
+  goalUnits: [],
+  kickboards: [],
+  pitchDividers: [],
+  sideNettings: []
 };
 
 const sampleDrawing = {
   id: "drawing-1",
   companyId: "company-1",
   name: "Rear boundary",
+  customerId: "customer-1",
   customerName: "Cleveland Land Services",
   layout: baseLayout,
   estimate: {

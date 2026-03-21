@@ -771,16 +771,20 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     <div className="editor-page">
       <EditorWorkspaceHeader
         session={session}
+        customers={workspace.customers}
         drawingTitle={drawingTitle}
         currentDrawingId={workspace.currentDrawingId}
         currentDrawingName={workspace.currentDrawingName}
+        currentCustomerId={workspace.currentCustomerId}
         currentCustomerName={workspace.currentCustomerName}
         isDirty={workspace.isDirty}
+        isSavingCustomer={workspace.isSavingCustomer}
         isSavingDrawing={workspace.isSavingDrawing}
         canManagePricing={canManagePricing}
         canManageAdmin={canManageAdmin}
         onSetCurrentDrawingName={workspace.setCurrentDrawingName}
-        onSetCurrentCustomerName={workspace.setCurrentCustomerName}
+        onSetCurrentCustomerId={workspace.setCurrentCustomerId}
+        onSaveCustomer={workspace.saveCustomer}
         onSaveDrawing={() => {
           void workspace.saveDrawing();
         }}

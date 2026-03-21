@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
 import {
   getAuthenticatedUser,
+  listCustomers,
   listDrawings,
   login,
   logout as logoutSession,
@@ -25,9 +26,11 @@ export function useWorkspaceSessionState({
   setNoticeMessage
 }: UseWorkspaceSessionStateOptions) {
   const [session, setSession] = useState<AuthSessionEnvelope | null>(null);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [isLoadingDrawings, setIsLoadingDrawings] = useState(false);
   const sessionRequestIdRef = useRef(0);
 
@@ -40,9 +43,26 @@ export function useWorkspaceSessionState({
 
   const clearSessionData = useCallback(() => {
     setSession(null);
+    setCustomers([]);
     setDrawings([]);
     writeStoredSession(null);
   }, []);
+
+  const refreshCustomers = useCallback(async () => {
+    if (!session) {
+      setCustomers([]);
+      return;
+    }
+
+    setIsLoadingCustomers(true);
+    try {
+      setCustomers(await listCustomers());
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  }, [session, setErrorMessage]);
 
   const refreshDrawings = useCallback(async () => {
     if (!session) {
@@ -77,10 +97,12 @@ export function useWorkspaceSessionState({
 
         setSession(authenticated);
         writeStoredSession(authenticated);
+        setCustomers([]);
         setDrawings([]);
         try {
-          const nextDrawings = await listDrawings();
+          const [nextCustomers, nextDrawings] = await Promise.all([listCustomers(), listDrawings()]);
           if (!cancelled && isActiveSessionRequest(requestId)) {
+            setCustomers(nextCustomers);
             setDrawings(nextDrawings);
           }
         } catch (error) {
@@ -119,12 +141,14 @@ export function useWorkspaceSessionState({
 
         setSession(nextSession);
         writeStoredSession(nextSession);
+        setCustomers([]);
         setDrawings([]);
         onRegistered();
         setNoticeMessage(`Signed in as ${nextSession.user.displayName}`);
-        void listDrawings()
-          .then((nextDrawings) => {
+        void Promise.all([listCustomers(), listDrawings()])
+          .then(([nextCustomers, nextDrawings]) => {
             if (isActiveSessionRequest(requestId)) {
+              setCustomers(nextCustomers);
               setDrawings(nextDrawings);
             }
           })
@@ -160,11 +184,13 @@ export function useWorkspaceSessionState({
 
         setSession(nextSession);
         writeStoredSession(nextSession);
+        setCustomers([]);
         setDrawings([]);
         setNoticeMessage(`Welcome back, ${nextSession.user.displayName}`);
-        void listDrawings()
-          .then((nextDrawings) => {
+        void Promise.all([listCustomers(), listDrawings()])
+          .then(([nextCustomers, nextDrawings]) => {
             if (isActiveSessionRequest(requestId)) {
+              setCustomers(nextCustomers);
               setDrawings(nextDrawings);
             }
           })
@@ -203,11 +229,15 @@ export function useWorkspaceSessionState({
 
   return {
     session,
+    customers,
     drawings,
     isRestoringSession,
     isAuthenticating,
+    isLoadingCustomers,
     isLoadingDrawings,
     setDrawings,
+    setCustomers,
+    refreshCustomers,
     refreshDrawings,
     register,
     login: loginToWorkspace,

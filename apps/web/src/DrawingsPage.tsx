@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import type { AuthSessionEnvelope, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 
@@ -8,7 +8,9 @@ type DrawingStatusFilter = "ACTIVE" | "ARCHIVED" | "ALL";
 type DrawingOwnershipFilter = "COMPANY" | "MINE";
 
 interface DrawingsPageProps {
+  query?: Record<string, string>;
   session: AuthSessionEnvelope;
+  customers: CustomerSummary[];
   drawings: DrawingSummary[];
   isLoading: boolean;
   onRefresh(this: void): Promise<void>;
@@ -32,7 +34,9 @@ function sortStrings(left: string, right: string): number {
 }
 
 export function DrawingsPage({
+  query,
   session,
+  customers,
   drawings,
   isLoading,
   onRefresh,
@@ -50,12 +54,31 @@ export function DrawingsPage({
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
 
-  const customerNames = useMemo(
-    () =>
-      [...new Set(drawings.map((drawing) => drawing.customerName.trim()).filter((customerName) => customerName.length > 0))].sort(
-        sortStrings,
-      ),
-    [drawings],
+  useEffect(() => {
+    if (query?.scope === "active") {
+      setStatusFilter("ACTIVE");
+    } else if (query?.scope === "archived") {
+      setStatusFilter("ARCHIVED");
+    } else if (query?.scope === "all") {
+      setStatusFilter("ALL");
+    }
+
+    if (query?.owner === "mine") {
+      setOwnershipFilter("MINE");
+    } else if (query?.owner === "company") {
+      setOwnershipFilter("COMPANY");
+    }
+
+    if (query?.customerId) {
+      setSelectedCustomer(query.customerId);
+    } else if (query && !("customerId" in query)) {
+      setSelectedCustomer("ALL_CUSTOMERS");
+    }
+  }, [query]);
+
+  const customerOptions = useMemo(
+    () => customers.slice().sort((left, right) => sortStrings(left.name, right.name)),
+    [customers],
   );
 
   const visibleDrawings = useMemo(() => {
@@ -75,23 +98,26 @@ export function DrawingsPage({
         }
         return true;
       })
-      .filter((drawing) => selectedCustomer === "ALL_CUSTOMERS" || drawing.customerName === selectedCustomer)
+      .filter((drawing) => selectedCustomer === "ALL_CUSTOMERS" || drawing.customerId === selectedCustomer)
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
   }, [drawings, ownershipFilter, selectedCustomer, session.user.id, statusFilter]);
 
   const groupedDrawings = useMemo(() => {
-    const groups = new Map<string, DrawingSummary[]>();
+    const groups = new Map<string, { label: string; drawings: DrawingSummary[] }>();
     for (const drawing of visibleDrawings) {
+      const groupKey = drawing.customerId ?? `snapshot:${drawing.customerName.trim() || "unassigned"}`;
       const customerName = drawing.customerName.trim() || "Unassigned customer";
-      const bucket = groups.get(customerName);
+      const bucket = groups.get(groupKey);
       if (bucket) {
-        bucket.push(drawing);
+        bucket.drawings.push(drawing);
       } else {
-        groups.set(customerName, [drawing]);
+        groups.set(groupKey, { label: customerName, drawings: [drawing] });
       }
     }
 
-    return [...groups.entries()].sort(([left], [right]) => sortStrings(left, right));
+    return [...groups.entries()]
+      .map(([groupKey, value]) => [groupKey, value.label, value.drawings] as const)
+      .sort(([, left], [, right]) => sortStrings(left, right));
   }, [visibleDrawings]);
 
   const activeCount = drawings.filter((drawing) => !drawing.isArchived).length;
@@ -168,9 +194,9 @@ export function DrawingsPage({
             <span>Customer View</span>
             <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
               <option value="ALL_CUSTOMERS">All customers</option>
-              {customerNames.map((customerName) => (
-                <option key={customerName} value={customerName}>
-                  {customerName}
+              {customerOptions.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
                 </option>
               ))}
             </select>
@@ -215,8 +241,8 @@ export function DrawingsPage({
       ) : null}
 
       <div className="drawing-library-groups">
-        {groupedDrawings.map(([customerName, customerDrawings]) => (
-          <section key={customerName} className="drawing-library-group">
+        {groupedDrawings.map(([groupKey, customerName, customerDrawings]) => (
+          <section key={groupKey} className="drawing-library-group">
             <header className="drawing-library-group-header">
               <div>
                 <span className="portal-section-kicker">Customer</span>

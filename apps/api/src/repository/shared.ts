@@ -5,6 +5,8 @@ import type {
   CompanyRecord,
   CompanyUserRecord,
   CompanyUserRole,
+  CustomerRecord,
+  CustomerSummary,
   DrawingRecord,
   DrawingSummary,
   DrawingVersionRecord,
@@ -15,6 +17,8 @@ import type {
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
+  customerRecordSchema,
+  customerSummarySchema,
   drawingCanvasViewportSchema,
   estimateResultSchema,
   layoutModelSchema,
@@ -62,11 +66,35 @@ export interface UserRow {
   created_at_iso: string;
 }
 
+export interface CustomerRow {
+  id: string;
+  company_id: string;
+  name: string;
+  primary_contact_name: string;
+  primary_email: string;
+  primary_phone: string;
+  site_address: string;
+  notes: string;
+  is_archived: number;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface CustomerSummaryRow extends CustomerRow {
+  active_drawing_count: number;
+  archived_drawing_count: number;
+  last_activity_at_iso: string | null;
+}
+
 export interface DrawingRow {
   id: string;
   company_id: string;
   name: string;
+  customer_id: string | null;
   customer_name: string;
+  resolved_customer_name?: string | null;
   layout_json: string;
   viewport_json?: string | null;
   estimate_json: string;
@@ -91,6 +119,7 @@ export interface DrawingVersionRow {
   version_number: number;
   source: DrawingVersionSource;
   name: string;
+  customer_id: string | null;
   customer_name: string;
   layout_json: string;
   viewport_json?: string | null;
@@ -167,6 +196,35 @@ export function toCompany(row: CompanyRow): CompanyRecord {
   };
 }
 
+export function toCustomer(row: CustomerRow): CustomerRecord {
+  const parsed = customerRecordSchema.parse({
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    primaryContactName: row.primary_contact_name,
+    primaryEmail: row.primary_email,
+    primaryPhone: row.primary_phone,
+    siteAddress: row.site_address,
+    notes: row.notes,
+    isArchived: row.is_archived === 1,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso
+  });
+  return parsed;
+}
+
+export function toCustomerSummary(row: CustomerSummaryRow): CustomerSummary {
+  const parsed = customerSummarySchema.parse({
+    ...toCustomer(row),
+    activeDrawingCount: row.active_drawing_count,
+    archivedDrawingCount: row.archived_drawing_count,
+    lastActivityAtIso: row.last_activity_at_iso
+  });
+  return parsed;
+}
+
 function parseStoredJson<T>(raw: string, schema: ZodType<T>, label: string): T {
   let parsed: unknown;
   try {
@@ -238,7 +296,8 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
-    customerName: row.customer_name,
+    customerId: row.customer_id,
+    customerName: row.resolved_customer_name ?? row.customer_name,
     layout,
     ...(savedViewport ? { savedViewport } : {}),
     estimate,
@@ -267,6 +326,7 @@ export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<Draw
     id: drawing.id,
     companyId: drawing.companyId,
     name: drawing.name,
+    customerId: drawing.customerId,
     customerName: drawing.customerName,
     previewLayout: buildPreviewLayout(drawing.layout),
     segmentCount: drawing.layout.segments.length,
@@ -307,6 +367,7 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     versionNumber: row.version_number,
     source: row.source,
     name: row.name,
+    customerId: row.customer_id,
     customerName: row.customer_name,
     layout,
     ...(savedViewport ? { savedViewport } : {}),
@@ -350,6 +411,7 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
     layout: buildStoredLayout(parsed.drawingSnapshot.layout),
     drawingId: parsed.drawingSnapshot.drawingId,
     drawingName: parsed.drawingSnapshot.drawingName,
+    customerId: parsed.drawingSnapshot.customerId,
     customerName: parsed.drawingSnapshot.customerName,
     estimate: parsed.drawingSnapshot.estimate,
     schemaVersion: parsed.drawingSnapshot.schemaVersion,

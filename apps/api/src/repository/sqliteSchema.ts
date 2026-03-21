@@ -178,6 +178,37 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_quotes_drawing_created
         ON quotes(company_id, drawing_id, created_at_iso DESC);
       `
+    },
+    {
+      name: "008_customers",
+      sql: `
+        CREATE TABLE IF NOT EXISTS customers (
+          id TEXT PRIMARY KEY,
+          company_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          name_normalized TEXT NOT NULL,
+          primary_contact_name TEXT NOT NULL DEFAULT '',
+          primary_email TEXT NOT NULL DEFAULT '',
+          primary_phone TEXT NOT NULL DEFAULT '',
+          site_address TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          is_archived INTEGER NOT NULL DEFAULT 0,
+          created_by_user_id TEXT NOT NULL,
+          updated_by_user_id TEXT NOT NULL,
+          created_at_iso TEXT NOT NULL,
+          updated_at_iso TEXT NOT NULL,
+          FOREIGN KEY (company_id) REFERENCES companies(id),
+          FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+          FOREIGN KEY (updated_by_user_id) REFERENCES users(id),
+          UNIQUE (company_id, name_normalized)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_customers_company_updated
+        ON customers(company_id, is_archived, updated_at_iso DESC);
+
+        ALTER TABLE drawings ADD COLUMN customer_id TEXT;
+        ALTER TABLE drawing_versions ADD COLUMN customer_id TEXT;
+      `
     }
   ] as const;
 
@@ -263,6 +294,95 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
       UPDATE drawing_versions
       SET customer_name = name
       WHERE TRIM(COALESCE(customer_name, '')) = ''
+    `);
+  }
+  if (!tableExists(database, "customers")) {
+    database.exec(`
+      CREATE TABLE customers (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        name_normalized TEXT NOT NULL,
+        primary_contact_name TEXT NOT NULL DEFAULT '',
+        primary_email TEXT NOT NULL DEFAULT '',
+        primary_phone TEXT NOT NULL DEFAULT '',
+        site_address TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        created_by_user_id TEXT NOT NULL,
+        updated_by_user_id TEXT NOT NULL,
+        created_at_iso TEXT NOT NULL,
+        updated_at_iso TEXT NOT NULL,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+        FOREIGN KEY (updated_by_user_id) REFERENCES users(id),
+        UNIQUE (company_id, name_normalized)
+      )
+    `);
+  }
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_customers_company_updated
+    ON customers(company_id, is_archived, updated_at_iso DESC)
+  `);
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "customer_id")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN customer_id TEXT");
+  }
+  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "customer_id")) {
+    database.exec("ALTER TABLE drawing_versions ADD COLUMN customer_id TEXT");
+  }
+
+  if (tableExists(database, "customers") && tableExists(database, "drawings")) {
+    database.exec(`
+      INSERT INTO customers (
+        id,
+        company_id,
+        name,
+        name_normalized,
+        primary_contact_name,
+        primary_email,
+        primary_phone,
+        site_address,
+        notes,
+        is_archived,
+        created_by_user_id,
+        updated_by_user_id,
+        created_at_iso,
+        updated_at_iso
+      )
+      SELECT
+        'customer:' || d.company_id || ':' || lower(trim(d.customer_name)),
+        d.company_id,
+        trim(d.customer_name),
+        lower(trim(d.customer_name)),
+        '',
+        '',
+        '',
+        '',
+        '',
+        0,
+        d.created_by_user_id,
+        d.updated_by_user_id,
+        MIN(d.created_at_iso),
+        MAX(d.updated_at_iso)
+      FROM drawings d
+      WHERE trim(COALESCE(d.customer_name, '')) <> ''
+      GROUP BY d.company_id, lower(trim(d.customer_name))
+      ON CONFLICT(company_id, name_normalized) DO NOTHING
+    `);
+
+    database.exec(`
+      UPDATE drawings
+      SET customer_id = 'customer:' || company_id || ':' || lower(trim(customer_name))
+      WHERE TRIM(COALESCE(customer_name, '')) <> ''
+        AND TRIM(COALESCE(customer_id, '')) = ''
+    `);
+  }
+  if (tableExists(database, "customers") && tableExists(database, "drawing_versions")) {
+    database.exec(`
+      UPDATE drawing_versions
+      SET customer_id = 'customer:' || company_id || ':' || lower(trim(customer_name))
+      WHERE TRIM(COALESCE(customer_name, '')) <> ''
+        AND TRIM(COALESCE(customer_id, '')) = ''
     `);
   }
 

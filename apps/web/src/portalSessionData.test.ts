@@ -32,6 +32,7 @@ describe("portalSessionData", () => {
       id: "drawing-1",
       companyId: "company-1",
       name: "Perimeter",
+      customerId: "customer-1",
       customerName: "Cleveland Land Services",
       layout: {
         segments: [

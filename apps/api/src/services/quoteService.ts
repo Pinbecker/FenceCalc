@@ -43,6 +43,7 @@ export async function createQuoteForDrawing(
     drawingSnapshot: {
       drawingId: drawing.id,
       drawingName: drawing.name,
+      customerId: drawing.customerId,
       customerName: drawing.customerName,
       layout: drawing.layout,
       ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),

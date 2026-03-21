@@ -2,19 +2,22 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerSummary,
   DrawingRecord,
   DrawingSummary
 } from "@fence-estimator/contracts";
 
-import { listAuditLog, listDrawings, listUsers } from "./apiClient";
+import { listAuditLog, listCustomers, listDrawings, listUsers } from "./apiClient";
 
 export interface PortalCompanyData {
+  customers: CustomerSummary[];
   drawings: DrawingSummary[];
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
 }
 
 export const EMPTY_PORTAL_COMPANY_DATA: PortalCompanyData = {
+  customers: [],
   drawings: [],
   users: [],
   auditLog: []
@@ -26,13 +29,15 @@ export function sessionCanManageCompanyData(session: AuthSessionEnvelope): boole
 
 export async function loadPortalCompanyData(session: AuthSessionEnvelope): Promise<PortalCompanyData> {
   const canManage = sessionCanManageCompanyData(session);
-  const [drawings, users, auditLog] = await Promise.all([
+  const [customers, drawings, users, auditLog] = await Promise.all([
+    listCustomers(),
     listDrawings(),
     canManage ? listUsers() : Promise.resolve([]),
     canManage ? listAuditLog() : Promise.resolve([])
   ]);
 
   return {
+    customers,
     drawings,
     users,
     auditLog
@@ -45,6 +50,7 @@ export function updateDrawingSummaryFromRecord(drawing: DrawingRecord, current?:
     id: drawing.id,
     companyId: drawing.companyId,
     name: drawing.name,
+    customerId: drawing.customerId,
     customerName: drawing.customerName,
     previewLayout: drawing.layout,
     segmentCount: drawing.layout.segments.length,

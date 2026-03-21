@@ -1,12 +1,15 @@
 import type {
   AuditLogRecord,
   CompanyRecord,
+  CustomerRecord,
+  CustomerSummary,
   DrawingRecord,
   DrawingVersionRecord,
   PricingConfigRecord,
   QuoteRecord
 } from "@fence-estimator/contracts";
 
+import { InMemoryCustomerStore } from "./inMemoryCustomerStore.js";
 import { InMemoryDrawingStore } from "./inMemoryDrawingStore.js";
 import { InMemoryPricingStore } from "./inMemoryPricingStore.js";
 import { InMemoryQuoteStore } from "./inMemoryQuoteStore.js";
@@ -19,21 +22,26 @@ import type {
   AppRepository,
   BootstrapOwnerAccountInput,
   CreateAuditLogInput,
+  CreateCustomerInput,
   CreateDrawingInput,
   CreatePasswordResetTokenInput,
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   RestoreDrawingVersionInput,
+  CustomerScope,
   SessionRecord,
+  SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
   StoredUser,
   UpsertPricingConfigInput,
+  UpdateCustomerInput,
   UpdateDrawingInput
 } from "./types.js";
 
 export class InMemoryAppRepository implements AppRepository {
   private readonly companies = new Map<string, CompanyRecord>();
+  private readonly customersMap = new Map<string, CustomerRecord>();
   private readonly users = new Map<string, StoredUser>();
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly drawingsMap = new Map<string, DrawingRecord>();
@@ -47,10 +55,15 @@ export class InMemoryAppRepository implements AppRepository {
     users: this.users,
     sessions: this.sessions
   });
+  private readonly customers = new InMemoryCustomerStore({
+    customers: this.customersMap,
+    drawings: this.drawingsMap
+  });
   private readonly drawings = new InMemoryDrawingStore({
     drawings: this.drawingsMap,
     drawingVersions: this.drawingVersionsMap,
-    users: this.users
+    users: this.users,
+    customers: this.customersMap
   });
   private readonly pricing = new InMemoryPricingStore({
     pricingConfigs: this.pricingConfigs
@@ -118,6 +131,26 @@ export class InMemoryAppRepository implements AppRepository {
 
   public getAuthenticatedSession(tokenHash: string) {
     return Promise.resolve(this.userSessions.getAuthenticatedSession(tokenHash));
+  }
+
+  public createCustomer(input: CreateCustomerInput) {
+    return Promise.resolve(this.customers.createCustomer(input));
+  }
+
+  public listCustomers(companyId: string, scope: CustomerScope = "ACTIVE", search = ""): Promise<CustomerSummary[]> {
+    return Promise.resolve(this.customers.listCustomers(companyId, scope, search));
+  }
+
+  public getCustomerById(customerId: string, companyId: string) {
+    return Promise.resolve(this.customers.getCustomerById(customerId, companyId));
+  }
+
+  public updateCustomer(input: UpdateCustomerInput) {
+    return Promise.resolve(this.customers.updateCustomer(input));
+  }
+
+  public setCustomerArchivedState(input: SetCustomerArchivedStateInput) {
+    return Promise.resolve(this.customers.setCustomerArchivedState(input));
   }
 
   public createDrawing(input: CreateDrawingInput) {

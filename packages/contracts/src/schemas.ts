@@ -736,6 +736,7 @@ export const pricedEstimateResultSchema = z.object({
   drawing: z.object({
     drawingId: z.string().trim().min(1).max(120),
     drawingName: z.string().trim().min(1).max(160),
+    customerId: z.string().trim().min(1).max(120).nullable(),
     customerName: z.string().trim().min(1).max(160)
   }),
   groups: z.array(estimateGroupSchema).max(200),
@@ -752,6 +753,7 @@ export const pricedEstimateResultSchema = z.object({
 export const quoteDrawingSnapshotSchema = z.object({
   drawingId: z.string().trim().min(1).max(120),
   drawingName: z.string().trim().min(1).max(160),
+  customerId: z.string().trim().min(1).max(120).nullable(),
   customerName: z.string().trim().min(1).max(160),
   layout: layoutModelSchema,
   savedViewport: drawingCanvasViewportSchema.nullable().optional(),
@@ -782,6 +784,9 @@ export const companyNameSchema = z.string().trim().min(2).max(120);
 export const displayNameSchema = z.string().trim().min(2).max(120);
 export const drawingNameSchema = z.string().trim().min(1).max(160);
 export const customerNameSchema = z.string().trim().min(1).max(160);
+export const customerIdSchema = z.string().trim().min(1).max(120);
+export const customerTextFieldSchema = z.string().trim().max(240);
+export const customerNotesSchema = z.string().trim().max(2_000);
 
 export const registerRequestSchema = z.object({
   companyName: companyNameSchema,
@@ -812,7 +817,7 @@ export const loginRequestSchema = z.object({
 
 export const drawingCreateRequestSchema = z.object({
   name: drawingNameSchema,
-  customerName: customerNameSchema,
+  customerId: customerIdSchema,
   layout: layoutModelSchema,
   savedViewport: drawingCanvasViewportSchema.nullable().optional()
 });
@@ -821,14 +826,14 @@ export const drawingUpdateRequestSchema = z
   .object({
     expectedVersionNumber: z.coerce.number().int().min(1),
     name: drawingNameSchema.optional(),
-    customerName: customerNameSchema.optional(),
+    customerId: customerIdSchema.optional(),
     layout: layoutModelSchema.optional(),
     savedViewport: drawingCanvasViewportSchema.nullable().optional()
   })
   .superRefine((value, context) => {
     if (
       value.name === undefined &&
-      value.customerName === undefined &&
+      value.customerId === undefined &&
       value.layout === undefined &&
       value.savedViewport === undefined
     ) {
@@ -842,6 +847,66 @@ export const drawingUpdateRequestSchema = z
 export const drawingArchiveRequestSchema = z.object({
   archived: z.boolean(),
   expectedVersionNumber: z.coerce.number().int().min(1)
+});
+
+export const customerRecordSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  companyId: z.string().trim().min(1).max(120),
+  name: customerNameSchema,
+  primaryContactName: customerTextFieldSchema,
+  primaryEmail: z.string().trim().email().max(320).or(z.literal("")),
+  primaryPhone: z.string().trim().max(40),
+  siteAddress: z.string().trim().max(400),
+  notes: customerNotesSchema,
+  isArchived: z.boolean(),
+  createdByUserId: z.string().trim().min(1).max(120),
+  updatedByUserId: z.string().trim().min(1).max(120),
+  createdAtIso: z.string().datetime(),
+  updatedAtIso: z.string().datetime()
+});
+
+export const customerSummarySchema = customerRecordSchema.extend({
+  activeDrawingCount: z.coerce.number().int().min(0),
+  archivedDrawingCount: z.coerce.number().int().min(0),
+  lastActivityAtIso: z.string().datetime().nullable()
+});
+
+export const customerCreateRequestSchema = z.object({
+  name: customerNameSchema,
+  primaryContactName: customerTextFieldSchema.default(""),
+  primaryEmail: z.string().trim().email().max(320).or(z.literal("")).default(""),
+  primaryPhone: z.string().trim().max(40).default(""),
+  siteAddress: z.string().trim().max(400).default(""),
+  notes: customerNotesSchema.default("")
+});
+
+export const customerUpdateRequestSchema = z
+  .object({
+    name: customerNameSchema.optional(),
+    primaryContactName: customerTextFieldSchema.optional(),
+    primaryEmail: z.string().trim().email().max(320).or(z.literal("")).optional(),
+    primaryPhone: z.string().trim().max(40).optional(),
+    siteAddress: z.string().trim().max(400).optional(),
+    notes: customerNotesSchema.optional()
+  })
+  .superRefine((value, context) => {
+    if (
+      value.name === undefined &&
+      value.primaryContactName === undefined &&
+      value.primaryEmail === undefined &&
+      value.primaryPhone === undefined &&
+      value.siteAddress === undefined &&
+      value.notes === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one customer field must be provided"
+      });
+    }
+  });
+
+export const customerArchiveRequestSchema = z.object({
+  archived: z.boolean()
 });
 
 export const passwordResetRequestSchema = z.object({

@@ -4,6 +4,20 @@ import { buildApp } from "./app.js";
 import { InMemoryAppRepository } from "./repository.js";
 import { getCookieHeader, registerAndGetSession } from "./testSupport.js";
 
+async function createCustomerForSession(app: Awaited<ReturnType<typeof registerAndGetSession>>["app"], cookieHeader: { cookie: string }) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/customers",
+    headers: cookieHeader,
+    payload: {
+      name: "Cleveland Land Services"
+    }
+  });
+
+  expect(response.statusCode).toBe(201);
+  return response.json<{ customer: { id: string } }>().customer.id;
+}
+
 describe("API drawing routes", { timeout: 10000 }, () => {
   it("returns estimate for valid layout", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
@@ -30,6 +44,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("creates, lists, loads, and updates drawings for the authenticated company", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -37,7 +52,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Yard perimeter",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: {
           segments: [
             {
@@ -153,6 +168,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("preserves new feature attachments when drawings are created", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -160,7 +176,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Feature-rich drawing",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: {
           segments: [
             {
@@ -292,6 +308,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("returns a server-priced estimate with pricing snapshot metadata", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -299,7 +316,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Priced estimate test",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: {
           segments: [
             {
@@ -342,6 +359,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("creates and lists immutable quote snapshots for a drawing", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -349,7 +367,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Quoted yard",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: {
           segments: [
             {
@@ -411,6 +429,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("rejects stale drawing updates with a version conflict", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -418,7 +437,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Conflict test",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: { segments: [] }
       }
     });
@@ -453,6 +472,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
   it("archives drawings, exposes audit log, and supports logout", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
 
     const create = await app.inject({
       method: "POST",
@@ -460,7 +480,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         name: "Archive me",
-        customerName: "Cleveland Land Services",
+        customerId,
         layout: { segments: [] }
       }
     });

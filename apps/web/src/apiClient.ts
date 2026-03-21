@@ -3,6 +3,8 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerRecord,
+  CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
   DrawingSummary,
@@ -52,6 +54,24 @@ export interface PasswordResetRequestInput {
 export interface PasswordResetConfirmInput {
   token: string;
   password: string;
+}
+
+export interface CreateCustomerInput {
+  name: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  siteAddress: string;
+  notes: string;
+}
+
+export interface UpdateCustomerInput {
+  name?: string;
+  primaryContactName?: string;
+  primaryEmail?: string;
+  primaryPhone?: string;
+  siteAddress?: string;
+  notes?: string;
 }
 
 interface RequestOptions {
@@ -162,6 +182,44 @@ export async function setUserPassword(userId: string, input: SetCompanyUserPassw
   });
 }
 
+export async function listCustomers(scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ALL", search = ""): Promise<CustomerSummary[]> {
+  const params = new URLSearchParams({ scope });
+  if (search.trim()) {
+    params.set("search", search.trim());
+  }
+  const response = await requestJson<{ customers: CustomerSummary[] }>(`/api/v1/customers?${params.toString()}`);
+  return response.customers;
+}
+
+export async function getCustomer(customerId: string): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}`);
+  return response.customer;
+}
+
+export async function createCustomer(input: CreateCustomerInput): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>("/api/v1/customers", {
+    method: "POST",
+    body: input
+  });
+  return response.customer;
+}
+
+export async function updateCustomer(customerId: string, input: UpdateCustomerInput): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}`, {
+    method: "PUT",
+    body: input
+  });
+  return response.customer;
+}
+
+export async function setCustomerArchivedState(customerId: string, archived: boolean): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}/archive`, {
+    method: "PUT",
+    body: { archived }
+  });
+  return response.customer;
+}
+
 export async function listDrawings(): Promise<DrawingSummary[]> {
   const response = await requestJson<{ drawings: DrawingSummary[] }>("/api/v1/drawings?scope=ALL");
   return response.drawings;
@@ -192,7 +250,7 @@ export async function createQuoteSnapshot(drawingId: string, ancillaryItems: Anc
 
 export async function createDrawing(input: {
   name: string;
-  customerName: string;
+  customerId: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
 }): Promise<DrawingRecord> {
@@ -208,7 +266,7 @@ export async function updateDrawing(
   input: {
     expectedVersionNumber: number;
     name?: string;
-    customerName?: string;
+    customerId?: string;
     layout?: LayoutModel;
     savedViewport?: DrawingCanvasViewport | null;
   },

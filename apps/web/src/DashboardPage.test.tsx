@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { AuthSessionEnvelope, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
 import { DashboardPage } from "./DashboardPage.js";
 
@@ -36,6 +36,7 @@ const drawings: DrawingSummary[] = [
     id: "drawing-1",
     companyId: "company-1",
     name: "Front perimeter",
+    customerId: "customer-1",
     customerName: "Cleveland Land Services",
     previewLayout: {
       segments: [
@@ -67,10 +68,31 @@ const drawings: DrawingSummary[] = [
   }
 ];
 
+const customers: CustomerSummary[] = [
+  {
+    id: "customer-1",
+    companyId: "company-1",
+    name: "Cleveland Land Services",
+    primaryContactName: "",
+    primaryEmail: "",
+    primaryPhone: "",
+    siteAddress: "",
+    notes: "",
+    isArchived: false,
+    createdByUserId: "user-1",
+    updatedByUserId: "user-1",
+    createdAtIso: "2026-03-10T10:00:00.000Z",
+    updatedAtIso: "2026-03-10T12:00:00.000Z",
+    activeDrawingCount: 1,
+    archivedDrawingCount: 0,
+    lastActivityAtIso: "2026-03-10T12:00:00.000Z"
+  }
+];
+
 describe("DashboardPage", () => {
   it("renders recent drawing previews beside the drawing names", () => {
     const html = renderToStaticMarkup(
-      <DashboardPage session={session} drawings={drawings} onNavigate={() => undefined} />
+      <DashboardPage session={session} customers={customers} drawings={drawings} onNavigate={() => undefined} />
     );
 
     expect(html).toContain("Front perimeter");

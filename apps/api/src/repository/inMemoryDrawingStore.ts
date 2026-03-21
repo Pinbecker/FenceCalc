@@ -1,4 +1,4 @@
-import type { DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { CustomerRecord, DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { toDrawingSummary } from "./shared.js";
 import type {
@@ -10,6 +10,7 @@ import type {
 } from "./types.js";
 
 export interface InMemoryDrawingState {
+  customers: Map<string, CustomerRecord>;
   drawings: Map<string, DrawingRecord>;
   drawingVersions: Map<string, DrawingVersionRecord[]>;
   users: Map<string, StoredUser>;
@@ -18,17 +19,32 @@ export interface InMemoryDrawingState {
 export class InMemoryDrawingStore {
   public constructor(private readonly state: InMemoryDrawingState) {}
 
+  private resolveCurrentDrawing(drawing: DrawingRecord): DrawingRecord {
+    if (!drawing.customerId) {
+      return drawing;
+    }
+    const customer = this.state.customers.get(drawing.customerId);
+    if (!customer) {
+      return drawing;
+    }
+    return {
+      ...drawing,
+      customerName: customer.name,
+    };
+  }
+
   private toSummary(drawing: DrawingRecord): DrawingSummary {
+    const resolvedDrawing = this.resolveCurrentDrawing(drawing);
     const versions = this.state.drawingVersions.get(drawing.id) ?? [];
     const contributorUserIds = [...new Set([
-      drawing.createdByUserId,
-      drawing.updatedByUserId,
+      resolvedDrawing.createdByUserId,
+      resolvedDrawing.updatedByUserId,
       ...versions.map((version) => version.createdByUserId)
     ])];
 
-    return toDrawingSummary(drawing, {
-      createdByDisplayName: this.state.users.get(drawing.createdByUserId)?.displayName ?? "",
-      updatedByDisplayName: this.state.users.get(drawing.updatedByUserId)?.displayName ?? "",
+    return toDrawingSummary(resolvedDrawing, {
+      createdByDisplayName: this.state.users.get(resolvedDrawing.createdByUserId)?.displayName ?? "",
+      updatedByDisplayName: this.state.users.get(resolvedDrawing.updatedByUserId)?.displayName ?? "",
       contributorUserIds,
       contributorDisplayNames: contributorUserIds
         .map((userId) => this.state.users.get(userId)?.displayName)
@@ -55,6 +71,7 @@ export class InMemoryDrawingStore {
         versionNumber: 1,
         source: "CREATE",
         name: drawing.name,
+        customerId: drawing.customerId,
         customerName: drawing.customerName,
         layout: drawing.layout,
         ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),
@@ -87,7 +104,7 @@ export class InMemoryDrawingStore {
     if (!drawing || drawing.companyId !== companyId) {
       return null;
     }
-    return drawing;
+    return this.resolveCurrentDrawing(drawing);
   }
 
   public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
@@ -98,6 +115,7 @@ export class InMemoryDrawingStore {
     const updated: DrawingRecord = {
       ...existing,
       name: input.name,
+      customerId: input.customerId,
       customerName: input.customerName,
       layout: input.layout,
       savedViewport: input.savedViewport ?? null,
@@ -119,6 +137,7 @@ export class InMemoryDrawingStore {
       versionNumber: updated.versionNumber,
       source: "UPDATE",
       name: updated.name,
+      customerId: updated.customerId,
       customerName: updated.customerName,
       layout: updated.layout,
       ...(updated.savedViewport ? { savedViewport: updated.savedViewport } : {}),
@@ -165,6 +184,7 @@ export class InMemoryDrawingStore {
     const restored: DrawingRecord = {
       ...existing,
       name: version.name,
+      customerId: version.customerId,
       customerName: version.customerName,
       layout: version.layout,
       savedViewport: version.savedViewport ?? null,
@@ -186,6 +206,7 @@ export class InMemoryDrawingStore {
       versionNumber: restored.versionNumber,
       source: "RESTORE",
       name: restored.name,
+      customerId: restored.customerId,
       customerName: restored.customerName,
       layout: restored.layout,
       ...(restored.savedViewport ? { savedViewport: restored.savedViewport } : {}),

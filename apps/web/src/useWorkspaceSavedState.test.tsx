@@ -18,16 +18,16 @@ const emptyLayout: LayoutModel = {
 
 describe("useWorkspaceSavedState", () => {
   it("treats an empty draft as clean", () => {
-    const result = renderHookServer(() => useWorkspaceSavedState(emptyLayout, null, "", ""));
+    const result = renderHookServer(() => useWorkspaceSavedState(emptyLayout, null, "", null));
 
     expect(result.isDirty).toBe(false);
   });
 
   it("treats a named unsaved draft as dirty and exposes save tracking callbacks", () => {
-    const result = renderHookServer(() => useWorkspaceSavedState(emptyLayout, null, "Draft", "Customer"));
+    const result = renderHookServer(() => useWorkspaceSavedState(emptyLayout, null, "Draft", "customer-1"));
 
     expect(result.isDirty).toBe(true);
-    expect(() => result.rememberSavedState(emptyLayout, "Draft", "Customer")).not.toThrow();
+    expect(() => result.rememberSavedState(emptyLayout, "Draft", "customer-1")).not.toThrow();
     expect(() => result.resetSavedState()).not.toThrow();
   });
 });

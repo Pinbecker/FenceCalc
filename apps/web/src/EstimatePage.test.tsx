@@ -69,6 +69,7 @@ describe("EstimatePage", () => {
       drawing: {
         drawingId: "drawing-1",
         drawingName: "Yard",
+        customerId: "customer-1",
         customerName: "Cleveland Land Services"
       },
       groups: [
@@ -137,6 +138,7 @@ describe("EstimatePage", () => {
         drawing: {
           drawingId: "drawing-1",
           drawingName: "Yard",
+          customerId: "customer-1",
           customerName: "Cleveland Land Services"
         },
         groups: [],
@@ -156,6 +158,7 @@ describe("EstimatePage", () => {
       drawingSnapshot: {
         drawingId: "drawing-1",
         drawingName: "Yard",
+        customerId: "customer-1",
         customerName: "Cleveland Land Services",
         layout: { segments: [], gates: [], basketballPosts: [], floodlightColumns: [] },
         estimate: {

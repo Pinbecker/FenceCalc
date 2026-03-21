@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type PortalRoute = "login" | "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin";
+export type PortalRoute = "login" | "dashboard" | "drawings" | "customers" | "editor" | "estimate" | "pricing" | "admin";
 
 export interface PortalLocation {
   route: PortalRoute;
@@ -8,7 +8,7 @@ export interface PortalLocation {
 }
 
 const DEFAULT_ROUTE: PortalRoute = "dashboard";
-const KNOWN_ROUTES = new Set<PortalRoute>(["login", "dashboard", "drawings", "editor", "estimate", "pricing", "admin"]);
+const KNOWN_ROUTES = new Set<PortalRoute>(["login", "dashboard", "drawings", "customers", "editor", "estimate", "pricing", "admin"]);
 
 function parseLocation(hash: string): PortalLocation {
   const raw = hash.replace(/^#/, "").trim();

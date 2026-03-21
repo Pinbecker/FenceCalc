@@ -1,8 +1,17 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AuthSessionEnvelope, DrawingCanvasViewport, DrawingRecord, DrawingSummary, LayoutModel } from "@fence-estimator/contracts";
+import type {
+  AuthSessionEnvelope,
+  CustomerRecord,
+  CustomerSummary,
+  DrawingCanvasViewport,
+  DrawingRecord,
+  DrawingSummary,
+  LayoutModel,
+} from "@fence-estimator/contracts";
 
 import {
+  createCustomer,
   createDrawing,
   getDrawing,
   updateDrawing,
@@ -23,22 +32,35 @@ interface UseWorkspacePersistenceOptions {
 
 export interface WorkspacePersistenceState {
   session: AuthSessionEnvelope | null;
+  customers: CustomerSummary[];
   drawings: DrawingSummary[];
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentCustomerId: string | null;
   currentCustomerName: string;
   isDirty: boolean;
   isRestoringSession: boolean;
   isAuthenticating: boolean;
+  isLoadingCustomers: boolean;
   isLoadingDrawings: boolean;
+  isSavingCustomer: boolean;
   isSavingDrawing: boolean;
   errorMessage: string | null;
   noticeMessage: string | null;
   setCurrentDrawingName: (name: string) => void;
-  setCurrentCustomerName: (name: string) => void;
+  setCurrentCustomerId: (customerId: string | null) => void;
+  saveCustomer: (input: {
+    name: string;
+    primaryContactName: string;
+    primaryEmail: string;
+    primaryPhone: string;
+    siteAddress: string;
+    notes: string;
+  }) => Promise<CustomerRecord | null>;
   register: (input: RegisterAccountInput) => Promise<void>;
   login: (input: LoginInput) => Promise<void>;
   logout: () => void;
+  refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
   loadDrawing: (drawingId: string) => Promise<void>;
   saveDrawing: () => Promise<void>;
@@ -51,27 +73,55 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [currentDrawingVersion, setCurrentDrawingVersion] = useState<number | null>(null);
   const [currentDrawingName, setCurrentDrawingName] = useState("");
+  const [currentCustomerId, setCurrentCustomerIdState] = useState<string | null>(null);
   const [currentCustomerName, setCurrentCustomerName] = useState("");
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [isSavingDrawing, setIsSavingDrawing] = useState(false);
   const feedback = usePortalFeedbackState();
-  const savedState = useWorkspaceSavedState(normalizedLayout, currentDrawingId, currentDrawingName, currentCustomerName);
+  const savedState = useWorkspaceSavedState(normalizedLayout, currentDrawingId, currentDrawingName, currentCustomerId);
   const sessionState = useWorkspaceSessionState({
     clearMessages: feedback.clearMessages,
     setErrorMessage: feedback.setErrorMessage,
     setNoticeMessage: feedback.setNoticeMessage
   });
   const {
+    customers,
+    isLoadingCustomers,
     drawings,
     isAuthenticating,
     isLoadingDrawings,
     isRestoringSession,
     login,
     logout: logoutSession,
+    refreshCustomers,
     refreshDrawings,
     register: registerSession,
     session
   } = sessionState;
   const { clearMessages, errorMessage, noticeMessage, setErrorMessage, setNoticeMessage } = feedback;
+
+  useEffect(() => {
+    if (!currentCustomerId) {
+      return;
+    }
+    const customer = customers.find((entry) => entry.id === currentCustomerId);
+    if (!customer) {
+      return;
+    }
+    if (customer.name !== currentCustomerName) {
+      setCurrentCustomerName(customer.name);
+    }
+  }, [currentCustomerId, currentCustomerName, customers]);
+
+  const setCurrentCustomerId = useCallback((customerId: string | null) => {
+    setCurrentCustomerIdState(customerId);
+    if (!customerId) {
+      setCurrentCustomerName("");
+      return;
+    }
+    const customer = customers.find((entry) => entry.id === customerId) ?? null;
+    setCurrentCustomerName(customer?.name ?? "");
+  }, [customers]);
 
   const reloadDrawingFromServer = useCallback(async (drawingId: string, notice: string) => {
     if (!session) {
@@ -84,17 +134,20 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setCurrentDrawingId(drawing.id);
     setCurrentDrawingVersion(drawing.versionNumber);
     setCurrentDrawingName(drawing.name);
+    setCurrentCustomerIdState(drawing.customerId);
     setCurrentCustomerName(drawing.customerName);
-    savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerName);
+    savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerId);
     setNoticeMessage(notice);
+    await refreshCustomers();
     await refreshDrawings();
-  }, [onLoadDrawing, refreshDrawings, savedState, session, setNoticeMessage]);
+  }, [onLoadDrawing, refreshCustomers, refreshDrawings, savedState, session, setNoticeMessage]);
 
   const register = useCallback(async (input: RegisterAccountInput) => {
     await registerSession(input, () => {
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentCustomerIdState(null);
       setCurrentCustomerName("");
       savedState.resetSavedState();
     });
@@ -109,6 +162,8 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentCustomerIdState(null);
+      setCurrentCustomerName("");
       savedState.resetSavedState();
     });
   }, [logoutSession, savedState]);
@@ -126,24 +181,58 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(drawing.id);
       setCurrentDrawingVersion(drawing.versionNumber);
       setCurrentDrawingName(drawing.name);
+      setCurrentCustomerIdState(drawing.customerId);
       setCurrentCustomerName(drawing.customerName);
-      savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerName);
+      savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerId);
       setNoticeMessage(`Loaded "${drawing.name}"`);
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     }
   }, [clearMessages, onLoadDrawing, savedState, session, setErrorMessage, setNoticeMessage]);
 
+  const saveCustomerRecord = useCallback(async (input: {
+    name: string;
+    primaryContactName: string;
+    primaryEmail: string;
+    primaryPhone: string;
+    siteAddress: string;
+    notes: string;
+  }): Promise<CustomerRecord | null> => {
+    if (!session) {
+      return null;
+    }
+
+    setIsSavingCustomer(true);
+    clearMessages();
+    try {
+      const customer = await createCustomer(input);
+      await refreshCustomers();
+      setCurrentCustomerIdState(customer.id);
+      setCurrentCustomerName(customer.name);
+      setNoticeMessage(`Added customer ${customer.name}`);
+      return customer;
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+      return null;
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  }, [clearMessages, refreshCustomers, session, setErrorMessage, setNoticeMessage]);
+
   const persistDrawing = useCallback(async (forceCreate: boolean) => {
     if (!session) {
       return;
     }
 
-    setIsSavingDrawing(true);
     clearMessages();
 
     const drawingName = currentDrawingName.trim() || buildDefaultDrawingName();
-    const customerName = currentCustomerName.trim() || drawingName;
+    if (!currentCustomerId) {
+      setErrorMessage("Select a customer before saving this drawing.");
+      return;
+    }
+
+    setIsSavingDrawing(true);
     const savedViewport = getSavedViewport();
     try {
       const drawing =
@@ -151,13 +240,13 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
           ? await updateDrawing(currentDrawingId, {
               expectedVersionNumber: currentDrawingVersion ?? 1,
               name: drawingName,
-              customerName,
+              customerId: currentCustomerId,
               layout: normalizedLayout,
               savedViewport
             })
           : await createDrawing({
               name: drawingName,
-              customerName,
+              customerId: currentCustomerId,
               layout: normalizedLayout,
               savedViewport
             });
@@ -165,9 +254,11 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(drawing.id);
       setCurrentDrawingVersion(drawing.versionNumber);
       setCurrentDrawingName(drawing.name);
+      setCurrentCustomerIdState(drawing.customerId);
       setCurrentCustomerName(drawing.customerName);
-      savedState.rememberSavedState(drawing.layout, drawing.name, drawing.customerName);
+      savedState.rememberSavedState(drawing.layout, drawing.name, drawing.customerId);
       setNoticeMessage(forceCreate || !currentDrawingId ? `Saved new drawing "${drawing.name}"` : `Saved "${drawing.name}"`);
+      await refreshCustomers();
       await refreshDrawings();
     } catch (error) {
       const conflictVersion = extractCurrentVersionNumber(error);
@@ -200,12 +291,13 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     }
   }, [
     currentDrawingId,
-    currentCustomerName,
+    currentCustomerId,
     currentDrawingName,
     currentDrawingVersion,
     clearMessages,
     getSavedViewport,
     normalizedLayout,
+    refreshCustomers,
     refreshDrawings,
     reloadDrawingFromServer,
     savedState,
@@ -219,28 +311,35 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setCurrentDrawingId(null);
     setCurrentDrawingVersion(null);
     setCurrentDrawingName(nextName ?? "");
+    setCurrentCustomerIdState(null);
     setCurrentCustomerName("");
     savedState.resetSavedState();
   }, [clearMessages, savedState]);
 
   return {
     session,
+    customers,
     drawings,
     currentDrawingId,
     currentDrawingName,
+    currentCustomerId,
     currentCustomerName,
     isDirty: savedState.isDirty,
     isRestoringSession,
     isAuthenticating,
+    isLoadingCustomers,
     isLoadingDrawings,
+    isSavingCustomer,
     isSavingDrawing,
     errorMessage,
     noticeMessage,
     setCurrentDrawingName,
-    setCurrentCustomerName,
+    setCurrentCustomerId,
+    saveCustomer: saveCustomerRecord,
     register,
     login: loginToWorkspace,
     logout,
+    refreshCustomers,
     refreshDrawings,
     loadDrawing: loadDrawingIntoWorkspace,
     saveDrawing: async () => persistDrawing(false),

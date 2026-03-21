@@ -5,6 +5,8 @@ import type {
   CompanyRecord,
   CompanyUserRecord,
   CompanyUserRole,
+  CustomerRecord,
+  CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
   DrawingSummary,
@@ -66,6 +68,7 @@ export interface CreateDrawingInput {
   id: string;
   companyId: string;
   name: string;
+  customerId: string | null;
   customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
@@ -82,6 +85,7 @@ export interface UpdateDrawingInput {
   drawingId: string;
   companyId: string;
   name: string;
+  customerId: string | null;
   customerName: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
@@ -106,8 +110,48 @@ export interface RestoreDrawingVersionInput {
   drawingId: string;
   companyId: string;
   versionNumber: number;
+  customerId: string | null;
+  customerName: string;
   restoredByUserId: string;
   restoredAtIso: string;
+}
+
+export type CustomerScope = "ALL" | "ACTIVE" | "ARCHIVED";
+
+export interface CreateCustomerInput {
+  id: string;
+  companyId: string;
+  name: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  siteAddress: string;
+  notes: string;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateCustomerInput {
+  customerId: string;
+  companyId: string;
+  name: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  siteAddress: string;
+  notes: string;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetCustomerArchivedStateInput {
+  customerId: string;
+  companyId: string;
+  archived: boolean;
+  updatedByUserId: string;
+  updatedAtIso: string;
 }
 
 export interface CreateAuditLogInput {
@@ -170,6 +214,11 @@ export interface AppRepository {
   revokeSession(tokenHash: string, revokedAtIso: string): Promise<void>;
   revokeSessionsForUser(userId: string, companyId: string, revokedAtIso: string): Promise<void>;
   getAuthenticatedSession(tokenHash: string): Promise<AuthenticatedSession | null>;
+  createCustomer(input: CreateCustomerInput): Promise<CustomerRecord>;
+  listCustomers(companyId: string, scope?: CustomerScope, search?: string): Promise<CustomerSummary[]>;
+  getCustomerById(customerId: string, companyId: string): Promise<CustomerRecord | null>;
+  updateCustomer(input: UpdateCustomerInput): Promise<CustomerRecord | null>;
+  setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
   listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED"): Promise<DrawingSummary[]>;
   getDrawingById(drawingId: string, companyId: string): Promise<DrawingRecord | null>;

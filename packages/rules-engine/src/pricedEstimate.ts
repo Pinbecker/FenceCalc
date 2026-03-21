@@ -372,6 +372,7 @@ export function buildPricedEstimate(
     drawing: {
       drawingId: drawing.id,
       drawingName: drawing.name,
+      customerId: drawing.customerId,
       customerName: drawing.customerName
     },
     groups,
