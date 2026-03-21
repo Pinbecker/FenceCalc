@@ -6025,3 +6025,242 @@ button:disabled {
     border-radius: 16px;
   }
 }
+
+/* Global portal consistency polish */
+:root {
+  --portal-polish-radius-lg: 20px;
+  --portal-polish-radius-md: 14px;
+  --portal-polish-border: rgba(95, 114, 104, 0.16);
+  --portal-polish-shadow: 0 14px 30px rgba(66, 54, 39, 0.1);
+  --portal-polish-surface:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 240, 231, 0.96)),
+    radial-gradient(circle at top right, rgba(204, 128, 90, 0.1), transparent 42%);
+}
+
+.portal-topbar {
+  border-bottom-color: rgba(96, 113, 102, 0.14);
+  background:
+    linear-gradient(180deg, rgba(250, 246, 240, 0.96), rgba(245, 238, 229, 0.94)),
+    radial-gradient(circle at top right, rgba(199, 126, 90, 0.1), transparent 44%);
+  box-shadow: 0 10px 26px rgba(84, 67, 44, 0.08);
+}
+
+.portal-topbar .portal-nav-links button {
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.portal-main {
+  padding: clamp(16px, 2.6vw, 28px);
+}
+
+.portal-page {
+  width: min(1420px, 100%);
+  gap: 20px;
+}
+
+.portal-page-header {
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.portal-page-header h1 {
+  margin: 0;
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+}
+
+.portal-page-header p {
+  margin: 0;
+  color: #5d6b62;
+  max-width: 74ch;
+}
+
+.portal-header-actions {
+  gap: 8px;
+}
+
+.portal-surface-card,
+.drawing-library-toolbar,
+.drawing-library-group,
+.portal-dashboard-primary,
+.portal-dashboard-customers,
+.portal-dashboard-quick-actions,
+.portal-customers-directory,
+.portal-customer-detail,
+.portal-customer-drawings-panel,
+.portal-customer-create-panel,
+.portal-customer-orphans,
+.pricing-system-card,
+.estimate-group-card,
+.estimate-ancillary-card,
+.estimate-totals-card {
+  border: 1px solid var(--portal-polish-border);
+  border-radius: var(--portal-polish-radius-lg);
+  background: var(--portal-polish-surface);
+  box-shadow: var(--portal-polish-shadow);
+}
+
+.portal-dashboard-row,
+.portal-dashboard-customer-row,
+.portal-dashboard-action,
+.drawing-library-row,
+.portal-customer-row,
+.drawing-history-row,
+.audit-log-card {
+  border: 1px solid rgba(96, 116, 106, 0.14);
+  border-radius: var(--portal-polish-radius-md);
+  background: rgba(255, 252, 247, 0.9);
+  transition: transform 170ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.portal-dashboard-row:hover,
+.portal-dashboard-customer-row:hover,
+.portal-dashboard-action:hover,
+.drawing-library-row:hover,
+.portal-customer-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(177, 100, 67, 0.28);
+  box-shadow: 0 14px 24px rgba(73, 60, 43, 0.14);
+}
+
+.portal-primary-button,
+.portal-secondary-button,
+.portal-logout-button {
+  border-radius: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.portal-primary-button {
+  box-shadow: 0 9px 16px rgba(179, 92, 60, 0.18);
+}
+
+.portal-text-button {
+  font-weight: 800;
+}
+
+.portal-field input,
+.portal-field select,
+.portal-field textarea,
+.drawing-library-customer-filter input,
+.drawing-library-customer-filter select,
+.drawing-library-customer-filter textarea,
+.pricing-table-row input,
+.pricing-table-row textarea,
+.estimate-ancillary-row input {
+  border: 1px solid rgba(104, 120, 111, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 253, 249, 0.95);
+  color: #213029;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.portal-field textarea,
+.drawing-library-customer-filter textarea {
+  min-height: 84px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.portal-field input:focus-visible,
+.portal-field select:focus-visible,
+.portal-field textarea:focus-visible,
+.drawing-library-customer-filter input:focus-visible,
+.drawing-library-customer-filter select:focus-visible,
+.drawing-library-customer-filter textarea:focus-visible,
+.pricing-table-row input:focus-visible,
+.pricing-table-row textarea:focus-visible,
+.estimate-ancillary-row input:focus-visible {
+  outline: none;
+  border-color: rgba(178, 99, 66, 0.5);
+  box-shadow: 0 0 0 3px rgba(178, 99, 66, 0.14);
+}
+
+.portal-dashboard-metric,
+.drawing-library-overview-metric,
+.pricing-page-summary article,
+.estimate-meta-strip article,
+.estimate-totals-grid article {
+  border: 1px solid rgba(96, 116, 106, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.92);
+}
+
+.drawing-library-badge,
+.portal-customer-status,
+.portal-dashboard-row-version,
+.portal-customer-row-cta {
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.portal-empty-state {
+  border: 1px solid var(--portal-polish-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.97), rgba(247, 240, 231, 0.95)),
+    radial-gradient(circle at top right, rgba(201, 127, 91, 0.1), transparent 42%);
+  box-shadow: var(--portal-polish-shadow);
+}
+
+.portal-inline-message {
+  border-radius: 14px;
+}
+
+.pricing-table-row,
+.estimate-table-row,
+.estimate-ancillary-row {
+  border-radius: 14px;
+}
+
+.pricing-table-head,
+.estimate-table-head {
+  border: 1px solid rgba(99, 117, 108, 0.16);
+}
+
+@media (max-width: 940px) {
+  .portal-page {
+    gap: 16px;
+  }
+
+  .portal-page-header {
+    gap: 14px;
+  }
+
+  .portal-header-actions {
+    width: 100%;
+  }
+
+  .portal-header-actions > * {
+    flex: 1 1 160px;
+  }
+}
+
+@media (max-width: 680px) {
+  .portal-main {
+    padding: 12px;
+  }
+
+  .portal-page {
+    gap: 14px;
+  }
+
+  .portal-surface-card,
+  .drawing-library-toolbar,
+  .drawing-library-group,
+  .portal-dashboard-primary,
+  .portal-dashboard-customers,
+  .portal-dashboard-quick-actions,
+  .portal-customers-directory,
+  .portal-customer-detail,
+  .portal-customer-drawings-panel,
+  .portal-customer-create-panel,
+  .portal-customer-orphans,
+  .pricing-system-card,
+  .estimate-group-card,
+  .estimate-ancillary-card,
+  .estimate-totals-card {
+    border-radius: 16px;
+  }
+}
