@@ -45,12 +45,12 @@ describe("useHashRoute", () => {
 
   it("parses the current hash and responds to hash changes", async () => {
     const { useHashRoute, hashChangeHandler, setLocation, windowMock } = await loadUseHashRoute(
-      "#/drawings?status=archived"
+      "#/customer?customerId=customer-1"
     );
 
     const route = useHashRoute();
-    expect(route.route).toBe("drawings");
-    expect(route.query).toEqual({ status: "archived" });
+    expect(route.route).toBe("customer");
+    expect(route.query).toEqual({ customerId: "customer-1" });
     expect(windowMock.addEventListener).toHaveBeenCalledWith("hashchange", expect.any(Function));
 
     windowMock.location.hash = "#/unknown?drawingId=123";
@@ -73,7 +73,7 @@ describe("useHashRoute", () => {
       query: { drawingId: "123" }
     });
 
-    route.navigate("admin", { tab: "users" });
-    expect(windowMock.location.hash).toBe("#/admin?tab=users");
+    route.navigate("customer", { customerId: "customer-2" });
+    expect(windowMock.location.hash).toBe("#/customer?customerId=customer-2");
   });
 });

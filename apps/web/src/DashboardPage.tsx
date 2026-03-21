@@ -51,7 +51,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
         <div className="portal-dashboard-heading">
           <span className="portal-eyebrow">Workspace overview</span>
           <h1>{session.company.name}</h1>
-          <p>Start from the current workload, reopen active drawings quickly, and only branch into the full library when you need more history.</p>
+          <p>Start from the current workload, reopen active drawings quickly, and move into customer-specific pages when you need customer context or drawing history.</p>
           <div className="portal-dashboard-context">
             <div className="portal-dashboard-context-item">
               <span className="portal-section-kicker">Signed in</span>
@@ -64,7 +64,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
           </div>
         </div>
         <div className="portal-header-actions portal-dashboard-actions">
-          <button type="button" className="portal-secondary-button" onClick={() => onNavigate("drawings")}>
+          <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>
             Open Library
           </button>
           <button type="button" className="portal-primary-button" onClick={() => onNavigate("editor")}>
@@ -103,8 +103,8 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
               <span className="portal-section-kicker">Work queue</span>
               <h2>{myDrawings.length > 0 ? "Recent drawings" : "Latest company drawings"}</h2>
             </div>
-            <button type="button" className="portal-text-button" onClick={() => onNavigate("drawings")}>
-              View all
+            <button type="button" className="portal-text-button" onClick={() => onNavigate("customers")}>
+              Browse customers
             </button>
           </div>
           {recent.length === 0 ? <p className="portal-empty-copy">No drawings saved yet.</p> : null}
@@ -155,7 +155,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
                   type="button"
                   key={customer.customerName}
                   className="portal-dashboard-customer-row"
-                  onClick={() => onNavigate("drawings", { customerId: customer.customerId, scope: "active" })}
+                  onClick={() => onNavigate("customer", { customerId: customer.customerId })}
                 >
                   <span className="portal-dashboard-rank">{String(index + 1).padStart(2, "0")}</span>
                   <div className="portal-dashboard-customer-copy">
@@ -179,12 +179,12 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
               </div>
             </div>
             <div className="portal-dashboard-action-grid">
-              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("drawings", { owner: "mine" })}>
-                <strong>My drawings</strong>
-                <span>Jump to the drawings you created or updated.</span>
+              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("customers")}>
+                <strong>Customer directory</strong>
+                <span>Browse into each customer workspace from one directory.</span>
               </button>
               <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("customers")}>
-                <strong>Customer library</strong>
+                <strong>Active customers</strong>
                 <span>Review customer records and reopen linked work.</span>
               </button>
               <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("editor")}>

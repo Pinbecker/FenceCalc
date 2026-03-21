@@ -61,7 +61,7 @@ import {
 interface EditorPageProps {
   initialDrawingId?: string | null;
   onNavigate: (
-    route: "dashboard" | "drawings" | "editor" | "estimate" | "pricing" | "admin" | "login",
+    route: "dashboard" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
     query?: Record<string, string>
   ) => void;
 }
@@ -725,12 +725,17 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     workspace.startNewDraft();
   }
 
-  function handleOpenDrawings(): void {
-    if (!confirmDiscardChanges("Discard unsaved changes and go back to the drawings library?")) {
+  function handleOpenCustomers(): void {
+    if (!confirmDiscardChanges("Discard unsaved changes and leave the editor?")) {
       return;
     }
 
-    onNavigate("drawings");
+    if (workspace.currentCustomerId) {
+      onNavigate("customer", { customerId: workspace.currentCustomerId });
+      return;
+    }
+
+    onNavigate("customers");
   }
 
   function handleExportPdf(): void {
@@ -795,7 +800,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         onStartNewDraft={handleStartNewDraft}
         onGoToLogin={() => guardedNavigate("login")}
         onNavigateDashboard={() => guardedNavigate("dashboard")}
-        onNavigateDrawings={handleOpenDrawings}
+        onNavigateCustomers={handleOpenCustomers}
         onNavigateEstimate={() => {
           if (!workspace.currentDrawingId || workspace.isDirty) {
             return;

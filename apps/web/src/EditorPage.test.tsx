@@ -504,7 +504,7 @@ describe("EditorPage", () => {
 
     expect(html).toContain("Casey Member");
     expect(html).toContain("Dashboard");
-    expect(html).toContain("Drawings");
+    expect(html).toContain("Customers");
     expect(html).not.toContain(">Pricing<");
     expect(html).not.toContain(">Admin<");
   });

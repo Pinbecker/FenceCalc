@@ -24,12 +24,16 @@ async function bootstrapOrLoginOwner(page: Page, companyName = "Acme Fencing") {
   await expect(page.getByRole("heading", { name: companyName })).toBeVisible();
 }
 
-test("covers bootstrap, admin user setup, drawing save/version restore, archive flows, and the refreshed portal views", async ({ page }) => {
+function pageHeading(page: Page, name: string) {
+  return page.locator("h1").filter({ hasText: name });
+}
+
+test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the refreshed portal views", async ({ page }) => {
   test.setTimeout(60_000);
 
   await bootstrapOrLoginOwner(page);
-  await expect(page.getByText("Active customers", { exact: true })).toBeVisible();
-  await expect(page.getByText("Useful routes", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Active customers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Useful routes" })).toBeVisible();
 
   let primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Admin" }).click();
@@ -72,8 +76,8 @@ test("covers bootstrap, admin user setup, drawing save/version restore, archive 
   await page.getByRole("button", { name: "Create Customer" }).click();
   await page.getByRole("button", { name: "Save New" }).click();
 
-  await page.getByRole("button", { name: "Drawings" }).click();
-  await expect(page.getByRole("heading", { name: "Saved drawings" })).toBeVisible();
+  await page.getByRole("button", { name: "Customers" }).click();
+  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
 
   const initialRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" });
   await expect(initialRow).toContainText("Active");
@@ -86,7 +90,8 @@ test("covers bootstrap, admin user setup, drawing save/version restore, archive 
   await expect(page.locator(".editor-save-pill")).toHaveText("All changes saved");
   await expect(page.getByRole("button", { name: "Estimate" })).toBeEnabled();
 
-  await page.getByRole("button", { name: "Drawings" }).click();
+  await page.getByRole("button", { name: "Customers" }).click();
+  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
   const drawingRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard v2" });
   await expect(drawingRow).toContainText("Active");
 
@@ -109,18 +114,13 @@ test("covers bootstrap, admin user setup, drawing save/version restore, archive 
   await page.getByRole("button", { name: "Active" }).click();
   await expect(page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" })).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Customers" }).click();
+  await page.getByRole("button", { name: "Back To Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
 
   const customerRow = page.locator(".portal-customer-row").filter({ hasText: "Operations Yard" });
   await customerRow.click();
-  await expect(customerRow).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("heading", { name: "Operations Yard" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Drawings" })).toBeVisible();
-
-  await page.getByRole("button", { name: "New Customer" }).click();
-  await expect(page.getByRole("heading", { name: "New customer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create Customer" })).toBeVisible();
+  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back To Customers" })).toBeVisible();
 });
 
 test("keeps dashboard, drawings, and customers usable on a mobile viewport", async ({ page }) => {
@@ -133,12 +133,19 @@ test("keeps dashboard, drawings, and customers usable on a mobile viewport", asy
   await expect(page.getByRole("button", { name: "Open Library" })).toBeVisible();
 
   const primaryNav = page.getByRole("navigation", { name: "Primary" });
-  await primaryNav.getByRole("button", { name: "Drawings" }).click();
-  await expect(page.getByRole("heading", { name: "Saved drawings" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New Drawing" })).toBeVisible();
-
   await primaryNav.getByRole("button", { name: "Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New Customer" })).toBeVisible();
-  await expect(page.locator(".portal-customer-row").filter({ hasText: "Operations Yard" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New Customer|Close Create Form/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "New Customer" }).click();
+  await page.getByLabel("Name").fill("Mobile Yard");
+  await page.getByRole("button", { name: "Create Customer" }).click();
+  await expect(pageHeading(page, "Mobile Yard")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back To Customers" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Back To Customers" }).click();
+  const customerRow = page.locator(".portal-customer-row").filter({ hasText: "Mobile Yard" });
+  await expect(customerRow).toBeVisible();
+  await customerRow.click();
+  await expect(pageHeading(page, "Mobile Yard")).toBeVisible();
 });

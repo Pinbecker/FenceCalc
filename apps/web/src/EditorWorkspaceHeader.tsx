@@ -31,7 +31,7 @@ interface EditorWorkspaceHeaderProps {
   onStartNewDraft: () => void;
   onGoToLogin: () => void;
   onNavigateDashboard: () => void;
-  onNavigateDrawings: () => void;
+  onNavigateCustomers: () => void;
   onNavigateEstimate: () => void;
   onNavigatePricing: () => void;
   onNavigateAdmin: () => void;
@@ -59,7 +59,7 @@ export function EditorWorkspaceHeader({
   onStartNewDraft,
   onGoToLogin,
   onNavigateDashboard,
-  onNavigateDrawings,
+  onNavigateCustomers,
   onNavigateEstimate,
   onNavigatePricing,
   onNavigateAdmin
@@ -236,8 +236,8 @@ export function EditorWorkspaceHeader({
           <button type="button" className="ghost editor-link-btn" onClick={onNavigateDashboard}>
             Dashboard
           </button>
-          <button type="button" className="ghost editor-link-btn" onClick={onNavigateDrawings}>
-            Drawings
+          <button type="button" className="ghost editor-link-btn" onClick={onNavigateCustomers}>
+            Customers
           </button>
           <button
             type="button"

@@ -52,7 +52,7 @@ describe("EstimatePage", () => {
 
     expect(html).toContain("No drawing selected");
     expect(html).toContain(">Pricing<");
-    expect(html).toContain("Drawing Library");
+    expect(html).toContain("Customers");
   });
 
   it("hides pricing navigation for members", () => {

@@ -13,14 +13,14 @@ const DashboardPage = lazy(async () => {
   return { default: module.DashboardPage };
 });
 
-const DrawingsPage = lazy(async () => {
-  const module = await import("./DrawingsPage");
-  return { default: module.DrawingsPage };
-});
-
 const CustomersPage = lazy(async () => {
   const module = await import("./CustomersPage");
   return { default: module.CustomersPage };
+});
+
+const CustomerPage = lazy(async () => {
+  const module = await import("./CustomerPage");
+  return { default: module.CustomerPage };
 });
 
 const EstimatePage = lazy(async () => {
@@ -48,7 +48,7 @@ function PortalNav(props: {
   userName: string;
   userRole: string;
   currentRoute: string;
-  onNavigate: (route: "dashboard" | "drawings" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
+  onNavigate: (route: "dashboard" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
   onLogout: () => void;
   showAdmin: boolean;
   showPricing: boolean;
@@ -73,14 +73,7 @@ function PortalNav(props: {
           </button>
           <button
             type="button"
-            className={props.currentRoute === "drawings" ? "is-active" : undefined}
-            onClick={() => props.onNavigate("drawings")}
-          >
-            Drawings
-          </button>
-          <button
-            type="button"
-            className={props.currentRoute === "customers" ? "is-active" : undefined}
+            className={props.currentRoute === "customers" || props.currentRoute === "customer" ? "is-active" : undefined}
             onClick={() => props.onNavigate("customers")}
           >
             Customers
@@ -166,7 +159,7 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "drawings" || route === "customers" || route === "estimate" || route === "editor";
+  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "estimate" || route === "editor";
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
@@ -271,32 +264,39 @@ export function App() {
           {route === "dashboard" ? (
             <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
           ) : null}
-          {route === "drawings" ? (
-            <DrawingsPage
-              query={query}
-              session={portal.session}
+          {route === "drawings" || route === "customers" ? (
+            <CustomersPage
               customers={portal.customers}
               drawings={portal.drawings}
-              isLoading={portal.isLoadingDrawings}
-              onRefresh={portal.refreshDrawings}
+              isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
+              isSavingCustomer={portal.isSavingCustomer}
+              onRefresh={async () => {
+                await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
+              }}
+              onSaveCustomer={portal.saveCustomer}
+              onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
+              onNavigate={navigate}
+            />
+          ) : null}
+          {route === "customer" ? (
+            <CustomerPage
+              query={query}
+              customers={portal.customers}
+              drawings={portal.drawings}
+              isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
+              isSavingCustomer={portal.isSavingCustomer}
+              isArchivingCustomerId={portal.isArchivingCustomerId}
+              onRefresh={async () => {
+                await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
+              }}
+              onSaveCustomer={portal.saveCustomer}
+              onSetCustomerArchived={portal.setCustomerArchived}
               onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
               onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
               onCreateDrawing={() => navigate("editor")}
-              onToggleArchive={portal.setDrawingArchived}
+              onToggleDrawingArchived={portal.setDrawingArchived}
               onLoadVersions={portal.loadDrawingVersions}
               onRestoreVersion={portal.restoreDrawingVersion}
-            />
-          ) : null}
-          {route === "customers" ? (
-            <CustomersPage
-              query={query}
-              customers={portal.customers}
-              isLoading={portal.isLoadingCustomers}
-              isSavingCustomer={portal.isSavingCustomer}
-              isArchivingCustomerId={portal.isArchivingCustomerId}
-              onRefresh={portal.refreshCustomers}
-              onSaveCustomer={portal.saveCustomer}
-              onSetCustomerArchived={portal.setCustomerArchived}
               onNavigate={navigate}
             />
           ) : null}

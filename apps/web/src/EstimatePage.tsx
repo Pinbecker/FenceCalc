@@ -236,8 +236,12 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               Pricing
             </button>
           ) : null}
-          <button type="button" className="portal-primary-button" onClick={() => onNavigate("drawings")}>
-            Drawing Library
+          <button
+            type="button"
+            className="portal-primary-button"
+            onClick={() => onNavigate(drawing?.customerId ? "customer" : "customers", drawing?.customerId ? { customerId: drawing.customerId } : undefined)}
+          >
+            {drawing?.customerId ? "Customer Page" : "Customers"}
           </button>
         </div>
       </header>

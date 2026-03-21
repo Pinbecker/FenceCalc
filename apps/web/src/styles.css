@@ -4585,8 +4585,30 @@ button:disabled {
   align-items: start;
 }
 
+.portal-customer-page-header,
+.portal-customer-page-layout {
+  display: grid;
+  gap: 22px;
+}
+
+.portal-customer-page-actions {
+  align-items: center;
+}
+
+.portal-customer-page-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.portal-customer-page-layout {
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.45fr);
+  align-items: start;
+}
+
 .portal-customers-directory,
-.portal-customer-detail {
+.portal-customer-detail,
+.portal-customer-drawings-panel,
+.portal-customer-create-panel,
+.portal-customer-orphans {
   padding: 20px;
 }
 
@@ -4594,6 +4616,21 @@ button:disabled {
 .portal-customer-detail-body {
   display: grid;
   gap: 12px;
+}
+
+.portal-customer-drawings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.portal-customer-drawings-empty {
+  padding: 28px;
+  box-shadow: none;
+}
+
+.portal-customer-orphans {
+  display: grid;
+  gap: 14px;
 }
 
 .portal-customer-row {
@@ -4721,6 +4758,7 @@ button:disabled {
   }
 
   .portal-customers-layout,
+  .portal-customer-page-layout,
   .drawing-library-toolbar-main {
     grid-template-columns: 1fr;
   }
@@ -4774,6 +4812,9 @@ button:disabled {
   .drawing-library-row,
   .portal-customers-directory,
   .portal-customer-detail,
+  .portal-customer-drawings-panel,
+  .portal-customer-create-panel,
+  .portal-customer-orphans,
   .drawing-library-toolbar,
   .drawing-library-group {
     padding: 12px;

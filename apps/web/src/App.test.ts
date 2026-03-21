@@ -22,7 +22,7 @@ describe("App route helpers", () => {
     expect(
       getPortalRedirectTarget({
         hasSession: false,
-        route: "drawings",
+        route: "customer",
         showAdmin: false,
         showPricing: false
       })
@@ -59,6 +59,7 @@ describe("App route helpers", () => {
   it("refreshes the right datasets for each portal route", () => {
     expect(shouldRefreshPortalDrawings("dashboard")).toBe(true);
     expect(shouldRefreshPortalDrawings("drawings")).toBe(true);
+    expect(shouldRefreshPortalDrawings("customer")).toBe(true);
     expect(shouldRefreshPortalDrawings("estimate")).toBe(true);
     expect(shouldRefreshPortalDrawings("pricing")).toBe(false);
 

@@ -16,8 +16,8 @@ describe("useEditorNavigationGuards", () => {
     const state = renderHookServer(() => useEditorNavigationGuards({ isDirty: false, onNavigate }));
 
     expect(state.confirmDiscardChanges("ignore")).toBe(true);
-    state.guardedNavigate("drawings");
-    expect(onNavigate).toHaveBeenCalledWith("drawings", undefined);
+    state.guardedNavigate("customers");
+    expect(onNavigate).toHaveBeenCalledWith("customers", undefined);
   });
 
   it("prompts before navigating away from a dirty editor", () => {
