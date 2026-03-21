@@ -1091,9 +1091,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
               postTypeCounts={postTypeCounts}
               panelCount={panelCount}
               fenceRunCount={fenceRunCount}
-              isTutorialOpen={shellState.isTutorialOpen}
-              onOpenTutorial={() => shellState.setIsTutorialOpen(true)}
-              onCloseTutorial={() => shellState.setIsTutorialOpen(false)}
               formatHeightLabelFromMm={formatHeightLabelFromMm}
             />
           </div>

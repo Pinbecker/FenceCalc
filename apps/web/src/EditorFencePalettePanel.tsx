@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { FenceHeightKey, FenceSpec, TwinBarVariant } from "@fence-estimator/contracts";
 
 interface EditorFencePalettePanelProps {
@@ -19,6 +21,7 @@ export function EditorFencePalettePanel({
 }: EditorFencePalettePanelProps) {
   const isLegacyRollFormDrawing = activeSpec.system === "ROLL_FORM";
   const systemValue = isLegacyRollFormDrawing ? "ROLL_FORM" : "TWIN_BAR";
+  const [isPaletteLegendOpen, setIsPaletteLegendOpen] = useState(false);
 
   return (
     <section className="panel-block panel-fence-palette">
@@ -88,16 +91,26 @@ export function EditorFencePalettePanel({
           </select>
         </label>
       ) : null}
-      <div className="palette-legend">
-        {(activeSpec.system === "TWIN_BAR" ? twinBarHeightOptions : rollFormHeightOptions).map((heightOption) => (
-          <div key={heightOption}>
-            <span className="swatch" style={{ background: getSegmentColor({ ...activeSpec, height: heightOption }) }} />
-            {activeSpec.system === "TWIN_BAR"
-              ? `${heightOption} ${activeSpec.twinBarVariant === "SUPER_REBOUND" ? "Super Rebound" : "Standard"}`
-              : `Roll Form ${heightOption}`}
-          </div>
-        ))}
-      </div>
+      <button
+        type="button"
+        className="section-toggle"
+        aria-expanded={isPaletteLegendOpen}
+        onClick={() => setIsPaletteLegendOpen((current) => !current)}
+      >
+        {isPaletteLegendOpen ? "Hide Fence Colors" : "Show Fence Colors"}
+      </button>
+      {isPaletteLegendOpen ? (
+        <div className="palette-legend">
+          {(activeSpec.system === "TWIN_BAR" ? twinBarHeightOptions : rollFormHeightOptions).map((heightOption) => (
+            <div key={heightOption}>
+              <span className="swatch" style={{ background: getSegmentColor({ ...activeSpec, height: heightOption }) }} />
+              {activeSpec.system === "TWIN_BAR"
+                ? `${heightOption} ${activeSpec.twinBarVariant === "SUPER_REBOUND" ? "Super Rebound" : "Standard"}`
+                : `Roll Form ${heightOption}`}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

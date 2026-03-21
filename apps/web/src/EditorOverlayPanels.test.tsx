@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { EditorOverlayPanels } from "./EditorOverlayPanels.js";
 
 describe("EditorOverlayPanels", () => {
-  it("renders count summaries, post key, and tutorial trigger", () => {
+  it("renders count summaries with collapsible post key and no workflow guide", () => {
     const html = renderToStaticMarkup(
       <EditorOverlayPanels
         postRowsByType={{
@@ -36,9 +36,6 @@ describe("EditorOverlayPanels", () => {
         }}
         panelCount={5}
         fenceRunCount={2}
-        isTutorialOpen={false}
-        onOpenTutorial={vi.fn()}
-        onCloseTutorial={vi.fn()}
         formatHeightLabelFromMm={(value) => `${value / 1000}m`}
       />,
     );
@@ -46,7 +43,8 @@ describe("EditorOverlayPanels", () => {
     expect(html).toContain("Item Counts");
     expect(html).toContain("Show Detail");
     expect(html).toContain("Post Key");
-    expect(html).toContain("Workflow Guide");
+    expect(html).toContain("Open the key when you need to map canvas symbols to post counts.");
+    expect(html).not.toContain("Workflow Guide");
     expect(html).toContain("Panels");
     expect(html).toContain("Basketball Posts");
     expect(html).toContain("BB Posts");

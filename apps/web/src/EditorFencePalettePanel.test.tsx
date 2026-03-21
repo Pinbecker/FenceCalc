@@ -27,5 +27,7 @@ describe("EditorFencePalettePanel", () => {
     expect(html).toContain("Fence Palette");
     expect(html).toContain("Twin Bar");
     expect(html).toContain("Super Rebound");
+    expect(html).toContain("Show Fence Colors");
+    expect(html).not.toContain("1.8m Standard");
   });
 });
