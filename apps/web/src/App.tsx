@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 
-import { useHashRoute } from "./useHashRoute";
+import { CustomerPickerModal } from "./CustomerPickerModal";
+import { useHashRoute, type PortalRoute } from "./useHashRoute";
 import { usePortalSession } from "./usePortalSession";
 
 const AdminPage = lazy(async () => {
@@ -11,11 +12,6 @@ const AdminPage = lazy(async () => {
 const DashboardPage = lazy(async () => {
   const module = await import("./DashboardPage");
   return { default: module.DashboardPage };
-});
-
-const CustomersPage = lazy(async () => {
-  const module = await import("./CustomersPage");
-  return { default: module.CustomersPage };
 });
 
 const CustomerPage = lazy(async () => {
@@ -42,6 +38,24 @@ const PricingPage = lazy(async () => {
   const module = await import("./PricingPage");
   return { default: module.PricingPage };
 });
+
+function formatRoleLabel(role: string): string {
+  return role
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+function isCustomerModalRoute(route: string): route is "customers" | "drawings" {
+  return route === "customers" || route === "drawings";
+}
+
+function getCustomerModalBaseRoute(route: PortalRoute): PortalRoute {
+  if (route === "editor" || route === "login" || route === "customers" || route === "drawings") {
+    return "dashboard";
+  }
+  return route;
+}
 
 function PortalNav(props: {
   companyName: string;
@@ -73,7 +87,11 @@ function PortalNav(props: {
           </button>
           <button
             type="button"
-            className={props.currentRoute === "customers" || props.currentRoute === "customer" ? "is-active" : undefined}
+            className={
+              props.currentRoute === "customers" || props.currentRoute === "drawings" || props.currentRoute === "customer"
+                ? "is-active"
+                : undefined
+            }
             onClick={() => props.onNavigate("customers")}
           >
             Customers
@@ -106,7 +124,7 @@ function PortalNav(props: {
         </nav>
       </div>
       <div className="portal-topbar-actions">
-        <span className="portal-user-chip">{props.userRole}</span>
+        <span className="portal-user-chip">{formatRoleLabel(props.userRole)}</span>
         <button type="button" className="portal-logout-button" onClick={props.onLogout}>
           Log Out
         </button>
@@ -171,6 +189,15 @@ export function App() {
   const portal = usePortalSession();
   const showAdmin = canManageAdmin(portal.session?.user.role);
   const showPricing = canManagePricing(portal.session?.user.role);
+  const customerModalReturnRef = useRef<{ route: PortalRoute; query?: Record<string, string> }>({ route: "dashboard" });
+  const isCustomerModalOpen = isCustomerModalRoute(route);
+
+  useEffect(() => {
+    if (isCustomerModalOpen || route === "login") {
+      return;
+    }
+    customerModalReturnRef.current = Object.keys(query).length > 0 ? { route, query } : { route };
+  }, [isCustomerModalOpen, query, route]);
 
   useEffect(() => {
     if (portal.isRestoringSession) {
@@ -244,6 +271,14 @@ export function App() {
     );
   }
 
+  const modalBaseRouteState: { route: PortalRoute; query?: Record<string, string> } = isCustomerModalOpen
+    ? customerModalReturnRef.current
+    : Object.keys(query).length > 0
+      ? { route, query }
+      : { route };
+  const modalBaseRoute = isCustomerModalOpen ? getCustomerModalBaseRoute(modalBaseRouteState.route) : route;
+  const modalBaseQuery = isCustomerModalOpen ? (modalBaseRouteState.query ?? {}) : query;
+
   return (
     <div className="portal-shell">
       <PortalNav
@@ -261,26 +296,12 @@ export function App() {
       />
       <main className="portal-main">
         <Suspense fallback={<PortalLoadingCard label="Loading page..." />}>
-          {route === "dashboard" ? (
+          {modalBaseRoute === "dashboard" ? (
             <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
           ) : null}
-          {route === "drawings" || route === "customers" ? (
-            <CustomersPage
-              customers={portal.customers}
-              drawings={portal.drawings}
-              isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
-              isSavingCustomer={portal.isSavingCustomer}
-              onRefresh={async () => {
-                await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
-              }}
-              onSaveCustomer={portal.saveCustomer}
-              onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
-              onNavigate={navigate}
-            />
-          ) : null}
-          {route === "customer" ? (
+          {modalBaseRoute === "customer" ? (
             <CustomerPage
-              query={query}
+              query={modalBaseQuery}
               customers={portal.customers}
               drawings={portal.drawings}
               isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
@@ -300,11 +321,11 @@ export function App() {
               onNavigate={navigate}
             />
           ) : null}
-          {route === "estimate" ? (
-            <EstimatePage session={portal.session} drawingId={query.drawingId ?? null} onNavigate={navigate} />
+          {modalBaseRoute === "estimate" ? (
+            <EstimatePage session={portal.session} drawingId={modalBaseQuery.drawingId ?? null} onNavigate={navigate} />
           ) : null}
-          {route === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
-          {route === "admin" && showAdmin ? (
+          {modalBaseRoute === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
+          {modalBaseRoute === "admin" && showAdmin ? (
             <AdminPage
               users={portal.users}
               auditLog={portal.auditLog}
@@ -324,6 +345,27 @@ export function App() {
           ) : null}
         </Suspense>
       </main>
+      {isCustomerModalOpen ? (
+        <CustomerPickerModal
+          customers={portal.customers}
+          drawings={portal.drawings}
+          isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
+          isSavingCustomer={portal.isSavingCustomer}
+          onRefresh={async () => {
+            await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
+          }}
+          onClose={() => {
+            const target = customerModalReturnRef.current;
+            if (target.route !== "login" && !isCustomerModalRoute(target.route)) {
+              navigate(target.route, target.query);
+              return;
+            }
+            navigate("dashboard");
+          }}
+          onOpenCustomer={(customerId) => navigate("customer", { customerId })}
+          onCreateCustomer={(customer) => portal.saveCustomer({ mode: "create", customer })}
+        />
+      ) : null}
     </div>
   );
 }

@@ -178,7 +178,7 @@ export function CustomerPage({
           <h1>Customer not found</h1>
           <p>Select a customer from the directory to view their details and drawings.</p>
           <button type="button" className="portal-primary-button" onClick={() => onNavigate("customers")}>
-            Back To Customers
+            Back to customers
           </button>
         </div>
       </section>
@@ -193,11 +193,11 @@ export function CustomerPage({
           <div className="portal-customer-page-heading">
             <span className="portal-eyebrow">Customer workspace</span>
             <h1>{customer.name}</h1>
-            <p>Customer information</p>
+            <p>Maintain customer profile details and manage all drawings from one workspace.</p>
           </div>
           <aside className="portal-customer-top-form" aria-label="Customer information">
             <div className="portal-customer-top-form-head">
-              <span className="portal-section-kicker">Customer information</span>
+              <span className="portal-section-kicker">Customer profile</span>
               <span className={`portal-customer-status${customer.isArchived ? " is-archived" : ""}`}>
                 {customer.isArchived ? "Archived" : "Active"}
               </span>
@@ -208,7 +208,7 @@ export function CustomerPage({
                 <input value={customerDraft.name} onChange={(event) => updateDraftField("name", event.target.value)} />
               </label>
               <label className="drawing-library-customer-filter">
-                <span>Primary Contact</span>
+                <span>Primary contact</span>
                 <input
                   value={customerDraft.primaryContactName}
                   onChange={(event) => updateDraftField("primaryContactName", event.target.value)}
@@ -227,13 +227,13 @@ export function CustomerPage({
         </div>
         <div className="portal-header-actions portal-customer-page-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>
-            Back To Customers
+            Back to customers
           </button>
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>
             {isLoading ? "Refreshing..." : "Refresh"}
           </button>
           <button type="button" className="portal-primary-button" onClick={onCreateDrawing}>
-            New Drawing
+            New drawing
           </button>
         </div>
       </header>
@@ -245,17 +245,17 @@ export function CustomerPage({
           <small>{formatTimestamp(customer.lastActivityAtIso)}</small>
         </article>
         <article className="portal-dashboard-metric">
-          <span>Active Drawings</span>
+          <span>Active drawings</span>
           <strong>{activeDrawings.length}</strong>
           <small>Current drawings for this customer</small>
         </article>
         <article className="portal-dashboard-metric">
-          <span>Archived Drawings</span>
+          <span>Archived drawings</span>
           <strong>{archivedDrawings.length}</strong>
           <small>Stored drawing history</small>
         </article>
         <article className="portal-dashboard-metric">
-          <span>Primary Contact</span>
+          <span>Primary contact</span>
           <strong>{primaryContact}</strong>
           <small>{customer.siteAddress || "No site address recorded"}</small>
         </article>
@@ -265,7 +265,7 @@ export function CustomerPage({
         <section className="portal-surface-card portal-customer-detail">
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Customer details</span>
+              <span className="portal-section-kicker">Customer record</span>
               <h2>Site and notes</h2>
             </div>
           </div>
@@ -305,10 +305,7 @@ export function CustomerPage({
 
               <div className="portal-customer-detail-footer">
                 <button type="button" className="portal-primary-button" onClick={() => void handleSave()} disabled={isSavingCustomer}>
-                  {isSavingCustomer ? "Saving..." : "Save Changes"}
-                </button>
-                <button type="button" className="portal-secondary-button" onClick={onCreateDrawing}>
-                  New Drawing
+                  {isSavingCustomer ? "Saving..." : "Save changes"}
                 </button>
                 <button
                   type="button"
@@ -316,7 +313,7 @@ export function CustomerPage({
                   onClick={() => void onSetCustomerArchived(customer.id, !customer.isArchived)}
                   disabled={isArchivingCustomerId === customer.id}
                 >
-                  {isArchivingCustomerId === customer.id ? "Updating..." : customer.isArchived ? "Restore Customer" : "Archive Customer"}
+                  {isArchivingCustomerId === customer.id ? "Updating..." : customer.isArchived ? "Restore customer" : "Archive customer"}
                 </button>
               </div>
             </div>
@@ -326,7 +323,7 @@ export function CustomerPage({
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Customer drawings</span>
-              <h2>Saved drawings</h2>
+              <h2>Drawing history</h2>
             </div>
             <div className="portal-filter-row" role="tablist" aria-label="Customer drawing filter">
               {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerDrawingFilter[]).map((option) => (
@@ -391,7 +388,7 @@ export function CustomerPage({
 
                     <div className="drawing-library-row-actions">
                       <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
-                        Open In Editor
+                        Open editor
                       </button>
                       <button type="button" className="portal-secondary-button" onClick={() => onOpenEstimate(drawing.id)}>
                         Estimate
@@ -409,7 +406,7 @@ export function CustomerPage({
                           className="portal-secondary-button drawing-library-utility-button"
                           onClick={() => void handleToggleHistory(drawing.id)}
                         >
-                          {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
+                          {expandedDrawingId === drawing.id ? "Hide history" : "Version history"}
                         </button>
                       </div>
                     </div>

@@ -151,12 +151,12 @@ describe("DrawingsPage", () => {
 
     expect(html).toContain("Saved drawings");
     expect(html).toContain("Drawing library summary");
-    expect(html).toContain("Company view includes every drawing stored for the current company workspace.");
+    expect(html).toContain("Company includes every drawing in this workspace.");
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Mine");
-    expect(html).toContain("Version History");
+    expect(html).toContain("Version history");
     expect(html).toContain("Archive");
-    expect(html).toContain("Open In Editor");
+    expect(html).toContain("Open editor");
     expect(html).toContain("Estimate");
   });
 });

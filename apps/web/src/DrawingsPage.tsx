@@ -123,14 +123,15 @@ export function DrawingsPage({
   const activeCount = drawings.filter((drawing) => !drawing.isArchived).length;
   const mineCount = drawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id)).length;
   const archivedCount = drawings.length - activeCount;
+  const latestVisibleDrawing = visibleDrawings[0] ?? null;
   const visibleCustomerCount = new Set(
     visibleDrawings.map((drawing) => drawing.customerName.trim() || "Unassigned customer"),
   ).size;
   const scopeSummary = statusFilter === "ACTIVE"
-    ? "Showing active drawings only."
+    ? "Active drawings only"
     : statusFilter === "ARCHIVED"
-      ? "Showing archived drawings only."
-      : "Showing active and archived drawings.";
+      ? "Archived drawings only"
+      : "Active and archived drawings";
 
   const handleToggleHistory = async (drawingId: string) => {
     if (expandedDrawingId === drawingId) {
@@ -154,9 +155,9 @@ export function DrawingsPage({
       <header className="portal-page-header portal-drawings-header">
         <div className="portal-drawings-heading-shell">
           <div className="portal-drawings-heading">
-            <span className="portal-eyebrow">Drawing Library</span>
+            <span className="portal-eyebrow">Drawing library</span>
             <h1>Saved drawings</h1>
-            <p>Filter the library quickly, then scan by customer and open the exact drawing you need without fighting oversized cards.</p>
+            <p>Filter by status, ownership, and customer, then open the exact drawing, estimate, or version history in one step.</p>
           </div>
           <aside className="portal-drawings-snapshot" aria-label="Drawing library snapshot">
             <span className="portal-section-kicker">View snapshot</span>
@@ -166,12 +167,12 @@ export function DrawingsPage({
                 <strong>{scopeSummary}</strong>
               </article>
               <article>
-                <span>Visible groups</span>
+                <span>Customer groups</span>
                 <strong>{groupedDrawings.length}</strong>
               </article>
               <article>
-                <span>Visible drawings</span>
-                <strong>{visibleDrawings.length}</strong>
+                <span>Latest activity</span>
+                <strong>{latestVisibleDrawing ? formatTimestamp(latestVisibleDrawing.updatedAtIso) : "No activity"}</strong>
               </article>
             </div>
           </aside>
@@ -181,7 +182,7 @@ export function DrawingsPage({
             {isLoading ? "Refreshing..." : "Refresh"}
           </button>
           <button type="button" className="portal-primary-button" onClick={onCreateDrawing}>
-            New Drawing
+            New drawing
           </button>
         </div>
       </header>
@@ -216,7 +217,7 @@ export function DrawingsPage({
             </div>
 
             <label className="drawing-library-customer-filter">
-              <span>Customer view</span>
+              <span>Customer</span>
               <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
                 <option value="ALL_CUSTOMERS">All customers</option>
                 {customerOptions.map((customer) => (
@@ -254,8 +255,8 @@ export function DrawingsPage({
 
         <p className="drawing-library-toolbar-copy">
           {ownershipFilter === "MINE"
-            ? "Mine includes drawings you created, updated, or otherwise touched through version history."
-            : "Company view includes every drawing stored for the current company workspace."}
+            ? "Mine includes drawings you created, edited, or contributed to."
+            : "Company includes every drawing in this workspace."}
         </p>
       </section>
 
@@ -326,7 +327,7 @@ export function DrawingsPage({
 
                       <div className="drawing-library-row-actions">
                         <button type="button" className="portal-primary-button" onClick={() => onOpenDrawing(drawing.id)}>
-                          Open In Editor
+                          Open editor
                         </button>
                         <button type="button" className="portal-secondary-button" onClick={() => onOpenEstimate(drawing.id)}>
                           Estimate
@@ -344,7 +345,7 @@ export function DrawingsPage({
                             className="portal-secondary-button drawing-library-utility-button"
                             onClick={() => void handleToggleHistory(drawing.id)}
                           >
-                            {expandedDrawingId === drawing.id ? "Hide History" : "Version History"}
+                            {expandedDrawingId === drawing.id ? "Hide history" : "Version history"}
                           </button>
                         </div>
                       </div>

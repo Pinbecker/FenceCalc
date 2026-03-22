@@ -51,8 +51,8 @@ describe("EstimatePage", () => {
     );
 
     expect(html).toContain("No drawing selected");
-    expect(html).toContain(">Pricing<");
-    expect(html).toContain("Customers");
+    expect(html).toContain(">Pricing settings<");
+    expect(html).toContain("Customer directory");
   });
 
   it("hides pricing navigation for members", () => {
@@ -61,7 +61,7 @@ describe("EstimatePage", () => {
     );
 
     expect(html).toContain("No drawing selected");
-    expect(html).not.toContain(">Pricing<");
+    expect(html).not.toContain(">Pricing settings<");
   });
 
   it("merges ancillary items into estimate totals", () => {

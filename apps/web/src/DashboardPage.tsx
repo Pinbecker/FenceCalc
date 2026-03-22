@@ -23,6 +23,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
   const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
   const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
   const latestDrawing = [...activeDrawings].sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))[0] ?? null;
+  const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
   const activeCustomers = customers.filter((customer) => !customer.isArchived && customer.activeDrawingCount > 0);
   const topCustomers = [...activeCustomers]
     .map((customer) => {
@@ -53,7 +54,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
           <div className="portal-dashboard-heading">
             <span className="portal-eyebrow">Workspace overview</span>
             <h1>{session.company.name}</h1>
-            <p>Start from the current workload, reopen active drawings quickly, and move into customer-specific pages when you need customer context or drawing history.</p>
+            <p>Review active workload, jump back into current drawings, and move into customer workspaces when you need contacts and version history.</p>
             <div className="portal-dashboard-context">
               <div className="portal-dashboard-context-item">
                 <span className="portal-section-kicker">Signed in</span>
@@ -78,29 +79,29 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
               </article>
               <article>
                 <span>Drawings in focus</span>
-                <strong>{recent.length}</strong>
+                <strong>{latestDrawing ? latestDrawing.name : "No saved drawings"}</strong>
               </article>
             </div>
           </aside>
         </div>
         <div className="portal-header-actions portal-dashboard-actions">
           <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>
-            Open Library
+            Customers
           </button>
           <button type="button" className="portal-primary-button" onClick={() => onNavigate("editor")}>
-            New Drawing
+            New drawing
           </button>
         </div>
       </header>
 
       <div className="portal-dashboard-strip">
         <article className="portal-dashboard-metric">
-          <span>Your Drawings</span>
+          <span>My drawings</span>
           <strong>{myDrawings.length}</strong>
-          <small>Active jobs you have touched</small>
+          <small>Active jobs you have contributed to</small>
         </article>
         <article className="portal-dashboard-metric">
-          <span>Active Library</span>
+          <span>Active library</span>
           <strong>{activeDrawings.length}</strong>
           <small>Current live drawings</small>
         </article>
@@ -199,18 +200,62 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
               </div>
             </div>
             <div className="portal-dashboard-action-grid">
-              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("customers")}>
-                <strong>Customer directory</strong>
-                <span>Browse into each customer workspace from one directory.</span>
-              </button>
-              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("customers")}>
-                <strong>Active customers</strong>
-                <span>Review customer records and reopen linked work.</span>
+              <button
+                type="button"
+                className="portal-dashboard-action"
+                disabled={!topCustomers[0]}
+                onClick={() => {
+                  if (!topCustomers[0]) {
+                    return;
+                  }
+                  onNavigate("customer", { customerId: topCustomers[0].customerId });
+                }}
+              >
+                <strong>Top customer workspace</strong>
+                <span>
+                  {topCustomers[0]
+                    ? "Open the current highest activity customer workspace."
+                    : "Customer activity will appear here once drawings are linked."}
+                </span>
               </button>
               <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("editor")}>
                 <strong>Start new drawing</strong>
-                <span>Open a fresh workspace and capture job details cleanly.</span>
+                <span>Create a fresh drawing and attach it to a customer when ready.</span>
               </button>
+              <button
+                type="button"
+                className="portal-dashboard-action"
+                disabled={!latestDrawing}
+                onClick={() => {
+                  if (!latestDrawing) {
+                    return;
+                  }
+                  onNavigate("editor", { drawingId: latestDrawing.id });
+                }}
+              >
+                <strong>Open latest drawing</strong>
+                <span>{latestDrawing ? "Jump straight into the most recently updated drawing." : "Create a drawing to unlock this shortcut."}</span>
+              </button>
+              <button
+                type="button"
+                className="portal-dashboard-action"
+                disabled={!latestDrawing}
+                onClick={() => {
+                  if (!latestDrawing) {
+                    return;
+                  }
+                  onNavigate("estimate", { drawingId: latestDrawing.id });
+                }}
+              >
+                <strong>Open latest estimate</strong>
+                <span>{latestDrawing ? "Review costs and totals for the latest saved drawing." : "Create a drawing to unlock estimate review."}</span>
+              </button>
+              {canManagePricing ? (
+                <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("pricing")}>
+                  <strong>Pricing configuration</strong>
+                  <span>Review labour and material rates used in every estimate.</span>
+                </button>
+              ) : null}
               {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
                 <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("admin")}>
                   <strong>User administration</strong>

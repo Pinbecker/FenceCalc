@@ -5,6 +5,7 @@ import type { CustomerSummary, DrawingSummary } from "@fence-estimator/contracts
 import type { PortalRoute } from "./useHashRoute";
 
 type CustomerFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+type CustomerSort = "RECENT" | "NAME" | "ACTIVE_DRAWINGS";
 
 interface CustomerDraft {
   name: string;
@@ -13,6 +14,12 @@ interface CustomerDraft {
   primaryPhone: string;
   siteAddress: string;
   notes: string;
+}
+
+interface CustomerDrawingActivity {
+  latestDrawingId: string;
+  latestDrawingName: string;
+  latestUpdatedAtIso: string;
 }
 
 interface CustomersPageProps {
@@ -56,6 +63,14 @@ function sortStrings(left: string, right: string): number {
   return left.localeCompare(right, "en-GB", { sensitivity: "base" });
 }
 
+function hasMissingContact(customer: CustomerSummary): boolean {
+  return !customer.primaryContactName.trim() && !customer.primaryEmail.trim() && !customer.primaryPhone.trim();
+}
+
+function formatPrimaryContact(customer: CustomerSummary): string {
+  return customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "No contact details";
+}
+
 export function CustomersPage({
   customers,
   drawings,
@@ -67,9 +82,32 @@ export function CustomersPage({
   onNavigate,
 }: CustomersPageProps) {
   const [filter, setFilter] = useState<CustomerFilter>("ACTIVE");
+  const [sortBy, setSortBy] = useState<CustomerSort>("RECENT");
   const [search, setSearch] = useState("");
+  const [onlyWithActiveWork, setOnlyWithActiveWork] = useState(false);
+  const [onlyMissingContact, setOnlyMissingContact] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showUnassignedDrawings, setShowUnassignedDrawings] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft>(buildEmptyDraft);
+
+  const drawingActivityByCustomerId = useMemo(() => {
+    const byCustomerId = new Map<string, CustomerDrawingActivity>();
+    for (const drawing of drawings) {
+      if (!drawing.customerId) {
+        continue;
+      }
+
+      const current = byCustomerId.get(drawing.customerId);
+      if (!current || drawing.updatedAtIso.localeCompare(current.latestUpdatedAtIso) > 0) {
+        byCustomerId.set(drawing.customerId, {
+          latestDrawingId: drawing.id,
+          latestDrawingName: drawing.name,
+          latestUpdatedAtIso: drawing.updatedAtIso,
+        });
+      }
+    }
+    return byCustomerId;
+  }, [drawings]);
 
   const visibleCustomers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -83,6 +121,8 @@ export function CustomersPage({
         }
         return true;
       })
+      .filter((customer) => !onlyWithActiveWork || customer.activeDrawingCount > 0)
+      .filter((customer) => !onlyMissingContact || hasMissingContact(customer))
       .filter((customer) => {
         if (!normalizedSearch) {
           return true;
@@ -93,20 +133,39 @@ export function CustomersPage({
           customer.primaryEmail,
           customer.primaryPhone,
           customer.siteAddress,
+          customer.notes,
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
       })
       .slice()
       .sort((left, right) => {
-        if (right.lastActivityAtIso && left.lastActivityAtIso && right.lastActivityAtIso !== left.lastActivityAtIso) {
-          return right.lastActivityAtIso.localeCompare(left.lastActivityAtIso);
+        if (sortBy === "NAME") {
+          return sortStrings(left.name, right.name);
         }
+
+        if (sortBy === "ACTIVE_DRAWINGS" && right.activeDrawingCount !== left.activeDrawingCount) {
+          return right.activeDrawingCount - left.activeDrawingCount;
+        }
+
+        const leftRecent = drawingActivityByCustomerId.get(left.id)?.latestUpdatedAtIso ?? left.lastActivityAtIso ?? "";
+        const rightRecent = drawingActivityByCustomerId.get(right.id)?.latestUpdatedAtIso ?? right.lastActivityAtIso ?? "";
+        if (leftRecent !== rightRecent) {
+          return rightRecent.localeCompare(leftRecent);
+        }
+
+        if (right.activeDrawingCount !== left.activeDrawingCount) {
+          return right.activeDrawingCount - left.activeDrawingCount;
+        }
+
         return sortStrings(left.name, right.name);
       });
-  }, [customers, filter, search]);
+  }, [customers, drawingActivityByCustomerId, filter, onlyMissingContact, onlyWithActiveWork, search, sortBy]);
 
   const activeCount = customers.filter((customer) => !customer.isArchived).length;
   const archivedCount = customers.length - activeCount;
   const activeWorkCount = customers.filter((customer) => customer.activeDrawingCount > 0).length;
+  const missingContactCount = customers.filter((customer) => hasMissingContact(customer)).length;
+  const visibleActiveWorkCount = visibleCustomers.filter((customer) => customer.activeDrawingCount > 0).length;
+
   const unassignedDrawings = useMemo(
     () => drawings.filter((drawing) => !drawing.customerId).sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso)),
     [drawings],
@@ -132,13 +191,16 @@ export function CustomersPage({
     onNavigate("customer", { customerId: result.id });
   };
 
+  const canCreateCustomer = draft.name.trim().length > 0;
+  const resultsLabel = `${visibleCustomers.length} customer${visibleCustomers.length === 1 ? "" : "s"} shown`;
+
   return (
     <section className="portal-page portal-customers-page">
       <header className="portal-page-header">
         <div className="portal-customers-heading">
           <span className="portal-eyebrow">Customers</span>
           <h1>Customer directory</h1>
-          <p>Browse customers first, then open a dedicated customer page to review customer information and that customer’s drawings together.</p>
+          <p>Use status, search, and sort controls to locate customers quickly and jump straight to workspace or latest drawing actions.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>
@@ -148,21 +210,23 @@ export function CustomersPage({
             type="button"
             className="portal-primary-button"
             onClick={() => {
-              setIsCreating((current) => !current);
-              if (!isCreating) {
-                setDraft(buildEmptyDraft());
+              if (isCreating) {
+                setIsCreating(false);
+                return;
               }
+              setDraft(buildEmptyDraft());
+              setIsCreating(true);
             }}
           >
-            {isCreating ? "Close Create Form" : "New Customer"}
+            {isCreating ? "Close create panel" : "New customer"}
           </button>
         </div>
       </header>
 
-      <section className="portal-surface-card drawing-library-toolbar">
-        <div className="drawing-library-toolbar-main">
-          <div className="drawing-library-toolbar-filters">
-            <div className="portal-filter-row" role="tablist" aria-label="Customer filter">
+      <section className="portal-surface-card drawing-library-toolbar portal-customers-toolbar">
+        <div className="portal-customers-toolbar-main-simple">
+          <div className="portal-customers-control-row">
+            <div className="portal-filter-row" role="tablist" aria-label="Customer status filter">
               {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerFilter[]).map((option) => (
                 <button
                   type="button"
@@ -174,39 +238,87 @@ export function CustomersPage({
                 </button>
               ))}
             </div>
-
-            <label className="drawing-library-customer-filter">
-              <span>Search</span>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer records" />
+            <label className="drawing-library-customer-filter portal-customers-sort-filter">
+              <span>Sort by</span>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as CustomerSort)}>
+                <option value="RECENT">Recent activity</option>
+                <option value="ACTIVE_DRAWINGS">Active drawings</option>
+                <option value="NAME">Name (A-Z)</option>
+              </select>
             </label>
           </div>
 
-          <div className="drawing-library-toolbar-summary" aria-label="Customer directory summary">
-            <article className="drawing-library-overview-metric">
-              <span>Visible</span>
-              <strong>{visibleCustomers.length}</strong>
-            </article>
-            <article className="drawing-library-overview-metric">
-              <span>Active</span>
-              <strong>{activeCount}</strong>
-            </article>
-            <article className="drawing-library-overview-metric">
-              <span>Archived</span>
-              <strong>{archivedCount}</strong>
-            </article>
-            <article className="drawing-library-overview-metric">
-              <span>With Work</span>
-              <strong>{activeWorkCount}</strong>
-            </article>
+          <div className="portal-customers-search-row">
+            <label className="drawing-library-customer-filter portal-customers-search">
+              <span>Search directory</span>
+              <div className="portal-customers-search-wrap">
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by customer, contact, email, phone, site, or notes"
+                />
+                {search.trim().length > 0 ? (
+                  <button type="button" className="portal-text-button portal-customers-clear-search" onClick={() => setSearch("")}>
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            </label>
+          </div>
+
+          <div className="portal-customers-toggle-row">
+            <label className="portal-customers-toggle">
+              <input
+                type="checkbox"
+                checked={onlyWithActiveWork}
+                onChange={(event) => setOnlyWithActiveWork(event.target.checked)}
+              />
+              <span>Only customers with active drawings</span>
+            </label>
+            <label className="portal-customers-toggle">
+              <input
+                type="checkbox"
+                checked={onlyMissingContact}
+                onChange={(event) => setOnlyMissingContact(event.target.checked)}
+              />
+              <span>Only customers missing contact details</span>
+            </label>
           </div>
         </div>
+
+        <div className="drawing-library-toolbar-summary" aria-label="Customer directory summary">
+          <article className="drawing-library-overview-metric">
+            <span>Visible</span>
+            <strong>{visibleCustomers.length}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Active</span>
+            <strong>{activeCount}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Archived</span>
+            <strong>{archivedCount}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>With work</span>
+            <strong>{activeWorkCount}</strong>
+          </article>
+          <article className="drawing-library-overview-metric">
+            <span>Missing contact</span>
+            <strong>{missingContactCount}</strong>
+          </article>
+        </div>
+
+        <p className="drawing-library-toolbar-copy portal-customers-result-copy">
+          <strong>{resultsLabel}.</strong> {visibleActiveWorkCount} shown with active drawing work.
+        </p>
       </section>
 
       {isCreating ? (
         <section className="portal-surface-card portal-customer-create-panel">
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Create</span>
+              <span className="portal-section-kicker">Create customer</span>
               <h2>New customer</h2>
             </div>
           </div>
@@ -232,7 +344,7 @@ export function CustomersPage({
               </div>
               <div className="portal-customer-form-grid portal-customer-form-grid-two-column">
                 <label className="drawing-library-customer-filter">
-                  <span>Primary Contact</span>
+                  <span>Primary contact</span>
                   <input
                     value={draft.primaryContactName}
                     onChange={(event) => setDraft((current) => ({ ...current, primaryContactName: event.target.value }))}
@@ -262,7 +374,7 @@ export function CustomersPage({
               </div>
               <div className="portal-customer-form-grid">
                 <label className="drawing-library-customer-filter">
-                  <span>Site Address</span>
+                  <span>Site address</span>
                   <textarea
                     value={draft.siteAddress}
                     onChange={(event) => setDraft((current) => ({ ...current, siteAddress: event.target.value }))}
@@ -285,8 +397,16 @@ export function CustomersPage({
             </section>
 
             <div className="portal-customer-detail-footer">
-              <button type="button" className="portal-primary-button" onClick={() => void handleCreateCustomer()} disabled={isSavingCustomer}>
-                {isSavingCustomer ? "Saving..." : "Create Customer"}
+              <button
+                type="button"
+                className="portal-primary-button"
+                onClick={() => void handleCreateCustomer()}
+                disabled={!canCreateCustomer || isSavingCustomer}
+              >
+                {isSavingCustomer ? "Saving..." : "Create customer"}
+              </button>
+              <button type="button" className="portal-secondary-button" onClick={() => setIsCreating(false)}>
+                Cancel
               </button>
             </div>
           </div>
@@ -294,45 +414,82 @@ export function CustomersPage({
       ) : null}
 
       <section className="portal-surface-card portal-customers-directory">
-        <div className="portal-section-heading">
+        <div className="portal-section-heading portal-customers-directory-header">
           <div>
             <span className="portal-section-kicker">Directory</span>
-            <h2>Company customers</h2>
+            <h2>Customer workspaces</h2>
           </div>
+          <span className="drawing-library-badge">{resultsLabel}</span>
         </div>
         {visibleCustomers.length === 0 ? (
           <div className="portal-empty-state portal-customers-empty-state">
-            <h2>No customers match this search</h2>
-            <p>Adjust the filter or search terms to bring records back into view.</p>
+            <h2>No customers in this view</h2>
+            <p>Adjust filters or search terms to bring records back into view.</p>
           </div>
         ) : null}
-        <div className="portal-customers-directory-list">
-          {visibleCustomers.map((customer) => (
-            <button
-              type="button"
-              key={customer.id}
-              className="portal-customer-row"
-              onClick={() => onNavigate("customer", { customerId: customer.id })}
-            >
-              <div className="portal-customer-row-main">
-                <div className="portal-customer-row-head">
-                  <div className="portal-customer-row-title">
-                    <strong>{customer.name}</strong>
-                    <p>{customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "No contact details yet"}</p>
+        <div className="portal-customers-list">
+          {visibleCustomers.map((customer) => {
+            const latestDrawing = drawingActivityByCustomerId.get(customer.id) ?? null;
+            const missingContact = hasMissingContact(customer);
+            return (
+              <article key={customer.id} className={`portal-customer-directory-row${missingContact ? " is-missing-contact" : ""}`}>
+                <div className="portal-customer-directory-main">
+                  <div className="portal-customer-directory-head">
+                    <div className="portal-customer-directory-title">
+                      <strong>{customer.name}</strong>
+                      <p>{customer.siteAddress || "No site address recorded"}</p>
+                    </div>
+                    <div className="portal-customer-directory-badges">
+                      <span className={`portal-customer-status${customer.isArchived ? " is-archived" : ""}`}>
+                        {customer.isArchived ? "Archived" : "Active"}
+                      </span>
+                      {missingContact ? <span className="drawing-library-badge">Contact details missing</span> : null}
+                    </div>
                   </div>
-                  <span className={`portal-customer-status${customer.isArchived ? " is-archived" : ""}`}>
-                    {customer.isArchived ? "Archived" : "Active"}
-                  </span>
+
+                  <div className="portal-customer-directory-contact">
+                    <span>Contact: {formatPrimaryContact(customer)}</span>
+                    <span>Email: {customer.primaryEmail || "Not set"}</span>
+                    <span>Phone: {customer.primaryPhone || "Not set"}</span>
+                  </div>
+
+                  <div className="portal-customer-directory-meta">
+                    <span>{customer.activeDrawingCount} active drawings</span>
+                    <span>{customer.archivedDrawingCount} archived drawings</span>
+                    <span>{latestDrawing ? `Latest: ${latestDrawing.latestDrawingName}` : "No linked drawings"}</span>
+                    <span>
+                      {latestDrawing
+                        ? `Updated ${formatTimestamp(latestDrawing.latestUpdatedAtIso)}`
+                        : `Last activity ${formatTimestamp(customer.lastActivityAtIso)}`}
+                    </span>
+                  </div>
                 </div>
-                <div className="portal-customer-row-meta">
-                  <span>{customer.activeDrawingCount} active drawings</span>
-                  <span>{customer.archivedDrawingCount} archived drawings</span>
-                  <span>Last activity {formatTimestamp(customer.lastActivityAtIso)}</span>
+
+                <div className="portal-customer-directory-actions">
+                  <button
+                    type="button"
+                    className="portal-primary-button"
+                    onClick={() => onNavigate("customer", { customerId: customer.id })}
+                  >
+                    Open workspace
+                  </button>
+                  <button
+                    type="button"
+                    className="portal-secondary-button"
+                    disabled={!latestDrawing}
+                    onClick={() => {
+                      if (!latestDrawing) {
+                        return;
+                      }
+                      onOpenDrawing(latestDrawing.latestDrawingId);
+                    }}
+                  >
+                    {latestDrawing ? "Open latest drawing" : "No drawing yet"}
+                  </button>
                 </div>
-              </div>
-              <span className="portal-customer-row-cta">View Customer</span>
-            </button>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -340,32 +497,44 @@ export function CustomersPage({
         <section className="portal-surface-card portal-customer-orphans">
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Exception</span>
+              <span className="portal-section-kicker">Assignment queue</span>
               <h2>Unassigned drawings</h2>
             </div>
+            <button
+              type="button"
+              className="portal-secondary-button"
+              onClick={() => setShowUnassignedDrawings((current) => !current)}
+            >
+              {showUnassignedDrawings ? "Hide list" : "Show list"}
+            </button>
           </div>
-          <p className="portal-empty-copy">These drawings are not linked to a customer yet, so they stay outside the customer-first browse flow.</p>
-          <div className="portal-dashboard-list">
-            {unassignedDrawings.map((drawing) => (
-              <button type="button" key={drawing.id} className="portal-dashboard-row" onClick={() => onOpenDrawing(drawing.id)}>
-                <div className="portal-dashboard-row-copy">
-                  <div className="portal-dashboard-row-head">
-                    <div className="portal-dashboard-row-title">
-                      <strong>{drawing.name}</strong>
-                      <p>{drawing.customerName.trim() || "Unassigned customer"}</p>
+          <p className="portal-empty-copy">
+            {unassignedDrawings.length} drawing{unassignedDrawings.length === 1 ? " is" : "s are"} currently outside customer workflows.
+            Open a drawing and assign it to a customer to move it into the main list.
+          </p>
+          {showUnassignedDrawings ? (
+            <div className="portal-dashboard-list">
+              {unassignedDrawings.map((drawing) => (
+                <button type="button" key={drawing.id} className="portal-dashboard-row" onClick={() => onOpenDrawing(drawing.id)}>
+                  <div className="portal-dashboard-row-copy">
+                    <div className="portal-dashboard-row-head">
+                      <div className="portal-dashboard-row-title">
+                        <strong>{drawing.name}</strong>
+                        <p>{drawing.customerName.trim() || "Unassigned customer"}</p>
+                      </div>
+                      <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
                     </div>
-                    <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
+                    <div className="portal-dashboard-row-meta">
+                      <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
+                      <span>{drawing.segmentCount} segments</span>
+                      <span>{drawing.gateCount} gates</span>
+                    </div>
                   </div>
-                  <div className="portal-dashboard-row-meta">
-                    <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                    <span>{drawing.segmentCount} segments</span>
-                    <span>{drawing.gateCount} gates</span>
-                  </div>
-                </div>
-                <span className="portal-dashboard-row-cta">Open</span>
-              </button>
-            ))}
-          </div>
+                  <span className="portal-dashboard-row-cta">Open</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </section>

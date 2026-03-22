@@ -219,7 +219,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
         <div>
           <span className="portal-eyebrow">Estimate</span>
           <h1>{drawing?.name ?? "Drawing estimate"}</h1>
-          <p>Review priced quantities derived from the saved drawing and the current company pricing configuration.</p>
+          <p>Review priced quantities from the saved drawing, add ancillary items, and publish quote snapshots for audit-safe history.</p>
         </div>
         <div className="portal-header-actions">
           {drawing ? (
@@ -228,12 +228,12 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               className="portal-secondary-button"
               onClick={() => onNavigate("editor", { drawingId: drawing.id })}
             >
-              Open In Editor
+              Open editor
             </button>
           ) : null}
           {canManagePricing ? (
             <button type="button" className="portal-secondary-button" onClick={() => onNavigate("pricing")}>
-              Pricing
+              Pricing settings
             </button>
           ) : null}
           <button
@@ -241,7 +241,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             className="portal-primary-button"
             onClick={() => onNavigate(drawing?.customerId ? "customer" : "customers", drawing?.customerId ? { customerId: drawing.customerId } : undefined)}
           >
-            {drawing?.customerId ? "Customer Page" : "Customers"}
+            {drawing?.customerId ? "Customer workspace" : "Customer directory"}
           </button>
         </div>
       </header>
@@ -252,7 +252,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
       {!drawingId ? (
         <div className="portal-empty-state">
           <h2>No drawing selected</h2>
-          <p>Open the estimate page from a drawing card or from the editor for a saved drawing.</p>
+          <p>Open estimates from a saved drawing in the editor or from a customer workspace drawing list.</p>
         </div>
       ) : null}
 
@@ -295,7 +295,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Quote snapshots</span>
-                <h2>Saved immutable quotes</h2>
+                <h2>Published quote snapshots</h2>
               </div>
               <button
                 type="button"
@@ -303,7 +303,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
                 onClick={() => void handleCreateQuote()}
                 disabled={isCreatingQuote}
               >
-                {isCreatingQuote ? "Saving Quote..." : "Save Quote Snapshot"}
+                {isCreatingQuote ? "Saving quote..." : "Save quote snapshot"}
               </button>
             </div>
 
@@ -328,14 +328,14 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Ancillary items</span>
-                <h2>Manual additions</h2>
+                <h2>Manual line items</h2>
               </div>
               <button
                 type="button"
                 className="portal-secondary-button"
                 onClick={() => setAncillaryItems((current) => [...current, buildAncillaryItem()])}
               >
-                Add Ancillary Item
+                Add ancillary line
               </button>
             </div>
 

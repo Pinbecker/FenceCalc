@@ -69,11 +69,13 @@ describe("CustomersPage", () => {
     );
 
     expect(html).toContain("Customer directory");
-    expect(html).toContain("Company customers");
+    expect(html).toContain("Customer workspaces");
     expect(html).toContain("Cleveland Land Services");
-    expect(html).toContain("View Customer");
+    expect(html).toContain("Open workspace");
+    expect(html).toContain("Only customers with active drawings");
+    expect(html).toContain("No drawing yet");
     expect(html).toContain("Unassigned drawings");
-    expect(html).toContain("Legacy yard layout");
+    expect(html).toContain("Show list");
   });
 
   it("renders the empty directory state when there are no customers", () => {
@@ -90,6 +92,6 @@ describe("CustomersPage", () => {
       />
     );
 
-    expect(html).toContain("No customers match this search");
+    expect(html).toContain("No customers in this view");
   });
 });

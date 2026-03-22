@@ -32,8 +32,8 @@ describe("PricingPage", () => {
   it("renders the pricing shell and loading state", () => {
     const html = renderToStaticMarkup(<PricingPage session={session} />);
 
-    expect(html).toContain("Pricing and labour rates");
-    expect(html).toContain("This deployment currently prices Twin Bar layouts only.");
+    expect(html).toContain("Pricing and labour schedule");
+    expect(html).toContain("Estimates read directly from this schedule.");
     expect(html).toContain("Acme Fencing");
     expect(html).toContain("Loading pricing configuration...");
     expect(html).toContain("Default configuration");

@@ -90,7 +90,7 @@ export function AdminPage({
         <div>
           <span className="portal-eyebrow">Administration</span>
           <h1>User management</h1>
-          <p>Keep the team list in view, handle resets quickly, and use the form as a secondary setup action instead of the main screen.</p>
+          <p>Manage user access, apply password resets, and keep an auditable record of account changes.</p>
         </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoadingUsers}>
@@ -110,7 +110,7 @@ export function AdminPage({
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Team</span>
-              <h2>Current company users</h2>
+              <h2>Company users</h2>
             </div>
           </div>
           <div className="admin-user-list">
@@ -127,12 +127,12 @@ export function AdminPage({
                 <div className="portal-form-grid">
                   {user.id === currentUserId ? (
                     <p className="portal-empty-copy">
-                      Your own password must be reset by another manager or through the operator recovery runbook.
+                      Your own password must be reset by another manager or through the operator recovery process.
                     </p>
                   ) : (
                     <>
                       <label className="portal-field">
-                        <span>Set temporary password</span>
+                        <span>Temporary password</span>
                         <input
                           type="password"
                           value={resetPasswordsByUserId[user.id] ?? ""}
@@ -147,9 +147,9 @@ export function AdminPage({
                         onClick={() => void handleResetPassword(user.id)}
                         disabled={isResettingUserId === user.id || !(resetPasswordsByUserId[user.id]?.trim())}
                       >
-                        {isResettingUserId === user.id ? "Setting Password..." : "Set Password"}
+                        {isResettingUserId === user.id ? "Setting password..." : "Set password"}
                       </button>
-                      <p className="portal-empty-copy">Active sessions are revoked immediately after a reset.</p>
+                      <p className="portal-empty-copy">Active sessions are revoked immediately after password reset.</p>
                     </>
                   )}
                 </div>
@@ -162,7 +162,7 @@ export function AdminPage({
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Create user</span>
-              <h2>Add a company login</h2>
+              <h2>Add user login</h2>
             </div>
           </div>
           <form className="portal-form-grid" onSubmit={(event) => void handleSubmit(event)}>
@@ -186,7 +186,7 @@ export function AdminPage({
               </select>
             </label>
             <button type="submit" className="portal-primary-button" disabled={isSavingUser}>
-              {isSavingUser ? "Adding..." : "Add User"}
+              {isSavingUser ? "Adding..." : "Add user"}
             </button>
           </form>
         </section>
@@ -200,6 +200,7 @@ export function AdminPage({
           </div>
         </div>
         <div className="audit-log-list">
+          {auditLog.length === 0 ? <p className="portal-empty-copy">No recent audit events.</p> : null}
           {auditLog.map((entry) => (
             <article key={entry.id} className="audit-log-card">
               <div>

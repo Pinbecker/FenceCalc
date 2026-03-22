@@ -123,9 +123,9 @@ export function PricingPage({ session }: PricingPageProps) {
     <section className="portal-page pricing-page">
       <header className="portal-page-header">
         <div>
-          <span className="portal-eyebrow">Estimating Configuration</span>
-          <h1>Pricing and labour rates</h1>
-          <p>The estimate pages read from this company pricing configuration. This deployment currently prices Twin Bar layouts only.</p>
+          <span className="portal-eyebrow">Pricing configuration</span>
+          <h1>Pricing and labour schedule</h1>
+          <p>Estimates read directly from this schedule. Keep names, units, and costs current so quote outputs stay consistent.</p>
         </div>
         <div className="portal-header-actions">
           <button
@@ -140,10 +140,10 @@ export function PricingPage({ session }: PricingPageProps) {
             }}
             disabled={!pricingConfig || !isDirty || isSaving}
           >
-            Reset Changes
+            Reset changes
           </button>
           <button type="button" className="portal-primary-button" onClick={() => void handleSave()} disabled={!isDirty || isSaving || isLoading}>
-            {isSaving ? "Saving..." : "Save Pricing"}
+            {isSaving ? "Saving..." : "Save pricing"}
           </button>
         </div>
       </header>
@@ -157,11 +157,11 @@ export function PricingPage({ session }: PricingPageProps) {
           <strong>{session.company.name}</strong>
         </article>
         <article>
-          <span>Rows</span>
+          <span>Line items</span>
           <strong>{draftItems.length}</strong>
         </article>
         <article>
-          <span>Active</span>
+          <span>Enabled</span>
           <strong>{draftItems.filter((item) => item.isActive).length}</strong>
         </article>
         <article>
@@ -169,6 +169,10 @@ export function PricingPage({ session }: PricingPageProps) {
           <strong>{formatPricingSavedLabel(pricingConfig)}</strong>
         </article>
       </section>
+
+      <p className="portal-empty-copy pricing-page-guidance">
+        Save after reviewing each category. Disabled rows remain in the schedule for historical compatibility but are excluded from new estimates.
+      </p>
 
       {isLoading ? (
         <div className="portal-empty-state">

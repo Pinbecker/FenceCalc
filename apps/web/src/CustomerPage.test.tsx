@@ -78,10 +78,10 @@ describe("CustomerPage", () => {
 
     expect(html).toContain("Customer workspace");
     expect(html).toContain("Cleveland Land Services");
-    expect(html).toContain("Customer information");
-    expect(html).toContain("Saved drawings");
+    expect(html).toContain("Customer profile");
+    expect(html).toContain("Drawing history");
     expect(html).toContain("Front perimeter");
-    expect(html).toContain("Open In Editor");
+    expect(html).toContain("Open editor");
   });
 
   it("renders a safe empty state when the customer is missing", () => {
@@ -107,6 +107,6 @@ describe("CustomerPage", () => {
     );
 
     expect(html).toContain("Customer not found");
-    expect(html).toContain("Back To Customers");
+    expect(html).toContain("Back to customers");
   });
 });
