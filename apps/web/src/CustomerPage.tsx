@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { CustomerContact, CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
@@ -23,7 +23,7 @@ interface CustomerPageProps {
   isArchivingCustomerId: string | null;
   onSaveCustomer(
     this: void,
-    input: { mode: "update"; customerId: string; customer: Partial<CustomerDraft> },
+    input: { mode: "update"; customerId: string; customer: Partial<CustomerDraft> & { additionalContacts?: CustomerContact[] } },
   ): Promise<{ id: string } | null>;
   onSetCustomerArchived(this: void, customerId: string, archived: boolean): Promise<boolean>;
   onOpenDrawing(this: void, drawingId: string): void;
@@ -75,6 +75,7 @@ export function CustomerPage({
   const [drawingFilter, setDrawingFilter] = useState<CustomerDrawingFilter>("ACTIVE");
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft | null>(null);
+  const [contactsDraft, setContactsDraft] = useState<CustomerContact[]>([]);
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
@@ -126,12 +127,14 @@ export function CustomerPage({
       return;
     }
     setDraft(buildDraft(customer));
+    setContactsDraft(customer.additionalContacts.map((c) => ({ ...c })));
     setIsEditOpen(true);
   };
 
   const closeEditModal = () => {
     setIsEditOpen(false);
     setDraft(null);
+    setContactsDraft([]);
   };
 
   const updateDraftField = (field: keyof CustomerDraft, value: string) => {
@@ -145,6 +148,9 @@ export function CustomerPage({
     if (!customer || !draft) {
       return;
     }
+    const trimmedContacts = contactsDraft
+      .map((c) => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim() }))
+      .filter((c) => c.name || c.phone || c.email);
     await onSaveCustomer({
       mode: "update",
       customerId: customer.id,
@@ -154,10 +160,12 @@ export function CustomerPage({
         primaryEmail: draft.primaryEmail.trim(),
         primaryPhone: draft.primaryPhone.trim(),
         siteAddress: draft.siteAddress.trim(),
+        additionalContacts: trimmedContacts,
       },
     });
     setIsEditOpen(false);
     setDraft(null);
+    setContactsDraft([]);
   };
 
   const handleToggleHistory = async (drawingId: string) => {
@@ -245,6 +253,26 @@ export function CustomerPage({
           </button>
         </div>
       </header>
+
+      {customer.additionalContacts.length > 0 ? (
+        <section className="portal-surface-card portal-customer-contacts-section">
+          <div className="portal-section-heading">
+            <div>
+              <span className="portal-section-kicker">People</span>
+              <h2>Additional contacts</h2>
+            </div>
+          </div>
+          <div className="portal-customer-contacts-list">
+            {customer.additionalContacts.map((contact, index) => (
+              <div key={index} className="portal-customer-contact-card">
+                {contact.name ? <strong>{contact.name}</strong> : null}
+                {contact.phone ? <span>{contact.phone}</span> : null}
+                {contact.email ? <span>{contact.email}</span> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="portal-surface-card portal-customer-drawings-panel">
         <div className="portal-section-heading">
@@ -391,6 +419,51 @@ export function CustomerPage({
                 <span>Site address</span>
                 <textarea value={draft?.siteAddress ?? ""} onChange={(event) => updateDraftField("siteAddress", event.target.value)} />
               </label>
+            </div>
+            <div className="portal-customer-edit-contacts">
+              <div className="portal-customer-edit-contacts-heading">
+                <h3>Additional contacts</h3>
+                <button
+                  type="button"
+                  className="portal-text-button"
+                  onClick={() => setContactsDraft((current) => [...current, { name: "", phone: "", email: "" }])}
+                >
+                  + Add contact
+                </button>
+              </div>
+              {contactsDraft.map((contact, index) => (
+                <div key={index} className="portal-customer-edit-contact-row">
+                  <input
+                    placeholder="Name"
+                    value={contact.name}
+                    onChange={(event) =>
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, name: event.target.value } : c)))
+                    }
+                  />
+                  <input
+                    placeholder="Phone"
+                    value={contact.phone}
+                    onChange={(event) =>
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, phone: event.target.value } : c)))
+                    }
+                  />
+                  <input
+                    placeholder="Email"
+                    value={contact.email}
+                    onChange={(event) =>
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, email: event.target.value } : c)))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="portal-customer-edit-contact-remove"
+                    onClick={() => setContactsDraft((current) => current.filter((_, i) => i !== index))}
+                    aria-label="Remove contact"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
             <div className="portal-customer-edit-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={closeEditModal}>

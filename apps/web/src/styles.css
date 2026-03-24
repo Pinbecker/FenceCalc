@@ -484,7 +484,7 @@ textarea {
   width: auto;
   min-height: 0;
   margin-bottom: 0;
-  padding: 5px 8px;
+  padding: 6px 14px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
@@ -7130,9 +7130,9 @@ button:disabled {
 /* ─── Customer page redesign ─── */
 
 .portal-compact-button {
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
+  min-height: 30px;
+  padding: 5px 14px;
+  font-size: 0.73rem;
 }
 
 .portal-customer-page .portal-customer-page-heading-shell {
@@ -7182,8 +7182,8 @@ button:disabled {
 
 .portal-customer-drawing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 16px;
 }
 
 .portal-customer-drawing-card {
@@ -7218,8 +7218,8 @@ button:disabled {
 
 .portal-customer-drawing-card-body {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 14px 16px 16px;
 }
 
 .portal-customer-drawing-card-head {
@@ -7260,8 +7260,9 @@ button:disabled {
 }
 
 .portal-customer-drawing-card-meta {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
 }
 
 .portal-customer-drawing-card-meta span {
@@ -7272,8 +7273,8 @@ button:disabled {
 
 .portal-customer-drawing-card-actions {
   display: flex;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 8px;
+  padding-top: 6px;
 }
 
 .portal-customer-drawing-card-actions .portal-compact-button {
@@ -7283,7 +7284,7 @@ button:disabled {
 .portal-customer-drawing-card-utility {
   display: flex;
   gap: 10px;
-  padding-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid rgba(90, 112, 103, 0.08);
 }
 
@@ -7439,6 +7440,112 @@ button:disabled {
   }
 }
 
+/* Additional contacts section */
+
+.portal-customer-contacts-section {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-customer-contacts-section .portal-section-heading {
+  margin-bottom: 0;
+}
+
+.portal-customer-contacts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.portal-customer-contact-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(90, 112, 103, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.88);
+}
+
+.portal-customer-contact-card strong {
+  font-size: 0.85rem;
+  color: #27342f;
+}
+
+.portal-customer-contact-card span {
+  font-size: 0.74rem;
+  color: #6a766c;
+  line-height: 1.4;
+}
+
+.portal-customer-contacts-empty {
+  font-size: 0.8rem;
+  color: #6a766c;
+  font-style: italic;
+}
+
+/* Additional contacts in edit modal */
+
+.portal-customer-edit-contacts {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(103, 115, 103, 0.1);
+}
+
+.portal-customer-edit-contacts-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-customer-edit-contacts-heading h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #6a766c;
+}
+
+.portal-customer-edit-contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.portal-customer-edit-contact-row input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid rgba(103, 115, 103, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 252, 247, 0.96);
+  color: #22302a;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.portal-customer-edit-contact-remove {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(180, 90, 60, 0.18);
+  border-radius: 8px;
+  background: rgba(180, 90, 60, 0.06);
+  color: #8a482d;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.portal-customer-edit-contact-remove:hover {
+  background: rgba(180, 90, 60, 0.14);
+}
+
 @media (max-width: 680px) {
   .portal-customer-drawing-grid {
     grid-template-columns: 1fr;
@@ -7451,5 +7558,13 @@ button:disabled {
   .portal-customer-edit-modal {
     padding: 14px;
     border-radius: 18px;
+  }
+
+  .portal-customer-edit-contact-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .portal-customer-contacts-list {
+    grid-template-columns: 1fr;
   }
 }

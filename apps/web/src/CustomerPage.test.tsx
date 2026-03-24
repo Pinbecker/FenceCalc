@@ -12,6 +12,9 @@ const customer: CustomerSummary = {
   primaryContactName: "Jane Doe",
   primaryEmail: "jane@example.com",
   primaryPhone: "01234 567890",
+  additionalContacts: [
+    { name: "Bob Smith", phone: "09876 543210", email: "bob@example.com" },
+  ],
   siteAddress: "1 Yard Road",
   notes: "Key holder on site",
   isArchived: false,
@@ -84,6 +87,9 @@ describe("CustomerPage", () => {
     expect(html).toContain("Open editor");
     expect(html).toContain("Edit profile");
     expect(html).toContain("v3");
+    expect(html).toContain("Additional contacts");
+    expect(html).toContain("Bob Smith");
+    expect(html).toContain("bob@example.com");
     expect(html).not.toContain("Back to customers");
     expect(html).not.toContain("Refresh");
     expect(html).not.toContain("Notes");
