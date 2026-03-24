@@ -96,6 +96,7 @@ describe("DashboardPage", () => {
     );
 
     expect(html).toContain("Workspace overview");
+    expect(html).toContain("Welcome, Jane Doe");
     expect(html).toContain("Recent drawings");
     expect(html).toContain("Active customers");
     expect(html).toContain("Useful routes");
@@ -104,5 +105,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Drawing preview for Front perimeter");
     expect(html).toContain("v3");
+    expect(html).not.toContain("Signed in");
+    expect(html).not.toContain("Access");
   });
 });

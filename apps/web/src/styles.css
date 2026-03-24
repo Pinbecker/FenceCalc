@@ -5315,6 +5315,38 @@ button:disabled {
   font-size: 1.58rem;
 }
 
+.portal-dashboard-stat-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.portal-dashboard-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid rgba(94, 114, 105, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.portal-dashboard-stat span {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a766c;
+}
+
+.portal-dashboard-stat strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #27342f;
+}
+
 .portal-dashboard-layout,
 .portal-customer-page-layout {
   gap: 18px;
