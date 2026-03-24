@@ -160,6 +160,7 @@ async function createTestCustomer(
     primaryContactName: "",
     primaryEmail: "",
     primaryPhone: "",
+    additionalContacts: [],
     siteAddress: "",
     notes: "",
     createdByUserId: userId,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { CustomerContact, CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import { customerUpdateRequestSchema, type CustomerContact, type CustomerSummary, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { ZodIssue } from "zod";
 
 import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
@@ -15,12 +16,34 @@ interface CustomerDraft {
   siteAddress: string;
 }
 
+interface CustomerProfileInput {
+  name: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  siteAddress: string;
+  additionalContacts: CustomerContact[];
+}
+
+interface SaveCustomerProfileSuccess {
+  ok: true;
+}
+
+interface SaveCustomerProfileFailure {
+  ok: false;
+  message: string | null;
+}
+
+type SaveCustomerProfileResult = SaveCustomerProfileSuccess | SaveCustomerProfileFailure;
+
 interface CustomerPageProps {
   query?: Record<string, string>;
   customers: CustomerSummary[];
   drawings: DrawingSummary[];
   isSavingCustomer: boolean;
   isArchivingCustomerId: string | null;
+  errorMessage: string | null;
+  noticeMessage: string | null;
   onSaveCustomer(
     this: void,
     input: { mode: "update"; customerId: string; customer: Partial<CustomerDraft> & { additionalContacts?: CustomerContact[] } },
@@ -55,12 +78,88 @@ function formatTimestamp(value: string | null): string {
   }).format(new Date(value));
 }
 
+function buildCustomerProfileInput(draft: CustomerDraft, contactsDraft: CustomerContact[]): CustomerProfileInput {
+  return {
+    name: draft.name.trim(),
+    primaryContactName: draft.primaryContactName.trim(),
+    primaryEmail: draft.primaryEmail.trim(),
+    primaryPhone: draft.primaryPhone.trim(),
+    siteAddress: draft.siteAddress.trim(),
+    additionalContacts: contactsDraft
+      .map((contact) => ({ name: contact.name.trim(), phone: contact.phone.trim(), email: contact.email.trim() }))
+      .filter((contact) => contact.name || contact.phone || contact.email),
+  };
+}
+
+function toFriendlyCustomerValidationMessage(issue: ZodIssue): string {
+  const [fieldName, index, nestedFieldName] = issue.path;
+
+  if (fieldName === "name") {
+    return "Enter a customer name.";
+  }
+
+  if (fieldName === "primaryEmail") {
+    return "Enter a valid primary email address or leave it blank.";
+  }
+
+  if (fieldName === "additionalContacts" && typeof index === "number" && nestedFieldName === "email") {
+    return `Enter a valid email address for additional contact ${index + 1}, or leave it blank.`;
+  }
+
+  if (fieldName === "additionalContacts" && typeof index === "number") {
+    return `Check the details for additional contact ${index + 1}.`;
+  }
+
+  return "Check the customer details and try again.";
+}
+
+export function validateCustomerProfileInput(input: CustomerProfileInput): string | null {
+  const parsed = customerUpdateRequestSchema.safeParse(input);
+  if (parsed.success) {
+    return null;
+  }
+
+  const firstIssue = parsed.error.issues[0];
+  return firstIssue ? toFriendlyCustomerValidationMessage(firstIssue) : "Check the customer details and try again.";
+}
+
+export async function saveCustomerProfile(
+  customer: CustomerSummary | null,
+  draft: CustomerDraft | null,
+  contactsDraft: CustomerContact[],
+  onSaveCustomer: CustomerPageProps["onSaveCustomer"],
+): Promise<SaveCustomerProfileResult> {
+  if (!customer || !draft) {
+    return { ok: false, message: null };
+  }
+
+  const input = buildCustomerProfileInput(draft, contactsDraft);
+  const validationMessage = validateCustomerProfileInput(input);
+  if (validationMessage) {
+    return { ok: false, message: validationMessage };
+  }
+
+  const savedCustomer = await onSaveCustomer({
+    mode: "update",
+    customerId: customer.id,
+    customer: input,
+  });
+
+  if (!savedCustomer) {
+    return { ok: false, message: null };
+  }
+
+  return { ok: true };
+}
+
 export function CustomerPage({
   query,
   customers,
   drawings,
   isSavingCustomer,
   isArchivingCustomerId,
+  errorMessage,
+  noticeMessage,
   onSaveCustomer,
   onSetCustomerArchived,
   onOpenDrawing,
@@ -76,6 +175,7 @@ export function CustomerPage({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft | null>(null);
   const [contactsDraft, setContactsDraft] = useState<CustomerContact[]>([]);
+  const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null);
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
@@ -116,6 +216,7 @@ export function CustomerPage({
       if (event.key === "Escape") {
         setIsEditOpen(false);
         setDraft(null);
+        setEditErrorMessage(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -128,6 +229,7 @@ export function CustomerPage({
     }
     setDraft(buildDraft(customer));
     setContactsDraft(customer.additionalContacts.map((c) => ({ ...c })));
+    setEditErrorMessage(null);
     setIsEditOpen(true);
   };
 
@@ -135,34 +237,24 @@ export function CustomerPage({
     setIsEditOpen(false);
     setDraft(null);
     setContactsDraft([]);
+    setEditErrorMessage(null);
   };
 
   const updateDraftField = (field: keyof CustomerDraft, value: string) => {
     if (!customer) {
       return;
     }
+    setEditErrorMessage(null);
     setDraft((current) => ({ ...(current ?? buildDraft(customer)), [field]: value }));
   };
 
   const handleSave = async () => {
-    if (!customer || !draft) {
+    const result = await saveCustomerProfile(customer, draft, contactsDraft, onSaveCustomer);
+    if (!result.ok) {
+      setEditErrorMessage(result.message);
       return;
     }
-    const trimmedContacts = contactsDraft
-      .map((c) => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim() }))
-      .filter((c) => c.name || c.phone || c.email);
-    await onSaveCustomer({
-      mode: "update",
-      customerId: customer.id,
-      customer: {
-        name: draft.name.trim(),
-        primaryContactName: draft.primaryContactName.trim(),
-        primaryEmail: draft.primaryEmail.trim(),
-        primaryPhone: draft.primaryPhone.trim(),
-        siteAddress: draft.siteAddress.trim(),
-        additionalContacts: trimmedContacts,
-      },
-    });
+    setEditErrorMessage(null);
     setIsEditOpen(false);
     setDraft(null);
     setContactsDraft([]);
@@ -254,6 +346,9 @@ export function CustomerPage({
         </div>
       </header>
 
+      {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
+      {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
+
       {customer.additionalContacts.length > 0 ? (
         <section className="portal-surface-card portal-customer-contacts-section">
           <div className="portal-section-heading">
@@ -317,7 +412,9 @@ export function CustomerPage({
 
                   <div className="portal-customer-drawing-card-body">
                     <div className="portal-customer-drawing-card-head">
-                      <h3>{drawing.name}</h3>
+                      <div className="portal-customer-drawing-card-copy">
+                        <h3>{drawing.name}</h3>
+                      </div>
                       <div className="portal-customer-drawing-card-badges">
                         <span className="portal-customer-drawing-badge">v{drawing.versionNumber}</span>
                         {drawing.isArchived ? (
@@ -332,30 +429,32 @@ export function CustomerPage({
                       <span>by {drawing.updatedByDisplayName || "Unknown user"}</span>
                     </div>
 
-                    <div className="portal-customer-drawing-card-actions">
-                      <button type="button" className="portal-primary-button portal-compact-button" onClick={() => onOpenDrawing(drawing.id)}>
-                        Open editor
-                      </button>
-                      <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onOpenEstimate(drawing.id)}>
-                        Estimate
-                      </button>
-                    </div>
+                    <div className="portal-customer-drawing-card-footer">
+                      <div className="portal-customer-drawing-card-actions">
+                        <button type="button" className="portal-primary-button portal-compact-button" onClick={() => onOpenDrawing(drawing.id)}>
+                          Open editor
+                        </button>
+                        <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onOpenEstimate(drawing.id)}>
+                          Estimate
+                        </button>
+                      </div>
 
-                    <div className="portal-customer-drawing-card-utility">
-                      <button
-                        type="button"
-                        className="portal-text-button"
-                        onClick={() => void onToggleDrawingArchived(drawing.id, !drawing.isArchived)}
-                      >
-                        {drawing.isArchived ? "Unarchive" : "Archive"}
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-text-button"
-                        onClick={() => void handleToggleHistory(drawing.id)}
-                      >
-                        {isExpanded ? "Hide history" : "History"}
-                      </button>
+                      <div className="portal-customer-drawing-card-utility">
+                        <button
+                          type="button"
+                          className="portal-text-button"
+                          onClick={() => void onToggleDrawingArchived(drawing.id, !drawing.isArchived)}
+                        >
+                          {drawing.isArchived ? "Unarchive" : "Archive"}
+                        </button>
+                        <button
+                          type="button"
+                          className="portal-text-button"
+                          onClick={() => void handleToggleHistory(drawing.id)}
+                        >
+                          {isExpanded ? "Hide history" : "History"}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -396,6 +495,7 @@ export function CustomerPage({
               <h2>Edit customer profile</h2>
               <button type="button" className="portal-text-button" onClick={closeEditModal}>Close</button>
             </div>
+            {editErrorMessage ? <div className="portal-inline-message portal-inline-error">{editErrorMessage}</div> : null}
             <div className="portal-customer-edit-modal-body">
               <label className="portal-customer-edit-field">
                 <span>Name</span>
@@ -413,7 +513,7 @@ export function CustomerPage({
               </div>
               <label className="portal-customer-edit-field">
                 <span>Email</span>
-                <input value={draft?.primaryEmail ?? ""} onChange={(event) => updateDraftField("primaryEmail", event.target.value)} />
+                <input type="email" value={draft?.primaryEmail ?? ""} onChange={(event) => updateDraftField("primaryEmail", event.target.value)} />
               </label>
               <label className="portal-customer-edit-field">
                 <span>Site address</span>
@@ -426,7 +526,10 @@ export function CustomerPage({
                 <button
                   type="button"
                   className="portal-text-button"
-                  onClick={() => setContactsDraft((current) => [...current, { name: "", phone: "", email: "" }])}
+                  onClick={() => {
+                    setEditErrorMessage(null);
+                    setContactsDraft((current) => [...current, { name: "", phone: "", email: "" }]);
+                  }}
                 >
                   + Add contact
                 </button>
@@ -436,28 +539,35 @@ export function CustomerPage({
                   <input
                     placeholder="Name"
                     value={contact.name}
-                    onChange={(event) =>
-                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, name: event.target.value } : c)))
-                    }
+                    onChange={(event) => {
+                      setEditErrorMessage(null);
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, name: event.target.value } : c)));
+                    }}
                   />
                   <input
                     placeholder="Phone"
                     value={contact.phone}
-                    onChange={(event) =>
-                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, phone: event.target.value } : c)))
-                    }
+                    onChange={(event) => {
+                      setEditErrorMessage(null);
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, phone: event.target.value } : c)));
+                    }}
                   />
                   <input
+                    type="email"
                     placeholder="Email"
                     value={contact.email}
-                    onChange={(event) =>
-                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, email: event.target.value } : c)))
-                    }
+                    onChange={(event) => {
+                      setEditErrorMessage(null);
+                      setContactsDraft((current) => current.map((c, i) => (i === index ? { ...c, email: event.target.value } : c)));
+                    }}
                   />
                   <button
                     type="button"
                     className="portal-customer-edit-contact-remove"
-                    onClick={() => setContactsDraft((current) => current.filter((_, i) => i !== index))}
+                    onClick={() => {
+                      setEditErrorMessage(null);
+                      setContactsDraft((current) => current.filter((_, i) => i !== index));
+                    }}
                     aria-label="Remove contact"
                   >
                     ×

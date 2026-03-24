@@ -16,4 +16,18 @@ describe("apiErrors", () => {
     expect(extractApiErrorMessage("nope")).toBe("Unexpected request failure");
     expect(extractCurrentVersionNumber(new Error("Boom"))).toBeNull();
   });
+
+  it("includes flattened validation details from API errors", () => {
+    const error = new ApiClientError("Invalid customer payload", 400, {
+      formErrors: ["At least one customer field must be provided"],
+      fieldErrors: {
+        primaryEmail: ["Invalid email address"],
+        name: ["String must contain at least 1 character(s)"],
+      },
+    });
+
+    expect(extractApiErrorMessage(error)).toBe(
+      "Invalid customer payload: At least one customer field must be provided; primaryEmail: Invalid email address; name: String must contain at least 1 character(s)",
+    );
+  });
 });

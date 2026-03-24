@@ -15,7 +15,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "dev:web": "npm run dev --workspace @fence-estimator/web",
-    "dev:api": "npm --prefix packages/contracts run build && npm --prefix packages/geometry run build && npm --prefix packages/rules-engine run build && npm --prefix apps/api run dev",
+    "dev:api": "node scripts/kill-port.mjs 3001 && npm --prefix packages/contracts run build && npm --prefix packages/geometry run build && npm --prefix packages/rules-engine run build && npm --prefix apps/api run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

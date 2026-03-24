@@ -306,6 +306,8 @@ export function App() {
               drawings={portal.drawings}
               isSavingCustomer={portal.isSavingCustomer}
               isArchivingCustomerId={portal.isArchivingCustomerId}
+              errorMessage={portal.errorMessage}
+              noticeMessage={portal.noticeMessage}
               onSaveCustomer={portal.saveCustomer}
               onSetCustomerArchived={portal.setCustomerArchived}
               onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}

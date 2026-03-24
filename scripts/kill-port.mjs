@@ -51,6 +51,75 @@ async function getListeningPidsWindows(port) {
   return [...matches];
 }
 
+async function listWindowsProcesses() {
+  const { stdout } = await execFileAsync(
+    "powershell",
+    [
+      "-NoProfile",
+      "-Command",
+      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Depth 3",
+    ],
+    { windowsHide: true },
+  );
+
+  const parsed = JSON.parse(stdout || "[]");
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function resolveWindowsKillPid(processMap, processId) {
+  let candidatePid = processId;
+  let current = processMap.get(processId);
+
+  while (current) {
+    const parentProcessId = Number(current.ParentProcessId);
+    if (!Number.isInteger(parentProcessId) || parentProcessId <= 0) {
+      break;
+    }
+
+    const parent = processMap.get(parentProcessId);
+    if (!parent) {
+      break;
+    }
+
+    const parentName = String(parent.Name ?? "").toLowerCase();
+    if (parentName !== "node.exe") {
+      break;
+    }
+
+    candidatePid = parentProcessId;
+    current = parent;
+  }
+
+  return candidatePid;
+}
+
+function findWindowsProcessIdsByCommand(processes) {
+  const matches = new Set();
+
+  for (const processInfo of processes) {
+    const processId = Number(processInfo.ProcessId);
+    const commandLine = String(processInfo.CommandLine ?? "").toLowerCase();
+
+    if (!Number.isInteger(processId) || processId <= 0 || !commandLine) {
+      continue;
+    }
+
+    if (
+      commandLine.includes("tsx watch src/server.ts") ||
+      commandLine.includes("npm-cli.js\" --prefix apps/api run dev") ||
+      commandLine.includes("npm-cli.js --prefix apps/api run dev")
+    ) {
+      matches.add(processId);
+    }
+  }
+
+  return [...matches];
+}
+
+async function killWindowsProcessTree(processId) {
+  await execFileAsync("taskkill", ["/PID", String(processId), "/T", "/F"], { windowsHide: true });
+}
+
 async function getListeningPidsUnix(port) {
   try {
     const { stdout } = await execFileAsync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], { windowsHide: true });
@@ -85,6 +154,41 @@ async function main() {
   }
 
   const stopped = [];
+
+  if (platform() === "win32") {
+    const processes = await listWindowsProcesses();
+    const processMap = new Map(
+      processes
+        .map((processInfo) => [Number(processInfo.ProcessId), processInfo])
+        .filter(([processId]) => Number.isInteger(processId) && processId > 0),
+    );
+
+    const treeRootPids = [...new Set([
+      ...pids.map((processId) => resolveWindowsKillPid(processMap, processId)),
+      ...findWindowsProcessIdsByCommand(processes),
+    ])];
+
+    for (const processId of treeRootPids) {
+      try {
+        await killWindowsProcessTree(processId);
+        stopped.push(processId);
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === 128) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (stopped.length === 0) {
+      console.log(`No running process remained on port ${port}.`);
+      return;
+    }
+
+    console.log(`Stopped process tree${stopped.length === 1 ? "" : "s"} on port ${port}: ${stopped.join(", ")}`);
+    return;
+  }
 
   for (const processId of pids) {
     try {

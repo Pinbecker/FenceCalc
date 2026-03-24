@@ -67,6 +67,10 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
   const width = variant === "inline" ? 132 : 240;
   const height = variant === "inline" ? 92 : 156;
   const padding = variant === "inline" ? 12 : 18;
+  const frameInset = variant === "inline" ? 10 : 0;
+  const gridInset = variant === "inline" ? 16 : 14;
+  const gridWidth = width - gridInset * 2;
+  const gridHeight = height - gridInset * 2;
 
   if (!bounds) {
     return (
@@ -91,16 +95,26 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
       role="img"
       aria-label={`Drawing preview for ${label}`}
     >
-      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="20" fill="#f2ebe0" stroke="rgba(32, 47, 43, 0.08)" />
-      <rect x="10" y="10" width={width - 20} height={height - 20} rx="16" fill="#fcf7f0" />
+      <rect
+        x="0.5"
+        y="0.5"
+        width={width - 1}
+        height={height - 1}
+        rx={variant === "inline" ? "20" : "18"}
+        fill={variant === "inline" ? "#f2ebe0" : "#f5ede1"}
+        stroke={variant === "inline" ? "rgba(32, 47, 43, 0.08)" : "rgba(32, 47, 43, 0.05)"}
+      />
+      {frameInset > 0 ? (
+        <rect x={frameInset} y={frameInset} width={width - frameInset * 2} height={height - frameInset * 2} rx="16" fill="#fcf7f0" />
+      ) : null}
       <g opacity="0.6" stroke="#e4d7c5" strokeWidth="1">
         {Array.from({ length: 5 }, (_, index) => {
-          const y = 20 + index * ((height - 40) / 4);
-          return <line key={`h-${index}`} x1="16" y1={y} x2={width - 16} y2={y} />;
+          const y = gridInset + index * (gridHeight / 4);
+          return <line key={`h-${index}`} x1={gridInset} y1={y} x2={width - gridInset} y2={y} />;
         })}
         {Array.from({ length: 6 }, (_, index) => {
-          const x = 18 + index * ((width - 36) / 5);
-          return <line key={`v-${index}`} x1={x} y1="16" x2={x} y2={height - 16} />;
+          const x = gridInset + index * (gridWidth / 5);
+          return <line key={`v-${index}`} x1={x} y1={gridInset} x2={x} y2={height - gridInset} />;
         })}
       </g>
       <g strokeLinecap="round" strokeLinejoin="round">

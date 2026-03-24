@@ -60,6 +60,7 @@ const sampleCustomers: CustomerSummary[] = [
     primaryContactName: "",
     primaryEmail: "",
     primaryPhone: "",
+    additionalContacts: [],
     siteAddress: "",
     notes: "",
     isArchived: false,

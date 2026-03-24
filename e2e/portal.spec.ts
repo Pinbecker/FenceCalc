@@ -21,7 +21,7 @@ async function bootstrapOrLoginOwner(page: Page, companyName = "Acme Fencing") {
     await loginButton.click();
   }
 
-  await expect(page.getByRole("heading", { name: companyName })).toBeVisible();
+  await expect(page.getByRole("banner").getByText(companyName)).toBeVisible();
 }
 
 function pageHeading(page: Page, name: string) {
@@ -79,9 +79,8 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   await page.getByRole("button", { name: "Customers" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
 
-  const initialRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" });
-  await expect(initialRow).toContainText("Active");
-  await initialRow.getByRole("button", { name: "Open In Editor" }).click();
+  const initialCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
+  await initialCard.getByRole("button", { name: "Open editor" }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
 
   await page.getByLabel("Drawing Name").fill("Operations Yard v2");
@@ -92,35 +91,32 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
 
   await page.getByRole("button", { name: "Customers" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
-  const drawingRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard v2" });
-  await expect(drawingRow).toContainText("Active");
+  const drawingCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" });
 
-  await drawingRow.getByRole("button", { name: "Version History" }).click();
-  const versionOneRow = drawingRow.locator(".drawing-history-row").filter({ hasText: "Version 1" });
+  await drawingCard.getByRole("button", { name: "History" }).click();
+  const versionOneRow = drawingCard.locator(".portal-customer-version-row").filter({ hasText: "v1" });
   await versionOneRow.getByRole("button", { name: "Restore" }).click();
 
-  const restoredRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" });
-  await expect(restoredRow).toContainText("v3");
+  const restoredCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
+  await expect(restoredCard).toContainText("v3");
 
-  await restoredRow.getByRole("button", { name: "Archive" }).click();
-  await expect(page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" })).toHaveCount(0);
+  await restoredCard.getByRole("button", { name: "Archive" }).click();
+  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Archived" }).click();
-  const archivedRow = page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" });
-  await expect(archivedRow).toContainText("Archived");
+  const archivedCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
+  await expect(archivedCard).toContainText("Archived");
 
-  await archivedRow.getByRole("button", { name: "Unarchive" }).click();
+  await archivedCard.getByRole("button", { name: "Unarchive" }).click();
 
   await page.getByRole("button", { name: "Active" }).click();
-  await expect(page.locator(".drawing-library-row").filter({ hasText: "Operations Yard" })).toHaveCount(1);
+  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" })).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Back To Customers" }).click();
+  const portalNav = page.getByRole("navigation", { name: "Primary" });
+  await portalNav.getByRole("button", { name: "Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
-
-  const customerRow = page.locator(".portal-customer-row").filter({ hasText: "Operations Yard" });
-  await customerRow.click();
+  await page.locator(".customer-picker-row").filter({ hasText: "Operations Yard" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back To Customers" })).toBeVisible();
 });
 
 test("keeps dashboard, drawings, and customers usable on a mobile viewport", async ({ page }) => {
@@ -135,16 +131,15 @@ test("keeps dashboard, drawings, and customers usable on a mobile viewport", asy
   const primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /New Customer|Close Create Form/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New customer|Cancel/ })).toBeVisible();
 
-  await page.getByRole("button", { name: "New Customer" }).click();
-  await page.getByLabel("Name").fill("Mobile Yard");
-  await page.getByRole("button", { name: "Create Customer" }).click();
+  await page.getByRole("button", { name: "New customer" }).click();
+  await page.getByLabel("Customer name").fill("Mobile Yard");
+  await page.getByRole("button", { name: "Create customer" }).click();
   await expect(pageHeading(page, "Mobile Yard")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back To Customers" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Back To Customers" }).click();
-  const customerRow = page.locator(".portal-customer-row").filter({ hasText: "Mobile Yard" });
+  await primaryNav.getByRole("button", { name: "Customers" }).click();
+  const customerRow = page.locator(".customer-picker-row").filter({ hasText: "Mobile Yard" });
   await expect(customerRow).toBeVisible();
   await customerRow.click();
   await expect(pageHeading(page, "Mobile Yard")).toBeVisible();

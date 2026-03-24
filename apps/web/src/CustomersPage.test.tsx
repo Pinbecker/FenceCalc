@@ -13,6 +13,7 @@ const customers: CustomerSummary[] = [
     primaryContactName: "Jane Doe",
     primaryEmail: "jane@example.com",
     primaryPhone: "01234 567890",
+    additionalContacts: [],
     siteAddress: "1 Yard Road",
     notes: "Key holder on site",
     isArchived: false,
