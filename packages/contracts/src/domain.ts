@@ -313,6 +313,12 @@ export interface AuthSessionEnvelope {
   session: AuthSessionRecord;
 }
 
+export interface CustomerContact {
+  name: string;
+  phone: string;
+  email: string;
+}
+
 export interface CustomerRecord {
   id: string;
   companyId: string;
@@ -320,6 +326,7 @@ export interface CustomerRecord {
   primaryContactName: string;
   primaryEmail: string;
   primaryPhone: string;
+  additionalContacts: CustomerContact[];
   siteAddress: string;
   notes: string;
   isArchived: boolean;

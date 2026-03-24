@@ -788,6 +788,14 @@ export const customerIdSchema = z.string().trim().min(1).max(120);
 export const customerTextFieldSchema = z.string().trim().max(240);
 export const customerNotesSchema = z.string().trim().max(2_000);
 
+export const customerContactSchema = z.object({
+  name: z.string().trim().max(240).default(""),
+  phone: z.string().trim().max(40).default(""),
+  email: z.string().trim().email().max(320).or(z.literal("")).default("")
+});
+
+export const customerAdditionalContactsSchema = z.array(customerContactSchema).max(20).default([]);
+
 export const registerRequestSchema = z.object({
   companyName: companyNameSchema,
   displayName: displayNameSchema,
@@ -856,6 +864,7 @@ export const customerRecordSchema = z.object({
   primaryContactName: customerTextFieldSchema,
   primaryEmail: z.string().trim().email().max(320).or(z.literal("")),
   primaryPhone: z.string().trim().max(40),
+  additionalContacts: z.array(customerContactSchema).max(20),
   siteAddress: z.string().trim().max(400),
   notes: customerNotesSchema,
   isArchived: z.boolean(),
@@ -876,6 +885,7 @@ export const customerCreateRequestSchema = z.object({
   primaryContactName: customerTextFieldSchema.default(""),
   primaryEmail: z.string().trim().email().max(320).or(z.literal("")).default(""),
   primaryPhone: z.string().trim().max(40).default(""),
+  additionalContacts: customerAdditionalContactsSchema,
   siteAddress: z.string().trim().max(400).default(""),
   notes: customerNotesSchema.default("")
 });
@@ -886,6 +896,7 @@ export const customerUpdateRequestSchema = z
     primaryContactName: customerTextFieldSchema.optional(),
     primaryEmail: z.string().trim().email().max(320).or(z.literal("")).optional(),
     primaryPhone: z.string().trim().max(40).optional(),
+    additionalContacts: customerAdditionalContactsSchema.optional(),
     siteAddress: z.string().trim().max(400).optional(),
     notes: customerNotesSchema.optional()
   })
@@ -895,6 +906,7 @@ export const customerUpdateRequestSchema = z
       value.primaryContactName === undefined &&
       value.primaryEmail === undefined &&
       value.primaryPhone === undefined &&
+      value.additionalContacts === undefined &&
       value.siteAddress === undefined &&
       value.notes === undefined
     ) {

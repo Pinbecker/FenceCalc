@@ -5,6 +5,7 @@ import type {
   CompanyRecord,
   CompanyUserRecord,
   CompanyUserRole,
+  CustomerContact,
   CustomerRecord,
   CustomerSummary,
   DrawingCanvasViewport,
@@ -125,6 +126,7 @@ export interface CreateCustomerInput {
   primaryContactName: string;
   primaryEmail: string;
   primaryPhone: string;
+  additionalContacts: CustomerContact[];
   siteAddress: string;
   notes: string;
   createdByUserId: string;
@@ -140,6 +142,7 @@ export interface UpdateCustomerInput {
   primaryContactName: string;
   primaryEmail: string;
   primaryPhone: string;
+  additionalContacts: CustomerContact[];
   siteAddress: string;
   notes: string;
   updatedByUserId: string;

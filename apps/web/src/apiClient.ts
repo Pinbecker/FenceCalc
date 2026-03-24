@@ -3,6 +3,7 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerContact,
   CustomerRecord,
   CustomerSummary,
   DrawingCanvasViewport,
@@ -61,6 +62,7 @@ export interface CreateCustomerInput {
   primaryContactName: string;
   primaryEmail: string;
   primaryPhone: string;
+  additionalContacts?: CustomerContact[];
   siteAddress: string;
   notes: string;
 }
@@ -70,6 +72,7 @@ export interface UpdateCustomerInput {
   primaryContactName?: string;
   primaryEmail?: string;
   primaryPhone?: string;
+  additionalContacts?: CustomerContact[];
   siteAddress?: string;
   notes?: string;
 }

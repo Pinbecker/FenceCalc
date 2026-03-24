@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CustomerRecord } from "@fence-estimator/contracts";
+import type { CustomerContact, CustomerRecord } from "@fence-estimator/contracts";
 
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { writeAuditLog } from "../auditLogSupport.js";
@@ -26,6 +26,7 @@ interface CustomerCreateInput {
   primaryContactName: string;
   primaryEmail: string;
   primaryPhone: string;
+  additionalContacts: CustomerContact[];
   siteAddress: string;
   notes: string;
 }
@@ -35,6 +36,7 @@ interface CustomerUpdateInput {
   primaryContactName?: string | undefined;
   primaryEmail?: string | undefined;
   primaryPhone?: string | undefined;
+  additionalContacts?: CustomerContact[] | undefined;
   siteAddress?: string | undefined;
   notes?: string | undefined;
 }
@@ -61,6 +63,7 @@ export async function createCustomerForCompany(
       primaryContactName: input.primaryContactName,
       primaryEmail: input.primaryEmail,
       primaryPhone: input.primaryPhone,
+      additionalContacts: input.additionalContacts,
       siteAddress: input.siteAddress,
       notes: input.notes,
       createdByUserId: authenticated.user.id,
@@ -103,6 +106,7 @@ export async function updateCustomerForCompany(
       primaryContactName: input.primaryContactName ?? existing.primaryContactName,
       primaryEmail: input.primaryEmail ?? existing.primaryEmail,
       primaryPhone: input.primaryPhone ?? existing.primaryPhone,
+      additionalContacts: input.additionalContacts ?? existing.additionalContacts,
       siteAddress: input.siteAddress ?? existing.siteAddress,
       notes: input.notes ?? existing.notes,
       updatedByUserId: authenticated.user.id,

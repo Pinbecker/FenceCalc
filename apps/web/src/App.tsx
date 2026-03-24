@@ -304,12 +304,8 @@ export function App() {
               query={modalBaseQuery}
               customers={portal.customers}
               drawings={portal.drawings}
-              isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
               isSavingCustomer={portal.isSavingCustomer}
               isArchivingCustomerId={portal.isArchivingCustomerId}
-              onRefresh={async () => {
-                await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
-              }}
               onSaveCustomer={portal.saveCustomer}
               onSetCustomerArchived={portal.setCustomerArchived}
               onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}

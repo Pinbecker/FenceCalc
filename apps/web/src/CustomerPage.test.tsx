@@ -60,10 +60,8 @@ describe("CustomerPage", () => {
         query={{ customerId: "customer-1" }}
         customers={[customer]}
         drawings={drawings}
-        isLoading={false}
         isSavingCustomer={false}
         isArchivingCustomerId={null}
-        onRefresh={() => Promise.resolve()}
         onSaveCustomer={() => Promise.resolve({ id: "customer-1" })}
         onSetCustomerArchived={() => Promise.resolve(true)}
         onOpenDrawing={() => undefined}
@@ -78,10 +76,17 @@ describe("CustomerPage", () => {
 
     expect(html).toContain("Customer workspace");
     expect(html).toContain("Cleveland Land Services");
-    expect(html).toContain("Customer profile");
-    expect(html).toContain("Drawing history");
+    expect(html).toContain("Jane Doe");
+    expect(html).toContain("jane@example.com");
+    expect(html).toContain("01234 567890");
+    expect(html).toContain("1 Yard Road");
     expect(html).toContain("Front perimeter");
     expect(html).toContain("Open editor");
+    expect(html).toContain("Edit profile");
+    expect(html).toContain("v3");
+    expect(html).not.toContain("Back to customers");
+    expect(html).not.toContain("Refresh");
+    expect(html).not.toContain("Notes");
   });
 
   it("renders a safe empty state when the customer is missing", () => {
@@ -90,10 +95,8 @@ describe("CustomerPage", () => {
         query={{ customerId: "missing-customer" }}
         customers={[customer]}
         drawings={drawings}
-        isLoading={false}
         isSavingCustomer={false}
         isArchivingCustomerId={null}
-        onRefresh={() => Promise.resolve()}
         onSaveCustomer={() => Promise.resolve({ id: "customer-1" })}
         onSetCustomerArchived={() => Promise.resolve(true)}
         onOpenDrawing={() => undefined}
@@ -107,6 +110,6 @@ describe("CustomerPage", () => {
     );
 
     expect(html).toContain("Customer not found");
-    expect(html).toContain("Back to customers");
+    expect(html).toContain("Browse customers");
   });
 });

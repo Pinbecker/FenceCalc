@@ -37,6 +37,7 @@ export class SqliteCustomerStore {
               primary_contact_name,
               primary_email,
               primary_phone,
+              additional_contacts_json,
               site_address,
               notes,
               is_archived,
@@ -44,7 +45,7 @@ export class SqliteCustomerStore {
               updated_by_user_id,
               created_at_iso,
               updated_at_iso
-            ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -55,6 +56,7 @@ export class SqliteCustomerStore {
           input.primaryContactName,
           input.primaryEmail,
           input.primaryPhone,
+          JSON.stringify(input.additionalContacts),
           input.siteAddress,
           input.notes,
           input.createdByUserId,
@@ -141,6 +143,7 @@ export class SqliteCustomerStore {
               primary_contact_name = ?,
               primary_email = ?,
               primary_phone = ?,
+              additional_contacts_json = ?,
               site_address = ?,
               notes = ?,
               updated_by_user_id = ?,
@@ -154,6 +157,7 @@ export class SqliteCustomerStore {
           input.primaryContactName,
           input.primaryEmail,
           input.primaryPhone,
+          JSON.stringify(input.additionalContacts),
           input.siteAddress,
           input.notes,
           input.updatedByUserId,

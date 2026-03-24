@@ -73,6 +73,7 @@ export interface CustomerRow {
   primary_contact_name: string;
   primary_email: string;
   primary_phone: string;
+  additional_contacts_json: string;
   site_address: string;
   notes: string;
   is_archived: number;
@@ -197,6 +198,16 @@ export function toCompany(row: CompanyRow): CompanyRecord {
 }
 
 export function toCustomer(row: CustomerRow): CustomerRecord {
+  let additionalContacts: Array<{ name: string; phone: string; email: string }> = [];
+  try {
+    const parsed = JSON.parse(row.additional_contacts_json || "[]");
+    if (Array.isArray(parsed)) {
+      additionalContacts = parsed;
+    }
+  } catch {
+    additionalContacts = [];
+  }
+
   const parsed = customerRecordSchema.parse({
     id: row.id,
     companyId: row.company_id,
@@ -204,6 +215,7 @@ export function toCustomer(row: CustomerRow): CustomerRecord {
     primaryContactName: row.primary_contact_name,
     primaryEmail: row.primary_email,
     primaryPhone: row.primary_phone,
+    additionalContacts,
     siteAddress: row.site_address,
     notes: row.notes,
     isArchived: row.is_archived === 1,

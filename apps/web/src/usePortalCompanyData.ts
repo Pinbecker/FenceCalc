@@ -3,6 +3,7 @@ import type {
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
+  CustomerContact,
   CustomerRecord,
   CustomerSummary,
   DrawingSummary,
@@ -294,8 +295,8 @@ export function usePortalCompanyData({
   const createOrUpdateCustomer = useCallback(
     async (
       input:
-        | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
-        | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; siteAddress?: string; notes?: string } },
+        | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; additionalContacts?: CustomerContact[]; siteAddress: string; notes: string } }
+        | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; additionalContacts?: CustomerContact[]; siteAddress?: string; notes?: string } },
     ): Promise<CustomerRecord | null> => {
       if (!session) {
         return null;

@@ -209,6 +209,12 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE drawings ADD COLUMN customer_id TEXT;
         ALTER TABLE drawing_versions ADD COLUMN customer_id TEXT;
       `
+    },
+    {
+      name: "009_customer_contacts",
+      sql: `
+        ALTER TABLE customers ADD COLUMN additional_contacts_json TEXT NOT NULL DEFAULT '[]';
+      `
     }
   ] as const;
 
