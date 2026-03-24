@@ -349,11 +349,7 @@ export function App() {
         <CustomerPickerModal
           customers={portal.customers}
           drawings={portal.drawings}
-          isLoading={portal.isLoadingCustomers || portal.isLoadingDrawings}
           isSavingCustomer={portal.isSavingCustomer}
-          onRefresh={async () => {
-            await Promise.all([portal.refreshCustomers(), portal.refreshDrawings()]);
-          }}
           onClose={() => {
             const target = customerModalReturnRef.current;
             if (target.route !== "login" && !isCustomerModalRoute(target.route)) {

@@ -19,33 +19,22 @@ function formatTimestamp(value: string): string {
 
 export function DashboardPage({ session, customers, drawings, onNavigate }: DashboardPageProps) {
   const activeDrawings = drawings.filter((drawing) => !drawing.isArchived);
-  const archivedDrawings = drawings.filter((drawing) => drawing.isArchived);
   const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
   const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
-  const latestDrawing = [...activeDrawings].sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))[0] ?? null;
-  const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
   const activeCustomers = customers.filter((customer) => !customer.isArchived && customer.activeDrawingCount > 0);
-  const topCustomers = [...activeCustomers]
-    .map((customer) => {
-      const customerDrawings = activeDrawings
-        .filter((drawing) => drawing.customerId === customer.id)
-        .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
 
-      return {
-        customerId: customer.id,
-        customerName: customer.name,
-        drawingCount: customerDrawings.length,
-        latestDrawingName: customerDrawings[0]?.name ?? "",
-        updatedAtIso: customerDrawings[0]?.updatedAtIso ?? ""
-      };
-    })
-    .sort((left, right) => {
-      if (right.drawingCount !== left.drawingCount) {
-        return right.drawingCount - left.drawingCount;
-      }
-      return right.updatedAtIso.localeCompare(left.updatedAtIso);
-    })
-    .slice(0, 4);
+  const recentActivity = [...drawings]
+    .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
+    .slice(0, 8)
+    .map((drawing) => ({
+      id: drawing.id,
+      name: drawing.name,
+      customerName: drawing.customerName,
+      user: drawing.updatedByDisplayName || drawing.createdByDisplayName,
+      timestamp: drawing.updatedAtIso,
+      isArchived: drawing.isArchived,
+      isNew: drawing.createdAtIso === drawing.updatedAtIso
+    }));
 
   return (
     <section className="portal-page portal-dashboard-page">
@@ -86,7 +75,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
               <span className="portal-section-kicker">Work queue</span>
               <h2>{myDrawings.length > 0 ? "Recent drawings" : "Latest company drawings"}</h2>
             </div>
-            <button type="button" className="portal-text-button" onClick={() => onNavigate("customers")}>
+            <button type="button" className="portal-secondary-button" onClick={() => onNavigate("customers")}>
               Browse customers
             </button>
           </div>
@@ -103,127 +92,52 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
                   <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="inline" />
                 </div>
                 <div className="portal-dashboard-row-copy">
-                  <div className="portal-dashboard-row-head">
-                    <div className="portal-dashboard-row-title">
-                      <strong>{drawing.name}</strong>
-                      <p>{drawing.customerName}</p>
-                    </div>
-                    <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
+                  <div className="portal-dashboard-row-title">
+                    <strong>{drawing.name}</strong>
+                    <p>{drawing.customerName}</p>
                   </div>
                   <div className="portal-dashboard-row-meta">
                     <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                    <span>{drawing.segmentCount} segments</span>
-                    <span>{drawing.gateCount} gates</span>
                     <span>{drawing.updatedByDisplayName || "Unknown user"}</span>
                   </div>
                 </div>
-                <span className="portal-dashboard-row-cta">Open</span>
+                <div className="portal-dashboard-row-trail">
+                  <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
+                  <span className="portal-dashboard-row-cta">Open</span>
+                </div>
               </button>
             ))}
           </div>
         </section>
 
         <div className="portal-dashboard-side">
-          <section className="portal-surface-card portal-dashboard-customers">
+          <section className="portal-surface-card portal-dashboard-activity">
             <div className="portal-section-heading">
               <div>
-                <span className="portal-section-kicker">Customer activity</span>
-                <h2>Active customers</h2>
+                <span className="portal-section-kicker">Team activity</span>
+                <h2>Recent changes</h2>
               </div>
             </div>
-            {topCustomers.length === 0 ? <p className="portal-empty-copy">No active customer work yet.</p> : null}
-            <div className="portal-dashboard-customer-list">
-              {topCustomers.map((customer, index) => (
+            {recentActivity.length === 0 ? <p className="portal-empty-copy">No activity yet.</p> : null}
+            <div className="portal-dashboard-activity-list">
+              {recentActivity.map((entry) => (
                 <button
                   type="button"
-                  key={customer.customerName}
-                  className="portal-dashboard-customer-row"
-                  onClick={() => onNavigate("customer", { customerId: customer.customerId })}
+                  key={`${entry.id}-${entry.timestamp}`}
+                  className="portal-dashboard-activity-row"
+                  onClick={() => onNavigate("editor", { drawingId: entry.id })}
                 >
-                  <span className="portal-dashboard-rank">{String(index + 1).padStart(2, "0")}</span>
-                  <div className="portal-dashboard-customer-copy">
-                    <strong>{customer.customerName}</strong>
-                    <span>{customer.latestDrawingName || "No drawing activity yet"}</span>
+                  <div className="portal-dashboard-activity-copy">
+                    <strong>{entry.user}</strong>
+                    <span>
+                      {entry.isArchived ? "archived" : entry.isNew ? "created" : "updated"}{" "}
+                      <em>{entry.name}</em>
+                      {entry.customerName ? ` for ${entry.customerName}` : ""}
+                    </span>
                   </div>
-                  <div className="portal-dashboard-customer-meta">
-                    <strong>{customer.drawingCount} drawings</strong>
-                    <span>{customer.updatedAtIso ? formatTimestamp(customer.updatedAtIso) : "No activity"}</span>
-                  </div>
+                  <time className="portal-dashboard-activity-time">{formatTimestamp(entry.timestamp)}</time>
                 </button>
               ))}
-            </div>
-          </section>
-
-          <section className="portal-surface-card portal-dashboard-quick-actions">
-            <div className="portal-section-heading">
-              <div>
-                <span className="portal-section-kicker">Shortcuts</span>
-                <h2>Useful routes</h2>
-              </div>
-            </div>
-            <div className="portal-dashboard-action-grid">
-              <button
-                type="button"
-                className="portal-dashboard-action"
-                disabled={!topCustomers[0]}
-                onClick={() => {
-                  if (!topCustomers[0]) {
-                    return;
-                  }
-                  onNavigate("customer", { customerId: topCustomers[0].customerId });
-                }}
-              >
-                <strong>Top customer workspace</strong>
-                <span>
-                  {topCustomers[0]
-                    ? "Open the current highest activity customer workspace."
-                    : "Customer activity will appear here once drawings are linked."}
-                </span>
-              </button>
-              <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("editor")}>
-                <strong>Start new drawing</strong>
-                <span>Create a fresh drawing and attach it to a customer when ready.</span>
-              </button>
-              <button
-                type="button"
-                className="portal-dashboard-action"
-                disabled={!latestDrawing}
-                onClick={() => {
-                  if (!latestDrawing) {
-                    return;
-                  }
-                  onNavigate("editor", { drawingId: latestDrawing.id });
-                }}
-              >
-                <strong>Open latest drawing</strong>
-                <span>{latestDrawing ? "Jump straight into the most recently updated drawing." : "Create a drawing to unlock this shortcut."}</span>
-              </button>
-              <button
-                type="button"
-                className="portal-dashboard-action"
-                disabled={!latestDrawing}
-                onClick={() => {
-                  if (!latestDrawing) {
-                    return;
-                  }
-                  onNavigate("estimate", { drawingId: latestDrawing.id });
-                }}
-              >
-                <strong>Open latest estimate</strong>
-                <span>{latestDrawing ? "Review costs and totals for the latest saved drawing." : "Create a drawing to unlock estimate review."}</span>
-              </button>
-              {canManagePricing ? (
-                <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("pricing")}>
-                  <strong>Pricing configuration</strong>
-                  <span>Review labour and material rates used in every estimate.</span>
-                </button>
-              ) : null}
-              {(session.user.role === "OWNER" || session.user.role === "ADMIN") ? (
-                <button type="button" className="portal-dashboard-action" onClick={() => onNavigate("admin")}>
-                  <strong>User administration</strong>
-                  <span>Manage access and resolve user account issues.</span>
-                </button>
-              ) : null}
             </div>
           </section>
         </div>

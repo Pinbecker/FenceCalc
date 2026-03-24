@@ -98,8 +98,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Workspace overview");
     expect(html).toContain("Welcome, Jane Doe");
     expect(html).toContain("Recent drawings");
-    expect(html).toContain("Active customers");
-    expect(html).toContain("Useful routes");
+    expect(html).toContain("Recent changes");
     expect(html).toContain("Jane Doe");
     expect(html).toContain("Front perimeter");
     expect(html).toContain("Cleveland Land Services");

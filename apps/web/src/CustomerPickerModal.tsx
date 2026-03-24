@@ -2,16 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
-type CustomerFilter = "ACTIVE" | "ARCHIVED" | "ALL";
 type CustomerSort = "RECENT" | "NAME";
 
 interface CustomerDraft {
   name: string;
-  primaryContactName: string;
-  primaryEmail: string;
-  primaryPhone: string;
   siteAddress: string;
-  notes: string;
 }
 
 interface CustomerDrawingActivity {
@@ -21,22 +16,16 @@ interface CustomerDrawingActivity {
 interface CustomerPickerModalProps {
   customers: CustomerSummary[];
   drawings: DrawingSummary[];
-  isLoading: boolean;
   isSavingCustomer: boolean;
   onClose(this: void): void;
-  onRefresh(this: void): Promise<void>;
   onOpenCustomer(this: void, customerId: string): void;
-  onCreateCustomer(this: void, customer: CustomerDraft): Promise<{ id: string } | null>;
+  onCreateCustomer(this: void, customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string }): Promise<{ id: string } | null>;
 }
 
 function buildEmptyDraft(): CustomerDraft {
   return {
     name: "",
-    primaryContactName: "",
-    primaryEmail: "",
-    primaryPhone: "",
     siteAddress: "",
-    notes: "",
   };
 }
 
@@ -54,21 +43,14 @@ function sortStrings(left: string, right: string): number {
   return left.localeCompare(right, "en-GB", { sensitivity: "base" });
 }
 
-function formatPrimaryContact(customer: CustomerSummary): string {
-  return customer.primaryContactName || customer.primaryEmail || customer.primaryPhone || "No contact details";
-}
-
 export function CustomerPickerModal({
   customers,
   drawings,
-  isLoading,
   isSavingCustomer,
   onClose,
-  onRefresh,
   onOpenCustomer,
   onCreateCustomer,
 }: CustomerPickerModalProps) {
-  const [filter, setFilter] = useState<CustomerFilter>("ACTIVE");
   const [sortBy, setSortBy] = useState<CustomerSort>("RECENT");
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -99,7 +81,7 @@ export function CustomerPickerModal({
   const drawingActivityByCustomerId = useMemo(() => {
     const byCustomerId = new Map<string, CustomerDrawingActivity>();
     for (const drawing of drawings) {
-      if (!drawing.customerId) {
+      if (!drawing.customerId || drawing.isArchived) {
         continue;
       }
       const current = byCustomerId.get(drawing.customerId);
@@ -116,27 +98,12 @@ export function CustomerPickerModal({
     const normalizedSearch = search.trim().toLowerCase();
 
     return customers
-      .filter((customer) => {
-        if (filter === "ACTIVE") {
-          return !customer.isArchived;
-        }
-        if (filter === "ARCHIVED") {
-          return customer.isArchived;
-        }
-        return true;
-      })
+      .filter((customer) => !customer.isArchived)
       .filter((customer) => {
         if (!normalizedSearch) {
           return true;
         }
-        return [
-          customer.name,
-          customer.primaryContactName,
-          customer.primaryEmail,
-          customer.primaryPhone,
-          customer.siteAddress,
-          customer.notes,
-        ].some((value) => value.toLowerCase().includes(normalizedSearch));
+        return [customer.name, customer.siteAddress].some((value) => value.toLowerCase().includes(normalizedSearch));
       })
       .slice()
       .sort((left, right) => {
@@ -151,16 +118,16 @@ export function CustomerPickerModal({
         }
         return sortStrings(left.name, right.name);
       });
-  }, [customers, drawingActivityByCustomerId, filter, search, sortBy]);
+  }, [customers, drawingActivityByCustomerId, search, sortBy]);
 
   const handleCreateCustomer = async () => {
     const result = await onCreateCustomer({
       name: draft.name.trim(),
-      primaryContactName: draft.primaryContactName.trim(),
-      primaryEmail: draft.primaryEmail.trim(),
-      primaryPhone: draft.primaryPhone.trim(),
+      primaryContactName: "",
+      primaryEmail: "",
+      primaryPhone: "",
       siteAddress: draft.siteAddress.trim(),
-      notes: draft.notes.trim(),
+      notes: "",
     });
 
     if (!result) {
@@ -185,71 +152,39 @@ export function CustomerPickerModal({
           <div>
             <span className="portal-eyebrow">Customers</span>
             <h2>Customer directory</h2>
-            <p>Select any customer to open their workspace, or create a new customer without leaving your current page.</p>
           </div>
-          <div className="customer-picker-header-actions">
-            <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>
-              {isLoading ? "Refreshing..." : "Refresh"}
-            </button>
-            <button
-              type="button"
-              className="portal-secondary-button"
-              onClick={() => {
-                if (isCreating) {
-                  setIsCreating(false);
-                  return;
-                }
-                setDraft(buildEmptyDraft());
-                setIsCreating(true);
-              }}
-            >
-              {isCreating ? "Cancel create" : "New customer"}
-            </button>
-            <button type="button" className="portal-primary-button" onClick={onClose}>
-              Close
-            </button>
-          </div>
+          <button type="button" className="customer-picker-close" onClick={onClose} aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
         </header>
 
         <section className="customer-picker-controls">
           <div className="customer-picker-control-row">
-            <div className="portal-filter-row" role="tablist" aria-label="Customer status filter">
-              {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerFilter[]).map((option) => (
-                <button
-                  type="button"
-                  key={option}
-                  className={filter === option ? "is-active" : undefined}
-                  onClick={() => setFilter(option)}
-                >
-                  {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
-                </button>
-              ))}
-            </div>
-
+            <label className="drawing-library-customer-filter customer-picker-search">
+              <span>Search</span>
+              <div className="customer-picker-search-row">
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by name or site address"
+                />
+                {search.trim().length > 0 ? (
+                  <button type="button" className="customer-picker-search-clear" onClick={() => setSearch("")} aria-label="Clear search">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                  </button>
+                ) : null}
+              </div>
+            </label>
             <label className="drawing-library-customer-filter customer-picker-sort">
-              <span>Sort by</span>
+              <span>Sort</span>
               <select value={sortBy} onChange={(event) => setSortBy(event.target.value as CustomerSort)}>
                 <option value="RECENT">Recent activity</option>
                 <option value="NAME">Name (A-Z)</option>
               </select>
             </label>
           </div>
-
-          <label className="drawing-library-customer-filter customer-picker-search">
-            <span>Search customers</span>
-            <div className="customer-picker-search-row">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by customer, contact, email, phone, or site"
-              />
-              {search.trim().length > 0 ? (
-                <button type="button" className="portal-text-button" onClick={() => setSearch("")}>
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </label>
         </section>
 
         {isCreating ? (
@@ -257,33 +192,20 @@ export function CustomerPickerModal({
             <h3>New customer</h3>
             <div className="customer-picker-create-grid">
               <label className="drawing-library-customer-filter">
-                <span>Name</span>
-                <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
-              </label>
-              <label className="drawing-library-customer-filter">
-                <span>Primary contact</span>
+                <span>Customer name</span>
                 <input
-                  value={draft.primaryContactName}
-                  onChange={(event) => setDraft((current) => ({ ...current, primaryContactName: event.target.value }))}
+                  value={draft.name}
+                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="e.g. Smith Residential"
                 />
               </label>
               <label className="drawing-library-customer-filter">
-                <span>Email</span>
-                <input
-                  value={draft.primaryEmail}
-                  onChange={(event) => setDraft((current) => ({ ...current, primaryEmail: event.target.value }))}
-                />
-              </label>
-              <label className="drawing-library-customer-filter">
-                <span>Phone</span>
-                <input
-                  value={draft.primaryPhone}
-                  onChange={(event) => setDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
-                />
-              </label>
-              <label className="drawing-library-customer-filter is-wide">
                 <span>Site address</span>
-                <input value={draft.siteAddress} onChange={(event) => setDraft((current) => ({ ...current, siteAddress: event.target.value }))} />
+                <input
+                  value={draft.siteAddress}
+                  onChange={(event) => setDraft((current) => ({ ...current, siteAddress: event.target.value }))}
+                  placeholder="Optional"
+                />
               </label>
             </div>
             <div className="customer-picker-create-actions">
@@ -302,12 +224,26 @@ export function CustomerPickerModal({
           </section>
         ) : null}
 
+        <div className="customer-picker-toolbar">
+          <span className="customer-picker-count">{visibleCustomers.length} customers</span>
+          <button
+            type="button"
+            className="portal-primary-button"
+            onClick={() => {
+              setDraft(buildEmptyDraft());
+              setIsCreating(true);
+            }}
+          >
+            New customer
+          </button>
+        </div>
+
         <div className="customer-picker-results-scroll">
           <div className="customer-picker-list">
             {visibleCustomers.length === 0 ? (
               <div className="portal-empty-state customer-picker-empty">
-                <h2>No customers in this view</h2>
-                <p>Adjust filters or search terms to bring customer records back into view.</p>
+                <h2>No customers found</h2>
+                <p>{search.trim() ? "Try a different search term." : "Create your first customer to get started."}</p>
               </div>
             ) : null}
 
@@ -318,12 +254,10 @@ export function CustomerPickerModal({
                   <div className="customer-picker-row-main">
                     <div className="customer-picker-row-title">
                       <strong>{customer.name}</strong>
-                      <p>{customer.siteAddress || "No site address recorded"}</p>
+                      {customer.siteAddress ? <p>{customer.siteAddress}</p> : null}
                     </div>
                     <div className="customer-picker-row-meta">
-                      <span>Contact: {formatPrimaryContact(customer)}</span>
-                      <span>{customer.activeDrawingCount} active drawings</span>
-                      <span>{customer.archivedDrawingCount} archived drawings</span>
+                      <span>{customer.activeDrawingCount} active drawing{customer.activeDrawingCount !== 1 ? "s" : ""}</span>
                       <span>
                         {latestDrawing
                           ? `Updated ${formatTimestamp(latestDrawing.latestUpdatedAtIso)}`
@@ -331,6 +265,7 @@ export function CustomerPickerModal({
                       </span>
                     </div>
                   </div>
+                  <span className="customer-picker-row-arrow" aria-hidden="true">&rsaquo;</span>
                 </button>
               );
             })}

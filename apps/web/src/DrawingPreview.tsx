@@ -109,8 +109,8 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
           const end = projectPoint(segment.end);
           return (
             <g key={segment.id}>
-              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="rgba(39, 54, 50, 0.12)" strokeWidth="8" />
-              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={getSegmentColor(segment.spec)} strokeWidth="5" />
+              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="rgba(39, 54, 50, 0.10)" strokeWidth="4" />
+              <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={getSegmentColor(segment.spec)} strokeWidth="2.5" />
             </g>
           );
         })}
@@ -134,8 +134,8 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
 
           return (
             <g key={gate.id}>
-              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#fffaf3" strokeWidth="8" />
-              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#b35c3c" strokeWidth="4" />
+              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#fffaf3" strokeWidth="4" />
+              <line x1={gateStart.x} y1={gateStart.y} x2={gateEnd.x} y2={gateEnd.y} stroke="#b35c3c" strokeWidth="2" />
             </g>
           );
         })}
@@ -192,8 +192,8 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
       <g>
         {Array.from(nodes.entries()).map(([key, point]) => (
           <g key={key}>
-            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "3.5" : "4.5"} fill="#fffaf3" />
-            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "2" : "2.5"} fill="#31433f" />
+            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "2.5" : "3.5"} fill="#fffaf3" />
+            <circle cx={point.x} cy={point.y} r={variant === "inline" ? "1.5" : "2"} fill="#31433f" />
           </g>
         ))}
       </g>
