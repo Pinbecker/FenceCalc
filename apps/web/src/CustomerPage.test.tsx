@@ -90,10 +90,7 @@ describe("CustomerPage", () => {
     expect(html).toContain("01234 567890");
     expect(html).toContain("1 Yard Road");
     expect(html).toContain("Front perimeter");
-    expect(html).toContain("Open editor");
-    expect(html).toContain("Estimate");
     expect(html).toContain("Archive");
-    expect(html).toContain("History");
     expect(html).toContain("Edit profile");
     expect(html).toContain("v3");
     expect(html).toContain("Additional contacts");
@@ -133,7 +130,7 @@ describe("CustomerPage", () => {
     expect(html).toContain("Browse customers");
   });
 
-  it("renders inline status messages when provided", () => {
+  it("does not render inline status messages", () => {
     const html = renderToStaticMarkup(
       <CustomerPage
         query={{ customerId: "customer-1" }}
@@ -156,8 +153,8 @@ describe("CustomerPage", () => {
       />
     );
 
-    expect(html).toContain("Customer name already exists");
-    expect(html).toContain("Updated customer Cleveland Land Services");
+    expect(html).not.toContain("Customer name already exists");
+    expect(html).not.toContain("Updated customer Cleveland Land Services");
   });
 
   it("keeps customer edits available when the save request fails", async () => {

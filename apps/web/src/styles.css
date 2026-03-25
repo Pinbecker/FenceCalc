@@ -5934,7 +5934,7 @@ button:disabled {
 
 .editor-document-fields {
   display: grid;
-  grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 1fr) auto;
   gap: 10px;
 }
 
@@ -7388,6 +7388,7 @@ button:disabled {
 .portal-customer-drawing-card-preview {
   padding: 14px 14px 0;
   background: linear-gradient(180deg, rgba(247, 241, 233, 0.96), rgba(255, 252, 247, 0));
+  cursor: pointer;
 }
 
 .portal-customer-drawing-card-preview .drawing-preview {
@@ -7414,6 +7415,13 @@ button:disabled {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 120ms ease;
+}
+
+.portal-customer-drawing-card-head:hover {
+  background: rgba(171, 94, 61, 0.05);
 }
 
 .portal-customer-drawing-card-copy {
@@ -7465,31 +7473,14 @@ button:disabled {
 }
 
 .portal-customer-drawing-card-footer {
-  display: grid;
-  gap: 8px;
   margin-top: auto;
-}
-
-.portal-customer-drawing-card-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-
-.portal-customer-drawing-card-actions .portal-compact-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-width: 0;
-  text-align: center;
 }
 
 .portal-customer-drawing-card-utility {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 6px 10px;
+  align-items: center;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(90, 112, 103, 0.08);
 }
@@ -7513,6 +7504,27 @@ button:disabled {
 .portal-customer-drawing-card-utility .portal-text-button:hover {
   background: rgba(179, 92, 60, 0.1);
   border-color: rgba(179, 92, 60, 0.18);
+}
+
+.portal-customer-drawing-status-select {
+  display: inline-flex;
+  align-items: center;
+}
+
+.portal-customer-drawing-status-select select {
+  padding: 4px 8px;
+  border: 1px solid rgba(103, 115, 103, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.9);
+  color: #294f45;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portal-customer-drawing-status-select select:hover {
+  border-color: rgba(42, 83, 72, 0.28);
+  background: rgba(42, 83, 72, 0.06);
 }
 
 @media (max-width: 1480px) {

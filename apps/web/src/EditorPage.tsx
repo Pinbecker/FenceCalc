@@ -2,6 +2,7 @@ import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import type Konva from "konva";
 import {
   type BasketballPostPlacement,
+  type DrawingStatus,
   type FloodlightColumnPlacement,
   type GatePlacement,
   type GoalUnitPlacement,
@@ -13,6 +14,8 @@ import {
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
 
+import { setDrawingStatus } from "./apiClient";
+import { extractApiErrorMessage } from "./apiErrors";
 import { EditorCanvasStage } from "./EditorCanvasStage";
 import { EditorCanvasControls } from "./EditorCanvasControls";
 import { EditorLengthEditor } from "./EditorLengthEditor";
@@ -687,6 +690,26 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const canManagePricing = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
+
+  const currentDrawingSummary = workspace.currentDrawingId
+    ? workspace.drawings.find((d) => d.id === workspace.currentDrawingId) ?? null
+    : null;
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
+
+  const handleChangeDrawingStatus = useCallback(async (nextStatus: DrawingStatus) => {
+    if (!workspace.currentDrawingId || !currentDrawingSummary) {
+      return;
+    }
+    setIsChangingStatus(true);
+    try {
+      await setDrawingStatus(workspace.currentDrawingId, nextStatus, currentDrawingSummary.versionNumber);
+      await workspace.refreshDrawings();
+    } catch (error) {
+      window.alert(extractApiErrorMessage(error));
+    } finally {
+      setIsChangingStatus(false);
+    }
+  }, [currentDrawingSummary, workspace.currentDrawingId, workspace.refreshDrawings]);
   const interactionLabel =
     shellState.interactionMode === "DRAW"
       ? "Draw"
@@ -780,9 +803,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         isDirty={workspace.isDirty}
         isSavingCustomer={workspace.isSavingCustomer}
         isSavingDrawing={workspace.isSavingDrawing}
+        currentDrawingStatus={currentDrawingSummary?.status ?? null}
+        isChangingStatus={isChangingStatus}
         canManagePricing={canManagePricing}
         canManageAdmin={canManageAdmin}
         onSetCurrentDrawingName={workspace.setCurrentDrawingName}
+        onChangeDrawingStatus={(status) => void handleChangeDrawingStatus(status)}
         onSetCurrentCustomerId={workspace.setCurrentCustomerId}
         onSaveCustomer={workspace.saveCustomer}
         onSaveDrawing={() => {

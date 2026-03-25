@@ -386,9 +386,6 @@ export function CustomerPage({
         </div>
       </header>
 
-      {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
-      {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
-
       {customer.additionalContacts.length > 0 ? (
         <section className="portal-surface-card portal-customer-contacts-section">
           <div className="portal-section-heading">
@@ -437,21 +434,29 @@ export function CustomerPage({
         ) : (
           <div className="portal-customer-drawing-grid">
             {customerDrawings.map((drawing) => {
-              const versions = versionsByDrawingId[drawing.id] ?? [];
-              const isLoadingVersions = isLoadingVersionsForId === drawing.id;
-              const isExpanded = expandedDrawingId === drawing.id;
-
               return (
                 <article
                   key={drawing.id}
-                  className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}${isExpanded ? " is-expanded" : ""}`}
+                  className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}`}
                 >
-                  <div className="portal-customer-drawing-card-preview">
+                  <div
+                    className="portal-customer-drawing-card-preview"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenDrawing(drawing.id)}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpenDrawing(drawing.id); }}
+                  >
                     <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
                   </div>
 
                   <div className="portal-customer-drawing-card-body">
-                    <div className="portal-customer-drawing-card-head">
+                    <div
+                      className="portal-customer-drawing-card-head"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onOpenDrawing(drawing.id)}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpenDrawing(drawing.id); }}
+                    >
                       <div className="portal-customer-drawing-card-copy">
                         <h3>{drawing.name}</h3>
                       </div>
@@ -469,21 +474,11 @@ export function CustomerPage({
                     <div className="portal-customer-drawing-card-meta">
                       <span>{drawing.segmentCount} segments · {drawing.gateCount} gates</span>
                       <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                      <span>by {drawing.updatedByDisplayName || "Unknown user"}</span>
                     </div>
 
                     <div className="portal-customer-drawing-card-footer">
-                      <div className="portal-customer-drawing-card-actions">
-                        <button type="button" className="portal-primary-button portal-compact-button" onClick={() => onOpenDrawing(drawing.id)}>
-                          Open editor
-                        </button>
-                        <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onOpenEstimate(drawing.id)}>
-                          Estimate
-                        </button>
-                      </div>
-
                       <div className="portal-customer-drawing-card-utility">
-                        <label className="portal-customer-drawing-status-select">
+                        <label className="portal-customer-drawing-status-select" onClick={(event) => event.stopPropagation()}>
                           <span className="sr-only">Job status</span>
                           <select
                             value={drawing.status}
@@ -505,13 +500,6 @@ export function CustomerPage({
                         >
                           {drawing.isArchived ? "Unarchive" : "Archive"}
                         </button>
-                        <button
-                          type="button"
-                          className="portal-text-button"
-                          onClick={() => void handleToggleHistory(drawing.id)}
-                        >
-                          {isExpanded ? "Hide history" : "History"}
-                        </button>
                         {isAdmin && drawing.isArchived ? (
                           <button
                             type="button"
@@ -524,30 +512,6 @@ export function CustomerPage({
                       </div>
                     </div>
                   </div>
-
-                  {isExpanded ? (
-                    <div className="portal-customer-drawing-card-history">
-                      {isLoadingVersions ? <p className="portal-empty-copy">Loading...</p> : null}
-                      {versions.length === 0 && !isLoadingVersions ? (
-                        <p className="portal-empty-copy">No previous versions.</p>
-                      ) : null}
-                      {versions.map((version) => (
-                        <div key={version.id} className="portal-customer-version-row">
-                          <div>
-                            <strong>v{version.versionNumber}</strong>
-                            <span>{formatTimestamp(version.createdAtIso)}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="portal-text-button"
-                            onClick={() => void onRestoreVersion(drawing.id, version.versionNumber)}
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                 </article>
               );
             })}

@@ -26,12 +26,15 @@ function formatTimestamp(value: string): string {
 }
 
 export function DashboardPage({ session, customers, drawings, onNavigate }: DashboardPageProps) {
-  const activeDrawings = drawings.filter((drawing) => !drawing.isArchived);
-  const myDrawings = activeDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
-  const recent = (myDrawings.length > 0 ? myDrawings : activeDrawings).slice(0, 4);
+  const archivedCustomerIds = new Set(customers.filter((c) => c.isArchived).map((c) => c.id));
+  const visibleDrawings = drawings.filter(
+    (drawing) => !drawing.isArchived && (!drawing.customerId || !archivedCustomerIds.has(drawing.customerId))
+  );
+  const myDrawings = visibleDrawings.filter((drawing) => drawing.contributorUserIds.includes(session.user.id));
+  const recent = (myDrawings.length > 0 ? myDrawings : visibleDrawings).slice(0, 4);
   const activeCustomers = customers.filter((customer) => !customer.isArchived && customer.activeDrawingCount > 0);
 
-  const recentActivity = [...drawings]
+  const recentActivity = [...visibleDrawings]
     .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
     .slice(0, 8)
     .map((drawing) => ({
@@ -40,7 +43,6 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
       customerName: drawing.customerName,
       user: drawing.updatedByDisplayName || drawing.createdByDisplayName,
       timestamp: drawing.updatedAtIso,
-      isArchived: drawing.isArchived,
       isNew: drawing.createdAtIso === drawing.updatedAtIso
     }));
 
@@ -57,7 +59,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
           <div className="portal-dashboard-stat-bar" role="group" aria-label="Workspace summary">
             <div className="portal-dashboard-stat">
               <span>Active library</span>
-              <strong>{activeDrawings.length}</strong>
+              <strong>{visibleDrawings.length}</strong>
             </div>
             <div className="portal-dashboard-stat">
               <span>My drawings</span>
@@ -141,7 +143,7 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
                   <div className="portal-dashboard-activity-copy">
                     <strong>{entry.user}</strong>
                     <span>
-                      {entry.isArchived ? "archived" : entry.isNew ? "created" : "updated"}{" "}
+                      {entry.isNew ? "created" : "updated"}{" "}
                       <em>{entry.name}</em>
                       {entry.customerName ? ` for ${entry.customerName}` : ""}
                     </span>

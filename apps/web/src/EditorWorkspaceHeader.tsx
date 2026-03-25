@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 
-import type { AuthSessionEnvelope, CustomerSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingStatus } from "@fence-estimator/contracts";
+import { DRAWING_STATUSES } from "@fence-estimator/contracts";
+
+const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
+};
 
 interface EditorWorkspaceHeaderProps {
   session: AuthSessionEnvelope | null;
@@ -13,9 +22,12 @@ interface EditorWorkspaceHeaderProps {
   isDirty: boolean;
   isSavingCustomer: boolean;
   isSavingDrawing: boolean;
+  currentDrawingStatus: DrawingStatus | null;
+  isChangingStatus: boolean;
   canManagePricing: boolean;
   canManageAdmin: boolean;
   onSetCurrentDrawingName: (name: string) => void;
+  onChangeDrawingStatus: (status: DrawingStatus) => void;
   onSetCurrentCustomerId: (customerId: string | null) => void;
   onSaveCustomer: (input: {
     name: string;
@@ -48,9 +60,12 @@ export function EditorWorkspaceHeader({
   isDirty,
   isSavingCustomer,
   isSavingDrawing,
+  currentDrawingStatus,
+  isChangingStatus,
   canManagePricing,
   canManageAdmin,
   onSetCurrentDrawingName,
+  onChangeDrawingStatus,
   onSetCurrentCustomerId,
   onSaveCustomer,
   onSaveDrawing,
@@ -200,6 +215,22 @@ export function EditorWorkspaceHeader({
                   onChange={(event) => onSetCurrentDrawingName(event.target.value)}
                 />
               </label>
+              {currentDrawingId && currentDrawingStatus ? (
+                <label className="editor-document-name">
+                  <span>Job Status</span>
+                  <select
+                    value={currentDrawingStatus}
+                    disabled={isChangingStatus}
+                    onChange={(event) => onChangeDrawingStatus(event.target.value as DrawingStatus)}
+                  >
+                    {DRAWING_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {JOB_STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
             {isCreatingCustomer ? (
               <div className="editor-customer-create">
