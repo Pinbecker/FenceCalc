@@ -333,10 +333,10 @@ export function resolveBasketballFeaturePlacements(
         return [];
       }
       const axes = getSegmentAxes(segment);
-      const hostPostIndex = resolveIntermediatePostIndex(segment, placement.offsetMm);
-      if (!axes || hostPostIndex === null) {
+      if (!axes) {
         return [];
       }
+      const hostPostIndex = resolveIntermediatePostIndex(segment, placement.offsetMm);
       const point = interpolateAlongSegment(segment, placement.offsetMm);
       const type = placement.type ?? "DEDICATED_POST";
       const mountingMode = placement.mountingMode ?? "PROJECTING_ARM";
@@ -363,7 +363,7 @@ export function resolveBasketballFeaturePlacements(
         armLengthMm: placement.armLengthMm ?? null,
         pairedFeatureId: placement.pairedFeatureId ?? null,
         replacesIntermediatePost,
-        hostPostIndex,
+        hostPostIndex: hostPostIndex ?? 0,
         renderHeightMm: Math.max(BASKETBALL_POST_RENDER_HEIGHT_MM, fenceHeightMm),
         placement
       } satisfies ResolvedBasketballFeaturePlacement];

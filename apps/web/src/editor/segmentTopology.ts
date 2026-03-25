@@ -7,7 +7,6 @@ import type {
   PointMm
 } from "@fence-estimator/contracts";
 import { distanceMm } from "@fence-estimator/geometry";
-import { getSegmentIntermediatePostOffsets } from "@fence-estimator/rules-engine";
 
 import { MIN_SEGMENT_MM, quantize } from "./constants.js";
 import {
@@ -197,11 +196,7 @@ export function resolveBasketballPostPlacements(
     if (!tangent) {
       continue;
     }
-    const validOffsetsMm = getSegmentIntermediatePostOffsets(segment);
-    const offsetMm = validOffsetsMm.find((candidateOffsetMm) => Math.abs(candidateOffsetMm - placement.offsetMm) <= 25);
-    if (offsetMm === undefined) {
-      continue;
-    }
+    const offsetMm = Math.max(0, Math.min(segmentLengthMm, placement.offsetMm));
     const point = interpolateAlongSegment(segment, offsetMm);
     const leftNormal = { x: -tangent.y, y: tangent.x };
     const normal =
@@ -225,7 +220,7 @@ export function resolveBasketballPostPlacements(
       armLengthMm: placement.armLengthMm ?? (type === "DEDICATED_POST" ? 1800 : null),
       pairedFeatureId: placement.pairedFeatureId ?? null,
       replacesIntermediatePost: type === "DEDICATED_POST" && (placement.replacesIntermediatePost ?? true),
-      hostPostIndex: validOffsetsMm.findIndex((candidateOffsetMm) => candidateOffsetMm === offsetMm) + 1 || null,
+      hostPostIndex: null,
       spec: segment.spec,
       placement: {
         ...placement,

@@ -10,7 +10,7 @@ import type {
 } from "@fence-estimator/contracts";
 import { distanceMm, snapPointToAngle } from "@fence-estimator/geometry";
 import { PITCH_DIVIDER_MAX_SPAN_MM, PITCH_DIVIDER_SUPPORT_INTERVAL_MM } from "@fence-estimator/contracts";
-import { getSegmentIntermediatePostOffsets, getSegmentPostOffsets } from "@fence-estimator/rules-engine";
+import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
 
 import {
   AXIS_GUIDE_SNAP_PX,
@@ -102,7 +102,6 @@ interface EditorInteractionPreviewsOptions {
   }>;
   drawChainStart: PointMm | null;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
-  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   activeGateDragId?: string | null;
   activeBasketballPostDragId?: string | null;
   activeFloodlightColumnDragId?: string | null;
@@ -265,7 +264,6 @@ export function useEditorInteractionPreviews({
   placedGoalUnitVisuals = [],
   drawChainStart,
   pendingPitchDividerStart = null,
-  pendingSideNettingStart = null,
   activeGateDragId = null,
   activeBasketballPostDragId = null,
   activeFloodlightColumnDragId = null
@@ -416,25 +414,8 @@ export function useEditorInteractionPreviews({
         0,
         Math.min(segmentLengthMm, Math.round(snappedOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
       );
-      const intermediateOffsetsMm = getSegmentIntermediatePostOffsets(segment);
-      if (intermediateOffsetsMm.length === 0) {
+      if (segmentLengthMm <= 0) {
         return null;
-      }
-      let bestIntermediateOffsetMm = intermediateOffsetsMm[0] ?? null;
-      let bestIntermediateDeltaMm = Number.POSITIVE_INFINITY;
-      for (const candidateOffsetMm of intermediateOffsetsMm) {
-        const deltaMm = Math.abs(candidateOffsetMm - snappedOffsetMm);
-        if (deltaMm < bestIntermediateDeltaMm) {
-          bestIntermediateDeltaMm = deltaMm;
-          bestIntermediateOffsetMm = candidateOffsetMm;
-        }
-      }
-      if (bestIntermediateOffsetMm === null) {
-        return null;
-      }
-      snappedOffsetMm = bestIntermediateOffsetMm;
-      if (snapMeta.kind === "FREE") {
-        snapMeta = buildSnapMeta("SEGMENT", "Intermediate post");
       }
 
       const point = interpolateAlongSegment(segment, snappedOffsetMm);
@@ -1129,60 +1110,26 @@ export function useEditorInteractionPreviews({
     };
   }, [hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
 
-  const resolveSideNettingAnchorPreview = useCallback(
-    (worldPoint: PointMm): PitchDividerAnchorPreview | null => {
-      const best = findNearestProjectedSegment(worldPoint, segments, pitchDividerPointerSnapMm);
+  const resolveSideNettingSegmentPreview = useCallback(
+    (worldPoint: PointMm): SegmentAttachmentPreview | null => {
+      const best = findNearestProjectedSegment(worldPoint, segments, hoverSegmentSnapMm);
       if (!best) {
         return null;
       }
-      const snappedOffsetMm = findNearestSegmentPostOffsetMm(best.segment, best.offsetMm);
-      if (snappedOffsetMm === null) {
-        return null;
-      }
-      const segmentLengthMm = distanceMm(best.segment.start, best.segment.end);
-      const isEndpoint = snappedOffsetMm <= 0.001 || Math.abs(snappedOffsetMm - segmentLengthMm) <= 0.001;
       return {
         segment: best.segment,
-        offsetMm: snappedOffsetMm,
-        point: interpolateAlongSegment(best.segment, snappedOffsetMm),
-        snapMeta: buildSnapMeta(isEndpoint ? "NODE" : "SEGMENT", isEndpoint ? "End post" : "Existing post")
+        snapMeta: buildSnapMeta("SEGMENT", "Fence line")
       };
     },
-    [pitchDividerPointerSnapMm, segments]
+    [hoverSegmentSnapMm, segments]
   );
 
-  const sideNettingAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
+  const sideNettingSegmentPreview = useMemo<SegmentAttachmentPreview | null>(() => {
     if (interactionMode !== "SIDE_NETTING" || !pointerWorld) {
       return null;
     }
-    return resolveSideNettingAnchorPreview(pointerWorld);
-  }, [interactionMode, pointerWorld, resolveSideNettingAnchorPreview]);
-
-  const sideNettingPreview = useMemo<SegmentRangePreview | null>(() => {
-    if (interactionMode !== "SIDE_NETTING" || !pendingSideNettingStart || !sideNettingAnchorPreview) {
-      return null;
-    }
-
-    if (pendingSideNettingStart.segment.id !== sideNettingAnchorPreview.segment.id) {
-      return null;
-    }
-
-    const startOffsetMm = Math.min(pendingSideNettingStart.offsetMm, sideNettingAnchorPreview.offsetMm);
-    const endOffsetMm = Math.max(pendingSideNettingStart.offsetMm, sideNettingAnchorPreview.offsetMm);
-    if (endOffsetMm - startOffsetMm <= DRAW_INCREMENT_MM * 0.5) {
-      return null;
-    }
-
-    return {
-      segment: sideNettingAnchorPreview.segment,
-      startOffsetMm,
-      endOffsetMm,
-      startPoint: interpolateAlongSegment(sideNettingAnchorPreview.segment, startOffsetMm),
-      endPoint: interpolateAlongSegment(sideNettingAnchorPreview.segment, endOffsetMm),
-      lengthMm: endOffsetMm - startOffsetMm,
-      snapMeta: buildSnapMeta("SEGMENT", "Fence line")
-    };
-  }, [interactionMode, pendingSideNettingStart, sideNettingAnchorPreview]);
+    return resolveSideNettingSegmentPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolveSideNettingSegmentPreview]);
 
   const pitchDividerAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
     if (interactionMode !== "PITCH_DIVIDER" || !pointerWorld) {
@@ -1334,9 +1281,8 @@ export function useEditorInteractionPreviews({
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
     resolvePitchDividerAnchorPreview,
-    resolveSideNettingAnchorPreview,
-    sideNettingAnchorPreview,
-    sideNettingPreview,
+    resolveSideNettingSegmentPreview,
+    sideNettingSegmentPreview,
     closeLoopPoint,
     resolveDrawPoint
   };

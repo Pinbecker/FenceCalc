@@ -28,14 +28,12 @@ type EditorCanvasPreviewLayerProps = Pick<
   | "kickboardPreview"
   | "oppositeGateGuides"
   | "pendingPitchDividerStart"
-  | "pendingSideNettingStart"
   | "pitchDividerAnchorPreview"
   | "pitchDividerPreview"
   | "rectanglePreviewEnd"
   | "rectangleStart"
   | "recessPreview"
-  | "sideNettingAnchorPreview"
-  | "sideNettingPreview"
+  | "sideNettingSegmentPreview"
   | "view"
   | "visibleBounds"
   | "closeLoopPoint"
@@ -275,14 +273,12 @@ export function EditorCanvasPreviewLayer({
   kickboardPreview = null,
   oppositeGateGuides,
   pendingPitchDividerStart = null,
-  pendingSideNettingStart = null,
   pitchDividerAnchorPreview = null,
   pitchDividerPreview = null,
   rectanglePreviewEnd,
   rectangleStart,
   recessPreview,
-  sideNettingAnchorPreview = null,
-  sideNettingPreview = null,
+  sideNettingSegmentPreview = null,
   view,
   visibleBounds,
   closeLoopPoint
@@ -772,99 +768,24 @@ export function EditorCanvasPreviewLayer({
           })}
         </Group>
       ) : null}
-      {interactionMode === "SIDE_NETTING" && sideNettingAnchorPreview && !sideNettingPreview ? (
-        <Group key={`side-netting-anchor-preview-${sideNettingAnchorPreview.segment.id}`} listening={false}>
+      {interactionMode === "SIDE_NETTING" && sideNettingSegmentPreview ? (
+        <Group key={`side-netting-segment-preview-${sideNettingSegmentPreview.segment.id}`} listening={false}>
           {renderTargetSegmentHighlight(
-            sideNettingAnchorPreview.segment.start,
-            sideNettingAnchorPreview.segment.end,
+            sideNettingSegmentPreview.segment.start,
+            sideNettingSegmentPreview.segment.end,
             view.scale,
             "#69c6a3"
           )}
-          {pendingSideNettingStart ? (
-            <Circle
-              x={pendingSideNettingStart.point.x}
-              y={pendingSideNettingStart.point.y}
-              radius={6 / view.scale}
-              fill="#dffff2"
-              stroke="#174236"
-              strokeWidth={1.2 / view.scale}
-            />
-          ) : null}
-          <Circle
-            x={sideNettingAnchorPreview.point.x}
-            y={sideNettingAnchorPreview.point.y}
-            radius={6 / view.scale}
-            fill="#dffff2"
-            stroke="#174236"
-            strokeWidth={1.2 / view.scale}
-          />
           {renderCanvasLabel({
-            keyValue: `side-netting-anchor-label-${sideNettingAnchorPreview.segment.id}`,
+            keyValue: `side-netting-segment-label-${sideNettingSegmentPreview.segment.id}`,
             ...offsetPoint(
-              sideNettingAnchorPreview.point,
-              deriveSegmentAxes(sideNettingAnchorPreview.segment.start, sideNettingAnchorPreview.segment.end).tangent,
-              deriveSegmentAxes(sideNettingAnchorPreview.segment.start, sideNettingAnchorPreview.segment.end).normal,
-              view.scale,
-              26
-            ),
-            text: pendingSideNettingStart ? "Choose end post" : `Start at ${formatLengthMm(sideNettingAnchorPreview.offsetMm)}`,
-            scale: view.scale,
-            fill: "rgba(12, 60, 44, 0.92)",
-            textColor: "#ddfff3",
-            stroke: "rgba(105, 198, 163, 0.42)",
-            fontSizePx: LABEL_FONT_SIZE_PX,
-            minWidthPx: 96
-          })}
-        </Group>
-      ) : null}
-      {interactionMode === "SIDE_NETTING" && sideNettingPreview ? (
-        <Group key={`side-netting-preview-${sideNettingPreview.segment.id}`} listening={false}>
-          {renderTargetSegmentHighlight(sideNettingPreview.startPoint, sideNettingPreview.endPoint, view.scale, "#69c6a3")}
-          <Circle
-            x={sideNettingPreview.startPoint.x}
-            y={sideNettingPreview.startPoint.y}
-            radius={5 / view.scale}
-            fill="#e4fff3"
-            stroke="#174236"
-            strokeWidth={1.1 / view.scale}
-          />
-          <Circle
-            x={sideNettingPreview.endPoint.x}
-            y={sideNettingPreview.endPoint.y}
-            radius={5 / view.scale}
-            fill="#e4fff3"
-            stroke="#174236"
-            strokeWidth={1.1 / view.scale}
-          />
-          {(() => {
-            const segmentAxes = deriveSegmentAxes(sideNettingPreview.segment.start, sideNettingPreview.segment.end);
-            return renderRunDistanceLabels({
-              keyPrefix: `side-netting-${sideNettingPreview.segment.id}`,
-              startPoint: sideNettingPreview.segment.start,
-              splitStartPoint: sideNettingPreview.startPoint,
-              splitEndPoint: sideNettingPreview.endPoint,
-              endPoint: sideNettingPreview.segment.end,
-              startDistanceMm: sideNettingPreview.startOffsetMm,
-              endDistanceMm: distanceMm(sideNettingPreview.endPoint, sideNettingPreview.segment.end),
-              tangent: segmentAxes.tangent,
-              startNormal: segmentAxes.normal,
-              endNormal: { x: -segmentAxes.normal.x, y: -segmentAxes.normal.y },
-              scale: view.scale,
-              fill: "rgba(12, 60, 44, 0.92)",
-              textColor: "#ddfff3",
-              stroke: "rgba(105, 198, 163, 0.42)"
-            });
-          })()}
-          {renderCanvasLabel({
-            keyValue: `side-netting-preview-label-${sideNettingPreview.segment.id}`,
-            ...offsetPoint(
-              midpoint(sideNettingPreview.startPoint, sideNettingPreview.endPoint),
-              deriveSegmentAxes(sideNettingPreview.startPoint, sideNettingPreview.endPoint).tangent,
-              deriveSegmentAxes(sideNettingPreview.startPoint, sideNettingPreview.endPoint).normal,
+              midpoint(sideNettingSegmentPreview.segment.start, sideNettingSegmentPreview.segment.end),
+              deriveSegmentAxes(sideNettingSegmentPreview.segment.start, sideNettingSegmentPreview.segment.end).tangent,
+              deriveSegmentAxes(sideNettingSegmentPreview.segment.start, sideNettingSegmentPreview.segment.end).normal,
               view.scale,
               24
             ),
-            text: `Side netting ${formatLengthMm(sideNettingPreview.lengthMm)}`,
+            text: `Side netting ${formatLengthMm(distanceMm(sideNettingSegmentPreview.segment.start, sideNettingSegmentPreview.segment.end))}`,
             scale: view.scale,
             fill: "rgba(12, 60, 44, 0.92)",
             textColor: "#ddfff3",

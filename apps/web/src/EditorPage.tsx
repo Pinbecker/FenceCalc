@@ -504,9 +504,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
     resolvePitchDividerAnchorPreview,
-    resolveSideNettingAnchorPreview,
-    sideNettingAnchorPreview,
-    sideNettingPreview,
+    resolveSideNettingSegmentPreview,
+    sideNettingSegmentPreview,
     closeLoopPoint,
     resolveDrawPoint
   } = useEditorInteractionPreviews({
@@ -536,7 +535,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     placedFloodlightColumnVisuals: resolvedFloodlightColumnPlacements,
     placedGoalUnitVisuals: resolvedGoalUnits,
     pendingPitchDividerStart: shellState.pendingPitchDividerStart,
-    pendingSideNettingStart: shellState.pendingSideNettingStart,
     activeGateDragId: selectionState.activeGateDrag?.gateId ?? null,
     activeBasketballPostDragId: selectionState.activeBasketballPostDrag?.basketballPostId ?? null,
     activeFloodlightColumnDragId: selectionState.activeFloodlightColumnDrag?.floodlightColumnId ?? null
@@ -592,7 +590,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     kickboardProfile: shellState.kickboardProfile,
     sideNettingHeightMm: shellState.sideNettingHeightMm,
     pendingPitchDividerStart: shellState.pendingPitchDividerStart,
-    pendingSideNettingStart: shellState.pendingSideNettingStart,
     drawStart: selectionState.drawStart,
     drawChainStart: selectionState.drawChainStart,
     rectangleStart: selectionState.rectangleStart,
@@ -618,12 +615,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     kickboardPreview,
     pitchDividerAnchorPreview,
     pitchDividerPreview,
-    sideNettingAnchorPreview,
-    sideNettingPreview,
+    sideNettingSegmentPreview,
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
     resolvePitchDividerAnchorPreview,
-    resolveSideNettingAnchorPreview,
+    resolveSideNettingSegmentPreview,
     resolveDrawPoint,
     toWorld,
     beginPan,
@@ -651,8 +647,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setRecessDepthInputM: shellState.setRecessDepthInputM,
     setCustomGateWidthMm: shellState.setCustomGateWidthMm,
     setCustomGateWidthInputM: shellState.setCustomGateWidthInputM,
-    setPendingPitchDividerStart: shellState.setPendingPitchDividerStart,
-    setPendingSideNettingStart: shellState.setPendingSideNettingStart
+    setPendingPitchDividerStart: shellState.setPendingPitchDividerStart
   });
 
   const keyboardShortcutOptions = useMemo(
@@ -831,14 +826,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 }
               : null
           }
-          pendingSideNettingStart={
-            shellState.pendingSideNettingStart
-              ? {
-                  segmentId: shellState.pendingSideNettingStart.segment.id,
-                  offsetMm: shellState.pendingSideNettingStart.offsetMm
-                }
-              : null
-          }
+          pendingSideNettingStart={null}
           gateType={shellState.gateType}
           customGateWidthInputM={shellState.customGateWidthInputM}
           recessWidthOptionsMm={RECESS_WIDTH_OPTIONS_MM}
@@ -864,10 +852,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           }
           pitchDividerPreview={pitchDividerPreview}
           sideNettingPreview={
-            sideNettingPreview
+            sideNettingSegmentPreview
               ? {
-                  lengthMm: sideNettingPreview.lengthMm,
-                  snapMeta: sideNettingPreview.snapMeta
+                  segmentId: sideNettingSegmentPreview.segment.id,
+                  snapMeta: sideNettingSegmentPreview.snapMeta
                 }
               : null
           }
@@ -950,10 +938,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 kickboardPreview={kickboardPreview}
                 pitchDividerPreview={pitchDividerPreview}
                 pitchDividerAnchorPreview={pitchDividerAnchorPreview}
-                sideNettingPreview={sideNettingPreview}
-                sideNettingAnchorPreview={sideNettingAnchorPreview}
+                sideNettingSegmentPreview={sideNettingSegmentPreview}
                 pendingPitchDividerStart={shellState.pendingPitchDividerStart}
-                pendingSideNettingStart={shellState.pendingSideNettingStart}
                 gatePreviewVisual={gatePreviewVisual}
                 hoveredBasketballPostId={hoveredBasketballPostId}
                 hoveredFloodlightColumnId={hoveredFloodlightColumnId}

@@ -54,7 +54,6 @@ import type {
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
   SegmentAttachmentPreview,
-  SegmentRangePreview,
   SegmentConnectivity
 } from "./types";
 
@@ -116,7 +115,6 @@ interface UseEditorCommandsOptions {
   kickboardProfile?: "SQUARE" | "CHAMFERED";
   sideNettingHeightMm?: number;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
-  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   drawStart: PointMm | null;
   drawChainStart: PointMm | null;
   rectangleStart: PointMm | null;
@@ -142,12 +140,11 @@ interface UseEditorCommandsOptions {
   kickboardPreview?: SegmentAttachmentPreview | null;
   pitchDividerAnchorPreview?: PitchDividerAnchorPreview | null;
   pitchDividerPreview?: PitchDividerSpanPreview | null;
-  sideNettingAnchorPreview?: PitchDividerAnchorPreview | null;
-  sideNettingPreview?: SegmentRangePreview | null;
+  sideNettingSegmentPreview?: SegmentAttachmentPreview | null;
   resolveBasketballPostPreview: (worldPoint: PointMm) => BasketballPostInsertionPreview | null;
   resolveFloodlightColumnPreview?: (worldPoint: PointMm) => FloodlightColumnInsertionPreview | null;
   resolvePitchDividerAnchorPreview?: (worldPoint: PointMm) => PitchDividerAnchorPreview | null;
-  resolveSideNettingAnchorPreview?: (worldPoint: PointMm) => PitchDividerAnchorPreview | null;
+  resolveSideNettingSegmentPreview?: (worldPoint: PointMm) => SegmentAttachmentPreview | null;
   resolveDrawPoint: (worldPoint: PointMm) => DrawResolveResult;
   toWorld: (screenPoint: PointerScreenPoint) => PointMm;
   beginPan: (pointer: PointerScreenPoint) => void;
@@ -176,7 +173,6 @@ interface UseEditorCommandsOptions {
   setCustomGateWidthMm: Dispatch<SetStateAction<number>>;
   setCustomGateWidthInputM: Dispatch<SetStateAction<string>>;
   setPendingPitchDividerStart?: Dispatch<SetStateAction<PitchDividerAnchorPreview | null>>;
-  setPendingSideNettingStart?: Dispatch<SetStateAction<PitchDividerAnchorPreview | null>>;
 }
 
 export function useEditorCommands({
@@ -202,7 +198,6 @@ export function useEditorCommands({
   kickboardProfile = "SQUARE",
   sideNettingHeightMm = 2000,
   pendingPitchDividerStart = null,
-  pendingSideNettingStart = null,
   drawStart,
   drawChainStart,
   rectangleStart,
@@ -228,12 +223,11 @@ export function useEditorCommands({
   kickboardPreview = null,
   pitchDividerAnchorPreview = null,
   pitchDividerPreview = null,
-  sideNettingAnchorPreview = null,
-  sideNettingPreview = null,
+  sideNettingSegmentPreview = null,
   resolveBasketballPostPreview,
   resolveFloodlightColumnPreview = () => null,
   resolvePitchDividerAnchorPreview = () => null,
-  resolveSideNettingAnchorPreview = () => null,
+  resolveSideNettingSegmentPreview = () => null,
   resolveDrawPoint,
   toWorld,
   beginPan,
@@ -261,8 +255,7 @@ export function useEditorCommands({
   setRecessDepthInputM,
   setCustomGateWidthMm,
   setCustomGateWidthInputM,
-  setPendingPitchDividerStart = () => null,
-  setPendingSideNettingStart = () => null
+  setPendingPitchDividerStart = () => null
 }: UseEditorCommandsOptions) {
   const updateSegment = useCallback(
     (segmentId: string, updater: (segment: LayoutSegment) => LayoutSegment): void => {
@@ -892,14 +885,15 @@ export function useEditorCommands({
   );
 
   const applySideNettingAttachment = useCallback(
-    (preview: SegmentRangePreview): void => {
+    (preview: SegmentAttachmentPreview): void => {
       applyLayout((previous) => {
+        const segmentLengthMm = distanceMm(preview.segment.start, preview.segment.end);
         const nextSideNetting: SideNettingAttachment = {
           id: crypto.randomUUID(),
           segmentId: preview.segment.id,
           additionalHeightMm: sideNettingHeightMm,
-          startOffsetMm: preview.startOffsetMm,
-          endOffsetMm: preview.endOffsetMm,
+          startOffsetMm: 0,
+          endOffsetMm: segmentLengthMm,
           extendedPostInterval: 3
         };
         const sideNettings = (previous.sideNettings ?? []).filter((attachment) => attachment.segmentId !== nextSideNetting.segmentId);
@@ -1033,20 +1027,9 @@ export function useEditorCommands({
       }
 
       if (interactionMode === "SIDE_NETTING") {
-        const resolvedAnchor = sideNettingAnchorPreview ?? resolveSideNettingAnchorPreview(world);
-        if (!pendingSideNettingStart) {
-          if (resolvedAnchor) {
-            setPendingSideNettingStart(resolvedAnchor);
-          }
-          return;
-        }
-        if (sideNettingPreview) {
-          applySideNettingAttachment(sideNettingPreview);
-          setPendingSideNettingStart(null);
-          return;
-        }
-        if (resolvedAnchor) {
-          setPendingSideNettingStart(resolvedAnchor);
+        const resolvedPreview = sideNettingSegmentPreview ?? resolveSideNettingSegmentPreview(world);
+        if (resolvedPreview) {
+          applySideNettingAttachment(resolvedPreview);
         }
         return;
       }
@@ -1093,20 +1076,17 @@ export function useEditorCommands({
       interactionMode,
       isSpacePressed,
       pendingPitchDividerStart,
-      pendingSideNettingStart,
       pitchDividerAnchorPreview,
       pitchDividerPreview,
       recessPreview,
       resolvePitchDividerAnchorPreview,
-      resolveSideNettingAnchorPreview,
+      resolveSideNettingSegmentPreview,
       setPendingPitchDividerStart,
-      setPendingSideNettingStart,
       setSelectedBasketballPostId,
       setSelectedFloodlightColumnId,
       setSelectedGateId,
       setSelectedSegmentId,
-      sideNettingAnchorPreview,
-      sideNettingPreview,
+      sideNettingSegmentPreview,
       applySideNettingAttachment,
       resolveBasketballPostPreview,
       resolveFloodlightColumnPreview,
@@ -1327,9 +1307,8 @@ export function useEditorCommands({
       setRectangleStart(null);
       setDrawChainStart(null);
       setPendingPitchDividerStart(null);
-      setPendingSideNettingStart(null);
     },
-    [setDrawChainStart, setDrawStart, setPendingPitchDividerStart, setPendingSideNettingStart, setRectangleStart]
+    [setDrawChainStart, setDrawStart, setPendingPitchDividerStart, setRectangleStart]
   );
 
   const deleteSelectedGate = useCallback((): boolean => {
@@ -1379,14 +1358,12 @@ export function useEditorCommands({
     setRectangleStart(null);
     setDrawChainStart(null);
     setPendingPitchDividerStart(null);
-    setPendingSideNettingStart(null);
     setSelectedBasketballPostId(null);
     setSelectedFloodlightColumnId(null);
   }, [
     setDrawChainStart,
     setDrawStart,
     setPendingPitchDividerStart,
-    setPendingSideNettingStart,
     setRectangleStart,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId
@@ -1407,7 +1384,6 @@ export function useEditorCommands({
     setDrawChainStart(null);
     setRectangleStart(null);
     setPendingPitchDividerStart(null);
-    setPendingSideNettingStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
@@ -1420,7 +1396,6 @@ export function useEditorCommands({
     setDrawStart,
     setIsLengthEditorOpen,
     setPendingPitchDividerStart,
-    setPendingSideNettingStart,
     setRectangleStart,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId,
@@ -1456,7 +1431,6 @@ export function useEditorCommands({
     setDrawStart(null);
     setDrawChainStart(null);
     setPendingPitchDividerStart(null);
-    setPendingSideNettingStart(null);
     setSelectedSegmentId(null);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
@@ -1466,7 +1440,6 @@ export function useEditorCommands({
     setDrawChainStart,
     setDrawStart,
     setPendingPitchDividerStart,
-    setPendingSideNettingStart,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId,
     setSelectedGateId,
