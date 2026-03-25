@@ -15,6 +15,10 @@ describe("loadConfig", () => {
     expect(config.trustProxy).toBe(false);
     expect(config.databasePath).toBe("./data/fence-estimator.db");
     expect(config.allowedOrigins).toContain("http://localhost:5173");
+    expect(config.loginAttemptWindowMs).toBe(900000);
+    expect(config.loginMaxAttempts).toBe(5);
+    expect(config.loginLockoutMs).toBe(900000);
+    expect(config.auditLogRetentionDays).toBe(365);
     expect(config.sessionTtlDays).toBe(30);
     expect(config.sessionCookieName).toBe("fence_estimator_session");
     expect(config.sessionCookieSecure).toBe(false);
@@ -33,6 +37,10 @@ describe("loadConfig", () => {
       BODY_LIMIT_BYTES: "524288",
       WRITE_RATE_LIMIT_WINDOW_MS: "30000",
       WRITE_RATE_LIMIT_MAX_REQUESTS: "40",
+      LOGIN_ATTEMPT_WINDOW_MS: "600000",
+      LOGIN_MAX_ATTEMPTS: "4",
+      LOGIN_LOCKOUT_MS: "1200000",
+      AUDIT_LOG_RETENTION_DAYS: "730",
       SESSION_TTL_DAYS: "14",
       SESSION_COOKIE_NAME: "custom_cookie",
       SESSION_COOKIE_SECURE: "true",
@@ -49,6 +57,10 @@ describe("loadConfig", () => {
     expect(config.bodyLimitBytes).toBe(524288);
     expect(config.writeRateLimitWindowMs).toBe(30000);
     expect(config.writeRateLimitMaxRequests).toBe(40);
+    expect(config.loginAttemptWindowMs).toBe(600000);
+    expect(config.loginMaxAttempts).toBe(4);
+    expect(config.loginLockoutMs).toBe(1200000);
+    expect(config.auditLogRetentionDays).toBe(730);
     expect(config.sessionTtlDays).toBe(14);
     expect(config.sessionCookieName).toBe("custom_cookie");
     expect(config.sessionCookieSecure).toBe(true);

@@ -22,6 +22,20 @@ export interface InMemorySupportState {
 export class InMemorySupportStore {
   public constructor(private readonly state: InMemorySupportState) {}
 
+  public pruneStaleRecords(nowIso: string, auditLogRetentionDays: number): void {
+    const nowMs = new Date(nowIso).getTime();
+    const retentionCutoffMs = nowMs - auditLogRetentionDays * 24 * 60 * 60 * 1000;
+
+    for (const [tokenHash, token] of this.state.passwordResetTokens.entries()) {
+      if (token.consumedAtIso || new Date(token.expiresAtIso).getTime() <= nowMs) {
+        this.state.passwordResetTokens.delete(tokenHash);
+      }
+    }
+
+    const retainedAuditLog = this.state.auditLog.filter((entry) => new Date(entry.createdAtIso).getTime() >= retentionCutoffMs);
+    this.state.auditLog.splice(0, this.state.auditLog.length, ...retainedAuditLog);
+  }
+
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): void {
     this.state.passwordResetTokens.set(input.tokenHash, {
       ...input,
@@ -64,7 +78,14 @@ export class InMemorySupportStore {
     return record;
   }
 
-  public listAuditLog(companyId: string, limit = 100): AuditLogRecord[] {
-    return this.state.auditLog.filter((entry) => entry.companyId === companyId).slice(0, limit);
+  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}): AuditLogRecord[] {
+    const normalizedOptions = typeof options === "number" ? { limit: options } : options;
+    const limit = normalizedOptions.limit ?? 100;
+    const beforeCreatedAtIso = normalizedOptions.beforeCreatedAtIso ?? null;
+
+    return this.state.auditLog
+      .filter((entry) => entry.companyId === companyId)
+      .filter((entry) => beforeCreatedAtIso === null || entry.createdAtIso < beforeCreatedAtIso)
+      .slice(0, limit);
   }
 }

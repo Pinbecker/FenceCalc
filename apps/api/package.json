@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
+    "@fastify/helmet": "^13.0.2",
     "@fence-estimator/contracts": "0.1.0",
     "@fence-estimator/rules-engine": "0.1.0",
     "better-sqlite3": "^11.10.0",

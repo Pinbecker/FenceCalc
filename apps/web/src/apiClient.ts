@@ -19,6 +19,8 @@ import type {
 } from "@fence-estimator/contracts";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const RETRIABLE_STATUS_CODES = new Set([502, 503, 504]);
 
 export interface RegisterAccountInput {
   companyName: string;
@@ -82,6 +84,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 export class ApiClientError extends Error {
@@ -100,31 +103,116 @@ function buildUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const requestInit: RequestInit = {
-    method: options.method ?? "GET",
-    credentials: "include",
-    headers: {
-      "content-type": "application/json",
-      ...(options.headers ?? {})
+function validateApiBaseUrl(): void {
+  if (!API_BASE_URL || typeof window === "undefined") {
+    return;
+  }
+
+  new URL(API_BASE_URL, window.location.origin);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function mergeSignals(signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => signal !== undefined);
+  if (activeSignals.length === 0) {
+    return undefined;
+  }
+
+  const controller = new AbortController();
+  const abort = () => {
+    controller.abort();
+    for (const signal of activeSignals) {
+      signal.removeEventListener("abort", abort);
     }
   };
-  if (options.body !== undefined) {
-    requestInit.body = JSON.stringify(options.body);
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      abort();
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
   }
 
-  const response = await fetch(buildUrl(path), requestInit);
+  return controller.signal;
+}
 
-  const payload = (await response.json().catch(() => null)) as T | { error?: string; details?: unknown } | null;
-  if (!response.ok) {
-    const message =
-      payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
-        ? payload.error
-        : `Request failed with status ${response.status}`;
-    const details = payload && typeof payload === "object" && "details" in payload ? payload.details : null;
-    throw new ApiClientError(message, response.status, details);
+async function executeRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const timeoutController = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+
+  try {
+    const requestInit: RequestInit = {
+      method: options.method ?? "GET",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        ...(options.headers ?? {})
+      },
+      signal: mergeSignals([options.signal, timeoutController.signal])
+    };
+    if (options.body !== undefined) {
+      requestInit.body = JSON.stringify(options.body);
+    }
+
+    const response = await fetch(buildUrl(path), requestInit);
+
+    const payload = (await response.json().catch(() => null)) as T | { error?: string; details?: unknown } | null;
+    if (!response.ok) {
+      const message =
+        payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+          ? payload.error
+          : `Request failed with status ${response.status}`;
+      const details = payload && typeof payload === "object" && "details" in payload ? payload.details : null;
+      throw new ApiClientError(message, response.status, details);
+    }
+
+    return payload as T;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
   }
-  return payload as T;
+}
+
+function shouldRetry(method: RequestOptions["method"], error: unknown): boolean {
+  if ((method ?? "GET") !== "GET") {
+    return false;
+  }
+
+  if (error instanceof ApiClientError) {
+    return RETRIABLE_STATUS_CODES.has(error.status);
+  }
+
+  return !isAbortError(error);
+}
+
+async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  validateApiBaseUrl();
+
+  let lastError: unknown;
+  const maxAttempts = (options.method ?? "GET") === "GET" ? 2 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await executeRequest<T>(path, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !shouldRetry(options.method, error)) {
+        throw error;
+      }
+
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 250 * attempt));
+    }
+  }
+
+  throw lastError;
 }
 
 export async function getSetupStatus(): Promise<SetupStatus> {

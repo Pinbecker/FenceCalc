@@ -4,7 +4,8 @@ import { requireUserManager } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
 
 const auditLogQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional()
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  before: z.string().datetime().optional()
 });
 
 export function registerAuditRoutes({ app, config, repository }: RouteDependencies): void {
@@ -22,7 +23,14 @@ export function registerAuditRoutes({ app, config, repository }: RouteDependenci
       });
     }
 
-    const entries = await repository.listAuditLog(authenticated.company.id, parsed.data.limit ?? 50);
-    return reply.code(200).send({ entries });
+    const entries = await repository.listAuditLog(authenticated.company.id, {
+      limit: parsed.data.limit ?? 50,
+      beforeCreatedAtIso: parsed.data.before ?? null
+    });
+
+    return reply.code(200).send({
+      entries,
+      nextBeforeCreatedAtIso: entries.length > 0 ? entries[entries.length - 1]?.createdAtIso ?? null : null
+    });
   });
 }

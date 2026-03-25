@@ -8,6 +8,16 @@ import type { CreateAuditLogInput, CreatePasswordResetTokenInput, PasswordResetC
 export class SqliteSupportStore {
   public constructor(private readonly database: Database.Database) {}
 
+  public pruneStaleRecords(nowIso: string, auditLogRetentionDays: number): void {
+    const nowMs = new Date(nowIso).getTime();
+    const retentionCutoffIso = new Date(nowMs - auditLogRetentionDays * 24 * 60 * 60 * 1000).toISOString();
+
+    this.database.prepare("DELETE FROM audit_log WHERE created_at_iso < ?").run(retentionCutoffIso);
+    this.database
+      .prepare("DELETE FROM password_reset_tokens WHERE consumed_at_iso IS NOT NULL OR expires_at_iso <= ?")
+      .run(nowIso);
+  }
+
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): void {
     this.database
       .prepare(
@@ -76,10 +86,19 @@ export class SqliteSupportStore {
     return { ...input };
   }
 
-  public listAuditLog(companyId: string, limit = 100): AuditLogRecord[] {
-    const rows = this.database
-      .prepare("SELECT * FROM audit_log WHERE company_id = ? ORDER BY created_at_iso DESC LIMIT ?")
-      .all(companyId, limit) as AuditLogRow[];
+  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}): AuditLogRecord[] {
+    const normalizedOptions = typeof options === "number" ? { limit: options } : options;
+    const limit = normalizedOptions.limit ?? 100;
+    const beforeCreatedAtIso = normalizedOptions.beforeCreatedAtIso ?? null;
+    const rows = (beforeCreatedAtIso
+      ? this.database
+          .prepare(
+            "SELECT * FROM audit_log WHERE company_id = ? AND created_at_iso < ? ORDER BY created_at_iso DESC LIMIT ?",
+          )
+          .all(companyId, beforeCreatedAtIso, limit)
+      : this.database
+          .prepare("SELECT * FROM audit_log WHERE company_id = ? ORDER BY created_at_iso DESC LIMIT ?")
+          .all(companyId, limit)) as AuditLogRow[];
     return rows.map((row) => toAuditLog(row));
   }
 }

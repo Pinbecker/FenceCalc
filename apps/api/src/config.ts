@@ -31,6 +31,10 @@ const envSchema = z.object({
   BODY_LIMIT_BYTES: z.coerce.number().int().min(1_024).max(5_242_880).default(262_144),
   WRITE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
   WRITE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(120),
+  LOGIN_ATTEMPT_WINDOW_MS: z.coerce.number().int().min(1_000).default(900_000),
+  LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  LOGIN_LOCKOUT_MS: z.coerce.number().int().min(1_000).default(900_000),
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(365),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_COOKIE_NAME: z.string().trim().min(1).default("fence_estimator_session"),
   SESSION_COOKIE_SECURE: envBooleanSchema.default(false),
@@ -48,6 +52,10 @@ export interface AppConfig {
   bodyLimitBytes: number;
   writeRateLimitWindowMs: number;
   writeRateLimitMaxRequests: number;
+  loginAttemptWindowMs: number;
+  loginMaxAttempts: number;
+  loginLockoutMs: number;
+  auditLogRetentionDays: number;
   sessionTtlDays: number;
   sessionCookieName: string;
   sessionCookieSecure: boolean;
@@ -91,6 +99,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     bodyLimitBytes: parsed.BODY_LIMIT_BYTES,
     writeRateLimitWindowMs: parsed.WRITE_RATE_LIMIT_WINDOW_MS,
     writeRateLimitMaxRequests: parsed.WRITE_RATE_LIMIT_MAX_REQUESTS,
+    loginAttemptWindowMs: parsed.LOGIN_ATTEMPT_WINDOW_MS,
+    loginMaxAttempts: parsed.LOGIN_MAX_ATTEMPTS,
+    loginLockoutMs: parsed.LOGIN_LOCKOUT_MS,
+    auditLogRetentionDays: parsed.AUDIT_LOG_RETENTION_DAYS,
     sessionTtlDays: parsed.SESSION_TTL_DAYS,
     sessionCookieName: parsed.SESSION_COOKIE_NAME,
     sessionCookieSecure: parsed.SESSION_COOKIE_SECURE,

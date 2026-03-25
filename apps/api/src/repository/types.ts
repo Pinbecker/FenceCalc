@@ -225,6 +225,7 @@ export interface AuthenticatedSession {
 }
 
 export interface AppRepository {
+  close(): Promise<void>;
   checkHealth(): Promise<void>;
   getUserCount(): Promise<number>;
   bootstrapOwnerAccount(input: BootstrapOwnerAccountInput): Promise<{ company: CompanyRecord; user: CompanyUserRecord } | null>;
@@ -261,5 +262,8 @@ export interface AppRepository {
   createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void>;
   consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string): Promise<PasswordResetConsumption | null>;
   addAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord>;
-  listAuditLog(companyId: string, limit?: number): Promise<AuditLogRecord[]>;
+  listAuditLog(
+    companyId: string,
+    options?: number | { limit?: number; beforeCreatedAtIso?: string | null }
+  ): Promise<AuditLogRecord[]>;
 }

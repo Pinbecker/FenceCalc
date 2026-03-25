@@ -11,7 +11,7 @@ import {
   readSessionToken
 } from "../sessionHttp.js";
 
-export function registerAuthRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
+export function registerAuthRoutes({ app, config, repository, writeLimiter, loginAttemptLimiter }: RouteDependencies): void {
   app.post("/api/v1/auth/register", async (_request, reply) =>
     reply.code(403).send({ error: "Self-service registration is disabled" }),
   );
@@ -29,10 +29,22 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter }: Ro
       });
     }
 
+    const emailKey = parsed.data.email.toLowerCase();
+    const lockStatus = loginAttemptLimiter.getStatus(emailKey);
+    if (!lockStatus.allowed) {
+      return reply.code(429).send({
+        error: "Too many failed sign-in attempts",
+        retryAfterSeconds: Math.ceil(lockStatus.retryAfterMs / 1000)
+      });
+    }
+
     const user = await repository.getUserByEmail(parsed.data.email);
     if (!user || !verifyPassword(parsed.data.password, user.passwordSalt, user.passwordHash)) {
+      loginAttemptLimiter.recordFailure(emailKey);
       return reply.code(401).send({ error: "Invalid credentials" });
     }
+
+    loginAttemptLimiter.recordSuccess(emailKey);
 
     const company = await repository.getCompanyById(user.companyId);
     if (!company) {

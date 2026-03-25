@@ -51,6 +51,8 @@ Important production rules:
 - `ALLOWED_ORIGINS` must be set explicitly in `NODE_ENV=production`.
 - `SESSION_COOKIE_SECURE=true` is required in `NODE_ENV=production`.
 - `TRUST_PROXY=true` should be set when the API runs behind the supported reverse proxy.
+- `LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_MS`, and `LOGIN_LOCKOUT_MS` control account lockout after failed sign-ins.
+- `AUDIT_LOG_RETENTION_DAYS` controls automatic audit-log retention and stale password-reset cleanup.
 - `BOOTSTRAP_OWNER_SECRET` should be set until the first owner account is created.
 - `VITE_API_BASE_URL` should point at the deployed API origin when the web app is built for production.
 

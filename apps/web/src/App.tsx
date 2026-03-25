@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
 
 import { CustomerPickerModal } from "./CustomerPickerModal";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useHashRoute, type PortalRoute } from "./useHashRoute";
 import { usePortalSession } from "./usePortalSession";
 
@@ -266,7 +267,9 @@ export function App() {
   if (route === "editor") {
     return (
       <Suspense fallback={<PortalLoadingCard label="Loading editor..." />}>
-        <EditorPage initialDrawingId={query.drawingId ?? null} onNavigate={navigate} />
+        <ErrorBoundary>
+          <EditorPage initialDrawingId={query.drawingId ?? null} onNavigate={navigate} />
+        </ErrorBoundary>
       </Suspense>
     );
   }
@@ -290,67 +293,71 @@ export function App() {
         showPricing={showPricing}
         onNavigate={navigate}
         onLogout={() => {
-          portal.logout();
-          navigate("login");
+          void (async () => {
+            await portal.logout();
+            navigate("login");
+          })();
         }}
       />
       <main className="portal-main">
         <Suspense fallback={<PortalLoadingCard label="Loading page..." />}>
-          {modalBaseRoute === "dashboard" ? (
-            <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
-          ) : null}
-          {modalBaseRoute === "customer" ? (
-            <CustomerPage
-              query={modalBaseQuery}
-              customers={portal.customers}
-              drawings={portal.drawings}
-              userRole={portal.session.user.role}
-              isSavingCustomer={portal.isSavingCustomer}
-              isArchivingCustomerId={portal.isArchivingCustomerId}
-              errorMessage={portal.errorMessage}
-              noticeMessage={portal.noticeMessage}
-              onSaveCustomer={portal.saveCustomer}
-              onSetCustomerArchived={portal.setCustomerArchived}
-              onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
-              onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
-              onCreateDrawing={() => navigate("editor")}
-              onToggleDrawingArchived={portal.setDrawingArchived}
-              onChangeDrawingStatus={portal.changeDrawingStatus}
-              onLoadVersions={portal.loadDrawingVersions}
-              onRestoreVersion={portal.restoreDrawingVersion}
-              onDeleteDrawing={portal.deleteDrawing}
-              onDeleteCustomer={portal.deleteCustomer}
-              onNavigate={navigate}
-            />
-          ) : null}
-          {modalBaseRoute === "estimate" ? (
-            <EstimatePage session={portal.session} drawingId={modalBaseQuery.drawingId ?? null} onNavigate={navigate} />
-          ) : null}
-          {modalBaseRoute === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
-          {modalBaseRoute === "admin" && showAdmin ? (
-            <AdminPage
-              users={portal.users}
-              auditLog={portal.auditLog}
-              customers={portal.customers}
-              currentUserId={portal.session.user.id}
-              currentUserRole={portal.session.user.role}
-              isLoadingUsers={portal.isLoadingUsers}
-              isLoadingAuditLog={portal.isLoadingAuditLog}
-              isSavingUser={portal.isSavingUser}
-              isResettingUserId={portal.isResettingUserId}
-              isArchivingCustomerId={portal.isArchivingCustomerId}
-              errorMessage={portal.errorMessage}
-              noticeMessage={portal.noticeMessage}
-              onRefresh={portal.refreshUsers}
-              onRefreshAudit={portal.refreshAuditLog}
-              onCreateUser={portal.createUser}
-              onResetUserPassword={portal.resetUserPassword}
-              onRestoreCustomer={async (customerId) => {
-                await portal.setCustomerArchived(customerId, false, false);
-                void portal.refreshCustomers();
-              }}
-            />
-          ) : null}
+          <ErrorBoundary>
+            {modalBaseRoute === "dashboard" ? (
+              <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
+            ) : null}
+            {modalBaseRoute === "customer" ? (
+              <CustomerPage
+                query={modalBaseQuery}
+                customers={portal.customers}
+                drawings={portal.drawings}
+                userRole={portal.session.user.role}
+                isSavingCustomer={portal.isSavingCustomer}
+                isArchivingCustomerId={portal.isArchivingCustomerId}
+                errorMessage={portal.errorMessage}
+                noticeMessage={portal.noticeMessage}
+                onSaveCustomer={portal.saveCustomer}
+                onSetCustomerArchived={portal.setCustomerArchived}
+                onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
+                onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
+                onCreateDrawing={() => navigate("editor")}
+                onToggleDrawingArchived={portal.setDrawingArchived}
+                onChangeDrawingStatus={portal.changeDrawingStatus}
+                onLoadVersions={portal.loadDrawingVersions}
+                onRestoreVersion={portal.restoreDrawingVersion}
+                onDeleteDrawing={portal.deleteDrawing}
+                onDeleteCustomer={portal.deleteCustomer}
+                onNavigate={navigate}
+              />
+            ) : null}
+            {modalBaseRoute === "estimate" ? (
+              <EstimatePage session={portal.session} drawingId={modalBaseQuery.drawingId ?? null} onNavigate={navigate} />
+            ) : null}
+            {modalBaseRoute === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
+            {modalBaseRoute === "admin" && showAdmin ? (
+              <AdminPage
+                users={portal.users}
+                auditLog={portal.auditLog}
+                customers={portal.customers}
+                currentUserId={portal.session.user.id}
+                currentUserRole={portal.session.user.role}
+                isLoadingUsers={portal.isLoadingUsers}
+                isLoadingAuditLog={portal.isLoadingAuditLog}
+                isSavingUser={portal.isSavingUser}
+                isResettingUserId={portal.isResettingUserId}
+                isArchivingCustomerId={portal.isArchivingCustomerId}
+                errorMessage={portal.errorMessage}
+                noticeMessage={portal.noticeMessage}
+                onRefresh={portal.refreshUsers}
+                onRefreshAudit={portal.refreshAuditLog}
+                onCreateUser={portal.createUser}
+                onResetUserPassword={portal.resetUserPassword}
+                onRestoreCustomer={async (customerId) => {
+                  await portal.setCustomerArchived(customerId, false, false);
+                  void portal.refreshCustomers();
+                }}
+              />
+            ) : null}
+          </ErrorBoundary>
         </Suspense>
       </main>
       {isCustomerModalOpen ? (

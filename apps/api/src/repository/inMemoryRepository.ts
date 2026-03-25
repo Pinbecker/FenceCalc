@@ -80,6 +80,15 @@ export class InMemoryAppRepository implements AppRepository {
     auditLog: this.auditLog,
     passwordResetTokens: this.passwordResetTokens
   });
+  private readonly auditLogRetentionDays: number;
+
+  public constructor(options: { auditLogRetentionDays?: number } = {}) {
+    this.auditLogRetentionDays = options.auditLogRetentionDays ?? 365;
+  }
+
+  public close(): Promise<void> {
+    return Promise.resolve();
+  }
 
   public checkHealth(): Promise<void> {
     return Promise.resolve();
@@ -217,19 +226,23 @@ export class InMemoryAppRepository implements AppRepository {
   }
 
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void> {
+    this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     this.support.createPasswordResetToken(input);
     return Promise.resolve();
   }
 
   public consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string) {
+    this.support.pruneStaleRecords(consumedAtIso, this.auditLogRetentionDays);
     return Promise.resolve(this.support.consumePasswordResetToken(tokenHash, passwordHash, passwordSalt, consumedAtIso));
   }
 
   public addAuditLog(input: CreateAuditLogInput) {
+    this.support.pruneStaleRecords(input.createdAtIso, this.auditLogRetentionDays);
     return Promise.resolve(this.support.addAuditLog(input));
   }
 
-  public listAuditLog(companyId: string, limit = 100) {
-    return Promise.resolve(this.support.listAuditLog(companyId, limit));
+  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}) {
+    this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
+    return Promise.resolve(this.support.listAuditLog(companyId, options));
   }
 }

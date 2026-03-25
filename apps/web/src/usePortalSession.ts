@@ -23,6 +23,7 @@ import {
   type SetupStatus
 } from "./apiClient";
 import { extractApiErrorMessage } from "./apiErrors";
+import { reportClientError } from "./errorReporting";
 import { readStoredSession, writeStoredSession } from "./sessionEnvelopeStore";
 import { usePortalCompanyData } from "./usePortalCompanyData";
 import { usePortalFeedbackState } from "./usePortalFeedbackState";
@@ -48,7 +49,7 @@ export interface PortalSessionState {
   noticeMessage: string | null;
   bootstrapOwner: (input: RegisterAccountInput) => Promise<boolean>;
   login: (input: LoginInput) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
   refreshUsers: () => Promise<void>;
@@ -260,10 +261,14 @@ export function usePortalSession(): PortalSessionState {
     setNoticeMessage
   ]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     beginSessionRequest();
     if (session) {
-      void logoutSession();
+      try {
+        await logoutSession();
+      } catch (error) {
+        reportClientError(error, "portal.logout");
+      }
     }
 
     setSession(null);

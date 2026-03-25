@@ -13,6 +13,8 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
     const body = response.json<{ ok: boolean; repository: string }>();
     expect(body.ok).toBe(true);
     expect(body.repository).toBe("ready");
+    expect(response.headers["x-request-id"]).toBeTruthy();
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
     await app.close();
   });
 
@@ -132,6 +134,47 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json<{ user: { email: string } }>().user.email).toBe("jane@example.com");
+    await app.close();
+  });
+
+  it("locks sign-in after repeated failed attempts", async () => {
+    const { app } = await registerAndGetSession({
+      loginMaxAttempts: 2,
+      loginLockoutMs: 60000,
+      loginAttemptWindowMs: 60000
+    });
+
+    const firstFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    const secondFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    const locked = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "supersecure123"
+      }
+    });
+
+    expect(firstFailure.statusCode).toBe(401);
+    expect(secondFailure.statusCode).toBe(401);
+    expect(locked.statusCode).toBe(429);
+    expect(locked.json<{ error: string }>().error).toContain("Too many failed sign-in attempts");
     await app.close();
   });
 
