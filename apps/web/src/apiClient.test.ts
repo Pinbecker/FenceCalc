@@ -6,6 +6,7 @@ import {
   createQuoteSnapshot,
   createDrawing,
   createUser,
+  exportAuditLogCsv,
   getAuthenticatedUser,
   getPricedEstimate,
   getSetupStatus,
@@ -40,7 +41,7 @@ describe("apiClient", () => {
 
   it("uses setup bootstrap endpoints", async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ bootstrapRequired: true, bootstrapSecretRequired: true }), { status: 200 }),
+      new Response(JSON.stringify({ bootstrapRequired: true, bootstrapSecretRequired: false }), { status: 200 }),
     );
     fetchMock.mockResolvedValueOnce(
       new Response(
@@ -67,7 +68,7 @@ describe("apiClient", () => {
       ),
     );
 
-    expect((await getSetupStatus()).bootstrapSecretRequired).toBe(true);
+    expect((await getSetupStatus()).bootstrapSecretRequired).toBe(false);
     expect((
       await bootstrapOwner({
         companyName: "Acme",
@@ -467,6 +468,40 @@ describe("apiClient", () => {
     expect(pricedEstimate.drawing.drawingId).toBe("drawing-1");
     expect(pricedEstimate.pricingSnapshot.source).toBe("DEFAULT");
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/drawings/drawing-1/priced-estimate", expect.anything());
+  });
+
+  it("builds audit query strings and exports CSV audit data", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          entries: [],
+          nextBeforeCreatedAtIso: null
+        }),
+        { status: 200 },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("createdAtIso,entityType\n", { status: 200 }));
+
+    await listAuditLog({
+      limit: 25,
+      from: "2026-03-01T00:00:00.000Z",
+      to: "2026-03-31T23:59:59.999Z",
+      entityType: "AUTH",
+      search: "login"
+    });
+    const csv = await exportAuditLogCsv({ search: "login" });
+
+    expect(csv).toContain("createdAtIso");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/audit-log?limit=25&from=2026-03-01T00%3A00%3A00.000Z&to=2026-03-31T23%3A59%3A59.999Z&entityType=AUTH&search=login",
+      expect.anything(),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/audit-log/export?search=login",
+      expect.objectContaining({ method: "GET", credentials: "include" }),
+    );
   });
 
   it("lists and creates immutable quote snapshots for a drawing", async () => {

@@ -9,7 +9,7 @@ export function registerSetupRoutes({ app, config, repository, writeLimiter }: R
     const userCount = await repository.getUserCount();
     return reply.code(200).send({
       bootstrapRequired: userCount === 0,
-      bootstrapSecretRequired: userCount === 0 && config.bootstrapOwnerSecret !== null
+      bootstrapSecretRequired: false
     });
   });
 

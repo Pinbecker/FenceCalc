@@ -35,6 +35,15 @@ export interface SetupStatus {
   bootstrapSecretRequired: boolean;
 }
 
+export interface AuditLogQueryOptions {
+  limit?: number;
+  before?: string;
+  from?: string;
+  to?: string;
+  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER";
+  search?: string;
+}
+
 export interface LoginInput {
   email: string;
   password: string;
@@ -99,8 +108,38 @@ export class ApiClientError extends Error {
   }
 }
 
+export interface AuditLogResponse {
+  entries: AuditLogRecord[];
+  nextBeforeCreatedAtIso: string | null;
+}
+
 function buildUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
+}
+
+function buildAuditLogQuery(options: AuditLogQueryOptions = {}): string {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  if (options.before) {
+    params.set("before", options.before);
+  }
+  if (options.from) {
+    params.set("from", options.from);
+  }
+  if (options.to) {
+    params.set("to", options.to);
+  }
+  if (options.entityType) {
+    params.set("entityType", options.entityType);
+  }
+  if (options.search?.trim()) {
+    params.set("search", options.search.trim());
+  }
+
+  const query = params.toString();
+  return query.length > 0 ? `?${query}` : "";
 }
 
 function validateApiBaseUrl(): void {
@@ -425,9 +464,22 @@ export async function restoreDrawingVersion(
   return response.drawing;
 }
 
-export async function listAuditLog(limit = 50): Promise<AuditLogRecord[]> {
-  const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/audit-log?limit=${limit}`);
+export async function listAuditLog(options: number | AuditLogQueryOptions = 50): Promise<AuditLogRecord[]> {
+  const queryOptions = typeof options === "number" ? { limit: options } : options;
+  const response = await requestJson<AuditLogResponse>(`/api/v1/audit-log${buildAuditLogQuery(queryOptions)}`);
   return response.entries;
+}
+
+export async function exportAuditLogCsv(options: AuditLogQueryOptions = {}): Promise<string> {
+  const response = await fetch(buildUrl(`/api/v1/audit-log/export${buildAuditLogQuery(options)}`), {
+    method: "GET",
+    credentials: "include"
+  });
+  if (!response.ok) {
+    throw new ApiClientError(`Request failed with status ${response.status}`, response.status, null);
+  }
+
+  return response.text();
 }
 
 export async function getPricingConfig(): Promise<PricingConfigRecord> {

@@ -52,7 +52,7 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
     expect(response.statusCode).toBe(200);
     expect(response.json<{ bootstrapRequired: boolean; bootstrapSecretRequired: boolean }>()).toEqual({
       bootstrapRequired: true,
-      bootstrapSecretRequired: true
+      bootstrapSecretRequired: false
     });
     await app.close();
   });
@@ -175,6 +175,86 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
     expect(secondFailure.statusCode).toBe(401);
     expect(locked.statusCode).toBe(429);
     expect(locked.json<{ error: string }>().error).toContain("Too many failed sign-in attempts");
+    await app.close();
+  });
+
+  it("treats email casing as the same lockout key", async () => {
+    const { app } = await registerAndGetSession({
+      loginMaxAttempts: 2,
+      loginLockoutMs: 60000,
+      loginAttemptWindowMs: 60000
+    });
+
+    const firstFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "Jane@Example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    const secondFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    const locked = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "JANE@EXAMPLE.COM",
+        password: "supersecure123"
+      }
+    });
+
+    expect(firstFailure.statusCode).toBe(401);
+    expect(secondFailure.statusCode).toBe(401);
+    expect(locked.statusCode).toBe(429);
+    await app.close();
+  });
+
+  it("clears failed attempts after a successful sign-in", async () => {
+    const { app } = await registerAndGetSession({
+      loginMaxAttempts: 2,
+      loginLockoutMs: 60000,
+      loginAttemptWindowMs: 60000
+    });
+
+    const firstFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    const success = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "supersecure123"
+      }
+    });
+
+    const nextFailure = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: "jane@example.com",
+        password: "wrongpassword123"
+      }
+    });
+
+    expect(firstFailure.statusCode).toBe(401);
+    expect(success.statusCode).toBe(200);
+    expect(nextFailure.statusCode).toBe(401);
     await app.close();
   });
 

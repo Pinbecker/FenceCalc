@@ -86,19 +86,54 @@ export class SqliteSupportStore {
     return { ...input };
   }
 
-  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}): AuditLogRecord[] {
+  public listAuditLog(
+    companyId: string,
+    options:
+      | number
+      | {
+          limit?: number;
+          beforeCreatedAtIso?: string | null;
+          fromCreatedAtIso?: string | null;
+          toCreatedAtIso?: string | null;
+          entityType?: AuditLogRow["entity_type"] | null;
+          search?: string | null;
+        } = {}
+  ): AuditLogRecord[] {
     const normalizedOptions = typeof options === "number" ? { limit: options } : options;
     const limit = normalizedOptions.limit ?? 100;
     const beforeCreatedAtIso = normalizedOptions.beforeCreatedAtIso ?? null;
-    const rows = (beforeCreatedAtIso
-      ? this.database
-          .prepare(
-            "SELECT * FROM audit_log WHERE company_id = ? AND created_at_iso < ? ORDER BY created_at_iso DESC LIMIT ?",
-          )
-          .all(companyId, beforeCreatedAtIso, limit)
-      : this.database
-          .prepare("SELECT * FROM audit_log WHERE company_id = ? ORDER BY created_at_iso DESC LIMIT ?")
-          .all(companyId, limit)) as AuditLogRow[];
+    const fromCreatedAtIso = normalizedOptions.fromCreatedAtIso ?? null;
+    const toCreatedAtIso = normalizedOptions.toCreatedAtIso ?? null;
+    const entityType = normalizedOptions.entityType ?? null;
+    const search = normalizedOptions.search?.trim().toLowerCase() ?? "";
+    const whereClauses = ["company_id = ?"];
+    const values: Array<string | number> = [companyId];
+
+    if (beforeCreatedAtIso) {
+      whereClauses.push("created_at_iso < ?");
+      values.push(beforeCreatedAtIso);
+    }
+    if (fromCreatedAtIso) {
+      whereClauses.push("created_at_iso >= ?");
+      values.push(fromCreatedAtIso);
+    }
+    if (toCreatedAtIso) {
+      whereClauses.push("created_at_iso <= ?");
+      values.push(toCreatedAtIso);
+    }
+    if (entityType) {
+      whereClauses.push("entity_type = ?");
+      values.push(entityType);
+    }
+    if (search) {
+      whereClauses.push("(lower(summary) LIKE ? OR lower(action) LIKE ? OR lower(entity_type) LIKE ?)");
+      values.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    values.push(limit);
+    const rows = this.database
+      .prepare(`SELECT * FROM audit_log WHERE ${whereClauses.join(" AND ")} ORDER BY created_at_iso DESC LIMIT ?`)
+      .all(...values) as AuditLogRow[];
     return rows.map((row) => toAuditLog(row));
   }
 }

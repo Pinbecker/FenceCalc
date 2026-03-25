@@ -16,6 +16,7 @@ import {
   createUser,
   deleteCustomer,
   deleteDrawing,
+  exportAuditLogCsv,
   listCustomers,
   listAuditLog,
   listDrawingVersions,
@@ -27,6 +28,7 @@ import {
   setDrawingStatus,
   setUserPassword,
   updateCustomer,
+  type AuditLogQueryOptions,
   type CreateCompanyUserInput
 } from "./apiClient";
 import { extractApiErrorMessage, extractCurrentVersionNumber } from "./apiErrors";
@@ -68,6 +70,17 @@ export function usePortalCompanyData({
   const [isLoadingAuditLog, setIsLoadingAuditLog] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isResettingUserId, setIsResettingUserId] = useState<string | null>(null);
+  const [auditLogQuery, setAuditLogQuery] = useState<AuditLogQueryOptions>({ limit: 50 });
+
+  const loadAuditLog = useCallback(
+    async (query: AuditLogQueryOptions) => {
+      const entries = await listAuditLog(query);
+      setAuditLogQuery(query);
+      setAuditLog(entries);
+      return entries;
+    },
+    [],
+  );
 
   const clearCompanyData = useCallback(() => {
     setCustomers(EMPTY_PORTAL_COMPANY_DATA.customers);
@@ -140,13 +153,48 @@ export function usePortalCompanyData({
 
     setIsLoadingAuditLog(true);
     try {
-      setAuditLog(await listAuditLog());
+      await loadAuditLog(auditLogQuery);
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     } finally {
       setIsLoadingAuditLog(false);
     }
-  }, [session, setErrorMessage]);
+  }, [auditLogQuery, loadAuditLog, session, setErrorMessage]);
+
+  const refreshFilteredAuditLog = useCallback(
+    async (query: AuditLogQueryOptions) => {
+      if (!session) {
+        setAuditLog([]);
+        return;
+      }
+
+      setIsLoadingAuditLog(true);
+      try {
+        await loadAuditLog({ limit: query.limit ?? auditLogQuery.limit ?? 50, ...query });
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+      } finally {
+        setIsLoadingAuditLog(false);
+      }
+    },
+    [auditLogQuery.limit, loadAuditLog, session, setErrorMessage],
+  );
+
+  const exportFilteredAuditLog = useCallback(
+    async (query: AuditLogQueryOptions) => {
+      if (!session) {
+        return "";
+      }
+
+      try {
+        return await exportAuditLogCsv(query);
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return "";
+      }
+    },
+    [session, setErrorMessage],
+  );
 
   const createCompanyUser = useCallback(
     async (input: CreateCompanyUserInput) => {
@@ -159,7 +207,7 @@ export function usePortalCompanyData({
       try {
         const user = await createUser(input);
         setUsers((current) => [...current, user].sort((left, right) => left.createdAtIso.localeCompare(right.createdAtIso)));
-        setAuditLog(await listAuditLog());
+        await loadAuditLog(auditLogQuery);
         setNoticeMessage(`Added ${user.displayName}`);
         return true;
       } catch (error) {
@@ -169,7 +217,7 @@ export function usePortalCompanyData({
         setIsSavingUser(false);
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const resetCompanyUserPassword = useCallback(
@@ -182,10 +230,9 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         await setUserPassword(userId, { password });
-        const [nextUsers, nextAuditLog] = await Promise.all([listUsers(), listAuditLog()]);
+        const [nextUsers] = await Promise.all([listUsers(), loadAuditLog(auditLogQuery)]);
         const targetUser = nextUsers.find((entry) => entry.id === userId) ?? null;
         setUsers(nextUsers);
-        setAuditLog(nextAuditLog);
         setNoticeMessage(
           targetUser
             ? `Reset password for ${targetUser.displayName}. Their active sessions were revoked.`
@@ -199,7 +246,7 @@ export function usePortalCompanyData({
         setIsResettingUserId(null);
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const setDrawingArchived = useCallback(
@@ -222,7 +269,7 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        setAuditLog(await listAuditLog());
+        await loadAuditLog(auditLogQuery);
         setNoticeMessage(archived ? `Archived "${drawing.name}"` : `Restored "${drawing.name}"`);
         return true;
       } catch (error) {
@@ -238,7 +285,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const changeDrawingStatus = useCallback(
@@ -261,7 +308,7 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        setAuditLog(await listAuditLog());
+        await loadAuditLog(auditLogQuery);
         setNoticeMessage(`Updated "${drawing.name}" status to ${status.charAt(0) + status.slice(1).toLowerCase()}`);
         return true;
       } catch (error) {
@@ -277,7 +324,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const loadDrawingVersions = useCallback(
@@ -316,7 +363,7 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        setAuditLog(await listAuditLog());
+        await loadAuditLog(auditLogQuery);
         setNoticeMessage(`Restored drawing version ${versionNumber}`);
         return true;
       } catch (error) {
@@ -332,7 +379,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const createOrUpdateCustomer = useCallback(
@@ -352,9 +399,8 @@ export function usePortalCompanyData({
           input.mode === "create"
             ? await createCustomer(input.customer)
             : await updateCustomer(input.customerId, input.customer);
-        const [nextCustomers, nextAuditLog] = await Promise.all([listCustomers(), listAuditLog()]);
+        const [nextCustomers] = await Promise.all([listCustomers(), loadAuditLog(auditLogQuery)]);
         setCustomers(nextCustomers);
-        setAuditLog(nextAuditLog);
         setNoticeMessage(
           input.mode === "create" ? `Added customer ${customer.name}` : `Updated customer ${customer.name}`,
         );
@@ -366,7 +412,7 @@ export function usePortalCompanyData({
         setIsSavingCustomer(false);
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const archiveCustomer = useCallback(
@@ -379,10 +425,9 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         const customer = await setCustomerArchivedState(customerId, archived, cascadeDrawings);
-        const [nextCustomers, nextDrawings, nextAuditLog] = await Promise.all([listCustomers(), listDrawings(), listAuditLog()]);
+        const [nextCustomers, nextDrawings] = await Promise.all([listCustomers(), listDrawings(), loadAuditLog(auditLogQuery)]);
         setCustomers(nextCustomers);
         setDrawings(nextDrawings);
-        setAuditLog(nextAuditLog);
         setNoticeMessage(archived ? `Archived customer ${customer.name}` : `Restored customer ${customer.name}`);
         return true;
       } catch (error) {
@@ -392,7 +437,7 @@ export function usePortalCompanyData({
         setIsArchivingCustomerId(null);
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const deleteDrawingPermanently = useCallback(
@@ -402,7 +447,7 @@ export function usePortalCompanyData({
       try {
         await deleteDrawing(drawingId);
         setDrawings((current) => current.filter((entry) => entry.id !== drawingId));
-        setAuditLog(await listAuditLog());
+        await loadAuditLog(auditLogQuery);
         setNoticeMessage("Drawing permanently deleted");
         return true;
       } catch (error) {
@@ -410,7 +455,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   const deleteCustomerPermanently = useCallback(
@@ -419,10 +464,9 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         await deleteCustomer(customerId);
-        const [nextCustomers, nextDrawings, nextAuditLog] = await Promise.all([listCustomers(), listDrawings(), listAuditLog()]);
+        const [nextCustomers, nextDrawings] = await Promise.all([listCustomers(), listDrawings(), loadAuditLog(auditLogQuery)]);
         setCustomers(nextCustomers);
         setDrawings(nextDrawings);
-        setAuditLog(nextAuditLog);
         setNoticeMessage("Customer permanently deleted");
         return true;
       } catch (error) {
@@ -430,7 +474,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [clearMessages, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
   return {
@@ -452,6 +496,8 @@ export function usePortalCompanyData({
     refreshDrawings,
     refreshUsers,
     refreshAuditLog,
+    refreshFilteredAuditLog,
+    exportAuditLog: exportFilteredAuditLog,
     saveCustomer: createOrUpdateCustomer,
     setCustomerArchived: archiveCustomer,
     createUser: createCompanyUser,

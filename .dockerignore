@@ -1,0 +1,14 @@
+node_modules
+.git
+.github
+.turbo
+.tmp
+.vscode
+coverage
+dist
+test-results
+playwright-report
+apps/api/data/*.db
+apps/api/data/*.db-shm
+apps/api/data/*.db-wal
+npm-debug.log*

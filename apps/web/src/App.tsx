@@ -349,6 +349,8 @@ export function App() {
                 noticeMessage={portal.noticeMessage}
                 onRefresh={portal.refreshUsers}
                 onRefreshAudit={portal.refreshAuditLog}
+                onApplyAuditFilters={portal.refreshFilteredAuditLog}
+                onExportAudit={portal.exportAuditLog}
                 onCreateUser={portal.createUser}
                 onResetUserPassword={portal.resetUserPassword}
                 onRestoreCustomer={async (customerId) => {

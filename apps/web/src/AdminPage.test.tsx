@@ -76,6 +76,8 @@ function renderPage(overrides: { customers?: CustomerSummary[] } = {}) {
       noticeMessage={null}
       onRefresh={() => Promise.resolve()}
       onRefreshAudit={() => Promise.resolve()}
+      onApplyAuditFilters={() => Promise.resolve()}
+      onExportAudit={() => Promise.resolve("createdAtIso,entityType")}
       onCreateUser={() => Promise.resolve(true)}
       onResetUserPassword={() => Promise.resolve(true)}
       onRestoreCustomer={() => Promise.resolve()}
@@ -98,6 +100,8 @@ describe("AdminPage", () => {
     expect(html).toContain("Users");
     expect(html).toContain("Drawings");
     expect(html).toContain("Search audit events");
+    expect(html).toContain("Export CSV");
+    expect(html).toContain("Apply filters");
   });
 
   it("shows archived customers section when archived customers exist", () => {

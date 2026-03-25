@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 
 import { loadConfig } from "./config.js";
+import { captureApiException } from "./observability/sentry.js";
 import { InMemoryAppRepository, type AppRepository, SqliteAppRepository } from "./repository.js";
 import {
   InMemoryLoginAttemptLimiter,
@@ -39,6 +40,10 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-request-id", request.id);
+  });
+
+  app.addHook("onError", async (request, _reply, error) => {
+    captureApiException(error, request);
   });
 
   const repository: AppRepository =

@@ -1,0 +1,65 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-runtime
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      DATABASE_PATH: ${DATABASE_PATH:-/var/lib/fence-estimator/fence-estimator.db}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4173}
+      BODY_LIMIT_BYTES: ${BODY_LIMIT_BYTES:-262144}
+      WRITE_RATE_LIMIT_WINDOW_MS: ${WRITE_RATE_LIMIT_WINDOW_MS:-60000}
+      WRITE_RATE_LIMIT_MAX_REQUESTS: ${WRITE_RATE_LIMIT_MAX_REQUESTS:-120}
+      LOGIN_ATTEMPT_WINDOW_MS: ${LOGIN_ATTEMPT_WINDOW_MS:-900000}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_MS: ${LOGIN_LOCKOUT_MS:-900000}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-365}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-fence_estimator_session}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      BOOTSTRAP_OWNER_SECRET: ${BOOTSTRAP_OWNER_SECRET:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+    ports:
+      - "3001:3001"
+    volumes:
+      - fence_estimator_data:/var/lib/fence-estimator
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web-runtime
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_ENVIRONMENT: ${VITE_SENTRY_ENVIRONMENT:-production}
+        VITE_SENTRY_RELEASE: ${VITE_SENTRY_RELEASE:-}
+        VITE_SENTRY_TRACES_SAMPLE_RATE: ${VITE_SENTRY_TRACES_SAMPLE_RATE:-0}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4173
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "4173:4173"
+
+volumes:
+  fence_estimator_data:

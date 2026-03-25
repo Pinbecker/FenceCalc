@@ -35,6 +35,10 @@ const envSchema = z.object({
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   LOGIN_LOCKOUT_MS: z.coerce.number().int().min(1_000).default(900_000),
   AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(365),
+  SENTRY_DSN: optionalTrimmedStringSchema,
+  SENTRY_ENVIRONMENT: optionalTrimmedStringSchema,
+  SENTRY_RELEASE: optionalTrimmedStringSchema,
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_COOKIE_NAME: z.string().trim().min(1).default("fence_estimator_session"),
   SESSION_COOKIE_SECURE: envBooleanSchema.default(false),
@@ -56,6 +60,10 @@ export interface AppConfig {
   loginMaxAttempts: number;
   loginLockoutMs: number;
   auditLogRetentionDays: number;
+  sentryDsn: string | null;
+  sentryEnvironment: string | null;
+  sentryRelease: string | null;
+  sentryTracesSampleRate: number;
   sessionTtlDays: number;
   sessionCookieName: string;
   sessionCookieSecure: boolean;
@@ -103,6 +111,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     loginMaxAttempts: parsed.LOGIN_MAX_ATTEMPTS,
     loginLockoutMs: parsed.LOGIN_LOCKOUT_MS,
     auditLogRetentionDays: parsed.AUDIT_LOG_RETENTION_DAYS,
+    sentryDsn: parsed.SENTRY_DSN ?? null,
+    sentryEnvironment: parsed.SENTRY_ENVIRONMENT ?? null,
+    sentryRelease: parsed.SENTRY_RELEASE ?? null,
+    sentryTracesSampleRate: parsed.SENTRY_TRACES_SAMPLE_RATE,
     sessionTtlDays: parsed.SESSION_TTL_DAYS,
     sessionCookieName: parsed.SESSION_COOKIE_NAME,
     sessionCookieSecure: parsed.SESSION_COOKIE_SECURE,

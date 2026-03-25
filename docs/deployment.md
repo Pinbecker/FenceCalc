@@ -22,8 +22,11 @@ Production requirements:
 - `DATABASE_PATH` set to an absolute persistent path
 - `ALLOWED_ORIGINS` set to the exact browser origins allowed to call the API
 - `SESSION_COOKIE_SECURE=true`
+- `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and `SENTRY_TRACES_SAMPLE_RATE` set if API error reporting is enabled
 - `BOOTSTRAP_OWNER_SECRET` set until the first owner is created, then removed from the runtime environment
 - `VITE_API_BASE_URL` pointed at the production API origin during web build
+- `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, and `VITE_SENTRY_TRACES_SAMPLE_RATE` set during web build if browser error reporting is enabled
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` set during web build if sourcemaps should be uploaded to Sentry
 
 ## Build and Release
 
@@ -37,9 +40,24 @@ Recommended deploy sequence:
 
 1. Build and test in CI.
 2. Snapshot the current production database.
-3. Deploy the API build and web build.
+3. Build the API and web container targets or produce equivalent artifacts.
 4. Start the API with the production environment.
-5. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
+5. Start the web build with the production API origin baked into `VITE_API_BASE_URL`.
+6. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
+
+## Container Workflow
+
+The repository now includes:
+
+- a multi-stage `Dockerfile` with `api-runtime` and `web-runtime` targets
+- a `.dockerignore` tuned for this monorepo
+- a `docker-compose.yml` file for the supported single-instance production shape
+
+Example local production-style run:
+
+```powershell
+docker compose up --build
+```
 
 ## CI Expectations
 

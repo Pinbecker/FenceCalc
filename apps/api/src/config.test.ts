@@ -19,6 +19,10 @@ describe("loadConfig", () => {
     expect(config.loginMaxAttempts).toBe(5);
     expect(config.loginLockoutMs).toBe(900000);
     expect(config.auditLogRetentionDays).toBe(365);
+    expect(config.sentryDsn).toBeNull();
+    expect(config.sentryEnvironment).toBeNull();
+    expect(config.sentryRelease).toBeNull();
+    expect(config.sentryTracesSampleRate).toBe(0);
     expect(config.sessionTtlDays).toBe(30);
     expect(config.sessionCookieName).toBe("fence_estimator_session");
     expect(config.sessionCookieSecure).toBe(false);
@@ -41,6 +45,10 @@ describe("loadConfig", () => {
       LOGIN_MAX_ATTEMPTS: "4",
       LOGIN_LOCKOUT_MS: "1200000",
       AUDIT_LOG_RETENTION_DAYS: "730",
+      SENTRY_DSN: "https://public@example.ingest.sentry.io/123",
+      SENTRY_ENVIRONMENT: "staging",
+      SENTRY_RELEASE: "2026.03.25",
+      SENTRY_TRACES_SAMPLE_RATE: "0.2",
       SESSION_TTL_DAYS: "14",
       SESSION_COOKIE_NAME: "custom_cookie",
       SESSION_COOKIE_SECURE: "true",
@@ -61,6 +69,10 @@ describe("loadConfig", () => {
     expect(config.loginMaxAttempts).toBe(4);
     expect(config.loginLockoutMs).toBe(1200000);
     expect(config.auditLogRetentionDays).toBe(730);
+    expect(config.sentryDsn).toBe("https://public@example.ingest.sentry.io/123");
+    expect(config.sentryEnvironment).toBe("staging");
+    expect(config.sentryRelease).toBe("2026.03.25");
+    expect(config.sentryTracesSampleRate).toBe(0.2);
     expect(config.sessionTtlDays).toBe(14);
     expect(config.sessionCookieName).toBe("custom_cookie");
     expect(config.sessionCookieSecure).toBe(true);

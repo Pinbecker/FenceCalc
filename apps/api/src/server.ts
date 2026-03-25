@@ -1,7 +1,9 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { flushApiSentry, initApiSentry } from "./observability/sentry.js";
 
 const config = loadConfig();
+initApiSentry(config);
 const app = buildApp({ config });
 let isShuttingDown = false;
 
@@ -15,6 +17,7 @@ async function shutdown(reason: string, exitCode = 0): Promise<void> {
 
   try {
     await app.close();
+    await flushApiSentry();
     app.log.info({ reason }, "API shutdown complete");
     process.exit(exitCode);
   } catch (error) {

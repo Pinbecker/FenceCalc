@@ -264,6 +264,15 @@ export interface AppRepository {
   addAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord>;
   listAuditLog(
     companyId: string,
-    options?: number | { limit?: number; beforeCreatedAtIso?: string | null }
+    options?:
+      | number
+      | {
+          limit?: number;
+          beforeCreatedAtIso?: string | null;
+          fromCreatedAtIso?: string | null;
+          toCreatedAtIso?: string | null;
+          entityType?: AuditEntityType | null;
+          search?: string | null;
+        }
   ): Promise<AuditLogRecord[]>;
 }

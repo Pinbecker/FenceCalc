@@ -23,7 +23,7 @@ import {
   type SetupStatus
 } from "./apiClient";
 import { extractApiErrorMessage } from "./apiErrors";
-import { reportClientError } from "./errorReporting";
+import { reportClientError, setClientTelemetrySession } from "./errorReporting";
 import { readStoredSession, writeStoredSession } from "./sessionEnvelopeStore";
 import { usePortalCompanyData } from "./usePortalCompanyData";
 import { usePortalFeedbackState } from "./usePortalFeedbackState";
@@ -122,6 +122,10 @@ export function usePortalSession(): PortalSessionState {
   }, []);
 
   const isActiveSessionRequest = useCallback((requestId: number) => sessionRequestIdRef.current === requestId, []);
+
+  useEffect(() => {
+    setClientTelemetrySession(session);
+  }, [session]);
 
   useEffect(() => {
     let cancelled = false;

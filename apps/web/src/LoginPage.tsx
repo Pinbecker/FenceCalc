@@ -81,14 +81,13 @@ export function LoginPage({
           </label>
         ) : null}
 
-        {bootstrapRequired && bootstrapSecretRequired ? (
+        {bootstrapRequired ? (
           <label className="portal-field">
-            <span>Bootstrap Secret</span>
+            <span>Bootstrap Secret (optional unless configured)</span>
             <input
               type="password"
               value={bootstrapSecret}
               onChange={(event) => setBootstrapSecret(event.target.value)}
-              required
             />
           </label>
         ) : null}

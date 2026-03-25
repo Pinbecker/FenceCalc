@@ -78,14 +78,44 @@ export class InMemorySupportStore {
     return record;
   }
 
-  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}): AuditLogRecord[] {
+  public listAuditLog(
+    companyId: string,
+    options:
+      | number
+      | {
+          limit?: number;
+          beforeCreatedAtIso?: string | null;
+          fromCreatedAtIso?: string | null;
+          toCreatedAtIso?: string | null;
+          entityType?: AuditLogRecord["entityType"] | null;
+          search?: string | null;
+        } = {}
+  ): AuditLogRecord[] {
     const normalizedOptions = typeof options === "number" ? { limit: options } : options;
     const limit = normalizedOptions.limit ?? 100;
     const beforeCreatedAtIso = normalizedOptions.beforeCreatedAtIso ?? null;
+    const fromCreatedAtIso = normalizedOptions.fromCreatedAtIso ?? null;
+    const toCreatedAtIso = normalizedOptions.toCreatedAtIso ?? null;
+    const entityType = normalizedOptions.entityType ?? null;
+    const search = normalizedOptions.search?.trim().toLowerCase() ?? "";
 
     return this.state.auditLog
       .filter((entry) => entry.companyId === companyId)
       .filter((entry) => beforeCreatedAtIso === null || entry.createdAtIso < beforeCreatedAtIso)
+      .filter((entry) => fromCreatedAtIso === null || entry.createdAtIso >= fromCreatedAtIso)
+      .filter((entry) => toCreatedAtIso === null || entry.createdAtIso <= toCreatedAtIso)
+      .filter((entry) => entityType === null || entry.entityType === entityType)
+      .filter((entry) => {
+        if (!search) {
+          return true;
+        }
+
+        return (
+          entry.summary.toLowerCase().includes(search) ||
+          entry.action.toLowerCase().includes(search) ||
+          entry.entityType.toLowerCase().includes(search)
+        );
+      })
       .slice(0, limit);
   }
 }

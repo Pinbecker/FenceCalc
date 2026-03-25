@@ -53,8 +53,37 @@ Important production rules:
 - `TRUST_PROXY=true` should be set when the API runs behind the supported reverse proxy.
 - `LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_MS`, and `LOGIN_LOCKOUT_MS` control account lockout after failed sign-ins.
 - `AUDIT_LOG_RETENTION_DAYS` controls automatic audit-log retention and stale password-reset cleanup.
+- `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and `SENTRY_TRACES_SAMPLE_RATE` enable API-side error reporting.
 - `BOOTSTRAP_OWNER_SECRET` should be set until the first owner account is created.
 - `VITE_API_BASE_URL` should point at the deployed API origin when the web app is built for production.
+- `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, and `VITE_SENTRY_TRACES_SAMPLE_RATE` enable browser-side error reporting.
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are only required when uploading production web sourcemaps during the build.
+
+## Containers
+
+Build the API image:
+
+```powershell
+docker build --target api-runtime -t fence-estimator-api .
+```
+
+Build the web image:
+
+```powershell
+docker build --target web-runtime -t fence-estimator-web --build-arg VITE_API_BASE_URL=https://api.example.com .
+```
+
+Run the production-shaped local stack:
+
+```powershell
+docker compose up --build
+```
+
+Notes:
+
+- the API container persists SQLite data under `/var/lib/fence-estimator`
+- the web container is a static build, so `VITE_*` values must be present at build time, not only at runtime
+- `docker-compose.yml` is intentionally single-instance and matches the current supported deployment shape
 
 ## Operations
 

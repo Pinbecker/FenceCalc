@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 import { LoginPage } from "./LoginPage.js";
 
 describe("LoginPage", () => {
-  it("renders the bootstrap secret field during protected initial setup", () => {
+  it("renders an optional bootstrap secret field during initial setup", () => {
     const html = renderToStaticMarkup(
       <LoginPage
         bootstrapRequired
-        bootstrapSecretRequired
+        bootstrapSecretRequired={false}
         isSubmitting={false}
         errorMessage={null}
         noticeMessage={null}
@@ -18,7 +18,7 @@ describe("LoginPage", () => {
     );
 
     expect(html).toContain("Create the first owner account");
-    expect(html).toContain("Bootstrap Secret");
+    expect(html).toContain("Bootstrap Secret (optional unless configured)");
     expect(html).toContain("Create Owner");
   });
 

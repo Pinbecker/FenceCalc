@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState, type FormEvent } from "react";
 
 import type { AuditEntityType, AuditLogRecord, CompanyUserRecord, CustomerSummary } from "@fence-estimator/contracts";
+import type { AuditLogQueryOptions } from "./apiClient";
 
 type AuditCategoryFilter = "ALL" | AuditEntityType;
 
@@ -19,6 +20,8 @@ interface AdminPageProps {
   noticeMessage: string | null;
   onRefresh(this: void): Promise<void>;
   onRefreshAudit(this: void): Promise<void>;
+  onApplyAuditFilters(this: void, filters: AuditLogQueryOptions): Promise<void>;
+  onExportAudit(this: void, filters: AuditLogQueryOptions): Promise<string>;
   onCreateUser(
     this: void,
     input: { displayName: string; email: string; password: string; role: "ADMIN" | "MEMBER" },
@@ -58,6 +61,8 @@ export function AdminPage({
   noticeMessage,
   onRefresh,
   onRefreshAudit,
+  onApplyAuditFilters,
+  onExportAudit,
   onCreateUser,
   onResetUserPassword,
   onRestoreCustomer
@@ -69,6 +74,9 @@ export function AdminPage({
   const [resetPasswordsByUserId, setResetPasswordsByUserId] = useState<Record<string, string>>({});
   const [auditCategory, setAuditCategory] = useState<AuditCategoryFilter>("ALL");
   const [auditSearch, setAuditSearch] = useState("");
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
+  const [isExportingAudit, setIsExportingAudit] = useState(false);
 
   const canManageUsers = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
 
@@ -77,22 +85,7 @@ export function AdminPage({
     [customers]
   );
 
-  const filteredAuditLog = useMemo(() => {
-    const normalizedSearch = auditSearch.trim().toLowerCase();
-    return auditLog.filter((entry) => {
-      if (auditCategory !== "ALL" && entry.entityType !== auditCategory) {
-        return false;
-      }
-      if (normalizedSearch) {
-        return (
-          entry.summary.toLowerCase().includes(normalizedSearch) ||
-          entry.action.toLowerCase().includes(normalizedSearch) ||
-          entry.entityType.toLowerCase().includes(normalizedSearch)
-        );
-      }
-      return true;
-    });
-  }, [auditLog, auditCategory, auditSearch]);
+  const filteredAuditLog = auditLog;
 
   const auditCountByCategory = useMemo(() => {
     const counts: Record<string, number> = { ALL: auditLog.length };
@@ -119,6 +112,48 @@ export function AdminPage({
     }
     if (await onResetUserPassword(userId, nextPassword)) {
       setResetPasswordsByUserId((current) => ({ ...current, [userId]: "" }));
+    }
+  };
+
+  const buildAuditFilters = (): AuditLogQueryOptions => ({
+    limit: 50,
+    entityType: auditCategory === "ALL" ? undefined : auditCategory,
+    search: auditSearch.trim() || undefined,
+    from: auditFrom ? new Date(`${auditFrom}T00:00:00.000Z`).toISOString() : undefined,
+    to: auditTo ? new Date(`${auditTo}T23:59:59.999Z`).toISOString() : undefined
+  });
+
+  const handleApplyAuditFilters = async () => {
+    await onApplyAuditFilters(buildAuditFilters());
+  };
+
+  const handleClearAuditFilters = async () => {
+    setAuditCategory("ALL");
+    setAuditSearch("");
+    setAuditFrom("");
+    setAuditTo("");
+    await onApplyAuditFilters({ limit: 50 });
+  };
+
+  const handleExportAudit = async () => {
+    setIsExportingAudit(true);
+    try {
+      const csv = await onExportAudit(buildAuditFilters());
+      if (!csv || typeof document === "undefined") {
+        return;
+      }
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExportingAudit(false);
     }
   };
 
@@ -293,7 +328,7 @@ export function AdminPage({
                 onClick={() => setAuditCategory(category.key)}
               >
                 {category.label}
-                {auditCountByCategory[category.key] ? (
+                {auditCategory === "ALL" && auditCountByCategory[category.key] ? (
                   <span className="admin-audit-count">{auditCountByCategory[category.key]}</span>
                 ) : null}
               </button>
@@ -305,12 +340,28 @@ export function AdminPage({
               onChange={(event) => setAuditSearch(event.target.value)}
               placeholder="Search audit events..."
             />
-            {auditSearch.trim().length > 0 ? (
-              <button type="button" className="portal-text-button" onClick={() => setAuditSearch("")}>
-                Clear
-              </button>
-            ) : null}
           </label>
+          <div className="portal-form-grid">
+            <label className="portal-field">
+              <span>From</span>
+              <input type="date" value={auditFrom} onChange={(event) => setAuditFrom(event.target.value)} />
+            </label>
+            <label className="portal-field">
+              <span>To</span>
+              <input type="date" value={auditTo} onChange={(event) => setAuditTo(event.target.value)} />
+            </label>
+          </div>
+          <div className="portal-header-actions">
+            <button type="button" className="portal-secondary-button" onClick={() => void handleApplyAuditFilters()} disabled={isLoadingAuditLog}>
+              {isLoadingAuditLog ? "Applying..." : "Apply filters"}
+            </button>
+            <button type="button" className="portal-secondary-button" onClick={() => void handleClearAuditFilters()} disabled={isLoadingAuditLog}>
+              Clear filters
+            </button>
+            <button type="button" className="portal-secondary-button" onClick={() => void handleExportAudit()} disabled={isExportingAudit}>
+              {isExportingAudit ? "Exporting..." : "Export CSV"}
+            </button>
+          </div>
         </div>
         <div className="audit-log-list">
           {filteredAuditLog.length === 0 ? (
