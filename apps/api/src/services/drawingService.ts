@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DrawingCanvasViewport, DrawingRecord, LayoutModel } from "@fence-estimator/contracts";
+import type { DrawingCanvasViewport, DrawingRecord, DrawingStatus, LayoutModel } from "@fence-estimator/contracts";
 
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { writeAuditLog } from "../auditLogSupport.js";
@@ -59,6 +59,11 @@ interface DrawingUpdateInput {
 
 interface DrawingArchiveInput {
   archived: boolean;
+  expectedVersionNumber: number;
+}
+
+interface DrawingStatusInput {
+  status: DrawingStatus;
   expectedVersionNumber: number;
 }
 
@@ -275,4 +280,83 @@ export async function restoreDrawingVersionForCompany(
   });
 
   return { kind: "success", drawing };
+}
+
+export async function setDrawingStatusForCompany(
+  repository: AppRepository,
+  authenticated: AuthenticatedRequestContext,
+  drawingId: string,
+  input: DrawingStatusInput,
+): Promise<DrawingMutationResult> {
+  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
+  if (!existing) {
+    return { kind: "drawing_not_found" };
+  }
+  if (input.expectedVersionNumber !== existing.versionNumber) {
+    return { kind: "conflict", currentVersionNumber: existing.versionNumber };
+  }
+
+  const updatedAtIso = new Date().toISOString();
+  const drawing = await repository.setDrawingStatus({
+    drawingId,
+    companyId: authenticated.company.id,
+    status: input.status,
+    statusChangedAtIso: updatedAtIso,
+    statusChangedByUserId: authenticated.user.id,
+    updatedAtIso,
+    updatedByUserId: authenticated.user.id
+  });
+  if (!drawing) {
+    return { kind: "drawing_not_found" };
+  }
+
+  const previousStatus = existing.status;
+  await writeAuditLog(repository, {
+    companyId: authenticated.company.id,
+    actorUserId: authenticated.user.id,
+    entityType: "DRAWING",
+    entityId: drawing.id,
+    action: "DRAWING_STATUS_CHANGED",
+    summary: `${authenticated.user.displayName} changed ${drawing.name} from ${previousStatus} to ${input.status}`,
+    createdAtIso: updatedAtIso,
+    metadata: { previousStatus, newStatus: input.status }
+  });
+
+  return { kind: "success", drawing };
+}
+
+export type DrawingDeleteResult =
+  | { kind: "success" }
+  | { kind: "drawing_not_found" }
+  | { kind: "not_archived" };
+
+export async function deleteDrawingForCompany(
+  repository: AppRepository,
+  authenticated: AuthenticatedRequestContext,
+  drawingId: string,
+): Promise<DrawingDeleteResult> {
+  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
+  if (!existing) {
+    return { kind: "drawing_not_found" };
+  }
+  if (!existing.isArchived) {
+    return { kind: "not_archived" };
+  }
+
+  await repository.deleteDrawing({
+    drawingId,
+    companyId: authenticated.company.id,
+  });
+
+  await writeAuditLog(repository, {
+    companyId: authenticated.company.id,
+    actorUserId: authenticated.user.id,
+    entityType: "DRAWING",
+    entityId: drawingId,
+    action: "DRAWING_DELETED",
+    summary: `${authenticated.user.displayName} permanently deleted drawing ${existing.name}`,
+    createdAtIso: new Date().toISOString(),
+  });
+
+  return { kind: "success" };
 }

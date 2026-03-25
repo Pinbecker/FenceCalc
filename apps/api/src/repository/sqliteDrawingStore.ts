@@ -4,8 +4,10 @@ import type { DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence
 import { type DrawingRow, type DrawingVersionRow, toDrawing, toDrawingSummary, toDrawingVersion } from "./shared.js";
 import type {
   CreateDrawingInput,
+  DeleteDrawingInput,
   RestoreDrawingVersionInput,
   SetDrawingArchivedStateInput,
+  SetDrawingStatusInput,
   UpdateDrawingInput
 } from "./types.js";
 
@@ -143,24 +145,35 @@ export class SqliteDrawingStore {
     return {
       ...input,
       versionNumber: 1,
+      status: "DRAFT" as const,
       isArchived: false,
       archivedAtIso: null,
-      archivedByUserId: null
+      archivedByUserId: null,
+      statusChangedAtIso: null,
+      statusChangedByUserId: null
     };
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE") {
+  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
     const whereClause =
       scope === "ACTIVE" ? "AND d.is_archived = 0" : scope === "ARCHIVED" ? "AND d.is_archived = 1" : "";
+    const searchClause = search.trim()
+      ? "AND (lower(d.name) LIKE ? OR lower(COALESCE(c.name, d.customer_name)) LIKE ?)"
+      : "";
+    const params: unknown[] = [companyId];
+    if (search.trim()) {
+      const normalized = `%${search.trim().toLowerCase()}%`;
+      params.push(normalized, normalized);
+    }
     const rows = this.database
       .prepare(`
         SELECT d.*, c.name AS resolved_customer_name
         FROM drawings d
         LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.company_id = ? ${whereClause}
+        WHERE d.company_id = ? ${whereClause} ${searchClause}
         ORDER BY d.updated_at_iso DESC
       `)
-      .all(companyId) as DrawingRow[];
+      .all(...params) as DrawingRow[];
     const metadata = this.buildContributorMetadata(
       companyId,
       rows.map((row) => row.id)
@@ -388,6 +401,51 @@ export class SqliteDrawingStore {
     };
   }
 
+  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
+    const row = this.database
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
+      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+    if (!row) {
+      return null;
+    }
+
+    this.database
+      .prepare(
+        `
+          UPDATE drawings
+          SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, updated_by_user_id = ?, updated_at_iso = ?
+          WHERE id = ? AND company_id = ?
+        `,
+      )
+      .run(
+        input.status,
+        input.statusChangedAtIso,
+        input.statusChangedByUserId,
+        input.updatedByUserId,
+        input.updatedAtIso,
+        input.drawingId,
+        input.companyId,
+      );
+
+    const drawing = this.tryReadDrawing(row);
+    if (!drawing) {
+      return null;
+    }
+    return {
+      ...drawing,
+      status: input.status,
+      statusChangedAtIso: input.statusChangedAtIso,
+      statusChangedByUserId: input.statusChangedByUserId,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso
+    };
+  }
+
   public listDrawingVersions(drawingId: string, companyId: string): DrawingVersionRecord[] {
     const rows = this.database
       .prepare(
@@ -502,5 +560,61 @@ export class SqliteDrawingStore {
       updatedByUserId: input.restoredByUserId,
       updatedAtIso: input.restoredAtIso
     };
+  }
+
+  public listDrawingsForCustomer(customerId: string, companyId: string): DrawingSummary[] {
+    const rows = this.database
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.company_id = ? AND d.customer_id = ?
+        ORDER BY d.updated_at_iso DESC
+      `)
+      .all(companyId, customerId) as DrawingRow[];
+    const metadata = this.buildContributorMetadata(
+      companyId,
+      rows.map((row) => row.id)
+    );
+    return rows.flatMap((row) => {
+      const drawing = this.tryReadDrawing(row);
+      if (!drawing) {
+        return [];
+      }
+      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
+      contributorIds.add(drawing.createdByUserId);
+      contributorIds.add(drawing.updatedByUserId);
+      const contributorUserIds = [...contributorIds];
+      return [toDrawingSummary(drawing, {
+        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
+        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
+        contributorUserIds,
+        contributorDisplayNames: contributorUserIds
+          .map((userId) => metadata.userDisplayNameById.get(userId))
+          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
+      })];
+    });
+  }
+
+  public deleteDrawing(input: DeleteDrawingInput): boolean {
+    const existing = this.database
+      .prepare("SELECT id, is_archived FROM drawings WHERE id = ? AND company_id = ?")
+      .get(input.drawingId, input.companyId) as { id: string; is_archived: number } | undefined;
+    if (!existing) {
+      return false;
+    }
+    const doDelete = this.database.transaction(() => {
+      this.database
+        .prepare("DELETE FROM drawing_versions WHERE drawing_id = ? AND company_id = ?")
+        .run(input.drawingId, input.companyId);
+      this.database
+        .prepare("DELETE FROM quotes WHERE drawing_id = ? AND company_id = ?")
+        .run(input.drawingId, input.companyId);
+      this.database
+        .prepare("DELETE FROM drawings WHERE id = ? AND company_id = ?")
+        .run(input.drawingId, input.companyId);
+    });
+    doDelete();
+    return true;
   }
 }

@@ -304,6 +304,7 @@ export function App() {
               query={modalBaseQuery}
               customers={portal.customers}
               drawings={portal.drawings}
+              userRole={portal.session.user.role}
               isSavingCustomer={portal.isSavingCustomer}
               isArchivingCustomerId={portal.isArchivingCustomerId}
               errorMessage={portal.errorMessage}
@@ -314,8 +315,11 @@ export function App() {
               onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
               onCreateDrawing={() => navigate("editor")}
               onToggleDrawingArchived={portal.setDrawingArchived}
+              onChangeDrawingStatus={portal.changeDrawingStatus}
               onLoadVersions={portal.loadDrawingVersions}
               onRestoreVersion={portal.restoreDrawingVersion}
+              onDeleteDrawing={portal.deleteDrawing}
+              onDeleteCustomer={portal.deleteCustomer}
               onNavigate={navigate}
             />
           ) : null}
@@ -327,18 +331,24 @@ export function App() {
             <AdminPage
               users={portal.users}
               auditLog={portal.auditLog}
+              customers={portal.customers}
               currentUserId={portal.session.user.id}
               currentUserRole={portal.session.user.role}
               isLoadingUsers={portal.isLoadingUsers}
               isLoadingAuditLog={portal.isLoadingAuditLog}
               isSavingUser={portal.isSavingUser}
               isResettingUserId={portal.isResettingUserId}
+              isArchivingCustomerId={portal.isArchivingCustomerId}
               errorMessage={portal.errorMessage}
               noticeMessage={portal.noticeMessage}
               onRefresh={portal.refreshUsers}
               onRefreshAudit={portal.refreshAuditLog}
               onCreateUser={portal.createUser}
               onResetUserPassword={portal.resetUserPassword}
+              onRestoreCustomer={async (customerId) => {
+                await portal.setCustomerArchived(customerId, false, false);
+                void portal.refreshCustomers();
+              }}
             />
           ) : null}
         </Suspense>

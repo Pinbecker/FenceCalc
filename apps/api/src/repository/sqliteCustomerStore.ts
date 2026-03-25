@@ -5,6 +5,7 @@ import { type CustomerRow, type CustomerSummaryRow, toCustomer, toCustomerSummar
 import type {
   CreateCustomerInput,
   CustomerScope,
+  DeleteCustomerInput,
   SetCustomerArchivedStateInput,
   UpdateCustomerInput,
 } from "./types.js";
@@ -195,5 +196,18 @@ export class SqliteCustomerStore {
       return null;
     }
     return this.getCustomerById(input.customerId, input.companyId);
+  }
+
+  public deleteCustomer(input: DeleteCustomerInput): boolean {
+    const existing = this.database
+      .prepare("SELECT id FROM customers WHERE id = ? AND company_id = ?")
+      .get(input.customerId, input.companyId) as { id: string } | undefined;
+    if (!existing) {
+      return false;
+    }
+    this.database
+      .prepare("DELETE FROM customers WHERE id = ? AND company_id = ?")
+      .run(input.customerId, input.companyId);
+    return true;
   }
 }

@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import { DRAWING_STATUSES, type AuthSessionEnvelope, type CustomerSummary, type DrawingStatus, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 
-type DrawingStatusFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+type DrawingArchiveFilter = "ACTIVE" | "ARCHIVED" | "ALL";
 type DrawingOwnershipFilter = "COMPANY" | "MINE";
+type DrawingJobStatusFilter = DrawingStatus | "ALL_STATUSES";
+
+const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
+};
 
 interface DrawingsPageProps {
   query?: Record<string, string>;
@@ -18,8 +27,12 @@ interface DrawingsPageProps {
   onOpenEstimate(this: void, drawingId: string): void;
   onCreateDrawing(this: void): void;
   onToggleArchive(this: void, drawingId: string, archived: boolean): Promise<boolean>;
+  onChangeStatus(this: void, drawingId: string, status: DrawingStatus): Promise<boolean>;
   onLoadVersions(this: void, drawingId: string): Promise<DrawingVersionRecord[]>;
   onRestoreVersion(this: void, drawingId: string, versionNumber: number): Promise<boolean>;
+  onDeleteDrawing?(this: void, drawingId: string): Promise<boolean>;
+  onSearch?(this: void, search: string): void;
+  userRole?: string;
 }
 
 function formatTimestamp(value: string): string {
@@ -44,15 +57,24 @@ export function DrawingsPage({
   onOpenEstimate,
   onCreateDrawing,
   onToggleArchive,
+  onChangeStatus,
   onLoadVersions,
-  onRestoreVersion
+  onRestoreVersion,
+  onDeleteDrawing,
+  onSearch,
+  userRole
 }: DrawingsPageProps) {
-  const [statusFilter, setStatusFilter] = useState<DrawingStatusFilter>("ACTIVE");
+  const isAdmin = userRole === "OWNER" || userRole === "ADMIN";
+  const [statusFilter, setStatusFilter] = useState<DrawingArchiveFilter>("ACTIVE");
+  const [jobStatusFilter, setJobStatusFilter] = useState<DrawingJobStatusFilter>("ALL_STATUSES");
   const [ownershipFilter, setOwnershipFilter] = useState<DrawingOwnershipFilter>("COMPANY");
   const [selectedCustomer, setSelectedCustomer] = useState("ALL_CUSTOMERS");
+  const [searchText, setSearchText] = useState("");
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeletingDrawing, setIsDeletingDrawing] = useState(false);
 
   useEffect(() => {
     if (query?.scope === "active") {
@@ -74,6 +96,10 @@ export function DrawingsPage({
     } else if (query && !("customerId" in query)) {
       setSelectedCustomer("ALL_CUSTOMERS");
     }
+
+    if (query?.jobStatus && (DRAWING_STATUSES as readonly string[]).includes(query.jobStatus)) {
+      setJobStatusFilter(query.jobStatus as DrawingJobStatusFilter);
+    }
   }, [query]);
 
   const customerOptions = useMemo(
@@ -82,6 +108,7 @@ export function DrawingsPage({
   );
 
   const visibleDrawings = useMemo(() => {
+    const normalizedSearch = searchText.trim().toLowerCase();
     return drawings
       .filter((drawing) => {
         if (statusFilter === "ACTIVE") {
@@ -99,8 +126,13 @@ export function DrawingsPage({
         return true;
       })
       .filter((drawing) => selectedCustomer === "ALL_CUSTOMERS" || drawing.customerId === selectedCustomer)
+      .filter((drawing) => jobStatusFilter === "ALL_STATUSES" || drawing.status === jobStatusFilter)
+      .filter((drawing) => {
+        if (!normalizedSearch) return true;
+        return drawing.name.toLowerCase().includes(normalizedSearch) || drawing.customerName.toLowerCase().includes(normalizedSearch);
+      })
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
-  }, [drawings, ownershipFilter, selectedCustomer, session.user.id, statusFilter]);
+  }, [drawings, jobStatusFilter, ownershipFilter, searchText, selectedCustomer, session.user.id, statusFilter]);
 
   const groupedDrawings = useMemo(() => {
     const groups = new Map<string, { label: string; drawings: DrawingSummary[] }>();
@@ -190,8 +222,8 @@ export function DrawingsPage({
       <section className="portal-surface-card drawing-library-toolbar">
         <div className="drawing-library-toolbar-main">
           <div className="drawing-library-toolbar-filters">
-            <div className="portal-filter-row" role="tablist" aria-label="Drawing status filter">
-              {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingStatusFilter[]).map((option) => (
+            <div className="portal-filter-row" role="tablist" aria-label="Drawing archive filter">
+              {(["ACTIVE", "ARCHIVED", "ALL"] as DrawingArchiveFilter[]).map((option) => (
                 <button
                   type="button"
                   key={option}
@@ -217,6 +249,21 @@ export function DrawingsPage({
             </div>
 
             <label className="drawing-library-customer-filter">
+              <span>Job status</span>
+              <select
+                value={jobStatusFilter}
+                onChange={(event) => setJobStatusFilter(event.target.value as DrawingJobStatusFilter)}
+              >
+                <option value="ALL_STATUSES">All statuses</option>
+                {DRAWING_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {JOB_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="drawing-library-customer-filter">
               <span>Customer</span>
               <select value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
                 <option value="ALL_CUSTOMERS">All customers</option>
@@ -226,6 +273,19 @@ export function DrawingsPage({
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className="drawing-library-search-input">
+              <span>Search</span>
+              <input
+                type="search"
+                placeholder="Drawing or customer name..."
+                value={searchText}
+                onChange={(event) => {
+                  setSearchText(event.target.value);
+                  onSearch?.(event.target.value);
+                }}
+              />
             </label>
           </div>
 
@@ -314,6 +374,9 @@ export function DrawingsPage({
                             <span className={`drawing-library-badge${drawing.isArchived ? " archived" : ""}`}>
                               {drawing.isArchived ? "Archived" : "Active"}
                             </span>
+                            <span className={`drawing-library-badge drawing-status-${drawing.status.toLowerCase()}`}>
+                              {JOB_STATUS_LABELS[drawing.status]}
+                            </span>
                           </div>
                         </div>
 
@@ -333,6 +396,21 @@ export function DrawingsPage({
                           Estimate
                         </button>
                         <div className="drawing-library-row-utility-actions">
+                          <label className="drawing-library-status-select">
+                            <span className="sr-only">Job status</span>
+                            <select
+                              value={drawing.status}
+                              onChange={(event) =>
+                                void onChangeStatus(drawing.id, event.target.value as DrawingStatus)
+                              }
+                            >
+                              {DRAWING_STATUSES.map((status) => (
+                                <option key={status} value={status}>
+                                  {JOB_STATUS_LABELS[status]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <button
                             type="button"
                             className="portal-secondary-button drawing-library-utility-button"
@@ -347,6 +425,15 @@ export function DrawingsPage({
                           >
                             {expandedDrawingId === drawing.id ? "Hide history" : "Version history"}
                           </button>
+                          {isAdmin && drawing.isArchived && onDeleteDrawing ? (
+                            <button
+                              type="button"
+                              className="portal-danger-button drawing-library-utility-button"
+                              onClick={() => setConfirmDeleteId(drawing.id)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -384,6 +471,38 @@ export function DrawingsPage({
           </section>
         ))}
       </div>
+
+      {confirmDeleteId && onDeleteDrawing ? (
+        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteId(null)}>
+          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete drawing" onClick={(event) => event.stopPropagation()}>
+            <div className="portal-customer-edit-modal-header">
+              <h2>Permanently delete drawing?</h2>
+              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteId(null)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body">
+              <p>This will permanently remove the drawing, all its versions, and any associated quotes. This action cannot be undone.</p>
+            </div>
+            <div className="portal-customer-edit-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteId(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-danger-button portal-compact-button"
+                disabled={isDeletingDrawing}
+                onClick={async () => {
+                  setIsDeletingDrawing(true);
+                  await onDeleteDrawing(confirmDeleteId);
+                  setIsDeletingDrawing(false);
+                  setConfirmDeleteId(null);
+                }}
+              >
+                {isDeletingDrawing ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

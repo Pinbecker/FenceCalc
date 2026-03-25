@@ -8,6 +8,7 @@ import type {
   CustomerRecord,
   CustomerSummary,
   DrawingRecord,
+  DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
   DrawingVersionSource,
@@ -17,6 +18,7 @@ import type {
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
+  DRAWING_STATUSES,
   customerRecordSchema,
   customerSummarySchema,
   drawingCanvasViewportSchema,
@@ -102,9 +104,12 @@ export interface DrawingRow {
   schema_version: number;
   rules_version: string;
   version_number: number;
+  status: string;
   is_archived: number;
   archived_at_iso: string | null;
   archived_by_user_id: string | null;
+  status_changed_at_iso: string | null;
+  status_changed_by_user_id: string | null;
   created_by_user_id: string;
   updated_by_user_id: string;
   created_at_iso: string;
@@ -294,6 +299,11 @@ function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
   };
 }
 
+function parseDrawingStatus(raw: string | undefined | null): DrawingStatus {
+  const value = raw ?? "DRAFT";
+  return (DRAWING_STATUSES as readonly string[]).includes(value) ? (value as DrawingStatus) : "DRAFT";
+}
+
 export function toDrawing(row: DrawingRow): DrawingRecord {
   const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing ${row.id}`);
   const savedViewport = parseOptionalStoredJson(
@@ -316,9 +326,12 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     schemaVersion: row.schema_version ?? DRAWING_SCHEMA_VERSION,
     rulesVersion: row.rules_version ?? RULES_ENGINE_VERSION,
     versionNumber: row.version_number,
+    status: parseDrawingStatus(row.status),
     isArchived: row.is_archived === 1,
     archivedAtIso: row.archived_at_iso,
     archivedByUserId: row.archived_by_user_id,
+    statusChangedAtIso: row.status_changed_at_iso ?? null,
+    statusChangedByUserId: row.status_changed_by_user_id ?? null,
     createdByUserId: row.created_by_user_id,
     updatedByUserId: row.updated_by_user_id,
     createdAtIso: row.created_at_iso,
@@ -346,9 +359,12 @@ export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<Draw
     schemaVersion: drawing.schemaVersion,
     rulesVersion: drawing.rulesVersion,
     versionNumber: drawing.versionNumber,
+    status: drawing.status,
     isArchived: drawing.isArchived,
     archivedAtIso: drawing.archivedAtIso,
     archivedByUserId: drawing.archivedByUserId,
+    statusChangedAtIso: drawing.statusChangedAtIso,
+    statusChangedByUserId: drawing.statusChangedByUserId,
     createdByUserId: drawing.createdByUserId,
     createdByDisplayName: metadata?.createdByDisplayName ?? "",
     updatedByUserId: drawing.updatedByUserId,

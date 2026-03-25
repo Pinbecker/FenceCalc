@@ -1,16 +1,20 @@
-﻿import { useState, type FormEvent } from "react";
+﻿import { useMemo, useState, type FormEvent } from "react";
 
-import type { AuditLogRecord, CompanyUserRecord } from "@fence-estimator/contracts";
+import type { AuditEntityType, AuditLogRecord, CompanyUserRecord, CustomerSummary } from "@fence-estimator/contracts";
+
+type AuditCategoryFilter = "ALL" | AuditEntityType;
 
 interface AdminPageProps {
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
+  customers: CustomerSummary[];
   currentUserId: string;
   currentUserRole: CompanyUserRecord["role"];
   isLoadingUsers: boolean;
   isLoadingAuditLog: boolean;
   isSavingUser: boolean;
   isResettingUserId: string | null;
+  isArchivingCustomerId: string | null;
   errorMessage: string | null;
   noticeMessage: string | null;
   onRefresh(this: void): Promise<void>;
@@ -20,6 +24,7 @@ interface AdminPageProps {
     input: { displayName: string; email: string; password: string; role: "ADMIN" | "MEMBER" },
   ): Promise<boolean>;
   onResetUserPassword(this: void, userId: string, password: string): Promise<boolean>;
+  onRestoreCustomer(this: void, customerId: string): Promise<void>;
 }
 
 function formatTimestamp(value: string): string {
@@ -29,29 +34,73 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
+const AUDIT_CATEGORIES: { key: AuditCategoryFilter; label: string }[] = [
+  { key: "ALL", label: "All" },
+  { key: "AUTH", label: "Auth" },
+  { key: "USER", label: "Users" },
+  { key: "DRAWING", label: "Drawings" },
+  { key: "QUOTE", label: "Quotes" },
+  { key: "CUSTOMER", label: "Customers" }
+];
+
 export function AdminPage({
   users,
   auditLog,
+  customers,
   currentUserId,
   currentUserRole,
   isLoadingUsers,
   isLoadingAuditLog,
   isSavingUser,
   isResettingUserId,
+  isArchivingCustomerId,
   errorMessage,
   noticeMessage,
   onRefresh,
   onRefreshAudit,
   onCreateUser,
-  onResetUserPassword
+  onResetUserPassword,
+  onRestoreCustomer
 }: AdminPageProps) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
   const [resetPasswordsByUserId, setResetPasswordsByUserId] = useState<Record<string, string>>({});
+  const [auditCategory, setAuditCategory] = useState<AuditCategoryFilter>("ALL");
+  const [auditSearch, setAuditSearch] = useState("");
 
   const canManageUsers = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
+
+  const archivedCustomers = useMemo(
+    () => customers.filter((customer) => customer.isArchived).sort((a, b) => a.name.localeCompare(b.name, "en-GB")),
+    [customers]
+  );
+
+  const filteredAuditLog = useMemo(() => {
+    const normalizedSearch = auditSearch.trim().toLowerCase();
+    return auditLog.filter((entry) => {
+      if (auditCategory !== "ALL" && entry.entityType !== auditCategory) {
+        return false;
+      }
+      if (normalizedSearch) {
+        return (
+          entry.summary.toLowerCase().includes(normalizedSearch) ||
+          entry.action.toLowerCase().includes(normalizedSearch) ||
+          entry.entityType.toLowerCase().includes(normalizedSearch)
+        );
+      }
+      return true;
+    });
+  }, [auditLog, auditCategory, auditSearch]);
+
+  const auditCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = { ALL: auditLog.length };
+    for (const entry of auditLog) {
+      counts[entry.entityType] = (counts[entry.entityType] ?? 0) + 1;
+    }
+    return counts;
+  }, [auditLog]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -192,6 +241,41 @@ export function AdminPage({
         </section>
       </div>
 
+      {archivedCustomers.length > 0 ? (
+        <section className="portal-surface-card">
+          <div className="portal-section-heading">
+            <div>
+              <span className="portal-section-kicker">Recovery</span>
+              <h2>Archived customers</h2>
+            </div>
+          </div>
+          <p className="portal-empty-copy" style={{ marginBottom: 12 }}>
+            These customers have been archived and are no longer visible in the directory.
+            Restore a customer to make them accessible again.
+          </p>
+          <div className="audit-log-list">
+            {archivedCustomers.map((customer) => (
+              <article key={customer.id} className="audit-log-card">
+                <div>
+                  <strong>{customer.name}</strong>
+                  <span>
+                    {customer.activeDrawingCount} active · {customer.archivedDrawingCount} archived drawings
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="portal-secondary-button portal-compact-button"
+                  disabled={isArchivingCustomerId === customer.id}
+                  onClick={() => void onRestoreCustomer(customer.id)}
+                >
+                  {isArchivingCustomerId === customer.id ? "Restoring..." : "Restore"}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="portal-surface-card">
         <div className="portal-section-heading">
           <div>
@@ -199,9 +283,44 @@ export function AdminPage({
             <h2>Recent operational events</h2>
           </div>
         </div>
+        <div className="admin-audit-controls">
+          <div className="portal-filter-row" role="tablist" aria-label="Audit category filter">
+            {AUDIT_CATEGORIES.map((category) => (
+              <button
+                type="button"
+                key={category.key}
+                className={auditCategory === category.key ? "is-active" : undefined}
+                onClick={() => setAuditCategory(category.key)}
+              >
+                {category.label}
+                {auditCountByCategory[category.key] ? (
+                  <span className="admin-audit-count">{auditCountByCategory[category.key]}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <label className="admin-audit-search">
+            <input
+              value={auditSearch}
+              onChange={(event) => setAuditSearch(event.target.value)}
+              placeholder="Search audit events..."
+            />
+            {auditSearch.trim().length > 0 ? (
+              <button type="button" className="portal-text-button" onClick={() => setAuditSearch("")}>
+                Clear
+              </button>
+            ) : null}
+          </label>
+        </div>
         <div className="audit-log-list">
-          {auditLog.length === 0 ? <p className="portal-empty-copy">No recent audit events.</p> : null}
-          {auditLog.map((entry) => (
+          {filteredAuditLog.length === 0 ? (
+            <p className="portal-empty-copy">
+              {auditLog.length === 0
+                ? "No recent audit events."
+                : "No events match the current filter."}
+            </p>
+          ) : null}
+          {filteredAuditLog.map((entry) => (
             <article key={entry.id} className="audit-log-card">
               <div>
                 <strong>{entry.summary}</strong>

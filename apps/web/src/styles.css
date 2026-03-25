@@ -321,6 +321,51 @@ textarea {
   font-weight: 700;
 }
 
+.portal-danger-button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid rgba(180, 50, 30, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.portal-danger-button:hover {
+  transform: translateY(-1px);
+}
+
+.portal-danger-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.portal-danger-text {
+  color: #c0392b;
+}
+
+.portal-confirm-modal {
+  max-width: 420px;
+}
+
+.portal-confirm-modal .portal-customer-edit-modal-body p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #444;
+}
+
+.portal-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .portal-shell {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -788,6 +833,52 @@ textarea {
 .audit-log-list {
   display: grid;
   gap: 14px;
+}
+
+.admin-audit-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.admin-audit-controls .portal-filter-row {
+  flex-shrink: 0;
+}
+
+.admin-audit-count {
+  margin-left: 4px;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.admin-audit-search {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+
+.admin-audit-search input {
+  width: 100%;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(103, 115, 103, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.88);
+  outline: none;
+}
+
+.admin-audit-search input:focus {
+  border-color: var(--accent-primary, #3a8a5e);
+}
+
+.admin-audit-search .portal-text-button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.74rem;
 }
 
 @media (max-width: 1180px) {
@@ -3070,7 +3161,8 @@ button:disabled {
   gap: 18px;
 }
 
-.drawing-library-customer-filter {
+.drawing-library-customer-filter,
+.drawing-library-search-input {
   display: grid;
   gap: 5px;
   min-width: min(300px, 100%);
@@ -3083,7 +3175,8 @@ button:disabled {
 
 .drawing-library-customer-filter input,
 .drawing-library-customer-filter select,
-.drawing-library-customer-filter textarea {
+.drawing-library-customer-filter textarea,
+.drawing-library-search-input input {
   width: 100%;
   min-width: 0;
   min-height: 38px;

@@ -354,9 +354,12 @@ export interface DrawingRecord {
   schemaVersion: number;
   rulesVersion: string;
   versionNumber: number;
+  status: DrawingStatus;
   isArchived: boolean;
   archivedAtIso: string | null;
   archivedByUserId: string | null;
+  statusChangedAtIso: string | null;
+  statusChangedByUserId: string | null;
   createdByUserId: string;
   updatedByUserId: string;
   createdAtIso: string;
@@ -375,9 +378,12 @@ export interface DrawingSummary {
   schemaVersion: number;
   rulesVersion: string;
   versionNumber: number;
+  status: DrawingStatus;
   isArchived: boolean;
   archivedAtIso: string | null;
   archivedByUserId: string | null;
+  statusChangedAtIso: string | null;
+  statusChangedByUserId: string | null;
   createdByUserId: string;
   createdByDisplayName: string;
   updatedByUserId: string;
@@ -387,6 +393,9 @@ export interface DrawingSummary {
   createdAtIso: string;
   updatedAtIso: string;
 }
+
+export const DRAWING_STATUSES = ["DRAFT", "QUOTED", "WON", "LOST", "ON_HOLD"] as const;
+export type DrawingStatus = (typeof DRAWING_STATUSES)[number];
 
 export type DrawingVersionSource = "CREATE" | "UPDATE" | "RESTORE";
 
@@ -421,12 +430,15 @@ export type AuditAction =
   | "DRAWING_UPDATED"
   | "DRAWING_ARCHIVED"
   | "DRAWING_UNARCHIVED"
+  | "DRAWING_STATUS_CHANGED"
   | "DRAWING_VERSION_RESTORED"
   | "QUOTE_CREATED"
   | "CUSTOMER_CREATED"
   | "CUSTOMER_UPDATED"
   | "CUSTOMER_ARCHIVED"
-  | "CUSTOMER_UNARCHIVED";
+  | "CUSTOMER_UNARCHIVED"
+  | "DRAWING_DELETED"
+  | "CUSTOMER_DELETED";
 
 export interface AuditLogRecord {
   id: string;

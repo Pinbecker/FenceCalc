@@ -50,7 +50,10 @@ const drawings: DrawingSummary[] = [
     contributorUserIds: ["user-1"],
     contributorDisplayNames: ["Jane Doe"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
-    updatedAtIso: "2026-03-10T12:00:00.000Z"
+    updatedAtIso: "2026-03-10T12:00:00.000Z",
+    status: "DRAFT",
+    statusChangedAtIso: null,
+    statusChangedByUserId: null
   }
 ];
 
@@ -73,6 +76,7 @@ describe("CustomerPage", () => {
         onOpenEstimate={() => undefined}
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
+        onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
         onNavigate={() => undefined}
@@ -118,6 +122,7 @@ describe("CustomerPage", () => {
         onOpenEstimate={() => undefined}
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
+        onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
         onNavigate={() => undefined}
@@ -144,6 +149,7 @@ describe("CustomerPage", () => {
         onOpenEstimate={() => undefined}
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
+        onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
         onNavigate={() => undefined}

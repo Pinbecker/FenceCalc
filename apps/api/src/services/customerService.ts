@@ -135,6 +135,7 @@ export async function setCustomerArchivedStateForCompany(
   authenticated: AuthenticatedRequestContext,
   customerId: string,
   archived: boolean,
+  cascadeDrawings = false,
 ): Promise<CustomerMutationResult> {
   const updatedAtIso = new Date().toISOString();
   const customer = await repository.setCustomerArchivedState({
@@ -158,5 +159,82 @@ export async function setCustomerArchivedStateForCompany(
     createdAtIso: updatedAtIso,
   });
 
+  if (archived && cascadeDrawings) {
+    const drawings = await repository.listDrawingsForCustomer(customerId, authenticated.company.id);
+    for (const drawing of drawings) {
+      if (!drawing.isArchived) {
+        await repository.setDrawingArchivedState({
+          drawingId: drawing.id,
+          companyId: authenticated.company.id,
+          archived: true,
+          archivedAtIso: updatedAtIso,
+          archivedByUserId: authenticated.user.id,
+          updatedAtIso,
+          updatedByUserId: authenticated.user.id,
+        });
+        await writeAuditLog(repository, {
+          companyId: authenticated.company.id,
+          actorUserId: authenticated.user.id,
+          entityType: "DRAWING",
+          entityId: drawing.id,
+          action: "DRAWING_ARCHIVED",
+          summary: `${authenticated.user.displayName} archived ${drawing.name} (cascade from customer ${customer.name})`,
+          createdAtIso: updatedAtIso,
+        });
+      }
+    }
+  }
+
   return { kind: "success", customer };
+}
+
+export type CustomerDeleteResult =
+  | { kind: "success" }
+  | { kind: "customer_not_found" }
+  | { kind: "not_archived" }
+  | { kind: "has_active_drawings" };
+
+export async function deleteCustomerForCompany(
+  repository: AppRepository,
+  authenticated: AuthenticatedRequestContext,
+  customerId: string,
+): Promise<CustomerDeleteResult> {
+  const existing = await repository.getCustomerById(customerId, authenticated.company.id);
+  if (!existing) {
+    return { kind: "customer_not_found" };
+  }
+  if (!existing.isArchived) {
+    return { kind: "not_archived" };
+  }
+
+  const drawings = await repository.listDrawingsForCustomer(customerId, authenticated.company.id);
+  const activeDrawings = drawings.filter((d) => !d.isArchived);
+  if (activeDrawings.length > 0) {
+    return { kind: "has_active_drawings" };
+  }
+
+  // Delete all archived drawings for this customer first
+  for (const drawing of drawings) {
+    await repository.deleteDrawing({
+      drawingId: drawing.id,
+      companyId: authenticated.company.id,
+    });
+  }
+
+  await repository.deleteCustomer({
+    customerId,
+    companyId: authenticated.company.id,
+  });
+
+  await writeAuditLog(repository, {
+    companyId: authenticated.company.id,
+    actorUserId: authenticated.user.id,
+    entityType: "CUSTOMER",
+    entityId: customerId,
+    action: "CUSTOMER_DELETED",
+    summary: `${authenticated.user.displayName} permanently deleted customer ${existing.name} (${drawings.length} drawings removed)`,
+    createdAtIso: new Date().toISOString(),
+  });
+
+  return { kind: "success" };
 }

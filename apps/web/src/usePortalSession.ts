@@ -6,6 +6,7 @@ import type {
   CompanyUserRecord,
   CustomerRecord,
   CustomerSummary,
+  DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord
 } from "@fence-estimator/contracts";
@@ -57,12 +58,15 @@ export interface PortalSessionState {
       | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
       | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; siteAddress?: string; notes?: string } },
   ) => Promise<CustomerRecord | null>;
-  setCustomerArchived: (customerId: string, archived: boolean) => Promise<boolean>;
+  setCustomerArchived: (customerId: string, archived: boolean, cascadeDrawings?: boolean) => Promise<boolean>;
   createUser: (input: CreateCompanyUserInput) => Promise<boolean>;
   resetUserPassword: (userId: string, password: string) => Promise<boolean>;
   setDrawingArchived: (drawingId: string, archived: boolean) => Promise<boolean>;
+  changeDrawingStatus: (drawingId: string, status: DrawingStatus) => Promise<boolean>;
   loadDrawingVersions: (drawingId: string) => Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion: (drawingId: string, versionNumber: number) => Promise<boolean>;
+  deleteDrawing: (drawingId: string) => Promise<boolean>;
+  deleteCustomer: (customerId: string) => Promise<boolean>;
   clearMessages: () => void;
 }
 
@@ -93,6 +97,7 @@ export function usePortalSession(): PortalSessionState {
     isSavingCustomer,
     isResettingUserId,
     isSavingUser,
+    changeDrawingStatus,
     loadCompanyData,
     refreshCustomers,
     loadDrawingVersions,
@@ -104,6 +109,8 @@ export function usePortalSession(): PortalSessionState {
     saveCustomer,
     setCustomerArchived,
     setDrawingArchived,
+    deleteDrawing,
+    deleteCustomer,
     users
   } = companyData;
   const { clearMessages, errorMessage, noticeMessage, setErrorMessage, setNoticeMessage } = feedback;
@@ -296,8 +303,11 @@ export function usePortalSession(): PortalSessionState {
     createUser,
     resetUserPassword,
     setDrawingArchived,
+    changeDrawingStatus,
     loadDrawingVersions,
     restoreDrawingVersion,
+    deleteDrawing,
+    deleteCustomer,
     clearMessages
   };
 }

@@ -5,17 +5,20 @@ import {
   buildDefaultPricingConfig,
   drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
+  drawingStatusUpdateRequestSchema,
   drawingUpdateRequestSchema
 } from "@fence-estimator/contracts";
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
-import { requireAuth } from "../authorization.js";
+import { requireAdminRole, requireAuth } from "../authorization.js";
 import { normalizeLayout } from "../estimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
+  deleteDrawingForCompany,
   restoreDrawingVersionForCompany,
   setDrawingArchivedStateForCompany,
+  setDrawingStatusForCompany,
   updateDrawingForCompany
 } from "../services/drawingService.js";
 import { createQuoteForDrawing } from "../services/quoteService.js";
@@ -73,7 +76,9 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     }
 
     const scope = drawingScopeSchema.parse((request.query as { scope?: unknown } | undefined)?.scope);
-    const drawings = await repository.listDrawings(authenticated.company.id, scope);
+    const query = (request.query as { search?: unknown } | undefined) ?? {};
+    const search = typeof query.search === "string" ? query.search : "";
+    const drawings = await repository.listDrawings(authenticated.company.id, scope, search);
     return reply.code(200).send({ drawings });
   });
 
@@ -274,6 +279,36 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     return reply.code(200).send({ drawing: result.drawing });
   });
 
+  app.put("/api/v1/drawings/:id/status", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    if (!writeLimiter.allow(`drawing-status:${request.ip}`)) {
+      return reply.code(429).send({ error: "Rate limit exceeded" });
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const parsed = drawingStatusUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid drawing status payload",
+        details: parsed.error.flatten()
+      });
+    }
+
+    const result = await setDrawingStatusForCompany(repository, authenticated, params.id, parsed.data);
+    if (result.kind !== "success") {
+      return sendDrawingMutationFailure(reply, result);
+    }
+
+    return reply.code(200).send({ drawing: result.drawing });
+  });
+
   app.get("/api/v1/drawings/:id/versions", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
@@ -323,5 +358,30 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     }
 
     return reply.code(200).send({ drawing: result.drawing });
+  });
+
+  app.delete("/api/v1/drawings/:id", async (request, reply) => {
+    const authenticated = await requireAdminRole(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    if (!writeLimiter.allow(`drawing-delete:${request.ip}`)) {
+      return reply.code(429).send({ error: "Rate limit exceeded" });
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const result = await deleteDrawingForCompany(repository, authenticated, params.id);
+    if (result.kind === "drawing_not_found") {
+      return reply.code(404).send({ error: "Drawing not found" });
+    }
+    if (result.kind === "not_archived") {
+      return reply.code(400).send({ error: "Drawing must be archived before it can be deleted" });
+    }
+
+    return reply.code(200).send({ deleted: true });
   });
 }

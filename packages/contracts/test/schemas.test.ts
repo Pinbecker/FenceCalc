@@ -147,7 +147,7 @@ describe("contracts schemas", () => {
   it("defaults missing gate lists on drawing payloads", () => {
     const result = drawingCreateRequestSchema.parse({
       name: "Main yard",
-      customerName: "Cleveland Land Services",
+      customerId: "customer-1",
       layout: {
         segments: []
       }
@@ -247,6 +247,7 @@ describe("contracts schemas", () => {
         drawing: {
           drawingId: "drawing-1",
           drawingName: "Main yard",
+          customerId: "customer-1",
           customerName: "Cleveland Land Services"
         },
         groups: [],
@@ -266,6 +267,7 @@ describe("contracts schemas", () => {
       drawingSnapshot: {
         drawingId: "drawing-1",
         drawingName: "Main yard",
+        customerId: "customer-1",
         customerName: "Cleveland Land Services",
         layout: {
           segments: [],

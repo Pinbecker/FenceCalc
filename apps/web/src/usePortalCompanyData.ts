@@ -6,6 +6,7 @@ import type {
   CustomerContact,
   CustomerRecord,
   CustomerSummary,
+  DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord
 } from "@fence-estimator/contracts";
@@ -13,6 +14,8 @@ import type {
 import {
   createCustomer,
   createUser,
+  deleteCustomer,
+  deleteDrawing,
   listCustomers,
   listAuditLog,
   listDrawingVersions,
@@ -21,6 +24,7 @@ import {
   restoreDrawingVersion,
   setCustomerArchivedState,
   setDrawingArchivedState,
+  setDrawingStatus,
   setUserPassword,
   updateCustomer,
   type CreateCompanyUserInput
@@ -237,6 +241,45 @@ export function usePortalCompanyData({
     [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
   );
 
+  const changeDrawingStatus = useCallback(
+    async (drawingId: string, status: DrawingStatus) => {
+      if (!session) {
+        return false;
+      }
+
+      clearMessages();
+      const currentDrawing = drawings.find((entry) => entry.id === drawingId);
+      const currentDrawingName = currentDrawing?.name ?? "Drawing";
+      try {
+        if (!currentDrawing) {
+          setErrorMessage("Drawing not found");
+          return false;
+        }
+
+        const drawing = await setDrawingStatus(drawingId, status, currentDrawing.versionNumber);
+        const nextSummary = updateDrawingSummaryFromRecord(drawing, currentDrawing);
+        setDrawings((current) =>
+          current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
+        );
+        setAuditLog(await listAuditLog());
+        setNoticeMessage(`Updated "${drawing.name}" status to ${status.charAt(0) + status.slice(1).toLowerCase()}`);
+        return true;
+      } catch (error) {
+        if (extractCurrentVersionNumber(error) !== null) {
+          setDrawings(await listDrawings());
+          setErrorMessage(
+            `"${currentDrawingName}" changed before this action completed. The drawings list has been refreshed; retry the action.`,
+          );
+          return false;
+        }
+
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [clearMessages, drawings, session, setErrorMessage, setNoticeMessage],
+  );
+
   const loadDrawingVersions = useCallback(
     async (drawingId: string): Promise<DrawingVersionRecord[]> => {
       if (!session) {
@@ -327,7 +370,7 @@ export function usePortalCompanyData({
   );
 
   const archiveCustomer = useCallback(
-    async (customerId: string, archived: boolean) => {
+    async (customerId: string, archived: boolean, cascadeDrawings = false) => {
       if (!session) {
         return false;
       }
@@ -335,9 +378,10 @@ export function usePortalCompanyData({
       setIsArchivingCustomerId(customerId);
       clearMessages();
       try {
-        const customer = await setCustomerArchivedState(customerId, archived);
-        const [nextCustomers, nextAuditLog] = await Promise.all([listCustomers(), listAuditLog()]);
+        const customer = await setCustomerArchivedState(customerId, archived, cascadeDrawings);
+        const [nextCustomers, nextDrawings, nextAuditLog] = await Promise.all([listCustomers(), listDrawings(), listAuditLog()]);
         setCustomers(nextCustomers);
+        setDrawings(nextDrawings);
         setAuditLog(nextAuditLog);
         setNoticeMessage(archived ? `Archived customer ${customer.name}` : `Restored customer ${customer.name}`);
         return true;
@@ -346,6 +390,44 @@ export function usePortalCompanyData({
         return false;
       } finally {
         setIsArchivingCustomerId(null);
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const deleteDrawingPermanently = useCallback(
+    async (drawingId: string) => {
+      if (!session) return false;
+      clearMessages();
+      try {
+        await deleteDrawing(drawingId);
+        setDrawings((current) => current.filter((entry) => entry.id !== drawingId));
+        setAuditLog(await listAuditLog());
+        setNoticeMessage("Drawing permanently deleted");
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [clearMessages, session, setErrorMessage, setNoticeMessage],
+  );
+
+  const deleteCustomerPermanently = useCallback(
+    async (customerId: string) => {
+      if (!session) return false;
+      clearMessages();
+      try {
+        await deleteCustomer(customerId);
+        const [nextCustomers, nextDrawings, nextAuditLog] = await Promise.all([listCustomers(), listDrawings(), listAuditLog()]);
+        setCustomers(nextCustomers);
+        setDrawings(nextDrawings);
+        setAuditLog(nextAuditLog);
+        setNoticeMessage("Customer permanently deleted");
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
       }
     },
     [clearMessages, session, setErrorMessage, setNoticeMessage],
@@ -375,7 +457,10 @@ export function usePortalCompanyData({
     createUser: createCompanyUser,
     resetUserPassword: resetCompanyUserPassword,
     setDrawingArchived,
+    changeDrawingStatus,
     loadDrawingVersions,
-    restoreDrawingVersion: restoreVersion
+    restoreDrawingVersion: restoreVersion,
+    deleteDrawing: deleteDrawingPermanently,
+    deleteCustomer: deleteCustomerPermanently
   };
 }

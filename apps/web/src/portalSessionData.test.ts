@@ -63,7 +63,10 @@ describe("portalSessionData", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2025-01-01T00:00:00.000Z",
-      updatedAtIso: "2025-01-01T00:00:00.000Z"
+      updatedAtIso: "2025-01-01T00:00:00.000Z",
+      status: "DRAFT",
+      statusChangedAtIso: null,
+      statusChangedByUserId: null
     });
 
     expect(summary.segmentCount).toBe(1);

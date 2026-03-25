@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { customerUpdateRequestSchema, type CustomerContact, type CustomerSummary, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
+import { customerUpdateRequestSchema, DRAWING_STATUSES, type CustomerContact, type CustomerSummary, type DrawingStatus, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
 import type { ZodIssue } from "zod";
 
 import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
 
 type CustomerDrawingFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+
+const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
+};
 
 interface CustomerDraft {
   name: string;
@@ -40,6 +48,7 @@ interface CustomerPageProps {
   query?: Record<string, string>;
   customers: CustomerSummary[];
   drawings: DrawingSummary[];
+  userRole: string;
   isSavingCustomer: boolean;
   isArchivingCustomerId: string | null;
   errorMessage: string | null;
@@ -48,13 +57,16 @@ interface CustomerPageProps {
     this: void,
     input: { mode: "update"; customerId: string; customer: Partial<CustomerDraft> & { additionalContacts?: CustomerContact[] } },
   ): Promise<{ id: string } | null>;
-  onSetCustomerArchived(this: void, customerId: string, archived: boolean): Promise<boolean>;
+  onSetCustomerArchived(this: void, customerId: string, archived: boolean, cascadeDrawings?: boolean): Promise<boolean>;
   onOpenDrawing(this: void, drawingId: string): void;
   onOpenEstimate(this: void, drawingId: string): void;
   onCreateDrawing(this: void): void;
   onToggleDrawingArchived(this: void, drawingId: string, archived: boolean): Promise<boolean>;
+  onChangeDrawingStatus(this: void, drawingId: string, status: DrawingStatus): Promise<boolean>;
   onLoadVersions(this: void, drawingId: string): Promise<DrawingVersionRecord[]>;
   onRestoreVersion(this: void, drawingId: string, versionNumber: number): Promise<boolean>;
+  onDeleteDrawing(this: void, drawingId: string): Promise<boolean>;
+  onDeleteCustomer(this: void, customerId: string): Promise<boolean>;
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
 
@@ -156,6 +168,7 @@ export function CustomerPage({
   query,
   customers,
   drawings,
+  userRole,
   isSavingCustomer,
   isArchivingCustomerId,
   errorMessage,
@@ -166,11 +179,15 @@ export function CustomerPage({
   onOpenEstimate,
   onCreateDrawing,
   onToggleDrawingArchived,
+  onChangeDrawingStatus,
   onLoadVersions,
   onRestoreVersion,
+  onDeleteDrawing,
+  onDeleteCustomer,
   onNavigate,
 }: CustomerPageProps) {
   const customerId = query?.customerId ?? null;
+  const isAdmin = userRole === "OWNER" || userRole === "ADMIN";
   const [drawingFilter, setDrawingFilter] = useState<CustomerDrawingFilter>("ACTIVE");
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft | null>(null);
@@ -179,6 +196,12 @@ export function CustomerPage({
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
   const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
   const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
+  const [confirmDeleteDrawingId, setConfirmDeleteDrawingId] = useState<string | null>(null);
+  const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [cascadeOnArchive, setCascadeOnArchive] = useState(false);
+  const [isDeletingDrawing, setIsDeletingDrawing] = useState(false);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
 
   const customer = useMemo(
     () => customers.find((entry) => entry.id === customerId) ?? null,
@@ -335,11 +358,28 @@ export function CustomerPage({
           <button
             type="button"
             className="portal-secondary-button portal-compact-button"
-            onClick={() => void onSetCustomerArchived(customer.id, !customer.isArchived)}
+            onClick={() => {
+              if (!customer.isArchived && activeCount > 0) {
+                setCascadeOnArchive(false);
+                setConfirmArchive(true);
+              } else {
+                void onSetCustomerArchived(customer.id, !customer.isArchived, false);
+              }
+            }}
             disabled={isArchivingCustomerId === customer.id}
           >
             {isArchivingCustomerId === customer.id ? "Updating..." : customer.isArchived ? "Restore" : "Archive"}
           </button>
+          {isAdmin && customer.isArchived ? (
+            <button
+              type="button"
+              className="portal-danger-button portal-compact-button"
+              onClick={() => setConfirmDeleteCustomer(true)}
+              disabled={isDeletingCustomer}
+            >
+              {isDeletingCustomer ? "Deleting..." : "Delete customer"}
+            </button>
+          ) : null}
           <button type="button" className="portal-primary-button portal-compact-button" onClick={onCreateDrawing}>
             New drawing
           </button>
@@ -420,6 +460,9 @@ export function CustomerPage({
                         {drawing.isArchived ? (
                           <span className="portal-customer-drawing-badge is-archived">Archived</span>
                         ) : null}
+                        <span className={`portal-customer-drawing-badge drawing-status-${drawing.status.toLowerCase()}`}>
+                          {JOB_STATUS_LABELS[drawing.status]}
+                        </span>
                       </div>
                     </div>
 
@@ -440,6 +483,21 @@ export function CustomerPage({
                       </div>
 
                       <div className="portal-customer-drawing-card-utility">
+                        <label className="portal-customer-drawing-status-select">
+                          <span className="sr-only">Job status</span>
+                          <select
+                            value={drawing.status}
+                            onChange={(event) =>
+                              void onChangeDrawingStatus(drawing.id, event.target.value as DrawingStatus)
+                            }
+                          >
+                            {DRAWING_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {JOB_STATUS_LABELS[status]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <button
                           type="button"
                           className="portal-text-button"
@@ -454,6 +512,15 @@ export function CustomerPage({
                         >
                           {isExpanded ? "Hide history" : "History"}
                         </button>
+                        {isAdmin && drawing.isArchived ? (
+                          <button
+                            type="button"
+                            className="portal-text-button portal-danger-text"
+                            onClick={() => setConfirmDeleteDrawingId(drawing.id)}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -487,6 +554,105 @@ export function CustomerPage({
           </div>
         )}
       </section>
+
+      {confirmDeleteDrawingId ? (
+        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteDrawingId(null)}>
+          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete drawing" onClick={(event) => event.stopPropagation()}>
+            <div className="portal-customer-edit-modal-header">
+              <h2>Permanently delete drawing?</h2>
+              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteDrawingId(null)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body">
+              <p>This will permanently remove the drawing, all its versions, and any associated quotes. This action cannot be undone.</p>
+            </div>
+            <div className="portal-customer-edit-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteDrawingId(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-danger-button portal-compact-button"
+                disabled={isDeletingDrawing}
+                onClick={async () => {
+                  setIsDeletingDrawing(true);
+                  await onDeleteDrawing(confirmDeleteDrawingId);
+                  setIsDeletingDrawing(false);
+                  setConfirmDeleteDrawingId(null);
+                }}
+              >
+                {isDeletingDrawing ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDeleteCustomer ? (
+        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteCustomer(false)}>
+          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete customer" onClick={(event) => event.stopPropagation()}>
+            <div className="portal-customer-edit-modal-header">
+              <h2>Permanently delete customer?</h2>
+              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteCustomer(false)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body">
+              <p>This will permanently remove the customer and all their archived drawings, versions, and quotes. This action cannot be undone.</p>
+            </div>
+            <div className="portal-customer-edit-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteCustomer(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-danger-button portal-compact-button"
+                disabled={isDeletingCustomer}
+                onClick={async () => {
+                  setIsDeletingCustomer(true);
+                  const deleted = await onDeleteCustomer(customer.id);
+                  setIsDeletingCustomer(false);
+                  setConfirmDeleteCustomer(false);
+                  if (deleted) onNavigate("customers");
+                }}
+              >
+                {isDeletingCustomer ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmArchive && customer ? (
+        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmArchive(false)}>
+          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm archive customer" onClick={(event) => event.stopPropagation()}>
+            <div className="portal-customer-edit-modal-header">
+              <h2>Archive customer?</h2>
+              <button type="button" className="portal-text-button" onClick={() => setConfirmArchive(false)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body">
+              <p>This customer has <strong>{activeCount}</strong> active {activeCount === 1 ? "drawing" : "drawings"}.</p>
+              <label className="portal-checkbox-label">
+                <input type="checkbox" checked={cascadeOnArchive} onChange={(event) => setCascadeOnArchive(event.target.checked)} />
+                Also archive all active drawings
+              </label>
+            </div>
+            <div className="portal-customer-edit-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmArchive(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-primary-button portal-compact-button"
+                disabled={isArchivingCustomerId === customer.id}
+                onClick={() => {
+                  setConfirmArchive(false);
+                  void onSetCustomerArchived(customer.id, true, cascadeOnArchive);
+                }}
+              >
+                Archive customer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isEditOpen ? (
         <div className="portal-customer-edit-backdrop" onClick={closeEditModal}>

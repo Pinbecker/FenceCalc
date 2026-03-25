@@ -17,12 +17,13 @@ function buildDrawing(): DrawingRecord {
       }
     ],
     gates: [],
-    basketballPosts: [
+    basketballFeatures: [
       {
         id: "bb-1",
         segmentId: "seg-1",
         offsetMm: 1200,
-        facing: "LEFT" as const
+        facing: "LEFT" as const,
+        replacesIntermediatePost: false
       }
     ],
     floodlightColumns: [

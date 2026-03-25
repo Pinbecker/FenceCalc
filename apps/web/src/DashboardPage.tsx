@@ -1,7 +1,15 @@
-import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, CustomerSummary, DrawingStatus, DrawingSummary } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 import type { PortalRoute } from "./useHashRoute";
+
+const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
+};
 
 interface DashboardPageProps {
   session: AuthSessionEnvelope;
@@ -102,6 +110,9 @@ export function DashboardPage({ session, customers, drawings, onNavigate }: Dash
                   </div>
                 </div>
                 <div className="portal-dashboard-row-trail">
+                  <span className={`portal-dashboard-row-status drawing-status-${drawing.status.toLowerCase()}`}>
+                    {JOB_STATUS_LABELS[drawing.status]}
+                  </span>
                   <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
                   <span className="portal-dashboard-row-cta">Open</span>
                 </div>

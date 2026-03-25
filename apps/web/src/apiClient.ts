@@ -8,6 +8,7 @@ import type {
   CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
+  DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
   LayoutModel,
@@ -78,7 +79,7 @@ export interface UpdateCustomerInput {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
 }
@@ -215,17 +216,31 @@ export async function updateCustomer(customerId: string, input: UpdateCustomerIn
   return response.customer;
 }
 
-export async function setCustomerArchivedState(customerId: string, archived: boolean): Promise<CustomerRecord> {
+export async function setCustomerArchivedState(customerId: string, archived: boolean, cascadeDrawings = false): Promise<CustomerRecord> {
   const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}/archive`, {
     method: "PUT",
-    body: { archived }
+    body: { archived, cascadeDrawings }
   });
   return response.customer;
 }
 
-export async function listDrawings(): Promise<DrawingSummary[]> {
-  const response = await requestJson<{ drawings: DrawingSummary[] }>("/api/v1/drawings?scope=ALL");
+export async function deleteCustomer(customerId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/api/v1/customers/${customerId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listDrawings(search = ""): Promise<DrawingSummary[]> {
+  const params = new URLSearchParams({ scope: "ALL" });
+  if (search.trim()) params.set("search", search.trim());
+  const response = await requestJson<{ drawings: DrawingSummary[] }>(`/api/v1/drawings?${params.toString()}`);
   return response.drawings;
+}
+
+export async function deleteDrawing(drawingId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${drawingId}`, {
+    method: "DELETE"
+  });
 }
 
 export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
@@ -289,6 +304,18 @@ export async function setDrawingArchivedState(
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/archive`, {
     method: "PUT",
     body: { archived, expectedVersionNumber }
+  });
+  return response.drawing;
+}
+
+export async function setDrawingStatus(
+  drawingId: string,
+  status: DrawingStatus,
+  expectedVersionNumber: number,
+): Promise<DrawingRecord> {
+  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/status`, {
+    method: "PUT",
+    body: { status, expectedVersionNumber }
   });
   return response.drawing;
 }

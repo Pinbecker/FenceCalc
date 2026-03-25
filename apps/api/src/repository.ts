@@ -15,6 +15,7 @@ export type {
   RestoreDrawingVersionInput,
   SessionRecord,
   SetDrawingArchivedStateInput,
+  SetDrawingStatusInput,
   StoredUser,
   UpdateDrawingInput
 } from "./repository/types.js";

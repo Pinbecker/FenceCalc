@@ -94,3 +94,22 @@ export async function requirePricingManager(
 
   return authenticated;
 }
+
+export async function requireAdminRole(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  repository: AppRepository,
+  config: AppConfig,
+): Promise<AuthenticatedRequestContext | null> {
+  const authenticated = await requireAuth(request, reply, repository, config);
+  if (!authenticated) {
+    return null;
+  }
+
+  if (authenticated.user.role !== "OWNER" && authenticated.user.role !== "ADMIN") {
+    await reply.code(403).send({ error: "This action requires admin access" });
+    return null;
+  }
+
+  return authenticated;
+}

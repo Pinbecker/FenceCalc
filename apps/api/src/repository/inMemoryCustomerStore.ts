@@ -3,6 +3,7 @@ import type { CustomerRecord, CustomerSummary, DrawingRecord } from "@fence-esti
 import type {
   CreateCustomerInput,
   CustomerScope,
+  DeleteCustomerInput,
   SetCustomerArchivedStateInput,
   UpdateCustomerInput,
 } from "./types.js";
@@ -144,5 +145,14 @@ export class InMemoryCustomerStore {
     };
     this.state.customers.set(updated.id, updated);
     return updated;
+  }
+
+  public deleteCustomer(input: DeleteCustomerInput): boolean {
+    const existing = this.state.customers.get(input.customerId);
+    if (!existing || existing.companyId !== input.companyId) {
+      return false;
+    }
+    this.state.customers.delete(input.customerId);
+    return true;
   }
 }

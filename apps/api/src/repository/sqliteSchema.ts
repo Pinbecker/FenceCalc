@@ -215,6 +215,14 @@ export function migrateSqliteDatabase(database: Database.Database): void {
       sql: `
         ALTER TABLE customers ADD COLUMN additional_contacts_json TEXT NOT NULL DEFAULT '[]';
       `
+    },
+    {
+      name: "010_drawing_status",
+      sql: `
+        ALTER TABLE drawings ADD COLUMN status TEXT NOT NULL DEFAULT 'DRAFT';
+        ALTER TABLE drawings ADD COLUMN status_changed_at_iso TEXT;
+        ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT;
+      `
     }
   ] as const;
 
@@ -464,5 +472,15 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
       CREATE INDEX IF NOT EXISTS idx_quotes_drawing_created
       ON quotes(company_id, drawing_id, created_at_iso DESC)
     `);
+  }
+
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN status TEXT NOT NULL DEFAULT 'DRAFT'");
+  }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status_changed_at_iso")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN status_changed_at_iso TEXT");
+  }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status_changed_by_user_id")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT");
   }
 }

@@ -19,10 +19,13 @@ import type {
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
+  DeleteCustomerInput,
+  DeleteDrawingInput,
   RestoreDrawingVersionInput,
   CustomerScope,
   SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
+  SetDrawingStatusInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
   UpdateDrawingInput
@@ -127,12 +130,20 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.customers.setCustomerArchivedState(input));
   }
 
+  public deleteCustomer(input: DeleteCustomerInput) {
+    return Promise.resolve(this.customers.deleteCustomer(input));
+  }
+
+  public listDrawingsForCustomer(customerId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listDrawingsForCustomer(customerId, companyId));
+  }
+
   public createDrawing(input: CreateDrawingInput) {
     return Promise.resolve(this.drawings.createDrawing(input));
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE") {
-    return Promise.resolve(this.drawings.listDrawings(companyId, scope));
+  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
+    return Promise.resolve(this.drawings.listDrawings(companyId, scope, search));
   }
 
   public getDrawingById(drawingId: string, companyId: string) {
@@ -145,6 +156,14 @@ export class SqliteAppRepository implements AppRepository {
 
   public setDrawingArchivedState(input: SetDrawingArchivedStateInput) {
     return Promise.resolve(this.drawings.setDrawingArchivedState(input));
+  }
+
+  public setDrawingStatus(input: SetDrawingStatusInput) {
+    return Promise.resolve(this.drawings.setDrawingStatus(input));
+  }
+
+  public deleteDrawing(input: DeleteDrawingInput) {
+    return Promise.resolve(this.drawings.deleteDrawing(input));
   }
 
   public listDrawingVersions(drawingId: string, companyId: string) {

@@ -68,6 +68,9 @@ export function updateDrawingSummaryFromRecord(drawing: DrawingRecord, current?:
     contributorUserIds,
     contributorDisplayNames: current?.contributorDisplayNames ?? [],
     createdAtIso: drawing.createdAtIso,
-    updatedAtIso: drawing.updatedAtIso
+    updatedAtIso: drawing.updatedAtIso,
+    status: drawing.status,
+    statusChangedAtIso: drawing.statusChangedAtIso,
+    statusChangedByUserId: drawing.statusChangedByUserId
   };
 }

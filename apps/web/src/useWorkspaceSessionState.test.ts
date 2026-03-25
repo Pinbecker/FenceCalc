@@ -48,7 +48,10 @@ const sampleDrawings: DrawingSummary[] = [
     contributorUserIds: ["user-1"],
     contributorDisplayNames: ["Owner"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
-    updatedAtIso: "2026-03-10T11:00:00.000Z"
+    updatedAtIso: "2026-03-10T11:00:00.000Z",
+    status: "DRAFT",
+    statusChangedAtIso: null,
+    statusChangedByUserId: null
   }
 ];
 

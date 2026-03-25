@@ -48,7 +48,10 @@ const sampleDrawings: DrawingSummary[] = [
     contributorUserIds: ["user-1"],
     contributorDisplayNames: ["Owner"],
     createdAtIso: "2026-03-10T10:00:00.000Z",
-    updatedAtIso: "2026-03-10T11:00:00.000Z"
+    updatedAtIso: "2026-03-10T11:00:00.000Z",
+    status: "DRAFT",
+    statusChangedAtIso: null,
+    statusChangedByUserId: null
   }
 ];
 
@@ -216,6 +219,12 @@ async function loadUsePortalCompanyData(options?: {
       name: "Archived boundary",
       versionNumber: 3
     })),
+    setDrawingStatus: vi.fn(() => Promise.resolve({
+      id: "drawing-1",
+      name: "Boundary fence",
+      versionNumber: 3,
+      status: "QUOTED"
+    })),
     setUserPassword: vi.fn(() => Promise.resolve()),
     ...options?.apiOverrides
   };
@@ -259,7 +268,10 @@ async function loadUsePortalCompanyData(options?: {
       contributorUserIds: ["user-1"],
       contributorDisplayNames: ["Owner"],
       createdAtIso: "2026-03-10T10:00:00.000Z",
-      updatedAtIso: "2026-03-10T12:00:00.000Z"
+      updatedAtIso: "2026-03-10T12:00:00.000Z",
+      status: "DRAFT",
+      statusChangedAtIso: null,
+      statusChangedByUserId: null
     })),
     ...options?.portalOverrides
   };

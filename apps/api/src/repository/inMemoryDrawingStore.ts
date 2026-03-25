@@ -3,8 +3,10 @@ import type { CustomerRecord, DrawingRecord, DrawingSummary, DrawingVersionRecor
 import { toDrawingSummary } from "./shared.js";
 import type {
   CreateDrawingInput,
+  DeleteDrawingInput,
   RestoreDrawingVersionInput,
   SetDrawingArchivedStateInput,
+  SetDrawingStatusInput,
   StoredUser,
   UpdateDrawingInput
 } from "./types.js";
@@ -56,9 +58,12 @@ export class InMemoryDrawingStore {
     const drawing: DrawingRecord = {
       ...input,
       versionNumber: 1,
+      status: "DRAFT",
       isArchived: false,
       archivedAtIso: null,
-      archivedByUserId: null
+      archivedByUserId: null,
+      statusChangedAtIso: null,
+      statusChangedByUserId: null
     };
     this.state.drawings.set(drawing.id, drawing);
     this.state.drawingVersions.set(drawing.id, [
@@ -83,7 +88,8 @@ export class InMemoryDrawingStore {
     return drawing;
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE") {
+  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
+    const normalized = search.trim().toLowerCase();
     return [...this.state.drawings.values()]
       .filter((drawing) => drawing.companyId === companyId)
       .filter((drawing) => {
@@ -95,8 +101,33 @@ export class InMemoryDrawingStore {
         }
         return true;
       })
+      .filter((drawing) => {
+        if (!normalized) {
+          return true;
+        }
+        const customer = drawing.customerId ? this.state.customers.get(drawing.customerId) : null;
+        const customerName = customer?.name ?? drawing.customerName;
+        return drawing.name.toLowerCase().includes(normalized) || customerName.toLowerCase().includes(normalized);
+      })
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
       .map((drawing) => this.toSummary(drawing));
+  }
+
+  public listDrawingsForCustomer(customerId: string, companyId: string): DrawingSummary[] {
+    return [...this.state.drawings.values()]
+      .filter((drawing) => drawing.companyId === companyId && drawing.customerId === customerId)
+      .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
+      .map((drawing) => this.toSummary(drawing));
+  }
+
+  public deleteDrawing(input: DeleteDrawingInput): boolean {
+    const existing = this.state.drawings.get(input.drawingId);
+    if (!existing || existing.companyId !== input.companyId) {
+      return false;
+    }
+    this.state.drawings.delete(input.drawingId);
+    this.state.drawingVersions.delete(input.drawingId);
+    return true;
   }
 
   public getDrawingById(drawingId: string, companyId: string): DrawingRecord | null {
@@ -160,6 +191,24 @@ export class InMemoryDrawingStore {
       isArchived: input.archived,
       archivedAtIso: input.archived ? input.archivedAtIso : null,
       archivedByUserId: input.archived ? input.archivedByUserId : null,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso
+    };
+    this.state.drawings.set(updated.id, updated);
+    return updated;
+  }
+
+  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
+    const existing = this.state.drawings.get(input.drawingId);
+    if (!existing || existing.companyId !== input.companyId) {
+      return null;
+    }
+
+    const updated: DrawingRecord = {
+      ...existing,
+      status: input.status,
+      statusChangedAtIso: input.statusChangedAtIso,
+      statusChangedByUserId: input.statusChangedByUserId,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso
     };

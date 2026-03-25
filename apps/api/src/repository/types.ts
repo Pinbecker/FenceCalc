@@ -10,6 +10,7 @@ import type {
   CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
+  DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
   EstimateResult,
@@ -107,6 +108,16 @@ export interface SetDrawingArchivedStateInput {
   updatedByUserId: string;
 }
 
+export interface SetDrawingStatusInput {
+  drawingId: string;
+  companyId: string;
+  status: DrawingStatus;
+  statusChangedAtIso: string;
+  statusChangedByUserId: string;
+  updatedAtIso: string;
+  updatedByUserId: string;
+}
+
 export interface RestoreDrawingVersionInput {
   drawingId: string;
   companyId: string;
@@ -184,6 +195,16 @@ export interface CreatePasswordResetTokenInput {
   expiresAtIso: string;
 }
 
+export interface DeleteDrawingInput {
+  drawingId: string;
+  companyId: string;
+}
+
+export interface DeleteCustomerInput {
+  customerId: string;
+  companyId: string;
+}
+
 export type CreateQuoteInput = QuoteRecord;
 
 export interface PasswordResetConsumption {
@@ -222,11 +243,15 @@ export interface AppRepository {
   getCustomerById(customerId: string, companyId: string): Promise<CustomerRecord | null>;
   updateCustomer(input: UpdateCustomerInput): Promise<CustomerRecord | null>;
   setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
+  deleteCustomer(input: DeleteCustomerInput): Promise<boolean>;
+  listDrawingsForCustomer(customerId: string, companyId: string): Promise<DrawingSummary[]>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
-  listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED"): Promise<DrawingSummary[]>;
+  listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED", search?: string): Promise<DrawingSummary[]>;
   getDrawingById(drawingId: string, companyId: string): Promise<DrawingRecord | null>;
   updateDrawing(input: UpdateDrawingInput): Promise<DrawingRecord | null>;
   setDrawingArchivedState(input: SetDrawingArchivedStateInput): Promise<DrawingRecord | null>;
+  setDrawingStatus(input: SetDrawingStatusInput): Promise<DrawingRecord | null>;
+  deleteDrawing(input: DeleteDrawingInput): Promise<boolean>;
   listDrawingVersions(drawingId: string, companyId: string): Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion(input: RestoreDrawingVersionInput): Promise<DrawingRecord | null>;
   createQuote(input: CreateQuoteInput): Promise<QuoteRecord>;

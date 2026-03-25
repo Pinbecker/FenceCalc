@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   BASKETBALL_ARM_LENGTHS_MM,
+  DRAWING_STATUSES,
   FENCE_HEIGHT_KEYS,
   GOAL_UNIT_HEIGHTS_MM,
   GOAL_UNIT_WIDTHS_MM,
@@ -857,6 +858,13 @@ export const drawingArchiveRequestSchema = z.object({
   expectedVersionNumber: z.coerce.number().int().min(1)
 });
 
+export const drawingStatusSchema = z.enum(DRAWING_STATUSES);
+
+export const drawingStatusUpdateRequestSchema = z.object({
+  status: drawingStatusSchema,
+  expectedVersionNumber: z.coerce.number().int().min(1)
+});
+
 export const customerRecordSchema = z.object({
   id: z.string().trim().min(1).max(120),
   companyId: z.string().trim().min(1).max(120),
@@ -918,7 +926,8 @@ export const customerUpdateRequestSchema = z
   });
 
 export const customerArchiveRequestSchema = z.object({
-  archived: z.boolean()
+  archived: z.boolean(),
+  cascadeDrawings: z.boolean().default(false)
 });
 
 export const passwordResetRequestSchema = z.object({
