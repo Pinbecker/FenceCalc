@@ -102,6 +102,19 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
     await app.close();
   });
 
+  it("reports bootstrap as complete after the first owner is created", async () => {
+    const { app } = await registerAndGetSession({ bootstrapOwnerSecret: "bootstrap-secret" });
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/setup/status" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ bootstrapRequired: boolean; bootstrapSecretRequired: boolean }>()).toEqual({
+      bootstrapRequired: false,
+      bootstrapSecretRequired: false
+    });
+    await app.close();
+  });
+
   it("disables public self-registration", async () => {
     const app = buildApp({ repository: new InMemoryAppRepository() });
 

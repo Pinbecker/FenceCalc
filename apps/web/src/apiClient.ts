@@ -190,9 +190,12 @@ async function executeRequest<T>(path: string, options: RequestOptions = {}): Pr
       headers: {
         "content-type": "application/json",
         ...(options.headers ?? {})
-      },
-      signal: mergeSignals([options.signal, timeoutController.signal])
+      }
     };
+    const signal = mergeSignals([options.signal, timeoutController.signal]);
+    if (signal) {
+      requestInit.signal = signal;
+    }
     if (options.body !== undefined) {
       requestInit.body = JSON.stringify(options.body);
     }

@@ -32,12 +32,26 @@ export function captureApiException(error: unknown, request: FastifyRequest): vo
     scope.setTag("route", request.routeOptions.url);
     scope.setContext("request", {
       method: request.method,
-      url: request.url,
       route: request.routeOptions.url,
-      requestId: request.id,
-      remoteAddress: request.ip
+      requestId: request.id
     });
     Sentry.captureException(error);
+  });
+}
+
+export function captureApiProcessException(error: unknown, context: string): void {
+  if (!sentryEnabled) {
+    return;
+  }
+
+  Sentry.withScope((scope) => {
+    scope.setTag("context", context);
+    if (error instanceof Error) {
+      Sentry.captureException(error);
+      return;
+    }
+
+    Sentry.captureMessage(`${context}: ${String(error)}`, "error");
   });
 }
 

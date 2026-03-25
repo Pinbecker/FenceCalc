@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { flushApiSentry, initApiSentry } from "./observability/sentry.js";
+import { captureApiProcessException, flushApiSentry, initApiSentry } from "./observability/sentry.js";
 
 const config = loadConfig();
 initApiSentry(config);
@@ -35,11 +35,13 @@ process.on("SIGTERM", () => {
 });
 
 process.on("uncaughtException", (error) => {
+  captureApiProcessException(error, "process.uncaughtException");
   app.log.fatal({ error }, "Uncaught exception");
   void shutdown("uncaughtException", 1);
 });
 
 process.on("unhandledRejection", (reason) => {
+  captureApiProcessException(reason, "process.unhandledRejection");
   app.log.fatal({ reason }, "Unhandled promise rejection");
   void shutdown("unhandledRejection", 1);
 });
@@ -50,6 +52,8 @@ app
     app.log.info({ port: config.port, host: config.host }, "API started");
   })
   .catch((error) => {
+    captureApiProcessException(error, "startup.listen");
     app.log.error(error, "API failed to start");
+    void flushApiSentry();
     process.exit(1);
   });

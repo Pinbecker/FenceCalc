@@ -127,4 +127,62 @@ describe("API user administration", { timeout: 10000 }, () => {
     expect(resetSelf.statusCode).toBe(400);
     await app.close();
   });
+
+  it("applies audit filters and exports matching csv rows", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const createUser = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: cookieHeader,
+      payload: {
+        displayName: "John Smith",
+        email: "john@example.com",
+        password: "supersecure123",
+        role: "ADMIN"
+      }
+    });
+    expect(createUser.statusCode).toBe(201);
+    const userId = createUser.json<{ user: { id: string } }>().user.id;
+
+    const resetPassword = await app.inject({
+      method: "PUT",
+      url: `/api/v1/users/${userId}/password`,
+      headers: cookieHeader,
+      payload: {
+        password: "evenmoresecure123"
+      }
+    });
+    expect(resetPassword.statusCode).toBe(202);
+
+    const filteredAudit = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit-log?limit=20&entityType=USER&search=password",
+      headers: cookieHeader
+    });
+    expect(filteredAudit.statusCode).toBe(200);
+    expect(filteredAudit.json<{ entries: Array<{ action: string; entityType: string }> }>().entries).toEqual([
+      expect.objectContaining({ action: "USER_PASSWORD_RESET", entityType: "USER" })
+    ]);
+
+    const exportedAudit = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit-log/export?entityType=USER&search=password",
+      headers: cookieHeader
+    });
+    expect(exportedAudit.statusCode).toBe(200);
+    expect(exportedAudit.headers["content-type"]).toContain("text/csv");
+    expect(exportedAudit.headers["content-disposition"]).toMatch(
+      /^attachment; filename="audit-log-[^"]+\.csv"$/,
+    );
+
+    const csv = exportedAudit.body;
+    const lines = csv.trim().split("\n");
+    expect(lines[0]).toBe("createdAtIso,entityType,action,summary,actorUserId,entityId,metadataJson");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("USER_PASSWORD_RESET");
+    expect(lines[1]).not.toContain("USER_CREATED");
+
+    await app.close();
+  });
 });

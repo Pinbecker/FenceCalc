@@ -4,17 +4,22 @@ import { defineConfig } from "vite";
 
 import { workspaceAliases } from "../../workspaceAliases";
 
+function readNonEmptyEnv(name: string): string | null {
+  const value = process.env[name]?.trim();
+  return value ? value : null;
+}
+
 const shouldUploadSourcemaps =
-  typeof process.env.SENTRY_AUTH_TOKEN === "string" &&
-  typeof process.env.SENTRY_ORG === "string" &&
-  typeof process.env.SENTRY_PROJECT === "string";
+  readNonEmptyEnv("SENTRY_AUTH_TOKEN") !== null &&
+  readNonEmptyEnv("SENTRY_ORG") !== null &&
+  readNonEmptyEnv("SENTRY_PROJECT") !== null;
 
 function getSentryPlugin() {
-  const authToken = process.env.SENTRY_AUTH_TOKEN;
-  const org = process.env.SENTRY_ORG;
-  const project = process.env.SENTRY_PROJECT;
+  const authToken = readNonEmptyEnv("SENTRY_AUTH_TOKEN");
+  const org = readNonEmptyEnv("SENTRY_ORG");
+  const project = readNonEmptyEnv("SENTRY_PROJECT");
 
-  if (typeof authToken !== "string" || typeof org !== "string" || typeof project !== "string") {
+  if (!authToken || !org || !project) {
     return null;
   }
 

@@ -115,13 +115,28 @@ export function AdminPage({
     }
   };
 
-  const buildAuditFilters = (): AuditLogQueryOptions => ({
-    limit: 50,
-    entityType: auditCategory === "ALL" ? undefined : auditCategory,
-    search: auditSearch.trim() || undefined,
-    from: auditFrom ? new Date(`${auditFrom}T00:00:00.000Z`).toISOString() : undefined,
-    to: auditTo ? new Date(`${auditTo}T23:59:59.999Z`).toISOString() : undefined
-  });
+  const buildAuditFilters = (): AuditLogQueryOptions => {
+    const filters: AuditLogQueryOptions = { limit: 50 };
+
+    if (auditCategory !== "ALL") {
+      filters.entityType = auditCategory;
+    }
+
+    const trimmedSearch = auditSearch.trim();
+    if (trimmedSearch) {
+      filters.search = trimmedSearch;
+    }
+
+    if (auditFrom) {
+      filters.from = new Date(`${auditFrom}T00:00:00.000Z`).toISOString();
+    }
+
+    if (auditTo) {
+      filters.to = new Date(`${auditTo}T23:59:59.999Z`).toISOString();
+    }
+
+    return filters;
+  };
 
   const handleApplyAuditFilters = async () => {
     await onApplyAuditFilters(buildAuditFilters());

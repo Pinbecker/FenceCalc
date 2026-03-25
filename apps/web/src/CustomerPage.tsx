@@ -171,17 +171,12 @@ export function CustomerPage({
   userRole,
   isSavingCustomer,
   isArchivingCustomerId,
-  errorMessage,
-  noticeMessage,
   onSaveCustomer,
   onSetCustomerArchived,
   onOpenDrawing,
-  onOpenEstimate,
   onCreateDrawing,
   onToggleDrawingArchived,
   onChangeDrawingStatus,
-  onLoadVersions,
-  onRestoreVersion,
   onDeleteDrawing,
   onDeleteCustomer,
   onNavigate,
@@ -193,9 +188,6 @@ export function CustomerPage({
   const [draft, setDraft] = useState<CustomerDraft | null>(null);
   const [contactsDraft, setContactsDraft] = useState<CustomerContact[]>([]);
   const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null);
-  const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
-  const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
-  const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
   const [confirmDeleteDrawingId, setConfirmDeleteDrawingId] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -281,21 +273,6 @@ export function CustomerPage({
     setIsEditOpen(false);
     setDraft(null);
     setContactsDraft([]);
-  };
-
-  const handleToggleHistory = async (drawingId: string) => {
-    if (expandedDrawingId === drawingId) {
-      setExpandedDrawingId(null);
-      return;
-    }
-    setExpandedDrawingId(drawingId);
-    if (versionsByDrawingId[drawingId]) {
-      return;
-    }
-    setIsLoadingVersionsForId(drawingId);
-    const versions = await onLoadVersions(drawingId);
-    setVersionsByDrawingId((current) => ({ ...current, [drawingId]: versions }));
-    setIsLoadingVersionsForId(null);
   };
 
   if (!customerId || !customer) {
@@ -537,11 +514,13 @@ export function CustomerPage({
                 type="button"
                 className="portal-danger-button portal-compact-button"
                 disabled={isDeletingDrawing}
-                onClick={async () => {
-                  setIsDeletingDrawing(true);
-                  await onDeleteDrawing(confirmDeleteDrawingId);
-                  setIsDeletingDrawing(false);
-                  setConfirmDeleteDrawingId(null);
+                onClick={() => {
+                  void (async () => {
+                    setIsDeletingDrawing(true);
+                    await onDeleteDrawing(confirmDeleteDrawingId);
+                    setIsDeletingDrawing(false);
+                    setConfirmDeleteDrawingId(null);
+                  })();
                 }}
               >
                 {isDeletingDrawing ? "Deleting..." : "Delete permanently"}
@@ -569,12 +548,14 @@ export function CustomerPage({
                 type="button"
                 className="portal-danger-button portal-compact-button"
                 disabled={isDeletingCustomer}
-                onClick={async () => {
-                  setIsDeletingCustomer(true);
-                  const deleted = await onDeleteCustomer(customer.id);
-                  setIsDeletingCustomer(false);
-                  setConfirmDeleteCustomer(false);
-                  if (deleted) onNavigate("customers");
+                onClick={() => {
+                  void (async () => {
+                    setIsDeletingCustomer(true);
+                    const deleted = await onDeleteCustomer(customer.id);
+                    setIsDeletingCustomer(false);
+                    setConfirmDeleteCustomer(false);
+                    if (deleted) onNavigate("customers");
+                  })();
                 }}
               >
                 {isDeletingCustomer ? "Deleting..." : "Delete permanently"}

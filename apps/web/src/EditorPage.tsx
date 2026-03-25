@@ -880,7 +880,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           sideNettingPreview={
             sideNettingSegmentPreview
               ? {
-                  segmentId: sideNettingSegmentPreview.segment.id,
+                  lengthMm: distanceMm(
+                    sideNettingSegmentPreview.segment.start,
+                    sideNettingSegmentPreview.segment.end,
+                  ),
                   snapMeta: sideNettingSegmentPreview.snapMeta
                 }
               : null
@@ -964,6 +967,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 kickboardPreview={kickboardPreview}
                 pitchDividerPreview={pitchDividerPreview}
                 pitchDividerAnchorPreview={pitchDividerAnchorPreview}
+                sideNettingAnchorPreview={null}
+                sideNettingPreview={null}
+                pendingSideNettingStart={null}
                 sideNettingSegmentPreview={sideNettingSegmentPreview}
                 pendingPitchDividerStart={shellState.pendingPitchDividerStart}
                 gatePreviewVisual={gatePreviewVisual}

@@ -55,6 +55,8 @@ COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages/contracts/package.json ./packages/contracts/package.json
 COPY --from=build /app/packages/contracts/dist ./packages/contracts/dist
+COPY --from=build /app/packages/geometry/package.json ./packages/geometry/package.json
+COPY --from=build /app/packages/geometry/dist ./packages/geometry/dist
 COPY --from=build /app/packages/rules-engine/package.json ./packages/rules-engine/package.json
 COPY --from=build /app/packages/rules-engine/dist ./packages/rules-engine/dist
 

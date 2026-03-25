@@ -66,6 +66,7 @@ describe("CustomerPage", () => {
         query={{ customerId: "customer-1" }}
         customers={[customer]}
         drawings={drawings}
+        userRole="OWNER"
         isSavingCustomer={false}
         isArchivingCustomerId={null}
         errorMessage={null}
@@ -79,6 +80,8 @@ describe("CustomerPage", () => {
         onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
+        onDeleteDrawing={() => Promise.resolve(true)}
+        onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />
     );
@@ -109,6 +112,7 @@ describe("CustomerPage", () => {
         query={{ customerId: "missing-customer" }}
         customers={[customer]}
         drawings={drawings}
+        userRole="OWNER"
         isSavingCustomer={false}
         isArchivingCustomerId={null}
         errorMessage={null}
@@ -122,6 +126,8 @@ describe("CustomerPage", () => {
         onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
+        onDeleteDrawing={() => Promise.resolve(true)}
+        onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />
     );
@@ -136,6 +142,7 @@ describe("CustomerPage", () => {
         query={{ customerId: "customer-1" }}
         customers={[customer]}
         drawings={drawings}
+        userRole="OWNER"
         isSavingCustomer={false}
         isArchivingCustomerId={null}
         errorMessage="Customer name already exists"
@@ -149,6 +156,8 @@ describe("CustomerPage", () => {
         onChangeDrawingStatus={() => Promise.resolve(true)}
         onLoadVersions={() => Promise.resolve(versions)}
         onRestoreVersion={() => Promise.resolve(true)}
+        onDeleteDrawing={() => Promise.resolve(true)}
+        onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />
     );

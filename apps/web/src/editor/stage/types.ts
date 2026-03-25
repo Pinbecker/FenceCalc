@@ -64,6 +64,7 @@ export interface EditorCanvasStageProps {
   pitchDividerAnchorPreview?: PitchDividerAnchorPreview | null;
   pitchDividerPreview?: PitchDividerSpanPreview | null;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
+  sideNettingSegmentPreview?: SegmentAttachmentPreview | null;
   sideNettingAnchorPreview?: PitchDividerAnchorPreview | null;
   sideNettingPreview?: SegmentRangePreview | null;
   pendingSideNettingStart?: PitchDividerAnchorPreview | null;

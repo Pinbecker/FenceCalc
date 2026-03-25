@@ -490,11 +490,13 @@ export function DrawingsPage({
                 type="button"
                 className="portal-danger-button portal-compact-button"
                 disabled={isDeletingDrawing}
-                onClick={async () => {
-                  setIsDeletingDrawing(true);
-                  await onDeleteDrawing(confirmDeleteId);
-                  setIsDeletingDrawing(false);
-                  setConfirmDeleteId(null);
+                onClick={() => {
+                  void (async () => {
+                    setIsDeletingDrawing(true);
+                    await onDeleteDrawing(confirmDeleteId);
+                    setIsDeletingDrawing(false);
+                    setConfirmDeleteId(null);
+                  })();
                 }}
               >
                 {isDeletingDrawing ? "Deleting..." : "Delete permanently"}

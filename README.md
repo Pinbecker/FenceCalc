@@ -83,6 +83,7 @@ Notes:
 
 - the API container persists SQLite data under `/var/lib/fence-estimator`
 - the web container is a static build, so `VITE_*` values must be present at build time, not only at runtime
+- the checked-in compose file keeps `SESSION_COOKIE_SECURE=true`, so realistic browser auth smoke tests require HTTPS in front of the stack
 - `docker-compose.yml` is intentionally single-instance and matches the current supported deployment shape
 
 ## Operations

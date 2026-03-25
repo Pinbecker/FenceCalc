@@ -203,11 +203,11 @@ export function toCompany(row: CompanyRow): CompanyRecord {
 }
 
 export function toCustomer(row: CustomerRow): CustomerRecord {
-  let additionalContacts: Array<{ name: string; phone: string; email: string }> = [];
+  let additionalContacts: unknown = [];
   try {
-    const parsed = JSON.parse(row.additional_contacts_json || "[]");
-    if (Array.isArray(parsed)) {
-      additionalContacts = parsed;
+    const parsedContacts: unknown = JSON.parse(row.additional_contacts_json || "[]");
+    if (Array.isArray(parsedContacts)) {
+      additionalContacts = parsedContacts;
     }
   } catch {
     additionalContacts = [];

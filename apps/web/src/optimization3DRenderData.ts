@@ -508,34 +508,6 @@ export function buildOptimization3DRenderData(
     strokes.push(strokeRecord);
   };
 
-  const pushPolylineStroke = (
-    key: string,
-    points: ReadonlyArray<Point3D>,
-    stroke: string,
-    strokeWidth: number,
-    opacity: number,
-    depthOffset: number = 0,
-    dashArray?: string
-  ) => {
-    const projected = projectPolyline(points);
-    if (!projected || projected.length < 2) {
-      return;
-    }
-    const strokeRecord: RenderStroke = {
-      key,
-      kind: "polyline",
-      value: projected.map((point) => `${point.x},${point.y}`).join(" "),
-      stroke,
-      strokeWidth,
-      opacity,
-      depth: getFaceDepth(projected) + depthOffset
-    };
-    if (dashArray) {
-      strokeRecord.dashArray = dashArray;
-    }
-    strokes.push(strokeRecord);
-  };
-
   const groundMinX = scene.bounds.minX - GROUND_PADDING_MM;
   const groundMaxX = scene.bounds.maxX + GROUND_PADDING_MM;
   const groundMinZ = scene.bounds.minZ - GROUND_PADDING_MM;

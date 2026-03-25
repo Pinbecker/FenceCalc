@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import { DRAWING_STATUSES, type DrawingRecord, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
 
 import { type DrawingRow, type DrawingVersionRow, toDrawing, toDrawingSummary, toDrawingVersion } from "./shared.js";
 import type {
@@ -13,6 +13,10 @@ import type {
 
 export class SqliteDrawingStore {
   public constructor(private readonly database: Database.Database) {}
+
+  private normalizeDrawingStatus(raw: string): DrawingRecord["status"] {
+    return (DRAWING_STATUSES as readonly string[]).includes(raw) ? (raw as DrawingRecord["status"]) : "DRAFT";
+  }
 
   private tryReadDrawing(row: DrawingRow): DrawingRecord | null {
     try {
@@ -385,9 +389,12 @@ export class SqliteDrawingStore {
         schemaVersion: existing.schema_version,
         rulesVersion: existing.rules_version,
         versionNumber: existing.version_number,
+        status: this.normalizeDrawingStatus(existing.status),
         isArchived: existing.is_archived === 1,
         archivedAtIso: existing.archived_at_iso,
         archivedByUserId: existing.archived_by_user_id,
+        statusChangedAtIso: existing.status_changed_at_iso,
+        statusChangedByUserId: existing.status_changed_by_user_id,
         createdByUserId: existing.created_by_user_id,
         updatedByUserId: existing.updated_by_user_id,
         createdAtIso: existing.created_at_iso,
@@ -396,6 +403,9 @@ export class SqliteDrawingStore {
       isArchived: input.archived,
       archivedAtIso: input.archived ? input.archivedAtIso : null,
       archivedByUserId: input.archived ? input.archivedByUserId : null,
+      status: this.normalizeDrawingStatus(existing.status),
+      statusChangedAtIso: existing.status_changed_at_iso,
+      statusChangedByUserId: existing.status_changed_by_user_id,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso
     };

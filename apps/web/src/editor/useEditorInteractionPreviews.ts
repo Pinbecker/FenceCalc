@@ -10,7 +10,6 @@ import type {
 } from "@fence-estimator/contracts";
 import { distanceMm, snapPointToAngle } from "@fence-estimator/geometry";
 import { PITCH_DIVIDER_MAX_SPAN_MM, PITCH_DIVIDER_SUPPORT_INTERVAL_MM } from "@fence-estimator/contracts";
-import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
 
 import {
   AXIS_GUIDE_SNAP_PX,
@@ -66,8 +65,7 @@ import type {
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
-  SegmentAttachmentPreview,
-  SegmentRangePreview
+  SegmentAttachmentPreview
 } from "./types";
 
 interface EditorInteractionPreviewsOptions {
@@ -220,22 +218,6 @@ function findNearestProjectedSegment(
   }
 
   return best;
-}
-
-function findNearestSegmentPostOffsetMm(segment: LayoutSegment, targetOffsetMm: number): number | null {
-  const postOffsetsMm = getSegmentPostOffsets(segment);
-  let bestOffsetMm: number | null = null;
-  let bestDeltaMm = Number.POSITIVE_INFINITY;
-
-  for (const offsetMm of postOffsetsMm) {
-    const deltaMm = Math.abs(offsetMm - targetOffsetMm);
-    if (deltaMm < bestDeltaMm) {
-      bestDeltaMm = deltaMm;
-      bestOffsetMm = offsetMm;
-    }
-  }
-
-  return bestOffsetMm;
 }
 
 export function useEditorInteractionPreviews({

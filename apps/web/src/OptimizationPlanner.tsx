@@ -1,7 +1,6 @@
 import type {
   LayoutSegment,
-  OptimizationSummary,
-  TwinBarOptimizationPlan
+  OptimizationSummary
 } from "@fence-estimator/contracts";
 
 import { Optimization3DView } from "./Optimization3DView";
@@ -43,10 +42,6 @@ function formatPanelCountLabel(count: number): string {
 
 function formatOpenedPanelCountLabel(count: number): string {
   return `${count} opened stock ${count === 1 ? "panel" : "panels"}`;
-}
-
-function formatReuseCountLabel(count: number): string {
-  return `${count} ${count === 1 ? "reuse" : "reuses"}`;
 }
 
 function buildDockHeadline(summary: OptimizationSummary, canInspect: boolean): string {
@@ -105,7 +100,6 @@ export function OptimizationPlanner({
     visiblePlans.find((plan) => plan.id === selectedPlanId) ??
     visiblePlans[0] ??
     null;
-  const activePlanId = activePlan?.id ?? null;
   const activePlanIndex = activePlan ? reusablePlans.findIndex((plan) => plan.id === activePlan.id) : -1;
   const hasVisiblePlans = visiblePlans.length > 0;
   const displayPlans = reusablePlans.length > 0 ? reusablePlans : visiblePlans;

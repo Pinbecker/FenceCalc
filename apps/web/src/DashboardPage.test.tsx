@@ -114,7 +114,7 @@ describe("DashboardPage", () => {
 
   it("excludes drawings whose customer is archived", () => {
     const archivedCustomer: CustomerSummary = {
-      ...customers[0],
+      ...customers[0]!,
       isArchived: true,
       activeDrawingCount: 0,
       archivedDrawingCount: 1
@@ -131,7 +131,7 @@ describe("DashboardPage", () => {
 
   it("excludes archived drawings from both sections", () => {
     const archivedDrawing: DrawingSummary = {
-      ...drawings[0],
+      ...drawings[0]!,
       isArchived: true,
       archivedAtIso: "2026-03-10T14:00:00.000Z",
       archivedByUserId: "user-1"

@@ -14,7 +14,6 @@ interface LoginPageProps {
 
 export function LoginPage({
   bootstrapRequired,
-  bootstrapSecretRequired,
   isSubmitting,
   errorMessage,
   noticeMessage,

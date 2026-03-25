@@ -17,6 +17,7 @@ import {
   getSetupStatus,
   login,
   logout as logoutSession,
+  type AuditLogQueryOptions,
   type CreateCompanyUserInput,
   type LoginInput,
   type RegisterAccountInput,
@@ -54,6 +55,8 @@ export interface PortalSessionState {
   refreshDrawings: () => Promise<void>;
   refreshUsers: () => Promise<void>;
   refreshAuditLog: () => Promise<void>;
+  refreshFilteredAuditLog: (query: AuditLogQueryOptions) => Promise<void>;
+  exportAuditLog: (query: AuditLogQueryOptions) => Promise<string>;
   saveCustomer: (
     input:
       | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
@@ -103,6 +106,7 @@ export function usePortalSession(): PortalSessionState {
     refreshCustomers,
     loadDrawingVersions,
     refreshAuditLog,
+    refreshFilteredAuditLog,
     refreshDrawings,
     refreshUsers,
     resetUserPassword,
@@ -110,6 +114,7 @@ export function usePortalSession(): PortalSessionState {
     saveCustomer,
     setCustomerArchived,
     setDrawingArchived,
+    exportAuditLog,
     deleteDrawing,
     deleteCustomer,
     users
@@ -307,6 +312,8 @@ export function usePortalSession(): PortalSessionState {
     refreshDrawings,
     refreshUsers,
     refreshAuditLog,
+    refreshFilteredAuditLog,
+    exportAuditLog,
     saveCustomer,
     setCustomerArchived,
     createUser,

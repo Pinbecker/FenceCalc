@@ -162,9 +162,7 @@ export function EditorCanvasStage({
           pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
           pitchDividerPreview={props.pitchDividerPreview ?? null}
           pendingPitchDividerStart={props.pendingPitchDividerStart ?? null}
-          sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
-          sideNettingPreview={props.sideNettingPreview ?? null}
-          pendingSideNettingStart={props.pendingSideNettingStart ?? null}
+          sideNettingSegmentPreview={props.sideNettingSegmentPreview ?? null}
           gatePreviewVisual={props.gatePreviewVisual}
           closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}

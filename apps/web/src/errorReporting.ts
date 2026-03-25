@@ -37,9 +37,7 @@ export function setClientTelemetrySession(session: AuthSessionEnvelope | null): 
   }
 
   Sentry.setUser({
-    id: session.user.id,
-    email: session.user.email,
-    username: session.user.displayName
+    id: session.user.id
   });
   Sentry.setTag("company_id", session.company.id);
   Sentry.setTag("user_role", session.user.role);

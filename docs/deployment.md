@@ -59,6 +59,8 @@ Example local production-style run:
 docker compose up --build
 ```
 
+The checked-in `docker-compose.yml` keeps `SESSION_COOKIE_SECURE=true` because that is the required production setting. That means authenticated browser flows need HTTPS in front of the stack. Plain `http://localhost` can still be used for unauthenticated smoke checks such as `/health` and setup-status, but not for a realistic cookie-backed sign-in flow.
+
 ## CI Expectations
 
 The repository should pass:
