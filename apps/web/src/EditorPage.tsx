@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
-import { distanceMm } from "@fence-estimator/geometry";
 
 import { EditorLengthEditor } from "./EditorLengthEditor";
+import { EditorMenuBar } from "./EditorMenuBar";
 import { EditorWorkspaceShell } from "./EditorWorkspaceShell";
-import { EditorWorkspaceHeader } from "./EditorWorkspaceHeader";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorDerivedState } from "./editor/useEditorDerivedState";
 import { useEditorInteractionPreviews } from "./editor/useEditorInteractionPreviews";
@@ -52,6 +51,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
   const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
+  const [isItemCountsVisible, setIsItemCountsVisible] = useState(false);
+  const [isPostKeyVisible, setIsPostKeyVisible] = useState(false);
   const {
     currentLayout,
     segments,
@@ -439,7 +440,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     handleExportPdf,
     handleOpenCustomers,
     handleStartNewDraft,
-    interactionLabel,
     isChangingStatus
   } = useEditorPageActions({
     stageRef,
@@ -464,7 +464,19 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       !!selectionState.selectedGateId ||
       !!selectionState.selectedBasketballPostId ||
       !!selectionState.selectedFloodlightColumnId);
-  const workspaceHeaderProps = {
+  const estimateTitle = workspace.currentDrawingId
+    ? workspace.isDirty
+      ? "Save the drawing before opening its estimate."
+      : "Open estimate"
+    : "Save this drawing first to open its estimate.";
+  const canNavigateEstimate = !!workspace.currentDrawingId && !workspace.isDirty;
+  const toggleItemCounts = useCallback(() => setIsItemCountsVisible((c) => !c), []);
+  const togglePostKey = useCallback(() => setIsPostKeyVisible((c) => !c), []);
+  const toggleOptimization = useCallback(() =>
+    shellState.setIsOptimizationInspectorOpen((c: boolean) => !c),
+    [shellState],
+  );
+  const menuBarProps = {
     session,
     customers: workspace.customers,
     drawingTitle,
@@ -479,6 +491,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isChangingStatus,
     canManagePricing,
     canManageAdmin,
+    canUndo,
+    canRedo,
+    canDeleteSelection,
+    isItemCountsVisible,
+    isPostKeyVisible,
+    isOptimizationVisible: shellState.isOptimizationInspectorOpen,
     onSetCurrentDrawingName: workspace.setCurrentDrawingName,
     onChangeDrawingStatus: (status: Parameters<typeof handleChangeDrawingStatus>[0]) => {
       void handleChangeDrawingStatus(status);
@@ -493,6 +511,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onExportPdf: handleExportPdf,
     onStartNewDraft: handleStartNewDraft,
+    onUndo: undoSegments,
+    onRedo: redoSegments,
+    onDeleteSelection: handleDeleteSelection,
+    onClearLayout: handleClearLayout,
+    onToggleItemCounts: toggleItemCounts,
+    onTogglePostKey: togglePostKey,
+    onToggleOptimization: toggleOptimization,
     onGoToLogin: () => guardedNavigate("login"),
     onNavigateDashboard: () => guardedNavigate("dashboard"),
     onNavigateCustomers: handleOpenCustomers,
@@ -503,11 +528,17 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       guardedNavigate("estimate", { drawingId: workspace.currentDrawingId });
     },
     onNavigatePricing: () => guardedNavigate("pricing"),
-    onNavigateAdmin: () => guardedNavigate("admin")
+    onNavigateAdmin: () => guardedNavigate("admin"),
+    canNavigateEstimate,
+    estimateTitle
   };
   const workspaceShellProps = {
-    sidebarProps: {
+    toolPaletteProps: {
       interactionMode: shellState.interactionMode,
+      activeSpec: shellState.activeSpec,
+      activeHeightOptions,
+      twinBarHeightOptions: TWIN_BAR_HEIGHT_OPTIONS,
+      rollFormHeightOptions: ROLL_FORM_HEIGHT_OPTIONS,
       recessWidthInputM: shellState.recessWidthInputM,
       recessDepthInputM: shellState.recessDepthInputM,
       goalUnitWidthMm: shellState.goalUnitWidthMm,
@@ -517,13 +548,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       kickboardSectionHeightMm: shellState.kickboardSectionHeightMm,
       kickboardProfile: shellState.kickboardProfile,
       sideNettingHeightMm: shellState.sideNettingHeightMm,
-      pendingPitchDividerStart: shellState.pendingPitchDividerStart
-        ? {
-            segmentId: shellState.pendingPitchDividerStart.segment.id,
-            offsetMm: shellState.pendingPitchDividerStart.offsetMm
-          }
-        : null,
-      pendingSideNettingStart: null,
       gateType: shellState.gateType,
       customGateWidthInputM: shellState.customGateWidthInputM,
       recessWidthOptionsMm: RECESS_WIDTH_OPTIONS_MM,
@@ -534,28 +558,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       kickboardSectionHeightOptionsMm: KICKBOARD_SECTION_HEIGHT_OPTIONS_MM,
       sideNettingHeightOptionsMm: SIDE_NETTING_HEIGHT_OPTIONS_MM,
       gateWidthOptionsMm: GATE_WIDTH_OPTIONS_MM,
-      recessPreview,
-      gatePreview,
-      basketballPostPreview,
-      floodlightColumnPreview,
-      goalUnitPreview,
-      kickboardPreview: kickboardPreview
-        ? {
-            segmentId: kickboardPreview.segment.id,
-            snapMeta: kickboardPreview.snapMeta
-          }
-        : null,
-      pitchDividerPreview,
-      sideNettingPreview: sideNettingSegmentPreview
-        ? {
-            lengthMm: distanceMm(sideNettingSegmentPreview.segment.start, sideNettingSegmentPreview.segment.end),
-            snapMeta: sideNettingSegmentPreview.snapMeta
-          }
-        : null,
-      activeSpec: shellState.activeSpec,
-      activeHeightOptions,
-      twinBarHeightOptions: TWIN_BAR_HEIGHT_OPTIONS,
-      rollFormHeightOptions: ROLL_FORM_HEIGHT_OPTIONS,
       formatLengthMm,
       formatMetersInputFromMm,
       getSegmentColor,
@@ -574,17 +576,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onCustomGateWidthInputChange,
       onNormalizeGateInputs: normalizeGateInputs,
       onSetActiveSpec: shellState.setActiveSpec
-    },
-    interactionLabel,
-    canvasControlsProps: {
-      canUndo,
-      canRedo,
-      canDeleteSelection,
-      onUndo: undoSegments,
-      onRedo: redoSegments,
-      onResetView: resetView,
-      onDeleteSelection: handleDeleteSelection,
-      onClearLayout: handleClearLayout
     },
     canvasFrameRef,
     canvasStageProps: {
@@ -740,7 +731,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onClose: () => shellState.setIsOptimizationInspectorOpen(false),
       onSelectPlan: shellState.setSelectedPlanId
     },
-    overlayPanelsProps: {
+    floatingPanelsProps: {
+      isItemCountsVisible,
+      isPostKeyVisible,
       postRowsByType,
       gateCounts,
       gateCountsByHeight,
@@ -752,8 +745,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       postTypeCounts,
       panelCount,
       fenceRunCount,
-      formatHeightLabelFromMm
-    }
+      formatHeightLabelFromMm,
+      onToggleItemCounts: toggleItemCounts,
+      onTogglePostKey: togglePostKey
+    },
+    isOptimizationVisible: shellState.isOptimizationInspectorOpen
   };
   const lengthEditorProps = {
     isOpen: selectionState.isLengthEditorOpen && selectedSegment !== null,
@@ -767,7 +763,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
 
   return (
     <div className="editor-page">
-      <EditorWorkspaceHeader {...workspaceHeaderProps} />
+      <EditorMenuBar {...menuBarProps} />
       <EditorWorkspaceShell {...workspaceShellProps} />
       <EditorLengthEditor {...lengthEditorProps} />
     </div>

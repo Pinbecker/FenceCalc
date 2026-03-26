@@ -1,7 +1,6 @@
-export { EditorCanvasControls } from "../EditorCanvasControls.js";
-export { EditorFencePalettePanel } from "../EditorFencePalettePanel.js";
-export { EditorInteractionPanel } from "../EditorInteractionPanel.js";
-export { EditorOverlayPanels } from "../EditorOverlayPanels.js";
+export { EditorFloatingPanels } from "../EditorFloatingPanels.js";
+export { EditorMenuBar } from "../EditorMenuBar.js";
+export { EditorToolPalette } from "../EditorToolPalette.js";
 export { shouldLoadInitialDrawing } from "../initialDrawingLoad.js";
 export { OptimizationPlanner } from "../OptimizationPlanner.js";
 export { getVisibleOptimizationPlans } from "../optimizationDisplay.js";

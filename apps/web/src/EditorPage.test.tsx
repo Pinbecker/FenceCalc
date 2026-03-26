@@ -291,24 +291,24 @@ vi.mock("./EditorCanvasStage", () => ({
   EditorCanvasStage: () => <div>CanvasStage</div>
 }));
 
-vi.mock("./EditorCanvasControls", () => ({
-  EditorCanvasControls: ({ canUndo, canRedo }: { canUndo: boolean; canRedo: boolean }) => (
-    <div>{`CanvasControls ${canUndo ? "undo" : "no-undo"} ${canRedo ? "redo" : "no-redo"}`}</div>
-  )
-}));
-
 vi.mock("./EditorLengthEditor", () => ({
   EditorLengthEditor: ({ isOpen }: { isOpen: boolean }) => <div>{isOpen ? "LengthEditorOpen" : "LengthEditorClosed"}</div>
 }));
 
-vi.mock("./EditorOverlayPanels", () => ({
-  EditorOverlayPanels: ({ panelCount, fenceRunCount }: { panelCount: number; fenceRunCount: number }) => (
-    <div>{`OverlayPanels panels:${panelCount} runs:${fenceRunCount}`}</div>
+vi.mock("./EditorMenuBar", () => ({
+  EditorMenuBar: ({ drawingTitle, currentCustomerName, isDirty, session }: { drawingTitle: string; currentCustomerName: string; isDirty: boolean; session: { user: { displayName: string } } | null }) => (
+    <div>{`MenuBar title:${drawingTitle} customer:${currentCustomerName} save:${isDirty ? "Unsaved changes" : "Saved"} user:${session?.user?.displayName ?? ""}`}</div>
   )
 }));
 
-vi.mock("./EditorSidebar", () => ({
-  EditorSidebar: ({ interactionMode }: { interactionMode: string }) => <div>{`Sidebar ${interactionMode}`}</div>
+vi.mock("./EditorToolPalette", () => ({
+  EditorToolPalette: ({ interactionMode }: { interactionMode: string }) => <div>{`ToolPalette ${interactionMode}`}</div>
+}));
+
+vi.mock("./EditorFloatingPanels", () => ({
+  EditorFloatingPanels: ({ panelCount, fenceRunCount }: { panelCount: number; fenceRunCount: number }) => (
+    <div>{`FloatingPanels panels:${panelCount} runs:${fenceRunCount}`}</div>
+  )
 }));
 
 vi.mock("./OptimizationPlanner", () => ({
@@ -444,24 +444,19 @@ describe("EditorPage", () => {
     mockDerivedState.selectedSegment = null;
   });
 
-  it("renders the authenticated workspace shell with admin navigation and editor rails", () => {
+  it("renders the authenticated workspace shell with menu bar and tool palette", () => {
     const html = renderToStaticMarkup(<EditorPage initialDrawingId="drawing-1" onNavigate={vi.fn()} />);
 
-    expect(html).toContain("Workspace Editor");
-    expect(html).toContain("Perimeter A");
-    expect(html).toContain("Cleveland Land Services");
-    expect(html).toContain("Acme Fencing workspace");
-    expect(html).toContain("Jane Owner");
-    expect(html).toContain("Admin");
-    expect(html).toContain("Export PDF");
-    expect(html).toContain("Sidebar SELECT");
+    expect(html).toContain("MenuBar title:Perimeter A");
+    expect(html).toContain("customer:Cleveland Land Services");
+    expect(html).toContain("user:Jane Owner");
+    expect(html).toContain("ToolPalette SELECT");
     expect(html).toContain("CanvasStage");
-    expect(html).toContain("OptimizationPlanner false");
-    expect(html).toContain("OverlayPanels panels:6 runs:3");
+    expect(html).toContain("FloatingPanels panels:6 runs:3");
     expect(html).toContain("LengthEditorClosed");
   });
 
-  it("renders the guest state with a login action and new drawing draft title", () => {
+  it("renders the guest state with tool palette and no user in menu bar", () => {
     mockWorkspace.session = null;
     mockWorkspace.currentDrawingId = null;
     mockWorkspace.currentDrawingName = "";
@@ -469,15 +464,12 @@ describe("EditorPage", () => {
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
-    expect(html).toContain("New drawing draft");
-    expect(html).toContain("Review the drawing canvas and sign in when you need to save or reopen company work.");
-    expect(html).toContain("Go To Login");
-    expect(html).toContain("Sidebar GATE");
-    expect(html).toContain("<h2>Gate</h2>");
-    expect(html).not.toContain("Admin");
+    expect(html).toContain("ToolPalette GATE");
+    expect(html).toContain("CanvasStage");
+    expect(html).toContain("MenuBar title:New drawing draft");
   });
 
-  it("shows untitled state, dirty save copy, and the length editor when a saved drawing has no name", () => {
+  it("shows dirty save state and the length editor when conditions match", () => {
     mockWorkspace.currentDrawingName = "   ";
     mockWorkspace.currentDrawingId = "drawing-2";
     mockWorkspace.isDirty = true;
@@ -487,13 +479,13 @@ describe("EditorPage", () => {
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
-    expect(html).toContain("Untitled drawing");
-    expect(html).toContain("Unsaved changes");
-    expect(html).toContain("<h2>Rectangle</h2>");
+    expect(html).toContain("title:Untitled drawing");
+    expect(html).toContain("save:Unsaved changes");
+    expect(html).toContain("ToolPalette RECTANGLE");
     expect(html).toContain("LengthEditorOpen");
   });
 
-  it("hides pricing and admin navigation for member users", () => {
+  it("renders member user name in menu bar", () => {
     mockWorkspace.session = {
       ...baseSession,
       user: {
@@ -505,10 +497,8 @@ describe("EditorPage", () => {
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
-    expect(html).toContain("Casey Member");
-    expect(html).toContain("Dashboard");
-    expect(html).toContain("Customers");
-    expect(html).not.toContain(">Pricing<");
-    expect(html).not.toContain(">Admin<");
+    expect(html).toContain("user:Casey Member");
+    expect(html).toContain("CanvasStage");
+    expect(html).toContain("ToolPalette SELECT");
   });
 });
