@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AuthSessionEnvelope, CustomerSummary, DrawingStatus } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingStatus } from "@fence-estimator/contracts";
 import { DRAWING_STATUSES } from "@fence-estimator/contracts";
 
 const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
@@ -13,14 +13,11 @@ const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
 
 interface EditorMenuBarProps {
   session: AuthSessionEnvelope | null;
-  customers: CustomerSummary[];
   drawingTitle: string;
   currentDrawingId: string | null;
   currentDrawingName: string;
-  currentCustomerId: string | null;
   currentCustomerName: string;
   isDirty: boolean;
-  isSavingCustomer: boolean;
   isSavingDrawing: boolean;
   currentDrawingStatus: DrawingStatus | null;
   isChangingStatus: boolean;
@@ -34,17 +31,8 @@ interface EditorMenuBarProps {
   isOptimizationVisible: boolean;
   onSetCurrentDrawingName: (name: string) => void;
   onChangeDrawingStatus: (status: DrawingStatus) => void;
-  onSetCurrentCustomerId: (customerId: string | null) => void;
-  onSaveCustomer: (input: {
-    name: string;
-    primaryContactName: string;
-    primaryEmail: string;
-    primaryPhone: string;
-    siteAddress: string;
-    notes: string;
-  }) => Promise<{ id: string } | null>;
   onSaveDrawing: () => void;
-  onSaveDrawingAsNew: () => void;
+  onOpenSaveAs: () => void;
   onExportPdf: () => void;
   onStartNewDraft: () => void;
   onUndo: () => void;
@@ -79,14 +67,11 @@ function useMenuDismiss(onDismiss: () => void, isOpen: boolean) {
 
 export function EditorMenuBar({
   session,
-  customers,
   drawingTitle,
   currentDrawingId,
   currentDrawingName,
-  currentCustomerId,
   currentCustomerName,
   isDirty,
-  isSavingCustomer,
   isSavingDrawing,
   currentDrawingStatus,
   isChangingStatus,
@@ -100,10 +85,8 @@ export function EditorMenuBar({
   isOptimizationVisible,
   onSetCurrentDrawingName,
   onChangeDrawingStatus,
-  onSetCurrentCustomerId,
-  onSaveCustomer,
   onSaveDrawing,
-  onSaveDrawingAsNew,
+  onOpenSaveAs,
   onExportPdf,
   onStartNewDraft,
   onUndo,
@@ -124,35 +107,17 @@ export function EditorMenuBar({
 }: EditorMenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
-  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const [newCustomerDraft, setNewCustomerDraft] = useState({
-    name: "",
-    primaryContactName: "",
-    primaryEmail: "",
-    primaryPhone: "",
-    siteAddress: "",
-    notes: ""
-  });
   const barRef = useRef<HTMLElement>(null);
-
-  const activeCustomers = useMemo(() => {
-    return customers
-      .filter((customer) => !customer.isArchived)
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [customers]);
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
-    setIsCustomerPickerOpen(false);
-    setIsCreatingCustomer(false);
   }, []);
 
-  useMenuDismiss(closeAll, openMenu !== null || isCustomerPickerOpen);
+  useMenuDismiss(closeAll, openMenu !== null);
 
   useEffect(() => {
-    if (!openMenu && !isCustomerPickerOpen) return;
+    if (!openMenu) return;
     function handleClick(event: MouseEvent) {
       if (barRef.current && !barRef.current.contains(event.target as Node)) {
         closeAll();
@@ -160,17 +125,7 @@ export function EditorMenuBar({
     }
     window.addEventListener("mousedown", handleClick);
     return () => window.removeEventListener("mousedown", handleClick);
-  }, [openMenu, isCustomerPickerOpen, closeAll]);
-
-  function toggleMenu(id: MenuId) {
-    setOpenMenu((current) => (current === id ? null : id));
-    setIsCustomerPickerOpen(false);
-  }
-
-  function menuAction(fn: () => void) {
-    fn();
-    closeAll();
-  }
+  }, [openMenu, closeAll]);
 
   useEffect(() => {
     if (isEditingName && nameInputRef.current) {
@@ -179,33 +134,20 @@ export function EditorMenuBar({
     }
   }, [isEditingName]);
 
-  const handleCreateCustomer = async () => {
-    const created = await onSaveCustomer({
-      name: newCustomerDraft.name.trim(),
-      primaryContactName: newCustomerDraft.primaryContactName.trim(),
-      primaryEmail: newCustomerDraft.primaryEmail.trim(),
-      primaryPhone: newCustomerDraft.primaryPhone.trim(),
-      siteAddress: newCustomerDraft.siteAddress.trim(),
-      notes: newCustomerDraft.notes.trim()
-    });
-    if (!created) return;
-    setIsCreatingCustomer(false);
-    setNewCustomerDraft({
-      name: "",
-      primaryContactName: "",
-      primaryEmail: "",
-      primaryPhone: "",
-      siteAddress: "",
-      notes: ""
-    });
-  };
+  function toggleMenu(id: MenuId) {
+    setOpenMenu((current) => (current === id ? null : id));
+  }
+
+  function menuAction(fn: () => void) {
+    fn();
+    closeAll();
+  }
 
   return (
     <header className="menu-bar" ref={barRef}>
       <div className="menu-bar-left">
         <span className="menu-bar-brand">FE</span>
 
-        {/* File Menu */}
         <div className="menu-bar-dropdown">
           <button
             type="button"
@@ -218,14 +160,14 @@ export function EditorMenuBar({
             <div className="menu-bar-panel" role="menu">
               {session ? (
                 <>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onSaveDrawing)} disabled={isSavingDrawing}>
-                    {currentDrawingId ? "Save" : "Save New"}<em>Ctrl+S</em>
+                  <button type="button" role="menuitem" onClick={() => menuAction(onSaveDrawing)} disabled={isSavingDrawing || !currentDrawingId}>
+                    Save<em>Ctrl+S</em>
                   </button>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onSaveDrawingAsNew)} disabled={isSavingDrawing}>
-                    Save As…
+                  <button type="button" role="menuitem" onClick={() => menuAction(onOpenSaveAs)} disabled={isSavingDrawing || !currentDrawingId}>
+                    Save As...
                   </button>
                   <button type="button" role="menuitem" onClick={() => menuAction(onStartNewDraft)}>
-                    New Drawing
+                    New Drawing...
                   </button>
                   <div className="menu-bar-divider" />
                 </>
@@ -272,7 +214,6 @@ export function EditorMenuBar({
           ) : null}
         </div>
 
-        {/* Edit Menu */}
         <div className="menu-bar-dropdown">
           <button
             type="button"
@@ -300,7 +241,6 @@ export function EditorMenuBar({
           ) : null}
         </div>
 
-        {/* View Menu */}
         <div className="menu-bar-dropdown">
           <button
             type="button"
@@ -346,9 +286,9 @@ export function EditorMenuBar({
             type="button"
             className="menu-bar-drawing-name"
             onClick={() => {
-              if (session) setIsEditingName(true);
+              if (session && currentDrawingId) setIsEditingName(true);
             }}
-            title={session ? "Click to rename" : drawingTitle}
+            title={session && currentDrawingId ? "Click to rename" : drawingTitle}
           >
             {drawingTitle}
           </button>
@@ -356,92 +296,9 @@ export function EditorMenuBar({
 
         {session ? (
           <div className="menu-bar-customer-wrap">
-            <button
-              type="button"
-              className="menu-bar-customer-label"
-              onClick={() => {
-                setIsCustomerPickerOpen((current) => !current);
-                setOpenMenu(null);
-              }}
-              title={currentCustomerName || "Select customer"}
-            >
-              {currentCustomerName || "No customer"}
-            </button>
-            {isCustomerPickerOpen ? (
-              <div className="menu-bar-customer-popover">
-                <select
-                  value={currentCustomerId ?? ""}
-                  onChange={(event) => {
-                    onSetCurrentCustomerId(event.target.value || null);
-                    setIsCustomerPickerOpen(false);
-                  }}
-                >
-                  <option value="">No customer</option>
-                  {activeCustomers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="menu-bar-btn-sm"
-                  onClick={() => setIsCreatingCustomer((current) => !current)}
-                >
-                  {isCreatingCustomer ? "Cancel" : "+ New"}
-                </button>
-                {isCreatingCustomer ? (
-                  <div className="menu-bar-new-customer">
-                    <input
-                      type="text"
-                      value={newCustomerDraft.name}
-                      placeholder="Customer name"
-                      onChange={(event) =>
-                        setNewCustomerDraft((current) => ({ ...current, name: event.target.value }))
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={newCustomerDraft.primaryContactName}
-                      placeholder="Contact"
-                      onChange={(event) =>
-                        setNewCustomerDraft((current) => ({
-                          ...current,
-                          primaryContactName: event.target.value
-                        }))
-                      }
-                    />
-                    <input
-                      type="email"
-                      value={newCustomerDraft.primaryEmail}
-                      placeholder="Email"
-                      onChange={(event) =>
-                        setNewCustomerDraft((current) => ({ ...current, primaryEmail: event.target.value }))
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={newCustomerDraft.primaryPhone}
-                      placeholder="Phone"
-                      onChange={(event) =>
-                        setNewCustomerDraft((current) => ({
-                          ...current,
-                          primaryPhone: event.target.value
-                        }))
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="menu-bar-btn-sm menu-bar-btn-primary"
-                      onClick={() => void handleCreateCustomer()}
-                      disabled={isSavingCustomer}
-                    >
-                      {isSavingCustomer ? "…" : "Create"}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            <span className="menu-bar-customer-label" title={currentCustomerName || "Create drawing to select customer"}>
+              {currentCustomerName || "No customer selected"}
+            </span>
           </div>
         ) : null}
 

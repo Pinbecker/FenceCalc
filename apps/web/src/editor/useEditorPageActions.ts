@@ -105,7 +105,7 @@ export function useEditorPageActions({
     () => (workspace.currentDrawingId ? workspace.drawings.find((drawing) => drawing.id === workspace.currentDrawingId) ?? null : null),
     [workspace.currentDrawingId, workspace.drawings]
   );
-  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "New drawing draft");
+  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : session ? "Create drawing" : "New drawing draft");
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const canManagePricing = canManageAdmin;
   const interactionLabel = getInteractionLabel(interactionMode);
@@ -129,7 +129,7 @@ export function useEditorPageActions({
   );
 
   const handleStartNewDraft = useCallback(() => {
-    if (!confirmDiscardChanges("Discard unsaved changes and start a new draft?")) {
+    if (!confirmDiscardChanges("Discard unsaved changes and create a new drawing?")) {
       return;
     }
 

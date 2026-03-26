@@ -22,7 +22,7 @@ import { extractApiErrorMessage, extractCurrentVersionNumber } from "./apiErrors
 import { usePortalFeedbackState } from "./usePortalFeedbackState";
 import { useWorkspaceSavedState } from "./useWorkspaceSavedState";
 import { useWorkspaceSessionState } from "./useWorkspaceSessionState";
-import { buildDefaultDrawingName, normalizeLayout } from "./workspacePersistenceUtils";
+import { normalizeLayout } from "./workspacePersistenceUtils";
 
 interface UseWorkspacePersistenceOptions {
   layout: LayoutModel;
@@ -48,7 +48,6 @@ export interface WorkspacePersistenceState {
   errorMessage: string | null;
   noticeMessage: string | null;
   setCurrentDrawingName: (name: string) => void;
-  setCurrentCustomerId: (customerId: string | null) => void;
   saveCustomer: (input: {
     name: string;
     primaryContactName: string;
@@ -63,9 +62,10 @@ export interface WorkspacePersistenceState {
   refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
   loadDrawing: (drawingId: string) => Promise<void>;
+  createDrawingRecord: (input: { name: string; customerId: string }) => Promise<boolean>;
   saveDrawing: () => Promise<void>;
-  saveDrawingAsNew: () => Promise<void>;
-  startNewDraft: (nextName?: string) => void;
+  saveDrawingAsCopy: (input: { name: string; customerId: string }) => Promise<boolean>;
+  startNewDraft: () => void;
 }
 
 export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawing }: UseWorkspacePersistenceOptions): WorkspacePersistenceState {
@@ -113,15 +113,14 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     }
   }, [currentCustomerId, currentCustomerName, customers]);
 
-  const setCurrentCustomerId = useCallback((customerId: string | null) => {
-    setCurrentCustomerIdState(customerId);
-    if (!customerId) {
-      setCurrentCustomerName("");
-      return;
-    }
-    const customer = customers.find((entry) => entry.id === customerId) ?? null;
-    setCurrentCustomerName(customer?.name ?? "");
-  }, [customers]);
+  const applyPersistedDrawing = useCallback((drawing: DrawingRecord) => {
+    setCurrentDrawingId(drawing.id);
+    setCurrentDrawingVersion(drawing.versionNumber);
+    setCurrentDrawingName(drawing.name);
+    setCurrentCustomerIdState(drawing.customerId);
+    setCurrentCustomerName(drawing.customerName);
+    savedState.rememberSavedState(normalizeLayout(drawing.layout), drawing.name, drawing.customerId);
+  }, [savedState]);
 
   const reloadDrawingFromServer = useCallback(async (drawingId: string, notice: string) => {
     if (!session) {
@@ -131,16 +130,11 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     const drawing = await getDrawing(drawingId);
     const nextLayout = normalizeLayout(drawing.layout);
     onLoadDrawing({ ...drawing, layout: nextLayout });
-    setCurrentDrawingId(drawing.id);
-    setCurrentDrawingVersion(drawing.versionNumber);
-    setCurrentDrawingName(drawing.name);
-    setCurrentCustomerIdState(drawing.customerId);
-    setCurrentCustomerName(drawing.customerName);
-    savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerId);
+    applyPersistedDrawing({ ...drawing, layout: nextLayout });
     setNoticeMessage(notice);
     await refreshCustomers();
     await refreshDrawings();
-  }, [onLoadDrawing, refreshCustomers, refreshDrawings, savedState, session, setNoticeMessage]);
+  }, [applyPersistedDrawing, onLoadDrawing, refreshCustomers, refreshDrawings, session, setNoticeMessage]);
 
   const register = useCallback(async (input: RegisterAccountInput) => {
     await registerSession(input, () => {
@@ -178,17 +172,12 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       const drawing = await getDrawing(drawingId);
       const nextLayout = normalizeLayout(drawing.layout);
       onLoadDrawing({ ...drawing, layout: nextLayout });
-      setCurrentDrawingId(drawing.id);
-      setCurrentDrawingVersion(drawing.versionNumber);
-      setCurrentDrawingName(drawing.name);
-      setCurrentCustomerIdState(drawing.customerId);
-      setCurrentCustomerName(drawing.customerName);
-      savedState.rememberSavedState(nextLayout, drawing.name, drawing.customerId);
+      applyPersistedDrawing({ ...drawing, layout: nextLayout });
       setNoticeMessage(`Loaded "${drawing.name}"`);
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     }
-  }, [clearMessages, onLoadDrawing, savedState, session, setErrorMessage, setNoticeMessage]);
+  }, [applyPersistedDrawing, clearMessages, onLoadDrawing, session, setErrorMessage, setNoticeMessage]);
 
   const saveCustomerRecord = useCallback(async (input: {
     name: string;
@@ -219,14 +208,73 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     }
   }, [clearMessages, refreshCustomers, session, setErrorMessage, setNoticeMessage]);
 
-  const persistDrawing = useCallback(async (forceCreate: boolean) => {
+  const createWorkspaceDrawing = useCallback(async (input: { name: string; customerId: string }) => {
+    if (!session) {
+      return false;
+    }
+
+    clearMessages();
+
+    const drawingName = input.name.trim();
+    if (!drawingName) {
+      setErrorMessage("Enter a drawing name before creating this drawing.");
+      return false;
+    }
+    if (!input.customerId) {
+      setErrorMessage("Select a customer before creating this drawing.");
+      return false;
+    }
+
+    setIsSavingDrawing(true);
+    const savedViewport = getSavedViewport();
+    try {
+      const drawing = await createDrawing({
+        name: drawingName,
+        customerId: input.customerId,
+        layout: normalizedLayout,
+        savedViewport
+      });
+
+      applyPersistedDrawing(drawing);
+      setNoticeMessage(`Created drawing "${drawing.name}"`);
+      await refreshCustomers();
+      await refreshDrawings();
+      return true;
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+      return false;
+    } finally {
+      setIsSavingDrawing(false);
+    }
+  }, [
+    applyPersistedDrawing,
+    clearMessages,
+    getSavedViewport,
+    normalizedLayout,
+    refreshCustomers,
+    refreshDrawings,
+    session,
+    setErrorMessage,
+    setNoticeMessage
+  ]);
+
+  const saveWorkspaceDrawing = useCallback(async () => {
     if (!session) {
       return;
     }
 
     clearMessages();
 
-    const drawingName = currentDrawingName.trim() || buildDefaultDrawingName();
+    if (!currentDrawingId) {
+      setErrorMessage("Create a drawing before saving.");
+      return;
+    }
+
+    const drawingName = currentDrawingName.trim();
+    if (!drawingName) {
+      setErrorMessage("Enter a drawing name before saving this drawing.");
+      return;
+    }
     if (!currentCustomerId) {
       setErrorMessage("Select a customer before saving this drawing.");
       return;
@@ -235,34 +283,21 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setIsSavingDrawing(true);
     const savedViewport = getSavedViewport();
     try {
-      const drawing =
-        !forceCreate && currentDrawingId
-          ? await updateDrawing(currentDrawingId, {
-              expectedVersionNumber: currentDrawingVersion ?? 1,
-              name: drawingName,
-              customerId: currentCustomerId,
-              layout: normalizedLayout,
-              savedViewport
-            })
-          : await createDrawing({
-              name: drawingName,
-              customerId: currentCustomerId,
-              layout: normalizedLayout,
-              savedViewport
-            });
+      const drawing = await updateDrawing(currentDrawingId, {
+        expectedVersionNumber: currentDrawingVersion ?? 1,
+        name: drawingName,
+        customerId: currentCustomerId,
+        layout: normalizedLayout,
+        savedViewport
+      });
 
-      setCurrentDrawingId(drawing.id);
-      setCurrentDrawingVersion(drawing.versionNumber);
-      setCurrentDrawingName(drawing.name);
-      setCurrentCustomerIdState(drawing.customerId);
-      setCurrentCustomerName(drawing.customerName);
-      savedState.rememberSavedState(drawing.layout, drawing.name, drawing.customerId);
-      setNoticeMessage(forceCreate || !currentDrawingId ? `Saved new drawing "${drawing.name}"` : `Saved "${drawing.name}"`);
+      applyPersistedDrawing(drawing);
+      setNoticeMessage(`Saved "${drawing.name}"`);
       await refreshCustomers();
       await refreshDrawings();
     } catch (error) {
       const conflictVersion = extractCurrentVersionNumber(error);
-      if (conflictVersion !== null && currentDrawingId) {
+      if (conflictVersion !== null) {
         const reloadLatest = window.confirm(
           `"${drawingName}" changed on the server while you were editing. Reload the latest saved version now? Your local unsaved changes will be lost.`,
         );
@@ -290,27 +325,77 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setIsSavingDrawing(false);
     }
   }, [
-    currentDrawingId,
+    applyPersistedDrawing,
+    clearMessages,
     currentCustomerId,
+    currentDrawingId,
     currentDrawingName,
     currentDrawingVersion,
-    clearMessages,
     getSavedViewport,
     normalizedLayout,
     refreshCustomers,
     refreshDrawings,
     reloadDrawingFromServer,
-    savedState,
     session,
     setErrorMessage,
     setNoticeMessage
   ]);
 
-  const startNewDraft = useCallback((nextName?: string) => {
+  const saveWorkspaceDrawingAsCopy = useCallback(async (input: { name: string; customerId: string }) => {
+    if (!session) {
+      return false;
+    }
+
+    clearMessages();
+
+    const drawingName = input.name.trim();
+    if (!drawingName) {
+      setErrorMessage("Enter a drawing name before saving a copy.");
+      return false;
+    }
+    if (!input.customerId) {
+      setErrorMessage("Select a customer before saving a copy.");
+      return false;
+    }
+
+    setIsSavingDrawing(true);
+    const savedViewport = getSavedViewport();
+    try {
+      const drawing = await createDrawing({
+        name: drawingName,
+        customerId: input.customerId,
+        layout: normalizedLayout,
+        savedViewport
+      });
+
+      applyPersistedDrawing(drawing);
+      setNoticeMessage(`Saved copy "${drawing.name}"`);
+      await refreshCustomers();
+      await refreshDrawings();
+      return true;
+    } catch (error) {
+      setErrorMessage(extractApiErrorMessage(error));
+      return false;
+    } finally {
+      setIsSavingDrawing(false);
+    }
+  }, [
+    applyPersistedDrawing,
+    clearMessages,
+    getSavedViewport,
+    normalizedLayout,
+    refreshCustomers,
+    refreshDrawings,
+    session,
+    setErrorMessage,
+    setNoticeMessage
+  ]);
+
+  const startNewDraft = useCallback(() => {
     clearMessages();
     setCurrentDrawingId(null);
     setCurrentDrawingVersion(null);
-    setCurrentDrawingName(nextName ?? "");
+    setCurrentDrawingName("");
     setCurrentCustomerIdState(null);
     setCurrentCustomerName("");
     savedState.resetSavedState();
@@ -334,7 +419,6 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     errorMessage,
     noticeMessage,
     setCurrentDrawingName,
-    setCurrentCustomerId,
     saveCustomer: saveCustomerRecord,
     register,
     login: loginToWorkspace,
@@ -342,8 +426,9 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     refreshCustomers,
     refreshDrawings,
     loadDrawing: loadDrawingIntoWorkspace,
-    saveDrawing: async () => persistDrawing(false),
-    saveDrawingAsNew: async () => persistDrawing(true),
+    createDrawingRecord: createWorkspaceDrawing,
+    saveDrawing: saveWorkspaceDrawing,
+    saveDrawingAsCopy: saveWorkspaceDrawingAsCopy,
     startNewDraft
   };
 }

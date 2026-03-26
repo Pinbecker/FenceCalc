@@ -152,10 +152,10 @@ const mockWorkspace = {
   isSavingCustomer: false,
   isSavingDrawing: false,
   setCurrentDrawingName: vi.fn(),
-  setCurrentCustomerId: vi.fn(),
   saveCustomer: vi.fn(() => Promise.resolve({ id: "customer-2" })),
+  createDrawingRecord: vi.fn(() => Promise.resolve(true)),
   saveDrawing: vi.fn(() => Promise.resolve()),
-  saveDrawingAsNew: vi.fn(() => Promise.resolve()),
+  saveDrawingAsCopy: vi.fn(() => Promise.resolve(true)),
   startNewDraft: vi.fn(),
   currentDrawingVersion: 1,
   drawings: [],
@@ -483,6 +483,18 @@ describe("EditorPage", () => {
     expect(html).toContain("save:Unsaved changes");
     expect(html).toContain("ToolPalette RECTANGLE");
     expect(html).toContain("LengthEditorOpen");
+  });
+
+  it("shows the create drawing title for authenticated users without a current drawing", () => {
+    mockWorkspace.currentDrawingId = null;
+    mockWorkspace.currentDrawingName = "";
+    mockWorkspace.currentCustomerId = null;
+    mockWorkspace.currentCustomerName = "";
+
+    const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
+
+    expect(html).toContain("MenuBar title:Create drawing");
+    expect(html).toContain("save:Saved");
   });
 
   it("renders member user name in menu bar", () => {

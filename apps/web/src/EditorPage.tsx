@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
 
+import { EditorDrawingSaveModal } from "./EditorDrawingSaveModal";
 import { EditorLengthEditor } from "./EditorLengthEditor";
 import { EditorMenuBar } from "./EditorMenuBar";
 import { EditorWorkspaceShell } from "./EditorWorkspaceShell";
@@ -53,6 +54,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
   const [isItemCountsVisible, setIsItemCountsVisible] = useState(false);
   const [isPostKeyVisible, setIsPostKeyVisible] = useState(false);
+  const [drawingModalMode, setDrawingModalMode] = useState<"create" | "saveAs" | null>(null);
   const {
     currentLayout,
     segments,
@@ -440,6 +442,18 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onNavigate
   });
   const session = workspace.session;
+  useEffect(() => {
+    if (!session) {
+      setDrawingModalMode(null);
+      return;
+    }
+    if (!workspace.currentDrawingId) {
+      setDrawingModalMode("create");
+      return;
+    }
+    setDrawingModalMode((current) => (current === "create" ? null : current));
+  }, [session, workspace.currentDrawingId]);
+
   const {
     canManageAdmin,
     canManagePricing,
@@ -487,14 +501,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   );
   const menuBarProps = {
     session,
-    customers: workspace.customers,
     drawingTitle,
     currentDrawingId: workspace.currentDrawingId,
     currentDrawingName: workspace.currentDrawingName,
-    currentCustomerId: workspace.currentCustomerId,
     currentCustomerName: workspace.currentCustomerName,
     isDirty: workspace.isDirty,
-    isSavingCustomer: workspace.isSavingCustomer,
     isSavingDrawing: workspace.isSavingDrawing,
     currentDrawingStatus: currentDrawingSummary?.status ?? null,
     isChangingStatus,
@@ -510,13 +521,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onChangeDrawingStatus: (status: Parameters<typeof handleChangeDrawingStatus>[0]) => {
       void handleChangeDrawingStatus(status);
     },
-    onSetCurrentCustomerId: workspace.setCurrentCustomerId,
-    onSaveCustomer: workspace.saveCustomer,
     onSaveDrawing: () => {
       void workspace.saveDrawing();
     },
-    onSaveDrawingAsNew: () => {
-      void workspace.saveDrawingAsNew();
+    onOpenSaveAs: () => {
+      setDrawingModalMode("saveAs");
     },
     onExportPdf: handleExportPdf,
     onStartNewDraft: handleStartNewDraft,
@@ -773,8 +782,31 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   return (
     <div className="editor-page">
       <EditorMenuBar {...menuBarProps} />
+      {workspace.errorMessage || workspace.noticeMessage ? (
+        <div className="editor-feedback-stack">
+          {workspace.errorMessage ? <div className="portal-inline-message portal-inline-error">{workspace.errorMessage}</div> : null}
+          {workspace.noticeMessage ? <div className="portal-inline-message portal-inline-notice">{workspace.noticeMessage}</div> : null}
+        </div>
+      ) : null}
       <EditorWorkspaceShell {...workspaceShellProps} />
       <EditorLengthEditor {...lengthEditorProps} />
+      <EditorDrawingSaveModal
+        isOpen={drawingModalMode !== null}
+        mode={drawingModalMode ?? "create"}
+        customers={workspace.customers}
+        currentDrawingName={workspace.currentDrawingName}
+        initialCustomerId={workspace.currentCustomerId}
+        isSavingDrawing={workspace.isSavingDrawing}
+        isSavingCustomer={workspace.isSavingCustomer}
+        onClose={() => setDrawingModalMode(null)}
+        onCreateCustomer={workspace.saveCustomer}
+        onSubmit={(input) => {
+          if (drawingModalMode === "saveAs") {
+            return workspace.saveDrawingAsCopy(input);
+          }
+          return workspace.createDrawingRecord(input);
+        }}
+      />
     </div>
   );
 }
