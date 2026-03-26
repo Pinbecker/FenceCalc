@@ -7,6 +7,11 @@ import type {
 
 export const COMMERCIAL_TRAVEL_DAYS_CODE = "COMMERCIAL_TRAVEL_DAYS";
 export const COMMERCIAL_MARKUP_UNITS_CODE = "COMMERCIAL_MARKUP_UNITS";
+export const COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE = "COMMERCIAL_LABOUR_OVERHEAD_PERCENT";
+export const COMMERCIAL_TRAVEL_RATE_CODE = "COMMERCIAL_TRAVEL_RATE";
+export const COMMERCIAL_MARKUP_RATE_CODE = "COMMERCIAL_MARKUP_RATE";
+export const COMMERCIAL_DISTRIBUTION_CHARGE_CODE = "COMMERCIAL_DISTRIBUTION_CHARGE";
+export const COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE = "COMMERCIAL_CONCRETE_PRICE_PER_CUBE";
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -18,6 +23,22 @@ function roundQuantity(value: number): number {
 
 function recalculateWorkbook(baseWorkbook: EstimateWorkbook, manualEntries: EstimateWorkbookManualEntry[]): EstimateWorkbook {
   const manualEntryMap = new Map(manualEntries.map((entry) => [entry.code, entry.quantity] as const));
+  const settings = {
+    ...baseWorkbook.settings,
+    labourOverheadPercent: roundQuantity(
+      manualEntryMap.get(COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE) ?? baseWorkbook.settings.labourOverheadPercent
+    ),
+    travelLodgePerDay: roundMoney(
+      manualEntryMap.get(COMMERCIAL_TRAVEL_RATE_CODE) ?? baseWorkbook.settings.travelLodgePerDay
+    ),
+    markupRate: roundMoney(manualEntryMap.get(COMMERCIAL_MARKUP_RATE_CODE) ?? baseWorkbook.settings.markupRate),
+    distributionCharge: roundMoney(
+      manualEntryMap.get(COMMERCIAL_DISTRIBUTION_CHARGE_CODE) ?? baseWorkbook.settings.distributionCharge
+    ),
+    concretePricePerCube: roundMoney(
+      manualEntryMap.get(COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE) ?? baseWorkbook.settings.concretePricePerCube
+    )
+  };
   const sections = baseWorkbook.sections.map((section) => {
     const rows = section.rows.map((row) => {
       if (!row.isEditable) {
@@ -28,7 +49,7 @@ function recalculateWorkbook(baseWorkbook: EstimateWorkbook, manualEntries: Esti
         row.rateMode === "REFERENCE"
           ? 0
           : row.rateMode === "VOLUME_PER_UNIT"
-            ? roundMoney(quantity * row.rate * baseWorkbook.settings.concretePricePerCube)
+            ? roundMoney(quantity * row.rate * settings.concretePricePerCube)
             : roundMoney(quantity * row.rate);
       return {
         ...row,
@@ -52,12 +73,13 @@ function recalculateWorkbook(baseWorkbook: EstimateWorkbook, manualEntries: Esti
   );
   const travelDays = roundQuantity(manualEntryMap.get(COMMERCIAL_TRAVEL_DAYS_CODE) ?? 0);
   const markupUnits = roundQuantity(manualEntryMap.get(COMMERCIAL_MARKUP_UNITS_CODE) ?? 0);
-  const labourOverheadAmount = roundMoney(labourSubtotal * (baseWorkbook.settings.labourOverheadPercent / 100));
-  const travelTotal = roundMoney(travelDays * baseWorkbook.settings.travelLodgePerDay);
-  const markupTotal = roundMoney(markupUnits * baseWorkbook.settings.markupRate);
+  const labourOverheadAmount = roundMoney(labourSubtotal * (settings.labourOverheadPercent / 100));
+  const travelTotal = roundMoney(travelDays * settings.travelLodgePerDay);
+  const markupTotal = roundMoney(markupUnits * settings.markupRate);
 
   return {
     ...baseWorkbook,
+    settings,
     sections,
     manualEntries,
     commercialInputs: {
@@ -67,17 +89,17 @@ function recalculateWorkbook(baseWorkbook: EstimateWorkbook, manualEntries: Esti
     totals: {
       materialsSubtotal,
       labourSubtotal,
-      labourOverheadPercent: baseWorkbook.settings.labourOverheadPercent,
+      labourOverheadPercent: settings.labourOverheadPercent,
       labourOverheadAmount,
-      distributionCharge: baseWorkbook.totals.distributionCharge,
+      distributionCharge: settings.distributionCharge,
       travelDays,
-      travelRatePerDay: baseWorkbook.settings.travelLodgePerDay,
+      travelRatePerDay: settings.travelLodgePerDay,
       travelTotal,
       markupUnits,
-      markupRate: baseWorkbook.settings.markupRate,
+      markupRate: settings.markupRate,
       markupTotal,
       grandTotal: roundMoney(
-        materialsSubtotal + baseWorkbook.totals.distributionCharge + labourSubtotal + labourOverheadAmount + travelTotal + markupTotal
+        materialsSubtotal + settings.distributionCharge + labourSubtotal + labourOverheadAmount + travelTotal + markupTotal
       )
     }
   };

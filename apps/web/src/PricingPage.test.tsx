@@ -33,7 +33,7 @@ describe("PricingPage", () => {
   it("renders the workbook shell and loading state", () => {
     const html = renderToStaticMarkup(<PricingPage session={session} />);
 
-    expect(html).toContain("Materials and labour schedule");
+    expect(html).toContain("Materials and labour rates");
     expect(html).toContain("Pricing workbook");
     expect(html).toContain("Acme Fencing");
     expect(html).toContain("Loading pricing workbook...");

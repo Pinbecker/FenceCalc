@@ -1640,6 +1640,99 @@
   gap: 18px;
 }
 
+.pricing-rate-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pricing-rate-group-card {
+  display: grid;
+  gap: 12px;
+}
+
+.pricing-rate-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pricing-rate-group-head h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #13202f;
+}
+
+.pricing-rate-group-head > span {
+  font-size: 12px;
+  color: rgba(22, 44, 66, 0.7);
+}
+
+.pricing-rate-table {
+  display: grid;
+  gap: 6px;
+}
+
+.pricing-rate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(64px, 0.46fr) minmax(96px, 0.72fr) minmax(96px, 0.72fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(18, 42, 66, 0.08);
+  border-radius: 10px;
+  background: rgba(248, 251, 255, 0.78);
+}
+
+.pricing-rate-head {
+  background: transparent;
+  border: 0;
+  padding: 0 2px 4px;
+}
+
+.pricing-rate-head span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(40, 60, 84, 0.6);
+}
+
+.pricing-rate-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.pricing-rate-copy strong {
+  font-size: 13px;
+  color: #13202f;
+}
+
+.pricing-rate-copy span {
+  font-size: 12px;
+  color: rgba(40, 60, 84, 0.68);
+}
+
+.pricing-rate-row > span,
+.pricing-rate-row > strong {
+  font-size: 13px;
+  color: #13202f;
+}
+
+.pricing-rate-row input {
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 1px solid rgba(18, 42, 66, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: #13202f;
+}
+
+.pricing-rate-placeholder {
+  color: rgba(40, 60, 84, 0.56);
+  font-weight: 700;
+}
+
 .workbook-summary-strip,
 .workbook-settings-card,
 .workbook-commercial-card,
@@ -1717,6 +1810,12 @@
 .workbook-sheet-stack {
   display: grid;
   gap: 18px;
+}
+
+.workbook-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .workbook-section-stack {
@@ -1815,6 +1914,33 @@
   border-radius: 8px;
   background: #fff;
   color: #13202f;
+}
+
+.estimate-control-card {
+  gap: 14px;
+}
+
+.estimate-control-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.estimate-display-card {
+  gap: 10px;
+  padding: 12px;
+}
+
+.estimate-display-table {
+  gap: 5px;
+}
+
+.estimate-display-row {
+  grid-template-columns: minmax(0, 1.8fr) minmax(70px, 0.48fr) minmax(100px, 0.72fr) minmax(100px, 0.72fr);
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.estimate-display-head {
+  padding: 0 2px 4px;
 }
 
 .admin-page-grid {
@@ -2207,7 +2333,9 @@
   .portal-customer-edit-field-row,
   .portal-customer-form-grid-two-column,
   .customer-picker-create-grid,
-  .portal-customer-edit-contact-row {
+  .portal-customer-edit-contact-row,
+  .workbook-section-grid,
+  .pricing-rate-group-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2327,13 +2455,15 @@
   .pricing-table-row,
   .estimate-table-row,
   .estimate-ancillary-row,
-  .workbook-table-row {
+  .workbook-table-row,
+  .pricing-rate-row {
     grid-template-columns: 1fr;
   }
 
   .pricing-table-head,
   .estimate-table-head,
-  .workbook-table-head {
+  .workbook-table-head,
+  .pricing-rate-head {
     display: none;
   }
 

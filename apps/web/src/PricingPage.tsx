@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { AuthSessionEnvelope, PricingConfigRecord, PricingWorkbookConfig, PricingWorkbookRow } from "@fence-estimator/contracts";
-import { buildDefaultPricingWorkbookConfig, groupWorkbookSectionsBySheet } from "@fence-estimator/contracts";
+import { buildDefaultPricingWorkbookConfig } from "@fence-estimator/contracts";
 
 import { getPricingConfig, updatePricingConfig } from "./apiClient";
+import { buildPricingRateGroups, type NumericPricingSettingKey } from "./workbookPresentation";
 
 interface PricingPageProps {
   session: AuthSessionEnvelope;
@@ -34,13 +35,6 @@ export function getPricingWorkbookOrDefault(pricingConfig: PricingConfigRecord |
   return pricingConfig?.workbook ?? buildDefaultPricingWorkbookConfig();
 }
 
-function countEditableRows(workbook: PricingWorkbookConfig | null): number {
-  return workbook?.sections.reduce(
-    (sum, section) => sum + section.rows.filter((row) => row.quantityRule.kind === "MANUAL_ENTRY").length,
-    0
-  ) ?? 0;
-}
-
 function updateWorkbookRow(
   workbook: PricingWorkbookConfig,
   code: string,
@@ -52,6 +46,20 @@ function updateWorkbookRow(
       ...section,
       rows: section.rows.map((row) => (row.code === code ? updater(row) : row))
     }))
+  };
+}
+
+function updateWorkbookSetting(
+  workbook: PricingWorkbookConfig,
+  key: NumericPricingSettingKey,
+  value: number
+): PricingWorkbookConfig {
+  return {
+    ...workbook,
+    settings: {
+      ...workbook.settings,
+      [key]: value
+    }
   };
 }
 
@@ -91,10 +99,7 @@ export function PricingPage({ session }: PricingPageProps) {
     };
   }, []);
 
-  const groupedSections = useMemo(
-    () => (draftWorkbook ? groupWorkbookSectionsBySheet(draftWorkbook) : { MATERIALS: [], LABOUR: [] }),
-    [draftWorkbook]
-  );
+  const rateGroups = useMemo(() => (draftWorkbook ? buildPricingRateGroups(draftWorkbook) : []), [draftWorkbook]);
 
   const isDirty = useMemo(
     () => JSON.stringify(draftWorkbook) !== JSON.stringify(getPricingWorkbookOrDefault(pricingConfig)),
@@ -128,8 +133,8 @@ export function PricingPage({ session }: PricingPageProps) {
       <header className="portal-page-header">
         <div>
           <span className="portal-eyebrow">Pricing workbook</span>
-          <h1>Materials and labour schedule</h1>
-          <p>Rates on this workbook feed the estimate page directly. Keep it aligned with the live spreadsheet structure rather than a flat catalogue list.</p>
+          <h1>Materials and labour rates</h1>
+          <p>Keep the base rates tight and periodic here. Estimate-specific commercial controls now live on the estimate itself.</p>
         </div>
         <div className="portal-header-actions">
           <button
@@ -159,12 +164,12 @@ export function PricingPage({ session }: PricingPageProps) {
           <strong>{session.company.name}</strong>
         </article>
         <article>
-          <span>Workbook sections</span>
-          <strong>{draftWorkbook?.sections.length ?? 0}</strong>
+          <span>Rate groups</span>
+          <strong>{rateGroups.length}</strong>
         </article>
         <article>
-          <span>Manual rows</span>
-          <strong>{countEditableRows(draftWorkbook)}</strong>
+          <span>Priced lines</span>
+          <strong>{rateGroups.reduce((sum, group) => sum + group.rows.length, 0)}</strong>
         </article>
         <article>
           <span>Last saved</span>
@@ -179,252 +184,86 @@ export function PricingPage({ session }: PricingPageProps) {
       ) : null}
 
       {draftWorkbook ? (
-        <>
-          <section className="portal-surface-card workbook-settings-card">
-            <div className="portal-section-heading">
-              <div>
-                <span className="portal-section-kicker">Workbook controls</span>
-                <h2>Commercial defaults</h2>
-              </div>
-            </div>
+        <div className="pricing-rate-group-grid">
+          {rateGroups.map((group) => (
+            <section key={group.key} className="portal-surface-card pricing-rate-group-card">
+              <header className="pricing-rate-group-head">
+                <div>
+                  <span className="portal-section-kicker">Pricing group</span>
+                  <h2>{group.title}</h2>
+                </div>
+                <span>{group.rows.length} items</span>
+              </header>
 
-            <div className="workbook-settings-grid">
-              <label>
-                <span>Labour overhead %</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draftWorkbook.settings.labourOverheadPercent}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              labourOverheadPercent: Number(event.target.value || 0)
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Travel / lodge per day</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draftWorkbook.settings.travelLodgePerDay}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              travelLodgePerDay: Number(event.target.value || 0)
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Markup rate</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draftWorkbook.settings.markupRate}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              markupRate: Number(event.target.value || 0)
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Distribution charge</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draftWorkbook.settings.distributionCharge}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              distributionCharge: Number(event.target.value || 0)
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Concrete price per cube</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draftWorkbook.settings.concretePricePerCube}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              concretePricePerCube: Number(event.target.value || 0)
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Colour option</span>
-                <input
-                  value={draftWorkbook.settings.colourOption}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              colourOption: event.target.value
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label className="workbook-toggle-field">
-                <span>Hard dig default</span>
-                <input
-                  type="checkbox"
-                  checked={draftWorkbook.settings.hardDigDefault}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              hardDigDefault: event.target.checked
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-              <label className="workbook-toggle-field">
-                <span>Clear spoils default</span>
-                <input
-                  type="checkbox"
-                  checked={draftWorkbook.settings.clearSpoilsDefault}
-                  onChange={(event) =>
-                    setDraftWorkbook((current) =>
-                      current
-                        ? {
-                            ...current,
-                            settings: {
-                              ...current.settings,
-                              clearSpoilsDefault: event.target.checked
-                            }
-                          }
-                        : current
-                    )
-                  }
-                />
-              </label>
-            </div>
-          </section>
+              <div className="pricing-rate-table" role="table" aria-label={`${group.title} pricing`}>
+                <div className="pricing-rate-row pricing-rate-head" role="row">
+                  <span>Item</span>
+                  <span>Unit</span>
+                  <span>Material</span>
+                  <span>Labour</span>
+                </div>
 
-          <div className="workbook-sheet-stack">
-            {(["MATERIALS", "LABOUR"] as const).map((sheet) => (
-              <section key={sheet} className="portal-surface-card workbook-sheet-card">
-                <div className="portal-section-heading">
-                  <div>
-                    <span className="portal-section-kicker">Workbook sheet</span>
-                    <h2>{sheet === "MATERIALS" ? "Materials" : "Labour"}</h2>
+                {group.rows.map((row) => (
+                  <div key={row.key} className="pricing-rate-row" role="row">
+                    <div className="pricing-rate-copy">
+                      <strong>{row.label}</strong>
+                      {row.notes ? <span>{row.notes}</span> : null}
+                    </div>
+                    <span>{row.unit}</span>
+                    {row.materialCode || row.materialSettingKey ? (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.materialSettingKey ? draftWorkbook.settings[row.materialSettingKey] : row.materialRate ?? 0}
+                        onChange={(event) => {
+                          const nextValue = Number(event.target.value || 0);
+                          setDraftWorkbook((current) => {
+                            if (!current) {
+                              return current;
+                            }
+                            if (row.materialSettingKey) {
+                              return updateWorkbookSetting(current, row.materialSettingKey, nextValue);
+                            }
+                            if (!row.materialCode) {
+                              return current;
+                            }
+                            return updateWorkbookRow(current, row.materialCode, (entry) => ({
+                              ...entry,
+                              rate: nextValue
+                            }));
+                          });
+                        }}
+                      />
+                    ) : (
+                      <strong className="pricing-rate-placeholder">-</strong>
+                    )}
+                    {row.labourCode ? (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.labourRate ?? 0}
+                        onChange={(event) =>
+                          setDraftWorkbook((current) =>
+                            current
+                              ? updateWorkbookRow(current, row.labourCode!, (entry) => ({
+                                  ...entry,
+                                  rate: Number(event.target.value || 0)
+                                }))
+                              : current
+                          )
+                        }
+                      />
+                    ) : (
+                      <strong className="pricing-rate-placeholder">-</strong>
+                    )}
                   </div>
-                </div>
-
-                <div className="workbook-section-stack">
-                  {groupedSections[sheet].map((section) => (
-                    <section key={section.key} className="workbook-section-card">
-                      <header className="workbook-section-head">
-                        <div>
-                          <h3>{section.title}</h3>
-                          {section.caption ? <p>{section.caption}</p> : null}
-                        </div>
-                        <span>{section.rows.length} rows</span>
-                      </header>
-
-                      <div className="workbook-table" role="table" aria-label={`${section.title} pricing`}>
-                        <div className="workbook-table-row workbook-table-head" role="row">
-                          <span>Item</span>
-                          <span>Unit</span>
-                          <span>Rate</span>
-                          <span>Mode</span>
-                        </div>
-
-                        {section.rows.map((row) => (
-                          <div key={row.code} className="workbook-table-row" role="row">
-                            <div className="workbook-item-copy">
-                              <strong>{row.label}</strong>
-                              {row.notes ? <span>{row.notes}</span> : null}
-                            </div>
-                            <span>{row.unit}</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.rate}
-                              disabled={row.rateMode === "REFERENCE"}
-                              onChange={(event) =>
-                                setDraftWorkbook((current) =>
-                                  current
-                                    ? updateWorkbookRow(current, row.code, (entry) => ({
-                                        ...entry,
-                                        rate: Number(event.target.value || 0)
-                                      }))
-                                    : current
-                                )
-                              }
-                            />
-                            <span>{row.rateMode ?? "MONEY"}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        </>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : null}
     </section>
   );

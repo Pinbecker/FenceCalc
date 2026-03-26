@@ -21,6 +21,11 @@ import { getSpecConfig } from "./constants.js";
 
 const COMMERCIAL_TRAVEL_DAYS_CODE = "COMMERCIAL_TRAVEL_DAYS";
 const COMMERCIAL_MARKUP_UNITS_CODE = "COMMERCIAL_MARKUP_UNITS";
+const COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE = "COMMERCIAL_LABOUR_OVERHEAD_PERCENT";
+const COMMERCIAL_TRAVEL_RATE_CODE = "COMMERCIAL_TRAVEL_RATE";
+const COMMERCIAL_MARKUP_RATE_CODE = "COMMERCIAL_MARKUP_RATE";
+const COMMERCIAL_DISTRIBUTION_CHARGE_CODE = "COMMERCIAL_DISTRIBUTION_CHARGE";
+const COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE = "COMMERCIAL_CONCRETE_PRICE_PER_CUBE";
 
 interface GateSummary {
   byHeight: Map<string, { SINGLE_LEAF: number; DOUBLE_LEAF: number; CUSTOM: number }>;
@@ -400,13 +405,41 @@ export function buildWorkbookPricedEstimate(
 ): PricedEstimateResult {
   const workbookConfig = getWorkbookConfig(pricingConfig);
   const manualEntryMap = new Map(manualEntries.map((entry) => [entry.code, entry.quantity] as const));
+  const settings = {
+    ...workbookConfig.settings,
+    labourOverheadPercent: roundQuantity(
+      manualEntryMap.get(COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE) ?? workbookConfig.settings.labourOverheadPercent
+    ),
+    travelLodgePerDay: roundMoney(
+      manualEntryMap.get(COMMERCIAL_TRAVEL_RATE_CODE) ?? workbookConfig.settings.travelLodgePerDay
+    ),
+    markupRate: roundMoney(manualEntryMap.get(COMMERCIAL_MARKUP_RATE_CODE) ?? workbookConfig.settings.markupRate),
+    distributionCharge: roundMoney(
+      manualEntryMap.get(COMMERCIAL_DISTRIBUTION_CHARGE_CODE) ?? workbookConfig.settings.distributionCharge
+    ),
+    concretePricePerCube: roundMoney(
+      manualEntryMap.get(COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE) ?? workbookConfig.settings.concretePricePerCube
+    )
+  };
   const panelLayerCounts = buildPanelLayerCounts(drawing);
   const gateSummary = buildGateSummary(drawing);
   const featureQuantityIndex = buildFeatureQuantityIndex(drawing);
 
   const sections: EstimateWorkbookSection[] = workbookConfig.sections.map((section) => {
     const rows = section.rows.map((row) =>
-      buildWorkbookRow(section, row, drawing, manualEntryMap, panelLayerCounts, gateSummary, featureQuantityIndex, workbookConfig)
+      buildWorkbookRow(
+        section,
+        row,
+        drawing,
+        manualEntryMap,
+        panelLayerCounts,
+        gateSummary,
+        featureQuantityIndex,
+        {
+          ...workbookConfig,
+          settings
+        }
+      )
     );
     return {
       key: section.key,
@@ -429,12 +462,12 @@ export function buildWorkbookPricedEstimate(
     travelDays: roundQuantity(manualEntryMap.get(COMMERCIAL_TRAVEL_DAYS_CODE) ?? 0),
     markupUnits: roundQuantity(manualEntryMap.get(COMMERCIAL_MARKUP_UNITS_CODE) ?? 0)
   };
-  const distributionCharge = drawing.layout.segments.length > 0 ? workbookConfig.settings.distributionCharge : 0;
+  const distributionCharge = drawing.layout.segments.length > 0 ? settings.distributionCharge : 0;
   const labourOverheadAmount = roundMoney(
-    labourSubtotal * (workbookConfig.settings.labourOverheadPercent / 100)
+    labourSubtotal * (settings.labourOverheadPercent / 100)
   );
-  const travelTotal = roundMoney(commercialInputs.travelDays * workbookConfig.settings.travelLodgePerDay);
-  const markupTotal = roundMoney(commercialInputs.markupUnits * workbookConfig.settings.markupRate);
+  const travelTotal = roundMoney(commercialInputs.travelDays * settings.travelLodgePerDay);
+  const markupTotal = roundMoney(commercialInputs.markupUnits * settings.markupRate);
 
   const ancillaryMaterialTotal = roundMoney(
     ancillaryItems.reduce((sum, item) => sum + item.quantity * item.materialCost, 0)
@@ -444,21 +477,21 @@ export function buildWorkbookPricedEstimate(
   );
 
   const workbook: EstimateWorkbook = {
-    settings: workbookConfig.settings,
+    settings,
     sections,
     manualEntries,
     commercialInputs,
     totals: {
       materialsSubtotal,
       labourSubtotal,
-      labourOverheadPercent: workbookConfig.settings.labourOverheadPercent,
+      labourOverheadPercent: settings.labourOverheadPercent,
       labourOverheadAmount,
       distributionCharge,
       travelDays: commercialInputs.travelDays,
-      travelRatePerDay: workbookConfig.settings.travelLodgePerDay,
+      travelRatePerDay: settings.travelLodgePerDay,
       travelTotal,
       markupUnits: commercialInputs.markupUnits,
-      markupRate: workbookConfig.settings.markupRate,
+      markupRate: settings.markupRate,
       markupTotal,
       grandTotal: roundMoney(
         materialsSubtotal + distributionCharge + labourSubtotal + labourOverheadAmount + travelTotal + markupTotal
