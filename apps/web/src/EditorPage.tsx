@@ -503,6 +503,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     session,
     drawingTitle,
     currentDrawingId: workspace.currentDrawingId,
+    currentCustomerId: workspace.currentCustomerId,
     currentDrawingName: workspace.currentDrawingName,
     currentCustomerName: workspace.currentCustomerName,
     isDirty: workspace.isDirty,
@@ -538,6 +539,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onToggleOptimization: toggleOptimization,
     onGoToLogin: () => guardedNavigate("login"),
     onNavigateDashboard: () => guardedNavigate("dashboard"),
+    onNavigateCurrentCustomer: () => {
+      if (!workspace.currentCustomerId) {
+        return;
+      }
+      guardedNavigate("customer", { customerId: workspace.currentCustomerId });
+    },
     onNavigateCustomers: handleOpenCustomers,
     onNavigateEstimate: () => {
       if (!workspace.currentDrawingId || workspace.isDirty) {

@@ -42,8 +42,8 @@ describe("useOptimization3DWalk helpers", () => {
     const movedWalk = applyWalkKeyboardInput(baseWalk, "w");
     const strafedWalk = applyWalkKeyboardInput(baseWalk, "d");
 
-    expect(lookedWalk.yaw).toBeGreaterThan(baseWalk.yaw);
-    expect(lookedWalk.pitch).toBeGreaterThan(baseWalk.pitch);
+    expect(lookedWalk.yaw).toBeLessThan(baseWalk.yaw);
+    expect(lookedWalk.pitch).toBeLessThan(baseWalk.pitch);
     expect(movedWalk.z).toBeGreaterThan(baseWalk.z);
     expect(strafedWalk.x).toBeGreaterThan(baseWalk.x);
   });

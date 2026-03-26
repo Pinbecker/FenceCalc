@@ -15,6 +15,7 @@ interface EditorMenuBarProps {
   session: AuthSessionEnvelope | null;
   drawingTitle: string;
   currentDrawingId: string | null;
+  currentCustomerId: string | null;
   currentDrawingName: string;
   currentCustomerName: string;
   isDirty: boolean;
@@ -44,6 +45,7 @@ interface EditorMenuBarProps {
   onToggleOptimization: () => void;
   onGoToLogin: () => void;
   onNavigateDashboard: () => void;
+  onNavigateCurrentCustomer: () => void;
   onNavigateCustomers: () => void;
   onNavigateEstimate: () => void;
   onNavigatePricing: () => void;
@@ -69,6 +71,7 @@ export function EditorMenuBar({
   session,
   drawingTitle,
   currentDrawingId,
+  currentCustomerId,
   currentDrawingName,
   currentCustomerName,
   isDirty,
@@ -98,6 +101,7 @@ export function EditorMenuBar({
   onToggleOptimization,
   onGoToLogin,
   onNavigateDashboard,
+  onNavigateCurrentCustomer,
   onNavigateCustomers,
   onNavigateEstimate,
   onNavigatePricing,
@@ -269,9 +273,20 @@ export function EditorMenuBar({
 
         {session ? (
           <div className="menu-bar-customer-wrap">
-            <span className="menu-bar-customer-label" title={currentCustomerName || "Create drawing to select customer"}>
-              {currentCustomerName || "No customer selected"}
-            </span>
+            {currentCustomerId ? (
+              <button
+                type="button"
+                className="menu-bar-customer-label menu-bar-customer-link"
+                onClick={onNavigateCurrentCustomer}
+                title={`Open ${currentCustomerName || "customer"} page`}
+              >
+                {currentCustomerName || "No customer selected"}
+              </button>
+            ) : (
+              <span className="menu-bar-customer-label" title={currentCustomerName || "Create drawing to select customer"}>
+                {currentCustomerName || "No customer selected"}
+              </span>
+            )}
           </div>
         ) : null}
 

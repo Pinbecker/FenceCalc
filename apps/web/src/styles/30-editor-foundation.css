@@ -188,6 +188,17 @@
   padding: 2px 6px;
 }
 
+.menu-bar-customer-link {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 80ms, color 80ms;
+}
+
+.menu-bar-customer-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(246, 238, 226, 0.84);
+}
+
 .menu-bar-status-select {
   all: unset;
   font-size: 0.64rem;

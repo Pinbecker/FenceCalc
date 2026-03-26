@@ -51,10 +51,11 @@ export function Optimization3DPlanSelector({
                 key={plan.id}
                 type="button"
                 className={`optimization-plan-pill${isActive ? " is-active" : ""}`}
+                aria-label={`Panel ${index + 1}, ${formatReuseCountLabel(plan.reusedCuts)}`}
+                title={`Panel ${index + 1} - ${formatReuseCountLabel(plan.reusedCuts)}`}
                 onClick={() => onSelectPlan(plan.id)}
               >
-                <span>Panel {index + 1}</span>
-                <strong>{formatReuseCountLabel(plan.reusedCuts)}</strong>
+                <span>{`Panel ${index + 1}`}</span>
               </button>
             );
           })}

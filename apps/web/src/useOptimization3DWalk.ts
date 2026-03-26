@@ -71,8 +71,8 @@ function clampWalkStateToScene(walk: WalkState, scene: Optimization3DScene): Wal
 export function applyWalkPointerDelta(walk: WalkState, deltaX: number, deltaY: number): WalkState {
   return {
     ...walk,
-    yaw: walk.yaw + deltaX * 0.0048,
-    pitch: clamp(walk.pitch - deltaY * 0.0036, WALK_PITCH_MIN, WALK_PITCH_MAX)
+    yaw: walk.yaw - deltaX * 0.0048,
+    pitch: clamp(walk.pitch + deltaY * 0.0036, WALK_PITCH_MIN, WALK_PITCH_MAX)
   };
 }
 

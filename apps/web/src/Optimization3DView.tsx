@@ -185,26 +185,28 @@ export function Optimization3DView({
             ) : null}
             <span className="optimization-3d-status-chip is-open-key">Fresh</span>
             <span className="optimization-3d-status-chip is-reuse-key">Reuse</span>
-            <button type="button" className="optimization-3d-reset optimization-3d-overlay-button" onClick={resetActiveCamera}>
-              Reset view
-            </button>
           </div>
         </div>
         <div className="optimization-3d-top-overlay optimization-3d-top-right">
-          <div className="optimization-3d-mode-toggle" role="group" aria-label="3D camera mode">
-            <button
-              type="button"
-              className={`optimization-3d-mode-button ${cameraMode === "orbit" ? "is-active" : ""}`}
-              onClick={() => setCameraMode("orbit")}
-            >
-              Orbit
-            </button>
-            <button
-              type="button"
-              className={`optimization-3d-mode-button ${cameraMode === "walk" ? "is-active" : ""}`}
-              onClick={() => setCameraMode("walk")}
-            >
-              Walk
+          <div className="optimization-3d-camera-controls">
+            <div className="optimization-3d-mode-toggle" role="group" aria-label="3D camera mode">
+              <button
+                type="button"
+                className={`optimization-3d-mode-button ${cameraMode === "orbit" ? "is-active" : ""}`}
+                onClick={() => setCameraMode("orbit")}
+              >
+                Orbit
+              </button>
+              <button
+                type="button"
+                className={`optimization-3d-mode-button ${cameraMode === "walk" ? "is-active" : ""}`}
+                onClick={() => setCameraMode("walk")}
+              >
+                Walk
+              </button>
+            </div>
+            <button type="button" className="optimization-3d-reset optimization-3d-overlay-button" onClick={resetActiveCamera}>
+              Reset view
             </button>
           </div>
         </div>
