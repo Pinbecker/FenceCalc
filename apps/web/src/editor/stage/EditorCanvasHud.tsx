@@ -21,6 +21,7 @@ type EditorCanvasHudProps = Pick<
   | "kickboardPreview"
   | "pitchDividerAnchorPreview"
   | "pitchDividerPreview"
+  | "pendingSideNettingStart"
   | "recessPreview"
   | "sideNettingAnchorPreview"
   | "sideNettingPreview"
@@ -45,6 +46,7 @@ export function EditorCanvasHud({
   kickboardPreview = null,
   pitchDividerAnchorPreview = null,
   pitchDividerPreview = null,
+  pendingSideNettingStart = null,
   recessPreview,
   sideNettingAnchorPreview = null,
   sideNettingPreview = null,
@@ -102,8 +104,14 @@ export function EditorCanvasHud({
                 : "Click first anchor"
               : interactionMode === "SIDE_NETTING"
                 ? sideNettingPreview
-                  ? "Click apply side netting"
-                  : "Hover a run"
+                  ? "Click to finish"
+                  : pendingSideNettingStart
+                    ? sideNettingAnchorPreview
+                      ? "Click to finish"
+                      : "Hover a line"
+                    : sideNettingAnchorPreview
+                      ? "Click to start"
+                      : "Hover a line"
           : interactionMode === "SELECT" && basketballPostPreview
             ? `Drag post ${basketballPostPreview.facing.toLowerCase()}`
             : interactionMode === "SELECT" && gatePreview

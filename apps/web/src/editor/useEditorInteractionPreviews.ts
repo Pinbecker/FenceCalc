@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
 import type {
   BasketballArmLengthMm,
   GateType,
@@ -28,6 +29,7 @@ import {
   normalizeVector,
   pointCoordinateKey,
   resolveGatePreviewLeafCount,
+  samePointApprox,
   snapToAxisGuide
 } from "./editorMath";
 import {
@@ -65,7 +67,8 @@ import type {
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
   ResolvedGatePlacement,
-  SegmentAttachmentPreview
+  SegmentAttachmentPreview,
+  SegmentRangePreview
 } from "./types";
 
 interface EditorInteractionPreviewsOptions {
@@ -100,6 +103,7 @@ interface EditorInteractionPreviewsOptions {
   }>;
   drawChainStart: PointMm | null;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
+  pendingSideNettingStart?: PitchDividerAnchorPreview | null;
   activeGateDragId?: string | null;
   activeBasketballPostDragId?: string | null;
   activeFloodlightColumnDragId?: string | null;
@@ -246,6 +250,7 @@ export function useEditorInteractionPreviews({
   placedGoalUnitVisuals = [],
   drawChainStart,
   pendingPitchDividerStart = null,
+  pendingSideNettingStart = null,
   activeGateDragId = null,
   activeBasketballPostDragId = null,
   activeFloodlightColumnDragId = null
@@ -261,6 +266,7 @@ export function useEditorInteractionPreviews({
   const hoverSegmentSnapMm = Math.max(180, 16 / viewScale);
   const hoverGateSnapMm = Math.max(180, 22 / viewScale);
   const pitchDividerPointerSnapMm = Math.max(650, 42 / viewScale);
+  const sideNettingPostSnapMm = Math.max(650, 42 / viewScale);
   const requestedGateWidthMm = useMemo(
     () => resolveGateWidthMm(gateType, customGateWidthMm),
     [customGateWidthMm, gateType]
@@ -725,6 +731,103 @@ export function useEditorInteractionPreviews({
     []
   );
 
+  const buildSideNettingRangePreview = useCallback(
+    (startAnchor: PitchDividerAnchorPreview, endAnchor: PitchDividerAnchorPreview): SegmentRangePreview | null => {
+      const buildPreview = (segment: LayoutSegment, firstOffsetMm: number, secondOffsetMm: number): SegmentRangePreview | null => {
+        const startOffsetMm = Math.min(firstOffsetMm, secondOffsetMm);
+        const endOffsetMm = Math.max(firstOffsetMm, secondOffsetMm);
+        if (Math.abs(endOffsetMm - startOffsetMm) < 1) {
+          return null;
+        }
+
+        return {
+          segment,
+          startOffsetMm,
+          endOffsetMm,
+          startPoint: interpolateAlongSegment(segment, startOffsetMm),
+          endPoint: interpolateAlongSegment(segment, endOffsetMm),
+          lengthMm: endOffsetMm - startOffsetMm,
+          snapMeta: buildSnapMeta("SEGMENT", "Existing post")
+        };
+      };
+
+      if (startAnchor.segment.id === endAnchor.segment.id) {
+        return buildPreview(startAnchor.segment, startAnchor.offsetMm, endAnchor.offsetMm);
+      }
+
+      const endSegmentLengthMm = distanceMm(endAnchor.segment.start, endAnchor.segment.end);
+      if (samePointApprox(startAnchor.point, endAnchor.segment.start)) {
+        return buildPreview(endAnchor.segment, 0, endAnchor.offsetMm);
+      }
+      if (samePointApprox(startAnchor.point, endAnchor.segment.end)) {
+        return buildPreview(endAnchor.segment, endSegmentLengthMm, endAnchor.offsetMm);
+      }
+
+      const startSegmentLengthMm = distanceMm(startAnchor.segment.start, startAnchor.segment.end);
+      if (samePointApprox(endAnchor.point, startAnchor.segment.start)) {
+        return buildPreview(startAnchor.segment, startAnchor.offsetMm, 0);
+      }
+      if (samePointApprox(endAnchor.point, startAnchor.segment.end)) {
+        return buildPreview(startAnchor.segment, startAnchor.offsetMm, startSegmentLengthMm);
+      }
+
+      return null;
+    },
+    []
+  );
+
+  const resolveSideNettingAnchorPreview = useCallback(
+    (worldPoint: PointMm): PitchDividerAnchorPreview | null => {
+      const candidates: Array<{
+        anchor: PitchDividerAnchorPreview;
+        distanceToPointerMm: number;
+        isConnectedToPending: boolean;
+      }> = [];
+
+      for (const segment of segments) {
+        const projection = projectPointOntoSegment(worldPoint, segment);
+        if (projection.distanceMm > sideNettingPostSnapMm) {
+          continue;
+        }
+
+        for (const offsetMm of getSegmentPostOffsets(segment)) {
+          const point = interpolateAlongSegment(segment, offsetMm);
+          const distanceToPointerMm = distanceMm(worldPoint, point);
+          if (distanceToPointerMm > sideNettingPostSnapMm) {
+            continue;
+          }
+
+          const anchor = {
+            segment,
+            offsetMm,
+            point,
+            snapMeta: buildSnapMeta("SEGMENT", "Existing post")
+          };
+
+          candidates.push({
+            anchor,
+            distanceToPointerMm,
+            isConnectedToPending: pendingSideNettingStart !== null && buildSideNettingRangePreview(pendingSideNettingStart, anchor) !== null
+          });
+        }
+      }
+
+      if (candidates.length === 0) {
+        return null;
+      }
+
+      candidates.sort((left, right) => {
+        if (left.isConnectedToPending !== right.isConnectedToPending) {
+          return left.isConnectedToPending ? -1 : 1;
+        }
+        return left.distanceToPointerMm - right.distanceToPointerMm;
+      });
+
+      return candidates[0]?.anchor ?? null;
+    },
+    [buildSideNettingRangePreview, pendingSideNettingStart, segments, sideNettingPostSnapMm]
+  );
+
   const resolveDrawPoint = useCallback(
     (worldPoint: PointMm): DrawResolveResult => {
       const angleCandidate =
@@ -1107,11 +1210,25 @@ export function useEditorInteractionPreviews({
   );
 
   const sideNettingSegmentPreview = useMemo<SegmentAttachmentPreview | null>(() => {
-    if (interactionMode !== "SIDE_NETTING" || !pointerWorld) {
+    if (interactionMode !== "SIDE_NETTING" || !pointerWorld || pendingSideNettingStart) {
       return null;
     }
     return resolveSideNettingSegmentPreview(pointerWorld);
-  }, [interactionMode, pointerWorld, resolveSideNettingSegmentPreview]);
+  }, [interactionMode, pendingSideNettingStart, pointerWorld, resolveSideNettingSegmentPreview]);
+
+  const sideNettingAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
+    if (interactionMode !== "SIDE_NETTING" || !pointerWorld) {
+      return null;
+    }
+    return resolveSideNettingAnchorPreview(pointerWorld);
+  }, [interactionMode, pointerWorld, resolveSideNettingAnchorPreview]);
+
+  const sideNettingPreview = useMemo<SegmentRangePreview | null>(() => {
+    if (interactionMode !== "SIDE_NETTING" || !pendingSideNettingStart || !sideNettingAnchorPreview) {
+      return null;
+    }
+    return buildSideNettingRangePreview(pendingSideNettingStart, sideNettingAnchorPreview);
+  }, [buildSideNettingRangePreview, interactionMode, pendingSideNettingStart, sideNettingAnchorPreview]);
 
   const pitchDividerAnchorPreview = useMemo<PitchDividerAnchorPreview | null>(() => {
     if (interactionMode !== "PITCH_DIVIDER" || !pointerWorld) {
@@ -1263,7 +1380,10 @@ export function useEditorInteractionPreviews({
     resolveBasketballPostPreview,
     resolveFloodlightColumnPreview,
     resolvePitchDividerAnchorPreview,
+    resolveSideNettingAnchorPreview,
     resolveSideNettingSegmentPreview,
+    sideNettingAnchorPreview,
+    sideNettingPreview,
     sideNettingSegmentPreview,
     closeLoopPoint,
     resolveDrawPoint

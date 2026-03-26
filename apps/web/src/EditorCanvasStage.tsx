@@ -52,6 +52,7 @@ export function EditorCanvasStage({
             props.kickboardPreview ||
             props.pitchDividerAnchorPreview ||
             props.pitchDividerPreview ||
+            props.sideNettingSegmentPreview ||
             props.sideNettingAnchorPreview ||
             props.sideNettingPreview
             ? "crosshair"
@@ -162,6 +163,9 @@ export function EditorCanvasStage({
           pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
           pitchDividerPreview={props.pitchDividerPreview ?? null}
           pendingPitchDividerStart={props.pendingPitchDividerStart ?? null}
+          pendingSideNettingStart={props.pendingSideNettingStart ?? null}
+          sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
+          sideNettingPreview={props.sideNettingPreview ?? null}
           sideNettingSegmentPreview={props.sideNettingSegmentPreview ?? null}
           gatePreviewVisual={props.gatePreviewVisual}
           closeLoopPoint={props.closeLoopPoint}
@@ -190,6 +194,7 @@ export function EditorCanvasStage({
         kickboardPreview={props.kickboardPreview ?? null}
         pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
         pitchDividerPreview={props.pitchDividerPreview ?? null}
+        pendingSideNettingStart={props.pendingSideNettingStart ?? null}
         sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
         sideNettingPreview={props.sideNettingPreview ?? null}
       />

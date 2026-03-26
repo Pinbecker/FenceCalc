@@ -196,4 +196,42 @@ describe("buildOptimization3DRenderData", () => {
     expect(gateFacePoints.length).toBeGreaterThanOrEqual(3);
     expect(gateFacePoints.every(([x, y]) => Math.abs(x) < 6000 && Math.abs(y) < 6000)).toBe(true);
   });
+
+  it("renders standalone basketball posts with a fixed hoop marker instead of a scaled ring", () => {
+    const renderData = buildOptimization3DRenderData(
+      {
+        panelSlices: [],
+        posts: [],
+        rails: [],
+        basketballPosts: [
+          {
+            key: "bp-1",
+            point: { x: 0, y: 0 },
+            normal: { x: 0, y: 1 },
+            heightMm: 3250,
+            armLengthMm: 1800,
+            hoopRadiusMm: 180
+          }
+        ],
+        floodlightColumns: [],
+        cutOverlays: [],
+        reuseLinks: [],
+        gates: [],
+        bounds: {
+          minX: -2000,
+          maxX: 2000,
+          minZ: -2000,
+          maxZ: 2000,
+          maxHeightMm: 3250
+        }
+      },
+      DEFAULT_ORBIT,
+      920,
+      320
+    );
+
+    expect(renderData.faces.some((face) => face.key === "bp-1-backboard")).toBe(true);
+    expect(renderData.faces.some((face) => face.key === "bp-1-hoop")).toBe(true);
+    expect(renderData.strokes.some((stroke) => stroke.key === "bp-1-hoop")).toBe(false);
+  });
 });

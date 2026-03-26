@@ -1066,6 +1066,7 @@ export function buildOptimization3DRenderData(
     const groundX = basketballPost.point.x;
     const groundZ = basketballPost.point.y;
     const topY = basketballPost.heightMm;
+    const armHeightMm = topY - 180;
     const columnFaces = [
       {
         key: `${basketballPost.key}-front`,
@@ -1108,31 +1109,86 @@ export function buildOptimization3DRenderData(
     };
     pushSegmentStroke(
       `${basketballPost.key}-arm`,
-      { x: basketballPost.point.x, y: topY - 180, z: basketballPost.point.y },
-      { x: armEnd.x, y: topY - 180, z: armEnd.y },
+      { x: basketballPost.point.x, y: armHeightMm, z: basketballPost.point.y },
+      { x: armEnd.x, y: armHeightMm, z: armEnd.y },
       "rgba(255, 156, 79, 0.94)",
       2.2,
       1,
       0.2
     );
 
-    const hoopCenter = projectVisiblePoint({ x: armEnd.x, y: topY - 180, z: armEnd.y });
-    if (!hoopCenter) {
+    const tangentLength = Math.hypot(basketballPost.normal.x, basketballPost.normal.y) || 1;
+    const screenTangent = {
+      x: -basketballPost.normal.y / tangentLength,
+      y: basketballPost.normal.x / tangentLength
+    };
+    const boardCenter = {
+      x: armEnd.x - basketballPost.normal.x * 140,
+      y: armEnd.y - basketballPost.normal.y * 140
+    };
+    const boardHalfWidthMm = 420;
+    const boardHalfHeightMm = 300;
+    pushFace(
+      `${basketballPost.key}-backboard`,
+      [
+        toWorldPoint(
+          {
+            x: boardCenter.x - screenTangent.x * boardHalfWidthMm,
+            y: boardCenter.y - screenTangent.y * boardHalfWidthMm
+          },
+          armHeightMm - boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x + screenTangent.x * boardHalfWidthMm,
+            y: boardCenter.y + screenTangent.y * boardHalfWidthMm
+          },
+          armHeightMm - boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x + screenTangent.x * boardHalfWidthMm,
+            y: boardCenter.y + screenTangent.y * boardHalfWidthMm
+          },
+          armHeightMm + boardHalfHeightMm
+        ),
+        toWorldPoint(
+          {
+            x: boardCenter.x - screenTangent.x * boardHalfWidthMm,
+            y: boardCenter.y - screenTangent.y * boardHalfWidthMm
+          },
+          armHeightMm + boardHalfHeightMm
+        )
+      ],
+      "rgba(244, 250, 255, 0.88)",
+      "rgba(87, 104, 121, 0.9)",
+      0.9,
+      1,
+      0.12
+    );
+
+    const hoopAnchor = projectVisiblePoint({
+      x: boardCenter.x - basketballPost.normal.x * 110,
+      y: armHeightMm - 40,
+      z: boardCenter.y - basketballPost.normal.y * 110
+    });
+    if (!hoopAnchor) {
       continue;
     }
-    const hoopRadius = Math.max(4, basketballPost.hoopRadiusMm * scale);
-    const ringPoints = Array.from({ length: 18 }, (_, index) => {
-      const angle = (Math.PI * 2 * index) / 18;
-      return `${hoopCenter.x + Math.cos(angle) * hoopRadius},${hoopCenter.y + Math.sin(angle) * hoopRadius}`;
-    }).join(" ");
-    strokes.push({
+
+    faces.push({
       key: `${basketballPost.key}-hoop`,
-      kind: "polyline",
-      value: `${ringPoints} ${ringPoints.split(" ")[0] ?? ""}`.trim(),
-      stroke: "rgba(255, 113, 41, 0.98)",
-      strokeWidth: 1.8,
+      points: formatPolygonPoints([
+        { x: hoopAnchor.x - 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x + 8, y: hoopAnchor.y - 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x + 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth },
+        { x: hoopAnchor.x - 8, y: hoopAnchor.y + 3, depth: hoopAnchor.depth }
+      ]),
+      fill: "rgba(255, 151, 70, 0.98)",
+      stroke: "rgba(168, 92, 33, 0.92)",
+      strokeWidth: 0.8,
       opacity: 1,
-      depth: hoopCenter.depth + 0.22
+      depth: hoopAnchor.depth + 0.22
     });
   }
 
