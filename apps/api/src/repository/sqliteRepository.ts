@@ -41,12 +41,14 @@ export class SqliteAppRepository implements AppRepository {
   private readonly support: SqliteSupportStore;
   private readonly auditLogRetentionDays: number;
 
-  public constructor(databasePath: string, options: { auditLogRetentionDays?: number } = {}) {
+  public constructor(databasePath: string, options: { auditLogRetentionDays?: number; skipMigration?: boolean } = {}) {
     mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new Database(databasePath);
     this.database.pragma("journal_mode = WAL");
     this.database.pragma("foreign_keys = ON");
-    migrateSqliteDatabase(this.database);
+    if (!options.skipMigration) {
+      migrateSqliteDatabase(this.database);
+    }
     this.userSessions = new SqliteUserSessionStore(this.database);
     this.customers = new SqliteCustomerStore(this.database);
     this.drawings = new SqliteDrawingStore(this.database);
@@ -64,6 +66,18 @@ export class SqliteAppRepository implements AppRepository {
   public checkHealth(): Promise<void> {
     this.database.prepare("SELECT 1").get();
     return Promise.resolve();
+  }
+
+  public async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = await fn();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   public getUserCount(): Promise<number> {

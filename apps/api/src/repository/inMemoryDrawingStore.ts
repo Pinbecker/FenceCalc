@@ -143,6 +143,9 @@ export class InMemoryDrawingStore {
     if (!existing || existing.companyId !== input.companyId) {
       return null;
     }
+    if (existing.versionNumber !== input.expectedVersionNumber) {
+      return null;
+    }
     const updated: DrawingRecord = {
       ...existing,
       name: input.name,
@@ -185,9 +188,13 @@ export class InMemoryDrawingStore {
     if (!existing || existing.companyId !== input.companyId) {
       return null;
     }
+    if (existing.versionNumber !== input.expectedVersionNumber) {
+      return null;
+    }
 
     const updated: DrawingRecord = {
       ...existing,
+      versionNumber: existing.versionNumber + 1,
       isArchived: input.archived,
       archivedAtIso: input.archived ? input.archivedAtIso : null,
       archivedByUserId: input.archived ? input.archivedByUserId : null,
@@ -203,9 +210,13 @@ export class InMemoryDrawingStore {
     if (!existing || existing.companyId !== input.companyId) {
       return null;
     }
+    if (existing.versionNumber !== input.expectedVersionNumber) {
+      return null;
+    }
 
     const updated: DrawingRecord = {
       ...existing,
+      versionNumber: existing.versionNumber + 1,
       status: input.status,
       statusChangedAtIso: input.statusChangedAtIso,
       statusChangedByUserId: input.statusChangedByUserId,
@@ -224,6 +235,9 @@ export class InMemoryDrawingStore {
   public restoreDrawingVersion(input: RestoreDrawingVersionInput): DrawingRecord | null {
     const existing = this.state.drawings.get(input.drawingId);
     if (!existing || existing.companyId !== input.companyId) {
+      return null;
+    }
+    if (existing.versionNumber !== input.expectedVersionNumber) {
       return null;
     }
     const version = (this.state.drawingVersions.get(input.drawingId) ?? []).find((entry) => entry.versionNumber === input.versionNumber);

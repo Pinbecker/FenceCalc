@@ -216,30 +216,14 @@ export class SqliteDrawingStore {
   }
 
   public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
-    const existing = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
-      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    if (!existing) {
-      return null;
-    }
-
-    const current = this.tryReadDrawing(existing);
-    if (!current) {
-      return null;
-    }
-    const nextVersionNumber = current.versionNumber + 1;
+    const nextVersionNumber = input.expectedVersionNumber + 1;
     const update = this.database.transaction(() => {
-      this.database
+      const result = this.database
         .prepare(
           `
             UPDATE drawings
             SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ?
+            WHERE id = ? AND company_id = ? AND version_number = ?
           `,
         )
         .run(
@@ -256,7 +240,11 @@ export class SqliteDrawingStore {
           input.updatedAtIso,
           input.drawingId,
           input.companyId,
+          input.expectedVersionNumber,
         );
+      if (result.changes === 0) {
+        return null;
+      }
       this.database
         .prepare(
           `
@@ -282,44 +270,26 @@ export class SqliteDrawingStore {
           input.updatedByUserId,
           input.updatedAtIso,
         );
+      const row = this.database
+        .prepare(`
+          SELECT d.*, c.name AS resolved_customer_name
+          FROM drawings d
+          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+          WHERE d.id = ? AND d.company_id = ?
+        `)
+        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+      return row ? this.tryReadDrawing(row) : null;
     });
-    update();
-
-    return {
-      ...current,
-      name: input.name,
-      customerId: input.customerId,
-      customerName: input.customerName,
-      layout: input.layout,
-      savedViewport: input.savedViewport ?? null,
-      estimate: input.estimate,
-      schemaVersion: input.schemaVersion,
-      rulesVersion: input.rulesVersion,
-      versionNumber: nextVersionNumber,
-      updatedByUserId: input.updatedByUserId,
-      updatedAtIso: input.updatedAtIso
-    };
+    return update();
   }
 
   public setDrawingArchivedState(input: SetDrawingArchivedStateInput): DrawingRecord | null {
-    const existing = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
-      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    if (!existing) {
-      return null;
-    }
-
-    this.database
+    const result = this.database
       .prepare(
         `
           UPDATE drawings
-          SET is_archived = ?, archived_at_iso = ?, archived_by_user_id = ?, updated_by_user_id = ?, updated_at_iso = ?
-          WHERE id = ? AND company_id = ?
+          SET is_archived = ?, archived_at_iso = ?, archived_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
+          WHERE id = ? AND company_id = ? AND version_number = ?
         `,
       )
       .run(
@@ -330,88 +300,12 @@ export class SqliteDrawingStore {
         input.updatedAtIso,
         input.drawingId,
         input.companyId,
+        input.expectedVersionNumber,
       );
+    if (result.changes === 0) {
+      return null;
+    }
 
-    return {
-      ...(this.tryReadDrawing(existing) ?? {
-        id: existing.id,
-        companyId: existing.company_id,
-        name: existing.name,
-        customerId: existing.customer_id,
-        customerName: existing.resolved_customer_name ?? existing.customer_name,
-        layout: { segments: [] },
-        estimate: {
-          posts: {
-            terminal: 0,
-            intermediate: 0,
-            total: 0,
-            cornerPosts: 0,
-            byHeightAndType: {},
-            byHeightMm: {}
-          },
-          corners: {
-            total: 0,
-            internal: 0,
-            external: 0,
-            unclassified: 0
-          },
-          materials: {
-            twinBarPanels: 0,
-            twinBarPanelsSuperRebound: 0,
-            twinBarPanelsByStockHeightMm: {},
-            twinBarPanelsByFenceHeight: {},
-            roll2100: 0,
-            roll900: 0,
-            totalRolls: 0,
-            rollsByFenceHeight: {}
-          },
-          optimization: {
-            strategy: "CHAINED_CUT_PLANNER",
-            twinBar: {
-              reuseAllowanceMm: 200,
-              stockPanelWidthMm: 2525,
-              fixedFullPanels: 0,
-              baselinePanels: 0,
-              optimizedPanels: 0,
-              panelsSaved: 0,
-              totalCutDemands: 0,
-              stockPanelsOpened: 0,
-              reusedCuts: 0,
-              totalConsumedMm: 0,
-              totalLeftoverMm: 0,
-              reusableLeftoverMm: 0,
-              utilizationRate: 0,
-              buckets: []
-            }
-          },
-          segments: []
-        },
-        schemaVersion: existing.schema_version,
-        rulesVersion: existing.rules_version,
-        versionNumber: existing.version_number,
-        status: this.normalizeDrawingStatus(existing.status),
-        isArchived: existing.is_archived === 1,
-        archivedAtIso: existing.archived_at_iso,
-        archivedByUserId: existing.archived_by_user_id,
-        statusChangedAtIso: existing.status_changed_at_iso,
-        statusChangedByUserId: existing.status_changed_by_user_id,
-        createdByUserId: existing.created_by_user_id,
-        updatedByUserId: existing.updated_by_user_id,
-        createdAtIso: existing.created_at_iso,
-        updatedAtIso: existing.updated_at_iso
-      }),
-      isArchived: input.archived,
-      archivedAtIso: input.archived ? input.archivedAtIso : null,
-      archivedByUserId: input.archived ? input.archivedByUserId : null,
-      status: this.normalizeDrawingStatus(existing.status),
-      statusChangedAtIso: existing.status_changed_at_iso,
-      statusChangedByUserId: existing.status_changed_by_user_id,
-      updatedByUserId: input.updatedByUserId,
-      updatedAtIso: input.updatedAtIso
-    };
-  }
-
-  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
     const row = this.database
       .prepare(`
         SELECT d.*, c.name AS resolved_customer_name
@@ -420,16 +314,16 @@ export class SqliteDrawingStore {
         WHERE d.id = ? AND d.company_id = ?
       `)
       .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    if (!row) {
-      return null;
-    }
+    return row ? this.tryReadDrawing(row) : null;
+  }
 
-    this.database
+  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
+    const result = this.database
       .prepare(
         `
           UPDATE drawings
-          SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, updated_by_user_id = ?, updated_at_iso = ?
-          WHERE id = ? AND company_id = ?
+          SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
+          WHERE id = ? AND company_id = ? AND version_number = ?
         `,
       )
       .run(
@@ -440,20 +334,21 @@ export class SqliteDrawingStore {
         input.updatedAtIso,
         input.drawingId,
         input.companyId,
+        input.expectedVersionNumber,
       );
-
-    const drawing = this.tryReadDrawing(row);
-    if (!drawing) {
+    if (result.changes === 0) {
       return null;
     }
-    return {
-      ...drawing,
-      status: input.status,
-      statusChangedAtIso: input.statusChangedAtIso,
-      statusChangedByUserId: input.statusChangedByUserId,
-      updatedByUserId: input.updatedByUserId,
-      updatedAtIso: input.updatedAtIso
-    };
+
+    const row = this.database
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.id = ? AND d.company_id = ?
+      `)
+      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+    return row ? this.tryReadDrawing(row) : null;
   }
 
   public listDrawingVersions(drawingId: string, companyId: string): DrawingVersionRecord[] {
@@ -475,18 +370,6 @@ export class SqliteDrawingStore {
   }
 
   public restoreDrawingVersion(input: RestoreDrawingVersionInput): DrawingRecord | null {
-    const existing = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
-      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    if (!existing) {
-      return null;
-    }
-
     const version = this.database
       .prepare("SELECT * FROM drawing_versions WHERE drawing_id = ? AND company_id = ? AND version_number = ?")
       .get(input.drawingId, input.companyId, input.versionNumber) as DrawingVersionRow | undefined;
@@ -494,23 +377,20 @@ export class SqliteDrawingStore {
       return null;
     }
 
-    const current = this.tryReadDrawing(existing);
-    if (!current) {
-      return null;
-    }
-    const restoredVersionNumber = current.versionNumber + 1;
     const restoredVersion = this.tryReadDrawingVersion(version);
     if (!restoredVersion) {
       return null;
     }
 
+    const restoredVersionNumber = input.expectedVersionNumber + 1;
+
     const restore = this.database.transaction(() => {
-      this.database
+      const result = this.database
         .prepare(
           `
             UPDATE drawings
             SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ?
+            WHERE id = ? AND company_id = ? AND version_number = ?
           `,
         )
         .run(
@@ -527,7 +407,11 @@ export class SqliteDrawingStore {
           input.restoredAtIso,
           input.drawingId,
           input.companyId,
+          input.expectedVersionNumber,
         );
+      if (result.changes === 0) {
+        return null;
+      }
       this.database
         .prepare(
           `
@@ -553,23 +437,17 @@ export class SqliteDrawingStore {
           input.restoredByUserId,
           input.restoredAtIso,
         );
+      const row = this.database
+        .prepare(`
+          SELECT d.*, c.name AS resolved_customer_name
+          FROM drawings d
+          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+          WHERE d.id = ? AND d.company_id = ?
+        `)
+        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+      return row ? this.tryReadDrawing(row) : null;
     });
-    restore();
-
-    return {
-      ...current,
-      name: restoredVersion.name,
-      customerId: input.customerId,
-      customerName: input.customerName,
-      layout: restoredVersion.layout,
-      savedViewport: restoredVersion.savedViewport ?? null,
-      estimate: restoredVersion.estimate,
-      schemaVersion: restoredVersion.schemaVersion,
-      rulesVersion: restoredVersion.rulesVersion,
-      versionNumber: restoredVersionNumber,
-      updatedByUserId: input.restoredByUserId,
-      updatedAtIso: input.restoredAtIso
-    };
+    return restore();
   }
 
   public listDrawingsForCustomer(customerId: string, companyId: string): DrawingSummary[] {

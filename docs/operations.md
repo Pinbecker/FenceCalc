@@ -16,6 +16,20 @@ For internal production use:
 - stop treating `apps/api/data` as a production location; that is a local-dev convenience only
 - do not commit live SQLite `.db`, `-wal`, or `-shm` files into the repo
 
+## Database Migrations
+
+Migrations are a deliberate release step, not an automatic startup side effect. Run them explicitly before starting a new API version:
+
+```powershell
+npm run migrate --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db
+```
+
+The script reports which migrations were applied. Always take a backup before migrating production.
+
+## Concurrency and Conflict Handling
+
+Drawing mutations (update, archive, restore, status change) enforce optimistic concurrency at the database level. Every mutation requires the caller to supply the expected version number. If another request has modified the drawing since the caller last read it, the API returns `409 Conflict`. Clients should refresh and retry.
+
 ## Backup
 
 Create a consistent SQLite snapshot:

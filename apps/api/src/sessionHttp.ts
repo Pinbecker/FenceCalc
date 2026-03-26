@@ -47,31 +47,10 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   }, {});
 }
 
-export function readBearerToken(headers: FastifyRequest["headers"]): string | null {
-  const authorization = headers.authorization;
-  const headerValue =
-    typeof authorization === "string" ? authorization : Array.isArray(authorization) ? authorization[0] : null;
-  if (!headerValue) {
-    return null;
-  }
-
-  const [scheme, token] = headerValue.split(" ");
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    return null;
-  }
-
-  return token;
-}
-
 export function readSessionToken(headers: FastifyRequest["headers"], config: AppConfig): string | null {
   const cookieHeader =
     typeof headers.cookie === "string" ? headers.cookie : Array.isArray(headers.cookie) ? headers.cookie[0] : undefined;
-  const cookieToken = parseCookies(cookieHeader)[config.sessionCookieName];
-  if (cookieToken) {
-    return cookieToken;
-  }
-
-  return readBearerToken(headers);
+  return parseCookies(cookieHeader)[config.sessionCookieName] ?? null;
 }
 
 export function buildSessionCookieHeader(config: AppConfig, sessionToken: string): string {

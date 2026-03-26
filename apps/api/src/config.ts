@@ -43,6 +43,7 @@ const envSchema = z.object({
   SESSION_COOKIE_NAME: z.string().trim().min(1).default("fence_estimator_session"),
   SESSION_COOKIE_SECURE: envBooleanSchema.default(false),
   BOOTSTRAP_OWNER_SECRET: optionalTrimmedStringSchema,
+  SKIP_AUTO_MIGRATION: envBooleanSchema.optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info")
 });
 
@@ -68,6 +69,7 @@ export interface AppConfig {
   sessionCookieName: string;
   sessionCookieSecure: boolean;
   bootstrapOwnerSecret: string | null;
+  skipAutoMigration: boolean;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
 }
 
@@ -119,6 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionCookieName: parsed.SESSION_COOKIE_NAME,
     sessionCookieSecure: parsed.SESSION_COOKIE_SECURE,
     bootstrapOwnerSecret: parsed.BOOTSTRAP_OWNER_SECRET ?? null,
+    skipAutoMigration: parsed.SKIP_AUTO_MIGRATION ?? parsed.NODE_ENV === "production",
     logLevel: parsed.LOG_LEVEL
   };
 }

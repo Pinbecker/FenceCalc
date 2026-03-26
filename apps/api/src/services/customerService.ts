@@ -161,17 +161,25 @@ export async function setCustomerArchivedStateForCompany(
 
   if (archived && cascadeDrawings) {
     const drawings = await repository.listDrawingsForCustomer(customerId, authenticated.company.id);
+    await repository.runInTransaction(async () => {
+      for (const drawing of drawings) {
+        if (!drawing.isArchived) {
+          await repository.setDrawingArchivedState({
+            drawingId: drawing.id,
+            companyId: authenticated.company.id,
+            expectedVersionNumber: drawing.versionNumber,
+            archived: true,
+            archivedAtIso: updatedAtIso,
+            archivedByUserId: authenticated.user.id,
+            updatedAtIso,
+            updatedByUserId: authenticated.user.id,
+          });
+        }
+      }
+    });
+    // Audit logs written outside the transaction to avoid blocking DB writes
     for (const drawing of drawings) {
       if (!drawing.isArchived) {
-        await repository.setDrawingArchivedState({
-          drawingId: drawing.id,
-          companyId: authenticated.company.id,
-          archived: true,
-          archivedAtIso: updatedAtIso,
-          archivedByUserId: authenticated.user.id,
-          updatedAtIso,
-          updatedByUserId: authenticated.user.id,
-        });
         await writeAuditLog(repository, {
           companyId: authenticated.company.id,
           actorUserId: authenticated.user.id,
@@ -213,17 +221,19 @@ export async function deleteCustomerForCompany(
     return { kind: "has_active_drawings" };
   }
 
-  // Delete all archived drawings for this customer first
-  for (const drawing of drawings) {
-    await repository.deleteDrawing({
-      drawingId: drawing.id,
+  // Delete all archived drawings for this customer first, then the customer, atomically
+  await repository.runInTransaction(async () => {
+    for (const drawing of drawings) {
+      await repository.deleteDrawing({
+        drawingId: drawing.id,
+        companyId: authenticated.company.id,
+      });
+    }
+
+    await repository.deleteCustomer({
+      customerId,
       companyId: authenticated.company.id,
     });
-  }
-
-  await repository.deleteCustomer({
-    customerId,
-    companyId: authenticated.company.id,
   });
 
   await writeAuditLog(repository, {

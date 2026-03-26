@@ -7,6 +7,7 @@
 - Keep API payloads aligned with `@fence-estimator/contracts`.
 - Treat auth, company isolation, and drawing persistence as security-sensitive changes.
 - Prefer migrations and backwards-compatible API changes over ad hoc data rewrites.
+- Database migrations are a deliberate release step. If your change adds a migration, note it in the PR so the deploy sequence includes `npm run migrate`.
 
 ## Local Workflow
 

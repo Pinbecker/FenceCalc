@@ -136,9 +136,6 @@ export async function updateDrawingForCompany(
   if (!existing) {
     return { kind: "drawing_not_found" };
   }
-  if (input.expectedVersionNumber !== existing.versionNumber) {
-    return { kind: "conflict", currentVersionNumber: existing.versionNumber };
-  }
 
   try {
     const nextCustomer =
@@ -159,6 +156,7 @@ export async function updateDrawingForCompany(
     const drawing = await repository.updateDrawing({
       drawingId: existing.id,
       companyId: authenticated.company.id,
+      expectedVersionNumber: input.expectedVersionNumber,
       name: input.name ?? existing.name,
       customerId: nextCustomer?.customer.id ?? existing.customerId,
       customerName: nextCustomer?.customer.name ?? existing.customerName,
@@ -171,7 +169,11 @@ export async function updateDrawingForCompany(
       updatedAtIso: new Date().toISOString()
     });
     if (!drawing) {
-      return { kind: "drawing_not_found" };
+      const current = await repository.getDrawingById(drawingId, authenticated.company.id);
+      if (!current) {
+        return { kind: "drawing_not_found" };
+      }
+      return { kind: "conflict", currentVersionNumber: current.versionNumber };
     }
     await writeAuditLog(repository, {
       companyId: authenticated.company.id,
@@ -203,14 +205,12 @@ export async function setDrawingArchivedStateForCompany(
   if (!existing) {
     return { kind: "drawing_not_found" };
   }
-  if (input.expectedVersionNumber !== existing.versionNumber) {
-    return { kind: "conflict", currentVersionNumber: existing.versionNumber };
-  }
 
   const updatedAtIso = new Date().toISOString();
   const drawing = await repository.setDrawingArchivedState({
     drawingId,
     companyId: authenticated.company.id,
+    expectedVersionNumber: input.expectedVersionNumber,
     archived: input.archived,
     archivedAtIso: input.archived ? updatedAtIso : null,
     archivedByUserId: input.archived ? authenticated.user.id : null,
@@ -218,7 +218,11 @@ export async function setDrawingArchivedStateForCompany(
     updatedByUserId: authenticated.user.id
   });
   if (!drawing) {
-    return { kind: "drawing_not_found" };
+    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
+    if (!current) {
+      return { kind: "drawing_not_found" };
+    }
+    return { kind: "conflict", currentVersionNumber: current.versionNumber };
   }
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
@@ -244,9 +248,6 @@ export async function restoreDrawingVersionForCompany(
   if (!existing) {
     return { kind: "drawing_not_found" };
   }
-  if (expectedVersionNumber !== existing.versionNumber) {
-    return { kind: "conflict", currentVersionNumber: existing.versionNumber };
-  }
 
   const versions = await repository.listDrawingVersions(drawingId, authenticated.company.id);
   const version = versions.find((entry) => entry.versionNumber === versionNumber);
@@ -259,6 +260,7 @@ export async function restoreDrawingVersionForCompany(
   const drawing = await repository.restoreDrawingVersion({
     drawingId,
     companyId: authenticated.company.id,
+    expectedVersionNumber,
     versionNumber,
     customerId: restoredCustomer?.id ?? version.customerId,
     customerName: restoredCustomer?.name ?? version.customerName,
@@ -266,7 +268,11 @@ export async function restoreDrawingVersionForCompany(
     restoredAtIso: new Date().toISOString()
   });
   if (!drawing) {
-    return { kind: "version_not_found" };
+    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
+    if (!current) {
+      return { kind: "drawing_not_found" };
+    }
+    return { kind: "conflict", currentVersionNumber: current.versionNumber };
   }
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
@@ -292,14 +298,12 @@ export async function setDrawingStatusForCompany(
   if (!existing) {
     return { kind: "drawing_not_found" };
   }
-  if (input.expectedVersionNumber !== existing.versionNumber) {
-    return { kind: "conflict", currentVersionNumber: existing.versionNumber };
-  }
 
   const updatedAtIso = new Date().toISOString();
   const drawing = await repository.setDrawingStatus({
     drawingId,
     companyId: authenticated.company.id,
+    expectedVersionNumber: input.expectedVersionNumber,
     status: input.status,
     statusChangedAtIso: updatedAtIso,
     statusChangedByUserId: authenticated.user.id,
@@ -307,7 +311,11 @@ export async function setDrawingStatusForCompany(
     updatedByUserId: authenticated.user.id
   });
   if (!drawing) {
-    return { kind: "drawing_not_found" };
+    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
+    if (!current) {
+      return { kind: "drawing_not_found" };
+    }
+    return { kind: "conflict", currentVersionNumber: current.versionNumber };
   }
 
   const previousStatus = existing.status;

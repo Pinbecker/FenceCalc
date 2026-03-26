@@ -52,7 +52,7 @@ describe("API health, setup, and auth", { timeout: 10000 }, () => {
     expect(response.statusCode).toBe(200);
     expect(response.json<{ bootstrapRequired: boolean; bootstrapSecretRequired: boolean }>()).toEqual({
       bootstrapRequired: true,
-      bootstrapSecretRequired: false
+      bootstrapSecretRequired: true
     });
     await app.close();
   });

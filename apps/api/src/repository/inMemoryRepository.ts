@@ -94,6 +94,10 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
+  public async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    return fn();
+  }
+
   public getUserCount(): Promise<number> {
     return Promise.resolve(this.userSessions.getUserCount());
   }

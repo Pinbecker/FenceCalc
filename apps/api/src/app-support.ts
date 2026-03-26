@@ -7,6 +7,5 @@ export {
   buildClearedSessionCookieHeader,
   buildSessionCookieHeader,
   createSessionEnvelope,
-  readBearerToken,
   readSessionToken
 } from "./sessionHttp.js";

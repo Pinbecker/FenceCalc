@@ -268,6 +268,7 @@ describe("InMemoryAppRepository", () => {
     const updated = await repository.updateDrawing({
       drawingId: "drawing-1",
       companyId: "company-1",
+      expectedVersionNumber: 1,
       name: "Updated",
       customerId: TEST_CUSTOMER_ID,
       customerName: TEST_CUSTOMER_NAME,
@@ -473,6 +474,7 @@ describe("InMemoryAppRepository", () => {
     await repository.updateDrawing({
       drawingId: "drawing-1",
       companyId: "company-1",
+      expectedVersionNumber: 1,
       name: "Updated",
       customerId: TEST_CUSTOMER_ID,
       customerName: TEST_CUSTOMER_NAME,
@@ -488,6 +490,7 @@ describe("InMemoryAppRepository", () => {
     const archived = await repository.setDrawingArchivedState({
       drawingId: "drawing-1",
       companyId: "company-1",
+      expectedVersionNumber: 2,
       archived: true,
       archivedAtIso: "2026-03-12T00:00:00.000Z",
       archivedByUserId: "user-1",
@@ -501,6 +504,7 @@ describe("InMemoryAppRepository", () => {
     const restored = await repository.restoreDrawingVersion({
       drawingId: "drawing-1",
       companyId: "company-1",
+      expectedVersionNumber: 3,
       versionNumber: 1,
       customerId: TEST_CUSTOMER_ID,
       customerName: TEST_CUSTOMER_NAME,
@@ -508,7 +512,7 @@ describe("InMemoryAppRepository", () => {
       restoredAtIso: "2026-03-13T00:00:00.000Z"
     });
 
-    expect(restored?.versionNumber).toBe(3);
+    expect(restored?.versionNumber).toBe(4);
     expect(restored?.savedViewport).toEqual({ x: 120, y: 90, scale: 0.2 });
 
     await repository.addAuditLog({
@@ -895,5 +899,253 @@ describe("SqliteAppRepository", () => {
     expect(firstAccount).not.toBeNull();
     expect(secondAccount).toBeNull();
     await expect(repository.getUserCount()).resolves.toBe(1);
+  });
+
+  it("returns null when updateDrawing has a stale version number", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) throw new Error("Expected bootstrap account");
+    await createTestCustomer(repository, account.company.id, account.user.id);
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: "company-1",
+      name: "Original",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: "user-1",
+      updatedByUserId: "user-1",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    // First update succeeds with correct version
+    const updated = await repository.updateDrawing({
+      drawingId: "drawing-1",
+      companyId: "company-1",
+      expectedVersionNumber: 1,
+      name: "Updated",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      updatedByUserId: "user-1",
+      updatedAtIso: "2026-03-11T00:00:00.000Z"
+    });
+    expect(updated).not.toBeNull();
+    expect(updated?.versionNumber).toBe(2);
+
+    // Second update with stale version 1 returns null (conflict)
+    const conflict = await repository.updateDrawing({
+      drawingId: "drawing-1",
+      companyId: "company-1",
+      expectedVersionNumber: 1,
+      name: "Stale update",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      updatedByUserId: "user-1",
+      updatedAtIso: "2026-03-12T00:00:00.000Z"
+    });
+    expect(conflict).toBeNull();
+
+    // Drawing still has version 2 with the first update's name
+    const drawing = await repository.getDrawingById("drawing-1", "company-1");
+    expect(drawing?.versionNumber).toBe(2);
+    expect(drawing?.name).toBe("Updated");
+  });
+
+  it("returns null when setDrawingArchivedState has a stale version number", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) throw new Error("Expected bootstrap account");
+    await createTestCustomer(repository, account.company.id, account.user.id);
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: "company-1",
+      name: "Drawing",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: "user-1",
+      updatedByUserId: "user-1",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    // Stale version number returns null
+    const conflict = await repository.setDrawingArchivedState({
+      drawingId: "drawing-1",
+      companyId: "company-1",
+      expectedVersionNumber: 999,
+      archived: true,
+      archivedAtIso: "2026-03-11T00:00:00.000Z",
+      archivedByUserId: "user-1",
+      updatedByUserId: "user-1",
+      updatedAtIso: "2026-03-11T00:00:00.000Z"
+    });
+    expect(conflict).toBeNull();
+
+    // Drawing is still not archived
+    const drawing = await repository.getDrawingById("drawing-1", "company-1");
+    expect(drawing?.isArchived).toBe(false);
+  });
+
+  it("returns null when restoreDrawingVersion has a stale version number", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) throw new Error("Expected bootstrap account");
+    await createTestCustomer(repository, account.company.id, account.user.id);
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: "company-1",
+      name: "Drawing",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: "user-1",
+      updatedByUserId: "user-1",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    // Update to create version 2
+    await repository.updateDrawing({
+      drawingId: "drawing-1",
+      companyId: "company-1",
+      expectedVersionNumber: 1,
+      name: "V2",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      updatedByUserId: "user-1",
+      updatedAtIso: "2026-03-11T00:00:00.000Z"
+    });
+
+    // Restore with stale version returns null
+    const conflict = await repository.restoreDrawingVersion({
+      drawingId: "drawing-1",
+      companyId: "company-1",
+      expectedVersionNumber: 1,
+      versionNumber: 1,
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      restoredByUserId: "user-1",
+      restoredAtIso: "2026-03-12T00:00:00.000Z"
+    });
+    expect(conflict).toBeNull();
+
+    // Drawing still at version 2
+    const drawing = await repository.getDrawingById("drawing-1", "company-1");
+    expect(drawing?.versionNumber).toBe(2);
+    expect(drawing?.name).toBe("V2");
+  });
+
+  it("rolls back all changes in a transaction on error", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) throw new Error("Expected bootstrap account");
+    await createTestCustomer(repository, account.company.id, account.user.id);
+
+    await repository.createDrawing({
+      id: "drawing-1",
+      companyId: "company-1",
+      name: "Drawing",
+      customerId: TEST_CUSTOMER_ID,
+      customerName: TEST_CUSTOMER_NAME,
+      layout: emptyLayout,
+      savedViewport: { x: 0, y: 0, scale: 1 },
+      estimate: emptyEstimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      createdByUserId: "user-1",
+      updatedByUserId: "user-1",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    // Transaction that succeeds partially then throws
+    await expect(
+      repository.runInTransaction(async () => {
+        await repository.setDrawingArchivedState({
+          drawingId: "drawing-1",
+          companyId: "company-1",
+          expectedVersionNumber: 1,
+          archived: true,
+          archivedAtIso: "2026-03-11T00:00:00.000Z",
+          archivedByUserId: "user-1",
+          updatedByUserId: "user-1",
+          updatedAtIso: "2026-03-11T00:00:00.000Z"
+        });
+        throw new Error("Simulated failure");
+      }),
+    ).rejects.toThrow("Simulated failure");
+
+    // Archive was rolled back
+    const drawing = await repository.getDrawingById("drawing-1", "company-1");
+    expect(drawing?.isArchived).toBe(false);
+    expect(drawing?.versionNumber).toBe(1);
   });
 });

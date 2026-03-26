@@ -60,11 +60,13 @@ COPY --from=build /app/packages/geometry/dist ./packages/geometry/dist
 COPY --from=build /app/packages/rules-engine/package.json ./packages/rules-engine/package.json
 COPY --from=build /app/packages/rules-engine/dist ./packages/rules-engine/dist
 
-RUN mkdir -p /var/lib/fence-estimator
+RUN addgroup --system app && adduser --system --ingroup app app
+RUN mkdir -p /var/lib/fence-estimator && chown app:app /var/lib/fence-estimator
 
 VOLUME ["/var/lib/fence-estimator"]
 EXPOSE 3001
 
+USER app
 CMD ["node", "apps/api/dist/server.js"]
 
 FROM node:20-bookworm-slim AS web-runtime
@@ -75,11 +77,14 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4173
 
+RUN addgroup --system app && adduser --system --ingroup app app
+
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/apps/web/scripts/serve-dist.mjs ./apps/web/scripts/serve-dist.mjs
 
 EXPOSE 4173
 
+USER app
 CMD ["node", "apps/web/scripts/serve-dist.mjs"]
 
 FROM node:20-bookworm-slim AS proxy-runtime
@@ -93,9 +98,12 @@ ENV PROXY_HTTP_PORT=8080
 
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
+RUN addgroup --system app && adduser --system --ingroup app app
+
 COPY --from=build /app/scripts/https-reverse-proxy.mjs ./scripts/https-reverse-proxy.mjs
 
 EXPOSE 8080
 EXPOSE 8443
 
+USER app
 CMD ["node", "scripts/https-reverse-proxy.mjs"]

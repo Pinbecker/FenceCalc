@@ -47,7 +47,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   const repository: AppRepository =
-    options.repository ?? new SqliteAppRepository(config.databasePath, { auditLogRetentionDays: config.auditLogRetentionDays });
+    options.repository ?? new SqliteAppRepository(config.databasePath, { auditLogRetentionDays: config.auditLogRetentionDays, skipMigration: config.skipAutoMigration });
   const writeLimiter: WriteRequestLimiter =
     options.writeLimiter ?? new InMemoryWriteRequestLimiter(config.writeRateLimitWindowMs, config.writeRateLimitMaxRequests);
   const loginAttemptLimiter: LoginAttemptLimiter =

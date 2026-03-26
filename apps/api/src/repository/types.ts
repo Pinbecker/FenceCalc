@@ -86,6 +86,7 @@ export interface CreateDrawingInput {
 export interface UpdateDrawingInput {
   drawingId: string;
   companyId: string;
+  expectedVersionNumber: number;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -101,6 +102,7 @@ export interface UpdateDrawingInput {
 export interface SetDrawingArchivedStateInput {
   drawingId: string;
   companyId: string;
+  expectedVersionNumber: number;
   archived: boolean;
   archivedAtIso: string | null;
   archivedByUserId: string | null;
@@ -111,6 +113,7 @@ export interface SetDrawingArchivedStateInput {
 export interface SetDrawingStatusInput {
   drawingId: string;
   companyId: string;
+  expectedVersionNumber: number;
   status: DrawingStatus;
   statusChangedAtIso: string;
   statusChangedByUserId: string;
@@ -121,6 +124,7 @@ export interface SetDrawingStatusInput {
 export interface RestoreDrawingVersionInput {
   drawingId: string;
   companyId: string;
+  expectedVersionNumber: number;
   versionNumber: number;
   customerId: string | null;
   customerName: string;
@@ -227,6 +231,7 @@ export interface AuthenticatedSession {
 export interface AppRepository {
   close(): Promise<void>;
   checkHealth(): Promise<void>;
+  runInTransaction<T>(fn: () => Promise<T>): Promise<T>;
   getUserCount(): Promise<number>;
   bootstrapOwnerAccount(input: BootstrapOwnerAccountInput): Promise<{ company: CompanyRecord; user: CompanyUserRecord } | null>;
   createUser(input: CreateUserInput): Promise<CompanyUserRecord>;

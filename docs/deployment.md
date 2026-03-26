@@ -24,6 +24,7 @@ Production requirements:
 - `SESSION_COOKIE_SECURE=true`
 - `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and `SENTRY_TRACES_SAMPLE_RATE` set if API error reporting is enabled
 - `BOOTSTRAP_OWNER_SECRET` set until the first owner is created, then removed from the runtime environment
+- `SKIP_AUTO_MIGRATION` — in production (`NODE_ENV=production`) the API skips auto-migration on startup by default. Set `SKIP_AUTO_MIGRATION=false` only if you want the legacy auto-migrate behavior.
 - `VITE_API_BASE_URL` pointed at the production API origin during web build
 - `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, and `VITE_SENTRY_TRACES_SAMPLE_RATE` set during web build if browser error reporting is enabled
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` set during web build if sourcemaps should be uploaded to Sentry
@@ -40,10 +41,15 @@ Recommended deploy sequence:
 
 1. Build and test in CI.
 2. Snapshot the current production database.
-3. Build the API and web container targets or produce equivalent artifacts.
-4. Start the API with the production environment.
-5. Start the web build with the production API origin baked into `VITE_API_BASE_URL`.
-6. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
+3. Run database migrations against the snapshot (or a copy) to verify they apply cleanly:
+   ```powershell
+   npm run migrate --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db
+   ```
+4. Build the API and web container targets or produce equivalent artifacts.
+5. Run migrations against the production database before starting the new API version.
+6. Start the API with the production environment.
+7. Start the web build with the production API origin baked into `VITE_API_BASE_URL`.
+8. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
 
 ## Container Workflow
 

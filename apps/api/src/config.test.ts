@@ -27,6 +27,7 @@ describe("loadConfig", () => {
     expect(config.sessionCookieName).toBe("fence_estimator_session");
     expect(config.sessionCookieSecure).toBe(false);
     expect(config.bootstrapOwnerSecret).toBeNull();
+    expect(config.skipAutoMigration).toBe(false);
     expect(config.logLevel).toBe("info");
   });
 
@@ -77,6 +78,7 @@ describe("loadConfig", () => {
     expect(config.sessionCookieName).toBe("custom_cookie");
     expect(config.sessionCookieSecure).toBe(true);
     expect(config.bootstrapOwnerSecret).toBe("bootstrap-secret");
+    expect(config.skipAutoMigration).toBe(false);
     expect(config.logLevel).toBe("warn");
   });
 
@@ -105,5 +107,28 @@ describe("loadConfig", () => {
     });
 
     expect(config.bootstrapOwnerSecret).toBeNull();
+  });
+
+  it("skips auto-migration by default in production", () => {
+    const config = loadConfig({
+      NODE_ENV: "production",
+      DATABASE_PATH: productionDatabasePath,
+      SESSION_COOKIE_SECURE: "true",
+      ALLOWED_ORIGINS: "https://app.example.com"
+    });
+
+    expect(config.skipAutoMigration).toBe(true);
+  });
+
+  it("allows overriding skipAutoMigration in production", () => {
+    const config = loadConfig({
+      NODE_ENV: "production",
+      DATABASE_PATH: productionDatabasePath,
+      SESSION_COOKIE_SECURE: "true",
+      ALLOWED_ORIGINS: "https://app.example.com",
+      SKIP_AUTO_MIGRATION: "false"
+    });
+
+    expect(config.skipAutoMigration).toBe(false);
   });
 });
