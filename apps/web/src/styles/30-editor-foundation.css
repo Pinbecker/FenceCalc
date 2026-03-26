@@ -2,17 +2,13 @@
 .editor-page {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   background: #1a2020;
   gap: 0;
   padding: 0;
 }
 
-.editor-feedback-stack {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px 0;
-}
+
 
 /* â”€â”€ Menu bar â”€â”€ */
 .menu-bar {
@@ -203,6 +199,16 @@
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
+}
+
+.menu-bar-status-select option {
+  background: #1e2826;
+  color: rgba(246, 238, 226, 0.9);
+}
+
+.flyout-field select option {
+  background: #1e2826;
+  color: rgba(246, 238, 226, 0.9);
 }
 
 .menu-bar-btn-sm {

@@ -782,12 +782,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   return (
     <div className="editor-page">
       <EditorMenuBar {...menuBarProps} />
-      {workspace.errorMessage || workspace.noticeMessage ? (
-        <div className="editor-feedback-stack">
-          {workspace.errorMessage ? <div className="portal-inline-message portal-inline-error">{workspace.errorMessage}</div> : null}
-          {workspace.noticeMessage ? <div className="portal-inline-message portal-inline-notice">{workspace.noticeMessage}</div> : null}
-        </div>
-      ) : null}
       <EditorWorkspaceShell {...workspaceShellProps} />
       <EditorLengthEditor {...lengthEditorProps} />
       <EditorDrawingSaveModal

@@ -134,27 +134,27 @@ export function EditorDrawingSaveModal({
 
   return (
     <div className="editor-drawing-modal-backdrop" role="presentation">
-      <div className="editor-drawing-modal optimization-modal" role="dialog" aria-modal="true" aria-labelledby="editor-drawing-modal-title">
+      <div className="editor-drawing-modal" role="dialog" aria-modal="true" aria-labelledby="editor-drawing-modal-title">
         <div className="editor-drawing-modal-head">
           <div>
             <h2 id="editor-drawing-modal-title">{isCreateMode ? "Create Drawing" : "Save Drawing As"}</h2>
             <p>
               {isCreateMode
-                ? "Choose the customer and name before this drawing can be edited."
-                : "Save a copy to an explicit customer and name. The current drawing stays unchanged until the copy is created."}
+                ? "Name and assign a customer before editing."
+                : "Save a copy with a new name or customer."}
             </p>
           </div>
           {!isCreateMode ? (
-            <button type="button" className="portal-secondary-button" onClick={onClose}>
+            <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
               Cancel
             </button>
           ) : null}
         </div>
 
-        {validationMessage ? <div className="portal-inline-message portal-inline-error">{validationMessage}</div> : null}
+        {validationMessage ? <div className="editor-drawing-modal-validation">{validationMessage}</div> : null}
 
         <div className="editor-drawing-modal-grid">
-          <label className="portal-field">
+          <label className="editor-drawing-modal-field">
             <span>Drawing name</span>
             <input
               type="text"
@@ -164,7 +164,7 @@ export function EditorDrawingSaveModal({
             />
           </label>
 
-          <label className="portal-field">
+          <label className="editor-drawing-modal-field">
             <span>Customer</span>
             <select value={customerIdDraft} onChange={(event) => setCustomerIdDraft(event.target.value)}>
               <option value="">Select customer</option>
@@ -180,19 +180,19 @@ export function EditorDrawingSaveModal({
         <div className="editor-drawing-modal-actions">
           <button
             type="button"
-            className="portal-text-button"
+            className="editor-drawing-modal-toggle-btn"
             onClick={() => {
               setValidationMessage(null);
               setIsCreatingCustomer((current) => !current);
             }}
           >
-            {isCreatingCustomer ? "Hide new customer fields" : "Create customer"}
+            {isCreatingCustomer ? "− Hide new customer" : "+ New customer"}
           </button>
         </div>
 
         {isCreatingCustomer ? (
           <div className="editor-drawing-modal-customer-grid">
-            <label className="portal-field">
+            <label className="editor-drawing-modal-field">
               <span>Customer name</span>
               <input
                 type="text"
@@ -200,7 +200,7 @@ export function EditorDrawingSaveModal({
                 onChange={(event) => setNewCustomerDraft((current) => ({ ...current, name: event.target.value }))}
               />
             </label>
-            <label className="portal-field">
+            <label className="editor-drawing-modal-field">
               <span>Contact</span>
               <input
                 type="text"
@@ -210,7 +210,7 @@ export function EditorDrawingSaveModal({
                 }
               />
             </label>
-            <label className="portal-field">
+            <label className="editor-drawing-modal-field">
               <span>Email</span>
               <input
                 type="email"
@@ -218,7 +218,7 @@ export function EditorDrawingSaveModal({
                 onChange={(event) => setNewCustomerDraft((current) => ({ ...current, primaryEmail: event.target.value }))}
               />
             </label>
-            <label className="portal-field">
+            <label className="editor-drawing-modal-field">
               <span>Phone</span>
               <input
                 type="text"
@@ -226,7 +226,7 @@ export function EditorDrawingSaveModal({
                 onChange={(event) => setNewCustomerDraft((current) => ({ ...current, primaryPhone: event.target.value }))}
               />
             </label>
-            <label className="portal-field editor-drawing-modal-customer-span">
+            <label className="editor-drawing-modal-field editor-drawing-modal-customer-span">
               <span>Site address</span>
               <input
                 type="text"
@@ -234,7 +234,7 @@ export function EditorDrawingSaveModal({
                 onChange={(event) => setNewCustomerDraft((current) => ({ ...current, siteAddress: event.target.value }))}
               />
             </label>
-            <label className="portal-field editor-drawing-modal-customer-span">
+            <label className="editor-drawing-modal-field editor-drawing-modal-customer-span">
               <span>Notes</span>
               <input
                 type="text"
@@ -245,7 +245,7 @@ export function EditorDrawingSaveModal({
             <div className="editor-drawing-modal-inline-actions">
               <button
                 type="button"
-                className="portal-secondary-button"
+                className="editor-drawing-modal-btn-secondary"
                 onClick={() => void handleCreateCustomer()}
                 disabled={isSavingCustomer}
               >
@@ -257,13 +257,13 @@ export function EditorDrawingSaveModal({
 
         <div className="editor-drawing-modal-footer">
           {!isCreateMode ? (
-            <button type="button" className="portal-secondary-button" onClick={onClose}>
+            <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
               Cancel
             </button>
           ) : null}
           <button
             type="button"
-            className="portal-primary-button"
+            className="editor-drawing-modal-btn-primary"
             onClick={() => void handleSubmit()}
             disabled={isSavingDrawing}
           >

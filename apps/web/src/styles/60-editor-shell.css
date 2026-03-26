@@ -143,18 +143,41 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(10, 14, 14, 0.56);
-  backdrop-filter: blur(10px);
+  background: rgba(8, 12, 12, 0.62);
+  backdrop-filter: blur(14px);
 }
 
+/* ── Dark glass modal card ── */
 .editor-drawing-modal {
-  width: min(760px, calc(100vw - 32px));
-  max-height: min(92vh, 920px);
+  width: min(580px, calc(100vw - 32px));
+  max-height: min(92vh, 860px);
   overflow-y: auto;
-  padding: 20px;
-  gap: 18px;
+  padding: 28px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  border: 1px solid var(--shell-border);
+  border-radius: 20px;
+  background: var(--shell-glass-strong);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 24px 64px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--shell-ink);
 }
 
+.editor-drawing-modal::-webkit-scrollbar {
+  width: 5px;
+}
+.editor-drawing-modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-drawing-modal::-webkit-scrollbar-thumb {
+  background: rgba(246, 238, 226, 0.12);
+  border-radius: 3px;
+}
+
+/* Head */
 .editor-drawing-modal-head {
   display: flex;
   align-items: flex-start;
@@ -164,35 +187,109 @@
 
 .editor-drawing-modal-head h2 {
   margin: 0;
-  color: #21322f;
-  font-size: 1.25rem;
+  color: rgba(246, 238, 226, 0.94);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .editor-drawing-modal-head p {
   margin: 6px 0 0;
-  color: rgba(35, 50, 47, 0.72);
+  color: var(--shell-ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+/* Validation banner */
+.editor-drawing-modal-validation {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 122, 81, 0.28);
+  background: rgba(214, 122, 81, 0.1);
+  color: rgba(255, 196, 160, 0.92);
+  font-size: 0.78rem;
   line-height: 1.5;
 }
 
+/* Form grid */
 .editor-drawing-modal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
+/* Field styling scoped to modal */
+.editor-drawing-modal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-drawing-modal-field > span {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--shell-ink-soft);
+}
+
+.editor-drawing-modal-field input,
+.editor-drawing-modal-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-ink);
+  font-size: 0.8rem;
+  transition: border-color 120ms, background 120ms;
+}
+
+.editor-drawing-modal-field input::placeholder {
+  color: var(--shell-ink-muted);
+}
+
+.editor-drawing-modal-field input:focus,
+.editor-drawing-modal-field select:focus {
+  outline: none;
+  border-color: var(--shell-accent-border);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.editor-drawing-modal-field select option {
+  background: #1e2826;
+  color: rgba(246, 238, 226, 0.9);
+}
+
+/* Actions row (toggle new customer) */
 .editor-drawing-modal-actions {
   display: flex;
   justify-content: flex-start;
 }
 
+.editor-drawing-modal-toggle-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--shell-ink-soft);
+  padding: 4px 0;
+  transition: color 100ms;
+}
+
+.editor-drawing-modal-toggle-btn:hover {
+  color: var(--shell-ink);
+}
+
+/* New customer sub-panel */
 .editor-drawing-modal-customer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(104, 118, 108, 0.16);
-  border-radius: 18px;
-  background: rgba(255, 252, 246, 0.62);
+  padding: 18px;
+  border: 1px solid var(--shell-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .editor-drawing-modal-customer-span {
@@ -204,6 +301,70 @@
   align-items: end;
 }
 
+/* Buttons */
+.editor-drawing-modal-btn-secondary {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1px solid var(--shell-border-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+  transition: background 100ms, border-color 100ms;
+}
+
+.editor-drawing-modal-btn-secondary:hover {
+  background: var(--shell-hover);
+  border-color: rgba(248, 235, 215, 0.24);
+}
+
+.editor-drawing-modal-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.editor-drawing-modal-btn-primary {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(79, 103, 97, 0.72), rgba(58, 82, 76, 0.88));
+  color: rgba(246, 238, 226, 0.96);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 120ms, transform 100ms, box-shadow 120ms;
+}
+
+.editor-drawing-modal-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(89, 118, 110, 0.82), rgba(68, 96, 88, 0.94));
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.editor-drawing-modal-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: wait;
+  transform: none;
+}
+
+/* Footer */
 .editor-drawing-modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -213,6 +374,10 @@
 @media (max-width: 720px) {
   .editor-drawing-modal-backdrop {
     padding: 12px;
+  }
+
+  .editor-drawing-modal {
+    padding: 20px;
   }
 
   .editor-drawing-modal-grid,
