@@ -11,9 +11,9 @@ import type {
   DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
+  EstimateWorkbookManualEntry,
   LayoutModel,
   PricingConfigRecord,
-  PricingItem,
   PricedEstimateResult,
   QuoteRecord,
 } from "@fence-estimator/contracts";
@@ -388,10 +388,14 @@ export async function listQuotes(drawingId: string): Promise<QuoteRecord[]> {
   return response.quotes;
 }
 
-export async function createQuoteSnapshot(drawingId: string, ancillaryItems: AncillaryEstimateItem[]): Promise<QuoteRecord> {
+export async function createQuoteSnapshot(
+  drawingId: string,
+  ancillaryItems: AncillaryEstimateItem[],
+  manualEntries: EstimateWorkbookManualEntry[] = []
+): Promise<QuoteRecord> {
   const response = await requestJson<{ quote: QuoteRecord }>(`/api/v1/drawings/${drawingId}/quotes`, {
     method: "POST",
-    body: { ancillaryItems }
+    body: { ancillaryItems, manualEntries }
   });
   return response.quote;
 }
@@ -490,10 +494,13 @@ export async function getPricingConfig(): Promise<PricingConfigRecord> {
   return response.pricingConfig;
 }
 
-export async function updatePricingConfig(items: PricingItem[]): Promise<PricingConfigRecord> {
+export async function updatePricingConfig(input: {
+  items?: PricingConfigRecord["items"];
+  workbook?: PricingConfigRecord["workbook"];
+}): Promise<PricingConfigRecord> {
   const response = await requestJson<{ pricingConfig: PricingConfigRecord }>("/api/v1/pricing-config", {
     method: "PUT",
-    body: { items }
+    body: input
   });
   return response.pricingConfig;
 }

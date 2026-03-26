@@ -195,7 +195,13 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
       });
     }
 
-    const result = await createQuoteForDrawing(repository, authenticated, params.id, parsed.data.ancillaryItems);
+    const result = await createQuoteForDrawing(
+      repository,
+      authenticated,
+      params.id,
+      parsed.data.ancillaryItems,
+      parsed.data.manualEntries
+    );
     if (result.kind !== "success") {
       return reply.code(404).send({ error: "Drawing not found" });
     }

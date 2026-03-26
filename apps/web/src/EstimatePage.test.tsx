@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AncillaryEstimateItem, AuthSessionEnvelope, PricedEstimateResult } from "@fence-estimator/contracts";
 
-import { EstimatePage, formatQuoteSummaryLabel, mergeEstimateWithAncillaryItems } from "./EstimatePage.js";
+import { EstimatePage, formatQuoteSummaryLabel } from "./EstimatePage.js";
+import { COMMERCIAL_MARKUP_UNITS_CODE, mergeEstimateWorkbook } from "./estimatingWorkbook.js";
 
 const ownerSession: AuthSessionEnvelope = {
   company: {
@@ -44,6 +45,98 @@ const memberSession: AuthSessionEnvelope = {
   }
 };
 
+const baseWorkbookEstimate: PricedEstimateResult = {
+  drawing: {
+    drawingId: "drawing-1",
+    drawingName: "Yard",
+    customerId: "customer-1",
+    customerName: "Cleveland Land Services"
+  },
+  groups: [],
+  ancillaryItems: [],
+  manualEntries: [],
+  workbook: {
+    settings: {
+      labourOverheadPercent: 75,
+      travelLodgePerDay: 90,
+      markupRate: 250,
+      distributionCharge: 215,
+      concretePricePerCube: 150,
+      hardDigDefault: false,
+      clearSpoilsDefault: false,
+      colourOption: "Black or Green"
+    },
+    sections: [
+      {
+        key: "materials-panels",
+        sheet: "MATERIALS",
+        title: "Panels",
+        subtotal: 100,
+        rows: [
+          {
+            code: "PANEL",
+            label: "Panel",
+            unit: "panel",
+            quantity: 2,
+            rate: 50,
+            rateMode: "MONEY",
+            total: 100,
+            isEditable: false
+          }
+        ]
+      },
+      {
+        key: "labour-panels",
+        sheet: "LABOUR",
+        title: "Panel labour",
+        subtotal: 40,
+        rows: [
+          {
+            code: "LABOUR",
+            label: "Panel labour",
+            unit: "panel",
+            quantity: 2,
+            rate: 20,
+            rateMode: "MONEY",
+            total: 40,
+            isEditable: false
+          }
+        ]
+      }
+    ],
+    manualEntries: [],
+    commercialInputs: {
+      travelDays: 0,
+      markupUnits: 0
+    },
+    totals: {
+      materialsSubtotal: 100,
+      labourSubtotal: 40,
+      labourOverheadPercent: 75,
+      labourOverheadAmount: 30,
+      distributionCharge: 215,
+      travelDays: 0,
+      travelRatePerDay: 90,
+      travelTotal: 0,
+      markupUnits: 0,
+      markupRate: 250,
+      markupTotal: 0,
+      grandTotal: 385
+    }
+  },
+  totals: {
+    materialCost: 315,
+    labourCost: 70,
+    totalCost: 385
+  },
+  warnings: [],
+  pricingSnapshot: {
+    updatedAtIso: "2026-03-12T14:20:00.000Z",
+    updatedByUserId: "user-1",
+    source: "COMPANY_CONFIG"
+  }
+};
+
 describe("EstimatePage", () => {
   it("renders the empty state and pricing navigation for owners", () => {
     const html = renderToStaticMarkup(
@@ -51,7 +144,7 @@ describe("EstimatePage", () => {
     );
 
     expect(html).toContain("No drawing selected");
-    expect(html).toContain(">Pricing settings<");
+    expect(html).toContain(">Pricing workbook<");
     expect(html).toContain("Customer directory");
   });
 
@@ -61,54 +154,10 @@ describe("EstimatePage", () => {
     );
 
     expect(html).toContain("No drawing selected");
-    expect(html).not.toContain(">Pricing settings<");
+    expect(html).not.toContain(">Pricing workbook<");
   });
 
-  it("merges ancillary items into estimate totals", () => {
-    const baseEstimate: PricedEstimateResult = {
-      drawing: {
-        drawingId: "drawing-1",
-        drawingName: "Yard",
-        customerId: "customer-1",
-        customerName: "Cleveland Land Services"
-      },
-      groups: [
-        {
-          key: "panels",
-          title: "Panels",
-          rows: [
-            {
-              key: "panel-1",
-              itemCode: "PANEL",
-              itemName: "Panel",
-              category: "PANELS",
-              quantity: 2,
-              unit: "panel",
-              unitMaterialCost: 20,
-              unitLabourCost: 5,
-              totalMaterialCost: 40,
-              totalLabourCost: 10,
-              totalCost: 50
-            }
-          ],
-          subtotalMaterialCost: 40,
-          subtotalLabourCost: 10,
-          subtotalCost: 50
-        }
-      ],
-      ancillaryItems: [],
-      totals: {
-        materialCost: 40,
-        labourCost: 10,
-        totalCost: 50
-      },
-      warnings: [],
-      pricingSnapshot: {
-        updatedAtIso: "2026-03-12T14:20:00.000Z",
-        updatedByUserId: "user-1",
-        source: "COMPANY_CONFIG"
-      }
-    };
+  it("merges ancillary items and commercial entries into workbook totals", () => {
     const ancillaryItems: AncillaryEstimateItem[] = [
       {
         id: "ancillary-1",
@@ -119,13 +168,13 @@ describe("EstimatePage", () => {
       }
     ];
 
-    const merged = mergeEstimateWithAncillaryItems(baseEstimate, ancillaryItems);
+    const merged = mergeEstimateWorkbook(baseWorkbookEstimate, ancillaryItems, [
+      { code: COMMERCIAL_MARKUP_UNITS_CODE, quantity: 2 }
+    ]);
 
-    expect(merged.groups).toHaveLength(2);
-    expect(merged.groups[1]?.key).toBe("ancillary-items");
-    expect(merged.totals.materialCost).toBe(70);
-    expect(merged.totals.labourCost).toBe(16);
-    expect(merged.totals.totalCost).toBe(86);
+    expect(merged.totals.materialCost).toBe(345);
+    expect(merged.totals.labourCost).toBe(576);
+    expect(merged.totals.totalCost).toBe(921);
   });
 
   it("formats immutable quote labels with version and total", () => {
@@ -134,27 +183,7 @@ describe("EstimatePage", () => {
       companyId: "company-1",
       drawingId: "drawing-1",
       drawingVersionNumber: 3,
-      pricedEstimate: {
-        drawing: {
-          drawingId: "drawing-1",
-          drawingName: "Yard",
-          customerId: "customer-1",
-          customerName: "Cleveland Land Services"
-        },
-        groups: [],
-        ancillaryItems: [],
-        totals: {
-          materialCost: 100,
-          labourCost: 25,
-          totalCost: 125
-        },
-        warnings: [],
-        pricingSnapshot: {
-          updatedAtIso: "1970-01-01T00:00:00.000Z",
-          updatedByUserId: null,
-          source: "DEFAULT"
-        }
-      },
+      pricedEstimate: baseWorkbookEstimate,
       drawingSnapshot: {
         drawingId: "drawing-1",
         drawingName: "Yard",
@@ -163,7 +192,7 @@ describe("EstimatePage", () => {
         layout: { segments: [], gates: [], basketballPosts: [], floodlightColumns: [] },
         estimate: {
           posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
-          corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+          corners: { total: 0, internal: 0, external: 0, unclassified: 0, byHeightMm: {} },
           materials: {
             twinBarPanels: 0,
             twinBarPanelsSuperRebound: 0,

@@ -34,9 +34,14 @@ export function registerPricingRoutes({ app, config, repository, writeLimiter }:
       });
     }
 
+    const existingPricingConfig =
+      (await repository.getPricingConfig(authenticated.company.id)) ??
+      buildDefaultPricingConfig(authenticated.company.id, null);
+
     const pricingConfig = await repository.upsertPricingConfig({
       companyId: authenticated.company.id,
-      items: parsed.data.items,
+      items: parsed.data.items ?? existingPricingConfig.items,
+      ...(parsed.data.workbook ?? existingPricingConfig.workbook ? { workbook: parsed.data.workbook ?? existingPricingConfig.workbook } : {}),
       updatedAtIso: new Date().toISOString(),
       updatedByUserId: authenticated.user.id
     });

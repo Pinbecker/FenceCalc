@@ -13,6 +13,7 @@ import {
   TWIN_BAR_HEIGHT_KEYS
 } from "./domain.js";
 import { PRICING_ITEM_CATEGORIES } from "./estimating.js";
+import { INSTALL_LIFT_LEVELS, PRICING_WORKBOOK_RATE_MODES, PRICING_WORKBOOK_SHEETS } from "./pricingWorkbook.js";
 
 const goalUnitWidthMmSchema = z.union([
   z.literal(GOAL_UNIT_WIDTHS_MM[0]),
@@ -610,7 +611,18 @@ export const estimateResultSchema = z.object({
     total: nonNegativeIntegerSchema,
     internal: nonNegativeIntegerSchema,
     external: nonNegativeIntegerSchema,
-    unclassified: nonNegativeIntegerSchema
+    unclassified: nonNegativeIntegerSchema,
+    byHeightMm: z
+      .record(
+        z.string(),
+        z.object({
+          total: nonNegativeIntegerSchema,
+          internal: nonNegativeIntegerSchema,
+          external: nonNegativeIntegerSchema,
+          unclassified: nonNegativeIntegerSchema
+        })
+      )
+      .default({})
   }),
   materials: z.object({
     twinBarPanels: nonNegativeIntegerSchema,
@@ -673,16 +685,179 @@ export const pricingItemSchema = z.object({
   sortOrder: z.number().finite().optional()
 });
 
+export const pricingWorkbookSheetSchema = z.enum(PRICING_WORKBOOK_SHEETS);
+export const pricingWorkbookRateModeSchema = z.enum(PRICING_WORKBOOK_RATE_MODES);
+export const installLiftLevelSchema = z.enum(INSTALL_LIFT_LEVELS);
+
+const pricingWorkbookQuantityRuleSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("MANUAL_ENTRY"),
+    defaultQuantity: z.number().finite().min(0).optional()
+  }),
+  z.object({
+    kind: z.literal("PANEL_COUNT"),
+    heightKey: fenceHeightKeySchema,
+    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"])
+  }),
+  z.object({
+    kind: z.literal("PANEL_LAYER_COUNT"),
+    panelHeightMm: z.number().finite().positive(),
+    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"]),
+    lift: installLiftLevelSchema.optional()
+  }),
+  z.object({
+    kind: z.literal("POST_COUNT"),
+    heightMm: z.number().finite().nonnegative(),
+    postType: z.enum(["end", "intermediate", "corner", "junction", "inlineJoin", "total"])
+  }),
+  z.object({
+    kind: z.literal("CORNER_COUNT"),
+    heightMm: z.number().finite().nonnegative(),
+    cornerType: z.enum(["internal", "external", "unclassified", "total"])
+  }),
+  z.object({
+    kind: z.literal("TOP_RAIL_COUNT"),
+    heightKey: fenceHeightKeySchema
+  }),
+  z.object({
+    kind: z.literal("GATE_COUNT"),
+    heightKey: fenceHeightKeySchema,
+    gateType: gateTypeSchema,
+    output: z.enum(["gate", "leaf", "post_set"])
+  }),
+  z.object({
+    kind: z.literal("GATE_COUNT_BUCKET"),
+    heightBucket: z.enum(["UP_TO_4M", "AT_LEAST_4_5M"]),
+    gateType: z.enum(["SINGLE_LEAF", "DOUBLE_LEAF"])
+  }),
+  z.object({
+    kind: z.literal("FEATURE_QUANTITY"),
+    featureKind: z.enum(["GOAL_UNIT", "BASKETBALL", "KICKBOARD", "PITCH_DIVIDER", "SIDE_NETTING"]),
+    component: z.string().trim().min(1).max(120)
+  }),
+  z.object({
+    kind: z.literal("FLOODLIGHT_COLUMN_COUNT")
+  }),
+  z.object({
+    kind: z.literal("TOTAL_POSTS_BY_HEIGHT"),
+    heightMm: z.number().finite().nonnegative()
+  }),
+  z.object({
+    kind: z.literal("TOTAL_POSTS")
+  })
+]);
+
+export const pricingWorkbookRowSchema = z.object({
+  code: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(240),
+  unit: z.string().trim().min(1).max(40),
+  rate: z.number().finite().min(0),
+  rateMode: pricingWorkbookRateModeSchema.optional(),
+  quantityRule: pricingWorkbookQuantityRuleSchema,
+  notes: z.string().trim().max(600).optional(),
+  tone: z.enum(["default", "highlight", "manual", "warning"]).optional()
+});
+
+export const pricingWorkbookSectionSchema = z.object({
+  key: z.string().trim().min(1).max(160),
+  sheet: pricingWorkbookSheetSchema,
+  title: z.string().trim().min(1).max(160),
+  caption: z.string().trim().max(240).optional(),
+  rows: z.array(pricingWorkbookRowSchema).max(400)
+});
+
+export const pricingWorkbookSettingsSchema = z.object({
+  labourOverheadPercent: z.number().finite().min(0),
+  travelLodgePerDay: z.number().finite().min(0),
+  markupRate: z.number().finite().min(0),
+  distributionCharge: z.number().finite().min(0),
+  concretePricePerCube: z.number().finite().min(0),
+  hardDigDefault: z.boolean(),
+  clearSpoilsDefault: z.boolean(),
+  colourOption: z.string().trim().min(1).max(120)
+});
+
+export const pricingWorkbookConfigSchema = z.object({
+  settings: pricingWorkbookSettingsSchema,
+  sections: z.array(pricingWorkbookSectionSchema).max(80)
+});
+
+export const estimateWorkbookManualEntrySchema = z.object({
+  code: z.string().trim().min(1).max(160),
+  quantity: z.number().finite().min(0)
+});
+
+export const estimateWorkbookCommercialInputsSchema = z.object({
+  travelDays: z.number().finite().min(0),
+  markupUnits: z.number().finite().min(0)
+});
+
+export const estimateWorkbookRowSchema = z.object({
+  code: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(240),
+  unit: z.string().trim().min(1).max(40),
+  quantity: z.number().finite().min(0),
+  rate: z.number().finite().min(0),
+  rateMode: pricingWorkbookRateModeSchema,
+  total: z.number().finite().min(0),
+  isEditable: z.boolean(),
+  notes: z.string().trim().max(600).optional(),
+  tone: z.enum(["default", "highlight", "manual", "warning"]).optional()
+});
+
+export const estimateWorkbookSectionSchema = z.object({
+  key: z.string().trim().min(1).max(160),
+  sheet: pricingWorkbookSheetSchema,
+  title: z.string().trim().min(1).max(160),
+  caption: z.string().trim().max(240).optional(),
+  subtotal: z.number().finite().min(0),
+  rows: z.array(estimateWorkbookRowSchema).max(400)
+});
+
+export const estimateWorkbookTotalsSchema = z.object({
+  materialsSubtotal: z.number().finite().min(0),
+  labourSubtotal: z.number().finite().min(0),
+  labourOverheadPercent: z.number().finite().min(0),
+  labourOverheadAmount: z.number().finite().min(0),
+  distributionCharge: z.number().finite().min(0),
+  travelDays: z.number().finite().min(0),
+  travelRatePerDay: z.number().finite().min(0),
+  travelTotal: z.number().finite().min(0),
+  markupUnits: z.number().finite().min(0),
+  markupRate: z.number().finite().min(0),
+  markupTotal: z.number().finite().min(0),
+  grandTotal: z.number().finite().min(0)
+});
+
+export const estimateWorkbookSchema = z.object({
+  settings: pricingWorkbookSettingsSchema,
+  sections: z.array(estimateWorkbookSectionSchema).max(80),
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
+  commercialInputs: estimateWorkbookCommercialInputsSchema,
+  totals: estimateWorkbookTotalsSchema
+});
+
 export const pricingConfigRecordSchema = z.object({
   companyId: z.string().trim().min(0).max(120),
   items: z.array(pricingItemSchema).max(500),
+  workbook: pricingWorkbookConfigSchema.optional(),
   updatedAtIso: z.string().datetime(),
   updatedByUserId: z.string().trim().min(1).max(120).nullable()
 });
 
-export const pricingConfigUpdateRequestSchema = z.object({
-  items: z.array(pricingItemSchema).max(500)
-});
+export const pricingConfigUpdateRequestSchema = z
+  .object({
+    items: z.array(pricingItemSchema).max(500).optional(),
+    workbook: pricingWorkbookConfigSchema.optional()
+  })
+  .superRefine((value, context) => {
+    if (value.items === undefined && value.workbook === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one pricing payload field must be provided"
+      });
+    }
+  });
 
 export const ancillaryEstimateItemSchema = z.object({
   id: z.string().trim().min(1).max(120),
@@ -742,6 +917,8 @@ export const pricedEstimateResultSchema = z.object({
   }),
   groups: z.array(estimateGroupSchema).max(200),
   ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200),
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
+  workbook: estimateWorkbookSchema.optional(),
   totals: z.object({
     materialCost: z.number().finite().min(0),
     labourCost: z.number().finite().min(0),
@@ -776,7 +953,8 @@ export const quoteRecordSchema = z.object({
 });
 
 export const quoteCreateRequestSchema = z.object({
-  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([])
+  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([]),
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([])
 });
 
 export const emailSchema = z.string().trim().email().max(320).transform((value) => value.toLowerCase());

@@ -442,6 +442,35 @@ describe("InMemoryAppRepository", () => {
     await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
   });
 
+  it("hydrates legacy pricing configs that do not yet include a workbook", async () => {
+    const repository = new InMemoryAppRepository();
+    await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+
+    await repository.upsertPricingConfig({
+      companyId: "company-1",
+      items: [],
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
+      updatedByUserId: "user-1"
+    });
+
+    await expect(repository.getPricingConfig("company-1")).resolves.toMatchObject({
+      workbook: {
+        settings: {
+          labourOverheadPercent: 75
+        }
+      }
+    });
+  });
+
   it("archives drawings, restores versions, and records audit items", async () => {
     const repository = new InMemoryAppRepository();
     await repository.bootstrapOwnerAccount({
@@ -788,6 +817,39 @@ describe("SqliteAppRepository", () => {
       passwordSalt: "salt-3"
     });
     await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
+  });
+
+  it("hydrates legacy sqlite pricing configs that do not yet include a workbook", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+
+    await repository.upsertPricingConfig({
+      companyId: account.company.id,
+      items: [],
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
+      updatedByUserId: account.user.id
+    });
+
+    await expect(repository.getPricingConfig(account.company.id)).resolves.toMatchObject({
+      workbook: {
+        settings: {
+          labourOverheadPercent: 75
+        }
+      }
+    });
   });
 
   it("patches legacy sqlite databases with missing newer columns", async () => {

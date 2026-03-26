@@ -12,13 +12,18 @@ import type {
   DrawingSummary,
   DrawingVersionRecord,
   DrawingVersionSource,
+  EstimateWorkbook,
+  EstimateWorkbookManualEntry,
+  EstimateResult,
   LayoutModel,
   PricingConfigRecord,
+  PricedEstimateResult,
   QuoteRecord
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
   DRAWING_STATUSES,
+  buildDefaultPricingWorkbookConfig,
   customerRecordSchema,
   customerSummarySchema,
   drawingCanvasViewportSchema,
@@ -304,6 +309,51 @@ function parseDrawingStatus(raw: string | undefined | null): DrawingStatus {
   return (DRAWING_STATUSES as readonly string[]).includes(value) ? (value as DrawingStatus) : "DRAFT";
 }
 
+type ParsedEstimateResult = Omit<EstimateResult, "corners"> & {
+  corners: Omit<EstimateResult["corners"], "byHeightMm"> & {
+    byHeightMm?: EstimateResult["corners"]["byHeightMm"] | undefined;
+  };
+};
+
+type ParsedEstimateWorkbook = Omit<EstimateWorkbook, "manualEntries"> & {
+  manualEntries?: EstimateWorkbookManualEntry[] | undefined;
+};
+
+type ParsedPricedEstimateResult = Omit<PricedEstimateResult, "manualEntries" | "workbook"> & {
+  manualEntries?: EstimateWorkbookManualEntry[] | undefined;
+  workbook?: ParsedEstimateWorkbook | undefined;
+};
+
+function normalizeEstimateResult(estimate: ParsedEstimateResult): EstimateResult {
+  return {
+    ...estimate,
+    corners: {
+      ...estimate.corners,
+      byHeightMm: estimate.corners.byHeightMm ?? {}
+    }
+  };
+}
+
+function normalizeEstimateWorkbook(workbook: ParsedEstimateWorkbook): EstimateWorkbook {
+  return {
+    ...workbook,
+    manualEntries: workbook.manualEntries ?? []
+  };
+}
+
+function normalizePricedEstimateResult(pricedEstimate: ParsedPricedEstimateResult): PricedEstimateResult {
+  return {
+    drawing: pricedEstimate.drawing,
+    groups: pricedEstimate.groups,
+    ancillaryItems: pricedEstimate.ancillaryItems,
+    manualEntries: pricedEstimate.manualEntries ?? [],
+    totals: pricedEstimate.totals,
+    warnings: pricedEstimate.warnings,
+    pricingSnapshot: pricedEstimate.pricingSnapshot,
+    ...(pricedEstimate.workbook ? { workbook: normalizeEstimateWorkbook(pricedEstimate.workbook) } : {})
+  };
+}
+
 export function toDrawing(row: DrawingRow): DrawingRecord {
   const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing ${row.id}`);
   const savedViewport = parseOptionalStoredJson(
@@ -312,7 +362,9 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     `viewport for drawing ${row.id}`
   );
   const layout = buildStoredLayout(parsedLayout);
-  const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`);
+  const estimate = normalizeEstimateResult(
+    parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`) as ParsedEstimateResult
+  );
 
   return {
     id: row.id,
@@ -384,7 +436,9 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     `viewport for drawing version ${row.id}`
   );
   const layout = buildStoredLayout(parsedLayout);
-  const estimate = parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`);
+  const estimate = normalizeEstimateResult(
+    parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`) as ParsedEstimateResult
+  );
 
   return {
     id: row.id,
@@ -423,14 +477,23 @@ export function toAuditLog(row: AuditLogRow): AuditLogRecord {
   };
 }
 
+export function normalizePricingConfigRecord(pricingConfig: PricingConfigRecord): PricingConfigRecord {
+  return pricingConfig.workbook
+    ? pricingConfig
+    : {
+        ...pricingConfig,
+        workbook: buildDefaultPricingWorkbookConfig()
+      };
+}
+
 export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
   const parsed = parseStoredJson(row.config_json, pricingConfigRecordSchema, `pricing config for company ${row.company_id}`);
-  return {
+  return normalizePricingConfigRecord({
     ...parsed,
     companyId: row.company_id,
     updatedAtIso: row.updated_at_iso,
     updatedByUserId: row.updated_by_user_id
-  };
+  });
 }
 
 export function toQuoteRecord(row: QuoteRow): QuoteRecord {
@@ -441,7 +504,7 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
     drawingName: parsed.drawingSnapshot.drawingName,
     customerId: parsed.drawingSnapshot.customerId,
     customerName: parsed.drawingSnapshot.customerName,
-    estimate: parsed.drawingSnapshot.estimate,
+    estimate: normalizeEstimateResult(parsed.drawingSnapshot.estimate as ParsedEstimateResult),
     schemaVersion: parsed.drawingSnapshot.schemaVersion,
     rulesVersion: parsed.drawingSnapshot.rulesVersion,
     versionNumber: parsed.drawingSnapshot.versionNumber,
@@ -450,11 +513,11 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
       : {})
   };
   return {
-    ...parsed,
     id: row.id,
     companyId: row.company_id,
     drawingId: row.drawing_id,
     drawingVersionNumber: row.drawing_version_number,
+    pricedEstimate: normalizePricedEstimateResult(parsed.pricedEstimate as ParsedPricedEstimateResult),
     drawingSnapshot,
     createdByUserId: row.created_by_user_id,
     createdAtIso: row.created_at_iso

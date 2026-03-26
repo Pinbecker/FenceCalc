@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AncillaryEstimateItem } from "@fence-estimator/contracts";
+import type { AncillaryEstimateItem, EstimateWorkbookManualEntry } from "@fence-estimator/contracts";
 import { buildDefaultPricingConfig } from "@fence-estimator/contracts";
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
@@ -23,7 +23,8 @@ export async function createQuoteForDrawing(
   repository: AppRepository,
   authenticated: QuoteActorContext,
   drawingId: string,
-  ancillaryItems: AncillaryEstimateItem[]
+  ancillaryItems: AncillaryEstimateItem[],
+  manualEntries: EstimateWorkbookManualEntry[] = []
 ): Promise<CreateQuoteResult> {
   const drawing = await repository.getDrawingById(drawingId, authenticated.company.id);
   if (!drawing) {
@@ -39,7 +40,7 @@ export async function createQuoteForDrawing(
     companyId: authenticated.company.id,
     drawingId: drawing.id,
     drawingVersionNumber: drawing.versionNumber,
-    pricedEstimate: buildPricedEstimate(drawing, pricingConfig, ancillaryItems),
+    pricedEstimate: buildPricedEstimate(drawing, pricingConfig, ancillaryItems, manualEntries),
     drawingSnapshot: {
       drawingId: drawing.id,
       drawingName: drawing.name,

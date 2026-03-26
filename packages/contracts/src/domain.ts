@@ -149,6 +149,15 @@ export interface CornerSummary {
   internal: number;
   external: number;
   unclassified: number;
+  byHeightMm?: Record<
+    string,
+    {
+      total: number;
+      internal: number;
+      external: number;
+      unclassified: number;
+    }
+  >;
 }
 
 export interface MaterialSummary {

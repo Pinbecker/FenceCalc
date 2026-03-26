@@ -1636,6 +1636,187 @@
   background: rgba(255, 249, 244, 0.96);
 }
 
+.workbook-page {
+  gap: 18px;
+}
+
+.workbook-summary-strip,
+.workbook-settings-card,
+.workbook-commercial-card,
+.workbook-sheet-card {
+  display: grid;
+  gap: 16px;
+}
+
+.workbook-summary-strip {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.workbook-summary-strip article {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(18, 42, 66, 0.08);
+  border-radius: 12px;
+  background: rgba(250, 252, 255, 0.82);
+}
+
+.workbook-summary-strip span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(40, 60, 84, 0.66);
+}
+
+.workbook-summary-strip strong {
+  font-size: 15px;
+  color: #13202f;
+}
+
+.workbook-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.workbook-settings-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.workbook-settings-grid span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: rgba(40, 60, 84, 0.66);
+}
+
+.workbook-settings-grid input {
+  min-height: 38px;
+  padding: 10px 12px;
+  border: 1px solid rgba(18, 42, 66, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  color: #13202f;
+}
+
+.workbook-settings-grid input[readonly] {
+  background: rgba(242, 246, 250, 0.9);
+}
+
+.workbook-toggle-field {
+  align-content: start;
+}
+
+.workbook-toggle-field input {
+  width: 18px;
+  min-height: 18px;
+  justify-self: start;
+}
+
+.workbook-sheet-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.workbook-section-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.workbook-section-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(18, 42, 66, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.workbook-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workbook-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #13202f;
+}
+
+.workbook-section-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(40, 60, 84, 0.72);
+}
+
+.workbook-section-head strong,
+.workbook-section-head span {
+  font-size: 13px;
+  color: rgba(22, 44, 66, 0.78);
+}
+
+.workbook-table {
+  display: grid;
+  gap: 6px;
+}
+
+.workbook-table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(92px, 0.6fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(18, 42, 66, 0.08);
+  border-radius: 10px;
+  background: rgba(248, 251, 255, 0.78);
+}
+
+.workbook-table-head {
+  background: transparent;
+  border: 0;
+  padding: 0 4px 4px;
+}
+
+.workbook-table-head span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(40, 60, 84, 0.6);
+}
+
+.workbook-item-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.workbook-item-copy strong {
+  font-size: 13px;
+  color: #13202f;
+}
+
+.workbook-item-copy span {
+  font-size: 12px;
+  color: rgba(40, 60, 84, 0.68);
+}
+
+.workbook-table-row > span,
+.workbook-table-row > strong {
+  font-size: 13px;
+  color: #13202f;
+}
+
+.workbook-table-row input {
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(18, 42, 66, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: #13202f;
+}
+
 .admin-page-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
@@ -2115,6 +2296,8 @@
   .drawing-library-search-input input,
   .pricing-table-row input,
   .pricing-table-row textarea,
+  .workbook-table-row input,
+  .workbook-settings-grid input,
   .estimate-ancillary-row input,
   .portal-customer-edit-field input,
   .portal-customer-edit-field textarea,
@@ -2143,13 +2326,25 @@
 
   .pricing-table-row,
   .estimate-table-row,
-  .estimate-ancillary-row {
+  .estimate-ancillary-row,
+  .workbook-table-row {
     grid-template-columns: 1fr;
   }
 
   .pricing-table-head,
-  .estimate-table-head {
+  .estimate-table-head,
+  .workbook-table-head {
     display: none;
+  }
+
+  .workbook-summary-strip,
+  .workbook-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workbook-section-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .admin-audit-controls .portal-form-grid {

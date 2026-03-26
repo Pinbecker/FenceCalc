@@ -4,14 +4,13 @@ import type {
   AncillaryEstimateItem,
   AuthSessionEnvelope,
   DrawingRecord,
-  EstimateGroup,
-  EstimateRow,
-  EstimateTotals,
+  EstimateWorkbookManualEntry,
   PricedEstimateResult,
   QuoteRecord
 } from "@fence-estimator/contracts";
 
 import { createQuoteSnapshot, getDrawing, getPricedEstimate, listQuotes } from "./apiClient";
+import { COMMERCIAL_MARKUP_UNITS_CODE, COMMERCIAL_TRAVEL_DAYS_CODE, mergeEstimateWorkbook } from "./estimatingWorkbook";
 import type { PortalRoute } from "./useHashRoute";
 
 interface EstimatePageProps {
@@ -27,14 +26,6 @@ function formatMoney(value: number): string {
   }).format(value);
 }
 
-function formatQuantity(value: number, unit: string): string {
-  if (unit === "m3") {
-    return `${value.toFixed(3)} ${unit}`;
-  }
-  const formatted = Number.isInteger(value) ? String(value) : value.toFixed(2);
-  return `${formatted} ${unit}`;
-}
-
 function formatTimestamp(value: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
@@ -42,11 +33,17 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
-function formatPricingSavedLabel(pricedEstimate: PricedEstimateResult): string {
-  if (pricedEstimate.pricingSnapshot.source === "DEFAULT") {
-    return "Default configuration";
+function formatWorkbookRate(
+  rate: number,
+  rateMode: "MONEY" | "REFERENCE" | "VOLUME_PER_UNIT"
+): string {
+  if (rateMode === "REFERENCE") {
+    return "-";
   }
-  return formatTimestamp(pricedEstimate.pricingSnapshot.updatedAtIso);
+  if (rateMode === "VOLUME_PER_UNIT") {
+    return `${rate.toFixed(3)} m3`;
+  }
+  return formatMoney(rate);
 }
 
 export function formatQuoteSummaryLabel(quote: QuoteRecord): string {
@@ -65,73 +62,17 @@ function buildAncillaryItem(): AncillaryEstimateItem {
   };
 }
 
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function buildAncillaryRows(items: AncillaryEstimateItem[]): EstimateRow[] {
-  return items
-    .filter((item) => item.quantity > 0 || item.materialCost > 0 || item.labourCost > 0 || item.description.trim().length > 0)
-    .map((item) => {
-      const quantity = Math.round(item.quantity * 1000) / 1000;
-      const totalMaterialCost = roundMoney(quantity * item.materialCost);
-      const totalLabourCost = roundMoney(quantity * item.labourCost);
-      return {
-        key: item.id,
-        itemCode: null,
-        itemName: item.description.trim() || "Ancillary item",
-        category: "ANCILLARY",
-        quantity,
-        unit: "item",
-        unitMaterialCost: item.materialCost,
-        unitLabourCost: item.labourCost,
-        totalMaterialCost,
-        totalLabourCost,
-        totalCost: roundMoney(totalMaterialCost + totalLabourCost)
-      };
-    });
-}
-
-function buildAncillaryGroup(items: AncillaryEstimateItem[]): EstimateGroup | null {
-  const rows = buildAncillaryRows(items);
-  if (rows.length === 0) {
-    return null;
+function upsertManualEntry(
+  current: EstimateWorkbookManualEntry[],
+  code: string,
+  quantity: number
+): EstimateWorkbookManualEntry[] {
+  const nextQuantity = Number.isFinite(quantity) ? quantity : 0;
+  const existing = current.find((entry) => entry.code === code);
+  if (existing) {
+    return current.map((entry) => (entry.code === code ? { ...entry, quantity: nextQuantity } : entry));
   }
-
-  const subtotalMaterialCost = roundMoney(rows.reduce((sum, row) => sum + row.totalMaterialCost, 0));
-  const subtotalLabourCost = roundMoney(rows.reduce((sum, row) => sum + row.totalLabourCost, 0));
-  return {
-    key: "ancillary-items",
-    title: "Ancillary items",
-    rows,
-    subtotalMaterialCost,
-    subtotalLabourCost,
-    subtotalCost: roundMoney(subtotalMaterialCost + subtotalLabourCost)
-  };
-}
-
-export function mergeEstimateWithAncillaryItems(
-  baseEstimate: PricedEstimateResult,
-  ancillaryItems: AncillaryEstimateItem[]
-): PricedEstimateResult {
-  const ancillaryGroup = buildAncillaryGroup(ancillaryItems);
-  const nonAncillaryGroups = baseEstimate.groups.filter((group) => group.key !== "ancillary-items");
-  const groups = ancillaryGroup ? [...nonAncillaryGroups, ancillaryGroup] : nonAncillaryGroups;
-  const totals: EstimateTotals = groups.reduce(
-    (sum, group) => ({
-      materialCost: roundMoney(sum.materialCost + group.subtotalMaterialCost),
-      labourCost: roundMoney(sum.labourCost + group.subtotalLabourCost),
-      totalCost: roundMoney(sum.totalCost + group.subtotalCost)
-    }),
-    { materialCost: 0, labourCost: 0, totalCost: 0 }
-  );
-
-  return {
-    ...baseEstimate,
-    ancillaryItems,
-    groups,
-    totals
-  };
+  return [...current, { code, quantity: nextQuantity }];
 }
 
 export function EstimatePage({ session, drawingId, onNavigate }: EstimatePageProps) {
@@ -139,6 +80,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null);
   const [basePricedEstimate, setBasePricedEstimate] = useState<PricedEstimateResult | null>(null);
   const [ancillaryItems, setAncillaryItems] = useState<AncillaryEstimateItem[]>([]);
+  const [manualEntries, setManualEntries] = useState<EstimateWorkbookManualEntry[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingQuote, setIsCreatingQuote] = useState(false);
@@ -152,6 +94,8 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
       setDrawing(null);
       setBasePricedEstimate(null);
       setQuotes([]);
+      setAncillaryItems([]);
+      setManualEntries([]);
       return;
     }
 
@@ -169,6 +113,8 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
         setDrawing(nextDrawing);
         setBasePricedEstimate(nextPricedEstimate);
         setQuotes(nextQuotes);
+        setAncillaryItems([]);
+        setManualEntries(nextPricedEstimate.manualEntries ?? []);
         setErrorMessage(null);
       } catch (error) {
         if (!cancelled) {
@@ -192,8 +138,16 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
     if (!basePricedEstimate) {
       return null;
     }
-    return mergeEstimateWithAncillaryItems(basePricedEstimate, ancillaryItems);
-  }, [ancillaryItems, basePricedEstimate]);
+    return mergeEstimateWorkbook(basePricedEstimate, ancillaryItems, manualEntries);
+  }, [ancillaryItems, basePricedEstimate, manualEntries]);
+
+  const workbookSections = useMemo(
+    () => ({
+      materials: pricedEstimate?.workbook?.sections.filter((section) => section.sheet === "MATERIALS") ?? [],
+      labour: pricedEstimate?.workbook?.sections.filter((section) => section.sheet === "LABOUR") ?? []
+    }),
+    [pricedEstimate]
+  );
 
   const handleCreateQuote = async () => {
     if (!drawingId) {
@@ -203,7 +157,7 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
     setQuoteNoticeMessage(null);
     setErrorMessage(null);
     try {
-      const quote = await createQuoteSnapshot(drawingId, ancillaryItems);
+      const quote = await createQuoteSnapshot(drawingId, ancillaryItems, manualEntries);
       setQuotes((current) => [quote, ...current]);
       setQuoteNoticeMessage(`Saved quote snapshot at ${formatTimestamp(quote.createdAtIso)}.`);
     } catch (error) {
@@ -214,12 +168,12 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
   };
 
   return (
-    <section className="portal-page estimate-page">
+    <section className="portal-page estimate-page workbook-page">
       <header className="portal-page-header">
         <div>
-          <span className="portal-eyebrow">Estimate</span>
+          <span className="portal-eyebrow">Estimate workbook</span>
           <h1>{drawing?.name ?? "Drawing estimate"}</h1>
-          <p>Review priced quantities from the saved drawing, add ancillary items, and publish quote snapshots for audit-safe history.</p>
+          <p>Review the workbook-style material and labour build-up, adjust manual commercial inputs, and save audit-safe quote snapshots.</p>
         </div>
         <div className="portal-header-actions">
           {drawing ? (
@@ -233,13 +187,18 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
           ) : null}
           {canManagePricing ? (
             <button type="button" className="portal-secondary-button" onClick={() => onNavigate("pricing")}>
-              Pricing settings
+              Pricing workbook
             </button>
           ) : null}
           <button
             type="button"
             className="portal-primary-button"
-            onClick={() => onNavigate(drawing?.customerId ? "customer" : "customers", drawing?.customerId ? { customerId: drawing.customerId } : undefined)}
+            onClick={() =>
+              onNavigate(
+                drawing?.customerId ? "customer" : "customers",
+                drawing?.customerId ? { customerId: drawing.customerId } : undefined
+              )
+            }
           >
             {drawing?.customerId ? "Customer workspace" : "Customer directory"}
           </button>
@@ -258,13 +217,20 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
 
       {isLoading ? (
         <div className="portal-empty-state">
-          <h2>Loading estimate...</h2>
+          <h2>Loading estimate workbook...</h2>
         </div>
       ) : null}
 
-      {drawing && pricedEstimate ? (
+      {drawing && basePricedEstimate && !pricedEstimate?.workbook ? (
+        <div className="portal-empty-state">
+          <h2>Estimate workbook unavailable</h2>
+          <p>This drawing returned pricing totals without workbook rows. Open the pricing workbook and save it once, then reopen this estimate.</p>
+        </div>
+      ) : null}
+
+      {drawing && pricedEstimate && pricedEstimate.workbook ? (
         <>
-          <section className="portal-surface-card estimate-meta-strip">
+          <section className="portal-surface-card workbook-summary-strip">
             <article>
               <span>Customer</span>
               <strong>{drawing.customerName}</strong>
@@ -274,28 +240,28 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               <strong>{formatTimestamp(drawing.updatedAtIso)}</strong>
             </article>
             <article>
-              <span>Panels</span>
-              <strong>{drawing.estimate.materials.twinBarPanels + drawing.estimate.materials.twinBarPanelsSuperRebound}</strong>
+              <span>Colour</span>
+              <strong>{pricedEstimate.workbook.settings.colourOption}</strong>
             </article>
             <article>
-              <span>Posts</span>
-              <strong>{drawing.estimate.posts.total}</strong>
+              <span>Overhead</span>
+              <strong>{pricedEstimate.workbook.settings.labourOverheadPercent}%</strong>
             </article>
             <article>
-              <span>Gates</span>
-              <strong>{drawing.layout.gates?.length ?? 0}</strong>
+              <span>Distribution</span>
+              <strong>{formatMoney(pricedEstimate.workbook.totals.distributionCharge)}</strong>
             </article>
             <article>
               <span>Pricing last saved</span>
-              <strong>{formatPricingSavedLabel(pricedEstimate)}</strong>
+              <strong>{pricedEstimate.pricingSnapshot.source === "DEFAULT" ? "Default configuration" : formatTimestamp(pricedEstimate.pricingSnapshot.updatedAtIso)}</strong>
             </article>
           </section>
 
-          <section className="portal-surface-card estimate-ancillary-card">
+          <section className="portal-surface-card workbook-commercial-card">
             <div className="portal-section-heading">
               <div>
-                <span className="portal-section-kicker">Quote snapshots</span>
-                <h2>Published quote snapshots</h2>
+                <span className="portal-section-kicker">Commercial controls</span>
+                <h2>Travel, markup, and quote snapshots</h2>
               </div>
               <button
                 type="button"
@@ -307,8 +273,46 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
               </button>
             </div>
 
-            {quotes.length === 0 ? <p className="portal-empty-copy">No quote snapshots saved for this drawing yet.</p> : null}
+            <div className="workbook-settings-grid">
+              <label>
+                <span>Travel days</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={pricedEstimate.workbook.commercialInputs.travelDays}
+                  onChange={(event) =>
+                    setManualEntries((current) =>
+                      upsertManualEntry(current, COMMERCIAL_TRAVEL_DAYS_CODE, Number(event.target.value || 0))
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>Travel / lodge rate</span>
+                <input value={pricedEstimate.workbook.settings.travelLodgePerDay} readOnly />
+              </label>
+              <label>
+                <span>Markup units</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={pricedEstimate.workbook.commercialInputs.markupUnits}
+                  onChange={(event) =>
+                    setManualEntries((current) =>
+                      upsertManualEntry(current, COMMERCIAL_MARKUP_UNITS_CODE, Number(event.target.value || 0))
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>Markup rate</span>
+                <input value={pricedEstimate.workbook.settings.markupRate} readOnly />
+              </label>
+            </div>
 
+            {quotes.length === 0 ? <p className="portal-empty-copy">No quote snapshots saved for this drawing yet.</p> : null}
             {quotes.length > 0 ? (
               <div className="estimate-ancillary-list">
                 {quotes.map((quote) => (
@@ -420,44 +424,65 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             </section>
           ) : null}
 
-          <div className="estimate-group-stack">
-            {pricedEstimate.groups.map((group) => (
-              <section key={group.key} className="portal-surface-card estimate-group-card">
+          <div className="workbook-sheet-stack">
+            {[
+              { key: "materials", title: "Materials sheet", sections: workbookSections.materials },
+              { key: "labour", title: "Labour sheet", sections: workbookSections.labour }
+            ].map((sheet) => (
+              <section key={sheet.key} className="portal-surface-card workbook-sheet-card">
                 <div className="portal-section-heading">
                   <div>
-                    <span className="portal-section-kicker">Estimate group</span>
-                    <h2>{group.title}</h2>
-                  </div>
-                  <div className="estimate-group-subtotal">
-                    <span>Subtotal</span>
-                    <strong>{formatMoney(group.subtotalCost)}</strong>
+                    <span className="portal-section-kicker">Estimate workbook</span>
+                    <h2>{sheet.title}</h2>
                   </div>
                 </div>
 
-                <div className="estimate-table" role="table" aria-label={`${group.title} estimate rows`}>
-                  <div className="estimate-table-row estimate-table-head" role="row">
-                    <span>Item</span>
-                    <span>Quantity</span>
-                    <span>Unit material</span>
-                    <span>Unit labour</span>
-                    <span>Material total</span>
-                    <span>Labour total</span>
-                    <span>Total</span>
-                  </div>
+                <div className="workbook-section-stack">
+                  {sheet.sections.map((section) => (
+                    <section key={section.key} className="workbook-section-card">
+                      <header className="workbook-section-head">
+                        <div>
+                          <h3>{section.title}</h3>
+                          {section.caption ? <p>{section.caption}</p> : null}
+                        </div>
+                        <strong>{formatMoney(section.subtotal)}</strong>
+                      </header>
 
-                  {group.rows.map((row) => (
-                    <div key={row.key} className="estimate-table-row" role="row">
-                      <div className="estimate-item-copy">
-                        <strong>{row.itemName}</strong>
-                        {row.notes ? <span>{row.notes}</span> : null}
+                      <div className="workbook-table" role="table" aria-label={`${section.title} workbook rows`}>
+                        <div className="workbook-table-row workbook-table-head" role="row">
+                          <span>Item</span>
+                          <span>Qty</span>
+                          <span>Rate</span>
+                          <span>Total</span>
+                        </div>
+
+                        {section.rows.map((row) => (
+                          <div key={row.code} className="workbook-table-row" role="row">
+                            <div className="workbook-item-copy">
+                              <strong>{row.label}</strong>
+                              {row.notes ? <span>{row.notes}</span> : null}
+                            </div>
+                            {row.isEditable ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={row.quantity}
+                                onChange={(event) =>
+                                  setManualEntries((current) =>
+                                    upsertManualEntry(current, row.code, Number(event.target.value || 0))
+                                  )
+                                }
+                              />
+                            ) : (
+                              <span>{row.quantity}</span>
+                            )}
+                            <span>{formatWorkbookRate(row.rate, row.rateMode)}</span>
+                            <strong>{row.rateMode === "REFERENCE" ? "-" : formatMoney(row.total)}</strong>
+                          </div>
+                        ))}
                       </div>
-                      <span>{formatQuantity(row.quantity, row.unit)}</span>
-                      <span>{formatMoney(row.unitMaterialCost)}</span>
-                      <span>{formatMoney(row.unitLabourCost)}</span>
-                      <span>{formatMoney(row.totalMaterialCost)}</span>
-                      <span>{formatMoney(row.totalLabourCost)}</span>
-                      <strong>{formatMoney(row.totalCost)}</strong>
-                    </div>
+                    </section>
                   ))}
                 </div>
               </section>
@@ -468,17 +493,41 @@ export function EstimatePage({ session, drawingId, onNavigate }: EstimatePagePro
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Totals</span>
-                <h2>Labour summary and grand total</h2>
+                <h2>Workbook totals</h2>
               </div>
             </div>
             <div className="estimate-totals-grid">
               <article>
-                <span>Material total</span>
-                <strong>{formatMoney(pricedEstimate.totals.materialCost)}</strong>
+                <span>Materials subtotal</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.materialsSubtotal)}</strong>
               </article>
               <article>
-                <span>Labour total</span>
-                <strong>{formatMoney(pricedEstimate.totals.labourCost)}</strong>
+                <span>Distribution</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.distributionCharge)}</strong>
+              </article>
+              <article>
+                <span>Labour subtotal</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.labourSubtotal)}</strong>
+              </article>
+              <article>
+                <span>Labour overhead</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.labourOverheadAmount)}</strong>
+              </article>
+              <article>
+                <span>Travel / lodge</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.travelTotal)}</strong>
+              </article>
+              <article>
+                <span>Markup</span>
+                <strong>{formatMoney(pricedEstimate.workbook.totals.markupTotal)}</strong>
+              </article>
+              <article>
+                <span>Ancillary material</span>
+                <strong>{formatMoney(ancillaryItems.reduce((sum, item) => sum + item.quantity * item.materialCost, 0))}</strong>
+              </article>
+              <article>
+                <span>Ancillary labour</span>
+                <strong>{formatMoney(ancillaryItems.reduce((sum, item) => sum + item.quantity * item.labourCost, 0))}</strong>
               </article>
               <article className="is-grand-total">
                 <span>Grand total</span>

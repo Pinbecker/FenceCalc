@@ -5,6 +5,8 @@ import type {
   FenceSystem,
   LayoutModel
 } from "./domain.js";
+import type { EstimateWorkbook, EstimateWorkbookManualEntry, PricingWorkbookConfig } from "./pricingWorkbook.js";
+import { buildDefaultPricingWorkbookConfig } from "./pricingWorkbook.js";
 
 export const PRICING_ITEM_CATEGORIES = [
   "PANELS",
@@ -36,6 +38,7 @@ export interface PricingItem {
 export interface PricingConfigRecord {
   companyId: string;
   items: PricingItem[];
+  workbook?: PricingWorkbookConfig | undefined;
   updatedAtIso: string;
   updatedByUserId: string | null;
 }
@@ -114,6 +117,8 @@ export interface PricedEstimateResult {
   drawing: DrawingEstimateInput;
   groups: EstimateGroup[];
   ancillaryItems: AncillaryEstimateItem[];
+  manualEntries?: EstimateWorkbookManualEntry[] | undefined;
+  workbook?: EstimateWorkbook | undefined;
   totals: EstimateTotals;
   warnings: EstimateWarning[];
   pricingSnapshot: EstimatePricingSnapshot;
@@ -352,6 +357,7 @@ export function buildDefaultPricingConfig(companyId = "", updatedByUserId: strin
   return {
     companyId,
     items: buildDefaultPricingItems(),
+    workbook: buildDefaultPricingWorkbookConfig(),
     updatedAtIso: new Date(0).toISOString(),
     updatedByUserId
   };

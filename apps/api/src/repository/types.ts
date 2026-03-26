@@ -187,6 +187,7 @@ export interface CreateAuditLogInput {
 export interface UpsertPricingConfigInput {
   companyId: string;
   items: PricingConfigRecord["items"];
+  workbook?: PricingConfigRecord["workbook"];
   updatedAtIso: string;
   updatedByUserId: string;
 }

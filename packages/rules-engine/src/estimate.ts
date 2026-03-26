@@ -339,6 +339,30 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
   let internalCorners = 0;
   let externalCorners = 0;
   let unclassifiedCorners = 0;
+  const cornerBreakdownByHeightMm: Record<
+    string,
+    { total: number; internal: number; external: number; unclassified: number }
+  > = {};
+
+  function ensureCornerHeightBucket(heightKey: string): {
+    total: number;
+    internal: number;
+    external: number;
+    unclassified: number;
+  } {
+    const existing = cornerBreakdownByHeightMm[heightKey];
+    if (existing) {
+      return existing;
+    }
+    const created = {
+      total: 0,
+      internal: 0,
+      external: 0,
+      unclassified: 0
+    };
+    cornerBreakdownByHeightMm[heightKey] = created;
+    return created;
+  }
 
   const components = computeConnectedComponents(nodes);
   const classifiedCornerNodes = new Set<string>();
@@ -386,10 +410,15 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
       }
 
       const isInternal = isCcw ? turn < 0 : turn > 0;
+      const heightKey = String(nodes.get(currentKey)?.maxHeightMm ?? 0);
+      const bucket = ensureCornerHeightBucket(heightKey);
+      bucket.total += 1;
       if (isInternal) {
         internalCorners += 1;
+        bucket.internal += 1;
       } else {
         externalCorners += 1;
+        bucket.external += 1;
       }
       classifiedCornerNodes.add(currentKey);
     }
@@ -398,6 +427,10 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
   for (const cornerKey of cornerNodeKeys) {
     if (!classifiedCornerNodes.has(cornerKey)) {
       unclassifiedCorners += 1;
+      const heightKey = String(nodes.get(cornerKey)?.maxHeightMm ?? 0);
+      const bucket = ensureCornerHeightBucket(heightKey);
+      bucket.total += 1;
+      bucket.unclassified += 1;
     }
   }
 
@@ -428,7 +461,8 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
       total: cornerNodeKeys.size,
       internal: internalCorners,
       external: externalCorners,
-      unclassified: unclassifiedCorners
+      unclassified: unclassifiedCorners,
+      byHeightMm: cornerBreakdownByHeightMm
     },
     materials: {
       twinBarPanels,

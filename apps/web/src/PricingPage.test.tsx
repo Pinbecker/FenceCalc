@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { AuthSessionEnvelope, PricingConfigRecord, PricingItem } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, PricingConfigRecord } from "@fence-estimator/contracts";
+import { buildDefaultPricingWorkbookConfig, groupWorkbookSectionsBySheet } from "@fence-estimator/contracts";
 
-import { PricingPage, formatPricingSavedLabel, groupItems } from "./PricingPage.js";
+import { PricingPage, formatPricingSavedLabel, getPricingWorkbookOrDefault } from "./PricingPage.js";
 
 const session: AuthSessionEnvelope = {
   company: {
@@ -29,77 +30,54 @@ const session: AuthSessionEnvelope = {
 };
 
 describe("PricingPage", () => {
-  it("renders the pricing shell and loading state", () => {
+  it("renders the workbook shell and loading state", () => {
     const html = renderToStaticMarkup(<PricingPage session={session} />);
 
-    expect(html).toContain("Pricing and labour schedule");
-    expect(html).toContain("Estimates read directly from this schedule.");
+    expect(html).toContain("Materials and labour schedule");
+    expect(html).toContain("Pricing workbook");
     expect(html).toContain("Acme Fencing");
-    expect(html).toContain("Loading pricing configuration...");
+    expect(html).toContain("Loading pricing workbook...");
     expect(html).toContain("Default configuration");
   });
 
-  it("groups pricing items by system and category in sort order", () => {
-    const items: PricingItem[] = [
-      {
-        itemCode: "POST-B",
-        displayName: "Post B",
-        category: "POSTS",
-        fenceSystem: "TWIN_BAR",
-        unit: "post",
-        materialCost: 1,
-        labourCost: 1,
-        isActive: true,
-        sortOrder: 20
-      },
-      {
-        itemCode: "PANEL-A",
-        displayName: "Panel A",
-        category: "PANELS",
-        fenceSystem: "TWIN_BAR",
-        unit: "panel",
-        materialCost: 1,
-        labourCost: 1,
-        isActive: true,
-        sortOrder: 10
-      },
-      {
-        itemCode: "ROLL-A",
-        displayName: "Roll A",
-        category: "PANELS",
-        fenceSystem: "ROLL_FORM",
-        unit: "roll",
-        materialCost: 1,
-        labourCost: 1,
-        isActive: true,
-        sortOrder: 5
-      }
-    ];
+  it("groups workbook sections by sheet", () => {
+    const workbook = buildDefaultPricingWorkbookConfig();
 
-    const grouped = groupItems(items);
+    const grouped = groupWorkbookSectionsBySheet(workbook);
 
-    expect(grouped).toHaveLength(2);
-    expect(grouped[0]?.[0]).toBe("ROLL_FORM");
-    expect(grouped[1]?.[0]).toBe("TWIN_BAR");
-    expect(grouped[1]?.[1].get("PANELS")?.[0]?.itemCode).toBe("PANEL-A");
-    expect(grouped[1]?.[1].get("POSTS")?.[0]?.itemCode).toBe("POST-B");
+    expect(grouped.MATERIALS.length).toBeGreaterThan(0);
+    expect(grouped.LABOUR.length).toBeGreaterThan(0);
   });
 
   it("formats default versus saved pricing labels", () => {
     const defaultConfig: PricingConfigRecord = {
       companyId: "company-1",
       items: [],
+      workbook: buildDefaultPricingWorkbookConfig(),
       updatedAtIso: "1970-01-01T00:00:00.000Z",
       updatedByUserId: null
     };
     const savedConfig: PricingConfigRecord = {
       companyId: "company-1",
       items: [],
+      workbook: buildDefaultPricingWorkbookConfig(),
       updatedAtIso: "2026-03-12T14:20:00.000Z",
       updatedByUserId: "user-1"
     };
 
     expect(formatPricingSavedLabel(defaultConfig)).toBe("Default configuration");
     expect(formatPricingSavedLabel(savedConfig)).not.toBe("Default configuration");
+  });
+
+  it("falls back to the default workbook for legacy pricing configs", () => {
+    const workbook = getPricingWorkbookOrDefault({
+      companyId: "company-1",
+      items: [],
+      updatedAtIso: "2026-03-12T14:20:00.000Z",
+      updatedByUserId: "user-1"
+    });
+
+    expect(workbook.sections.length).toBeGreaterThan(0);
+    expect(workbook.settings.labourOverheadPercent).toBe(75);
   });
 });

@@ -18,6 +18,7 @@ export class SqlitePricingStore {
     const record: PricingConfigRecord = {
       companyId: input.companyId,
       items: input.items,
+      ...(input.workbook ? { workbook: input.workbook } : {}),
       updatedAtIso: input.updatedAtIso,
       updatedByUserId: input.updatedByUserId
     };
