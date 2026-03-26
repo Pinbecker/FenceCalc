@@ -52,7 +52,7 @@ function isCustomerModalRoute(route: string): route is "customers" | "drawings" 
 }
 
 function getCustomerModalBaseRoute(route: PortalRoute): PortalRoute {
-  if (route === "editor" || route === "login" || route === "customers" || route === "drawings") {
+  if (route === "login" || route === "customers" || route === "drawings") {
     return "dashboard";
   }
   return route;
@@ -192,6 +192,13 @@ export function App() {
   const showPricing = canManagePricing(portal.session?.user.role);
   const customerModalReturnRef = useRef<{ route: PortalRoute; query?: Record<string, string> }>({ route: "dashboard" });
   const isCustomerModalOpen = isCustomerModalRoute(route);
+  const modalBaseRouteState: { route: PortalRoute; query?: Record<string, string> } = isCustomerModalOpen
+    ? customerModalReturnRef.current
+    : Object.keys(query).length > 0
+      ? { route, query }
+      : { route };
+  const modalBaseRoute = isCustomerModalOpen ? getCustomerModalBaseRoute(modalBaseRouteState.route) : route;
+  const modalBaseQuery = isCustomerModalOpen ? (modalBaseRouteState.query ?? {}) : query;
 
   useEffect(() => {
     if (isCustomerModalOpen || route === "login") {
@@ -264,23 +271,36 @@ export function App() {
     );
   }
 
-  if (route === "editor") {
+  const customerPickerModal = isCustomerModalOpen ? (
+    <CustomerPickerModal
+      customers={portal.customers}
+      drawings={portal.drawings}
+      isSavingCustomer={portal.isSavingCustomer}
+      onClose={() => {
+        const target = customerModalReturnRef.current;
+        if (target.route !== "login" && !isCustomerModalRoute(target.route)) {
+          navigate(target.route, target.query);
+          return;
+        }
+        navigate("dashboard");
+      }}
+      onOpenCustomer={(customerId) => navigate("customer", { customerId })}
+      onCreateCustomer={(customer) => portal.saveCustomer({ mode: "create", customer })}
+    />
+  ) : null;
+
+  if (modalBaseRoute === "editor") {
     return (
-      <Suspense fallback={<PortalLoadingCard label="Loading editor..." />}>
-        <ErrorBoundary>
-          <EditorPage initialDrawingId={query.drawingId ?? null} onNavigate={navigate} />
-        </ErrorBoundary>
-      </Suspense>
+      <>
+        <Suspense fallback={<PortalLoadingCard label="Loading editor..." />}>
+          <ErrorBoundary>
+            <EditorPage initialDrawingId={modalBaseQuery.drawingId ?? null} onNavigate={navigate} />
+          </ErrorBoundary>
+        </Suspense>
+        {customerPickerModal}
+      </>
     );
   }
-
-  const modalBaseRouteState: { route: PortalRoute; query?: Record<string, string> } = isCustomerModalOpen
-    ? customerModalReturnRef.current
-    : Object.keys(query).length > 0
-      ? { route, query }
-      : { route };
-  const modalBaseRoute = isCustomerModalOpen ? getCustomerModalBaseRoute(modalBaseRouteState.route) : route;
-  const modalBaseQuery = isCustomerModalOpen ? (modalBaseRouteState.query ?? {}) : query;
 
   return (
     <div className="portal-shell">
@@ -362,23 +382,7 @@ export function App() {
           </ErrorBoundary>
         </Suspense>
       </main>
-      {isCustomerModalOpen ? (
-        <CustomerPickerModal
-          customers={portal.customers}
-          drawings={portal.drawings}
-          isSavingCustomer={portal.isSavingCustomer}
-          onClose={() => {
-            const target = customerModalReturnRef.current;
-            if (target.route !== "login" && !isCustomerModalRoute(target.route)) {
-              navigate(target.route, target.query);
-              return;
-            }
-            navigate("dashboard");
-          }}
-          onOpenCustomer={(customerId) => navigate("customer", { customerId })}
-          onCreateCustomer={(customer) => portal.saveCustomer({ mode: "create", customer })}
-        />
-      ) : null}
+      {customerPickerModal}
     </div>
   );
 }

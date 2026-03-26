@@ -236,6 +236,51 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.menu-bar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.menu-bar-nav-button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 235, 215, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(246, 238, 226, 0.78);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 80ms, border-color 80ms, color 80ms;
+}
+
+.menu-bar-nav-button:hover {
+  border-color: rgba(248, 235, 215, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(246, 238, 226, 0.96);
+}
+
+.menu-bar-nav-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.menu-bar-nav-button:disabled:hover {
+  border-color: rgba(248, 235, 215, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(246, 238, 226, 0.78);
 }
 
 .menu-bar-save-pill {
@@ -735,6 +780,26 @@
   }
 
   .menu-bar-center {
+    display: none;
+  }
+
+  .menu-bar-right {
+    gap: 6px;
+  }
+
+  .menu-bar-nav {
+    max-width: min(100vw - 140px, 340px);
+    overflow-x: auto;
+    padding-right: 0;
+  }
+
+  .menu-bar-nav-button {
+    height: 24px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+  }
+
+  .menu-bar-user {
     display: none;
   }
 

@@ -143,13 +143,8 @@ export function useEditorPageActions({
       return;
     }
 
-    if (workspace.currentCustomerId) {
-      onNavigate("customer", { customerId: workspace.currentCustomerId });
-      return;
-    }
-
     onNavigate("customers");
-  }, [confirmDiscardChanges, onNavigate, workspace.currentCustomerId]);
+  }, [confirmDiscardChanges, onNavigate]);
 
   const handleExportPdf = useCallback(() => {
     let canvasImageDataUrl: string | null = null;

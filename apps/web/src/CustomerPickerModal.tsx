@@ -140,15 +140,15 @@ export function CustomerPickerModal({
   };
 
   return (
-    <div className="customer-picker-backdrop" role="presentation" onClick={onClose}>
+    <div className="customer-picker-backdrop portal-modal-backdrop" role="presentation" onClick={onClose}>
       <section
-        className="customer-picker-modal"
+        className="customer-picker-modal portal-modal-card portal-modal-card-wide"
         role="dialog"
         aria-modal="true"
         aria-label="Customer picker"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="customer-picker-header">
+        <header className="customer-picker-header portal-modal-header">
           <div>
             <span className="portal-eyebrow">Customers</span>
             <h2>Customer directory</h2>

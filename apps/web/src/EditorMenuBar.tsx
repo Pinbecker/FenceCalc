@@ -175,40 +175,13 @@ export function EditorMenuBar({
               <button type="button" role="menuitem" onClick={() => menuAction(onExportPdf)}>
                 Export PDF
               </button>
-              {session ? (
+              {!session ? (
                 <>
                   <div className="menu-bar-divider" />
-                  <button type="button" role="menuitem" onClick={() => menuAction(onNavigateDashboard)}>
-                    Dashboard
+                  <button type="button" role="menuitem" onClick={() => menuAction(onGoToLogin)}>
+                    Sign In
                   </button>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onNavigateCustomers)}>
-                    Customers
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!canNavigateEstimate}
-                    title={estimateTitle}
-                    onClick={() => menuAction(onNavigateEstimate)}
-                  >
-                    Estimate
-                  </button>
-                  {canManagePricing ? (
-                    <button type="button" role="menuitem" onClick={() => menuAction(onNavigatePricing)}>
-                      Pricing
-                    </button>
-                  ) : null}
-                  {canManageAdmin ? (
-                    <button type="button" role="menuitem" onClick={() => menuAction(onNavigateAdmin)}>
-                      Admin
-                    </button>
-                  ) : null}
                 </>
-              ) : null}
-              {!session ? (
-                <button type="button" role="menuitem" onClick={() => menuAction(onGoToLogin)}>
-                  Sign In
-                </button>
               ) : null}
             </div>
           ) : null}
@@ -319,6 +292,35 @@ export function EditorMenuBar({
       </div>
 
       <div className="menu-bar-right">
+        {session ? (
+          <nav className="menu-bar-nav" aria-label="Editor navigation">
+            <button type="button" className="menu-bar-nav-button" onClick={onNavigateDashboard}>
+              Dashboard
+            </button>
+            <button type="button" className="menu-bar-nav-button" onClick={onNavigateCustomers}>
+              Customers
+            </button>
+            <button
+              type="button"
+              className="menu-bar-nav-button"
+              disabled={!canNavigateEstimate}
+              title={estimateTitle}
+              onClick={onNavigateEstimate}
+            >
+              Estimate
+            </button>
+            {canManagePricing ? (
+              <button type="button" className="menu-bar-nav-button" onClick={onNavigatePricing}>
+                Pricing
+              </button>
+            ) : null}
+            {canManageAdmin ? (
+              <button type="button" className="menu-bar-nav-button" onClick={onNavigateAdmin}>
+                Admin
+              </button>
+            ) : null}
+          </nav>
+        ) : null}
         {session ? (
           <span className={`menu-bar-save-pill${isDirty ? " dirty" : ""}`}>
             {isDirty ? "Unsaved" : "Saved"}

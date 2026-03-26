@@ -473,16 +473,21 @@ export function DrawingsPage({
       </div>
 
       {confirmDeleteId && onDeleteDrawing ? (
-        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteId(null)}>
-          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete drawing" onClick={(event) => event.stopPropagation()}>
-            <div className="portal-customer-edit-modal-header">
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteId(null)}>
+          <div
+            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
+            role="dialog"
+            aria-label="Confirm delete drawing"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Permanently delete drawing?</h2>
               <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteId(null)}>Close</button>
             </div>
-            <div className="portal-customer-edit-modal-body">
+            <div className="portal-customer-edit-modal-body portal-modal-body">
               <p>This will permanently remove the drawing, all its versions, and any associated quotes. This action cannot be undone.</p>
             </div>
-            <div className="portal-customer-edit-modal-footer">
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteId(null)}>
                 Cancel
               </button>

@@ -303,7 +303,7 @@ export function CustomerPage({
             <span className="portal-eyebrow">Customer workspace</span>
             <h1>{customer.name}</h1>
             {contactParts.length > 0 ? (
-              <p className="portal-customer-contact-line">{contactParts.join(" · ")}</p>
+              <p className="portal-customer-contact-line">{contactParts.join(" | ")}</p>
             ) : (
               <p className="portal-customer-contact-line portal-customer-contact-empty">No contact details recorded</p>
             )}
@@ -449,7 +449,7 @@ export function CustomerPage({
                     </div>
 
                     <div className="portal-customer-drawing-card-meta">
-                      <span>{drawing.segmentCount} segments · {drawing.gateCount} gates</span>
+                      <span>{drawing.segmentCount} segments | {drawing.gateCount} gates</span>
                       <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
                     </div>
 
@@ -497,16 +497,21 @@ export function CustomerPage({
       </section>
 
       {confirmDeleteDrawingId ? (
-        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteDrawingId(null)}>
-          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete drawing" onClick={(event) => event.stopPropagation()}>
-            <div className="portal-customer-edit-modal-header">
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteDrawingId(null)}>
+          <div
+            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
+            role="dialog"
+            aria-label="Confirm delete drawing"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Permanently delete drawing?</h2>
               <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteDrawingId(null)}>Close</button>
             </div>
-            <div className="portal-customer-edit-modal-body">
+            <div className="portal-customer-edit-modal-body portal-modal-body">
               <p>This will permanently remove the drawing, all its versions, and any associated quotes. This action cannot be undone.</p>
             </div>
-            <div className="portal-customer-edit-modal-footer">
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteDrawingId(null)}>
                 Cancel
               </button>
@@ -531,16 +536,21 @@ export function CustomerPage({
       ) : null}
 
       {confirmDeleteCustomer ? (
-        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmDeleteCustomer(false)}>
-          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm delete customer" onClick={(event) => event.stopPropagation()}>
-            <div className="portal-customer-edit-modal-header">
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteCustomer(false)}>
+          <div
+            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
+            role="dialog"
+            aria-label="Confirm delete customer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Permanently delete customer?</h2>
               <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteCustomer(false)}>Close</button>
             </div>
-            <div className="portal-customer-edit-modal-body">
+            <div className="portal-customer-edit-modal-body portal-modal-body">
               <p>This will permanently remove the customer and all their archived drawings, versions, and quotes. This action cannot be undone.</p>
             </div>
-            <div className="portal-customer-edit-modal-footer">
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteCustomer(false)}>
                 Cancel
               </button>
@@ -566,20 +576,25 @@ export function CustomerPage({
       ) : null}
 
       {confirmArchive && customer ? (
-        <div className="portal-customer-edit-backdrop" onClick={() => setConfirmArchive(false)}>
-          <div className="portal-customer-edit-modal portal-confirm-modal" role="dialog" aria-label="Confirm archive customer" onClick={(event) => event.stopPropagation()}>
-            <div className="portal-customer-edit-modal-header">
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmArchive(false)}>
+          <div
+            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
+            role="dialog"
+            aria-label="Confirm archive customer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Archive customer?</h2>
               <button type="button" className="portal-text-button" onClick={() => setConfirmArchive(false)}>Close</button>
             </div>
-            <div className="portal-customer-edit-modal-body">
+            <div className="portal-customer-edit-modal-body portal-modal-body">
               <p>This customer has <strong>{activeCount}</strong> active {activeCount === 1 ? "drawing" : "drawings"}.</p>
               <label className="portal-checkbox-label">
                 <input type="checkbox" checked={cascadeOnArchive} onChange={(event) => setCascadeOnArchive(event.target.checked)} />
                 Also archive all active drawings
               </label>
             </div>
-            <div className="portal-customer-edit-modal-footer">
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmArchive(false)}>
                 Cancel
               </button>
@@ -600,14 +615,14 @@ export function CustomerPage({
       ) : null}
 
       {isEditOpen ? (
-        <div className="portal-customer-edit-backdrop" onClick={closeEditModal}>
-          <div className="portal-customer-edit-modal" role="dialog" aria-label="Edit customer profile" onClick={(event) => event.stopPropagation()}>
-            <div className="portal-customer-edit-modal-header">
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={closeEditModal}>
+          <div className="portal-customer-edit-modal portal-modal-card" role="dialog" aria-label="Edit customer profile" onClick={(event) => event.stopPropagation()}>
+            <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Edit customer profile</h2>
               <button type="button" className="portal-text-button" onClick={closeEditModal}>Close</button>
             </div>
             {editErrorMessage ? <div className="portal-inline-message portal-inline-error">{editErrorMessage}</div> : null}
-            <div className="portal-customer-edit-modal-body">
+            <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
                 <span>Name</span>
                 <input value={draft?.name ?? ""} onChange={(event) => updateDraftField("name", event.target.value)} />
@@ -681,12 +696,12 @@ export function CustomerPage({
                     }}
                     aria-label="Remove contact"
                   >
-                    ×
+                    x
                   </button>
                 </div>
               ))}
             </div>
-            <div className="portal-customer-edit-modal-footer">
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={closeEditModal}>
                 Cancel
               </button>
