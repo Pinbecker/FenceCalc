@@ -311,6 +311,10 @@ vi.mock("./EditorSidebar", () => ({
   EditorSidebar: ({ interactionMode }: { interactionMode: string }) => <div>{`Sidebar ${interactionMode}`}</div>
 }));
 
+vi.mock("./OptimizationPlanner", () => ({
+  OptimizationPlanner: ({ canInspect }: { canInspect: boolean }) => <div>{`OptimizationPlanner ${canInspect}`}</div>
+}));
+
 vi.mock("./editor/useEditorCommands", () => ({
   useEditorCommands: () => mockCommands
 }));
@@ -409,7 +413,6 @@ vi.mock("./editor", () => ({
   KICKBOARD_SECTION_HEIGHT_OPTIONS_MM: [200, 225, 250],
   MAX_SCALE: 3,
   MIN_SCALE: 0.003,
-  OptimizationPlanner: ({ canInspect }: { canInspect: boolean }) => <div>{`OptimizationPlanner ${canInspect}`}</div>,
   RECESS_DEPTH_OPTIONS_MM: [500, 1000],
   RECESS_INPUT_STEP_M: 0.05,
   RECESS_WIDTH_OPTIONS_MM: [500, 1000],

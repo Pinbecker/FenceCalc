@@ -1,0 +1,854 @@
+/* Editor layout refresh */
+.editor-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background:
+    radial-gradient(circle at top left, rgba(214, 122, 81, 0.18), transparent 26%),
+    linear-gradient(180deg, #233130 0%, #1a2323 100%);
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid rgba(248, 235, 215, 0.12);
+  background: rgba(23, 32, 31, 0.64);
+  box-shadow: 0 20px 44px rgba(9, 14, 14, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.editor-header-main {
+  display: grid;
+  min-width: 0;
+}
+
+.editor-header-copy {
+  display: grid;
+}
+
+.editor-header-copy h1 {
+}
+
+.editor-header-copy p {
+}
+
+.editor-header .portal-eyebrow {
+  background: rgba(247, 242, 234, 0.08);
+  color: rgba(246, 238, 226, 0.78);
+  border-color: rgba(248, 235, 215, 0.12);
+}
+
+.editor-route-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.editor-header-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.editor-save-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 93, 80, 0.2);
+  background: rgba(47, 93, 80, 0.12);
+  color: rgba(236, 248, 243, 0.9);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.editor-save-pill.dirty {
+  border-color: rgba(214, 122, 81, 0.28);
+  background: rgba(214, 122, 81, 0.16);
+  color: #ffd7c6;
+}
+
+.editor-workspace-shell {
+  min-height: 0;
+  display: grid;
+}
+
+.editor-primary-rail,
+.editor-secondary-rail {
+  min-height: 0;
+}
+
+.editor-rail-scroll {
+  display: grid;
+  align-content: start;
+  padding-right: 4px;
+}
+
+.editor-stage-column {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.editor-stage-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px;
+}
+
+.editor-stage-toolbar-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-stage-toolbar-copy h2 {
+  margin: 0;
+  color: #22302a;
+  font-size: 1.3rem;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.editor-toolbar-button {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: left;
+}
+
+.editor-toolbar-button em {
+  font-style: normal;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.editor-stage-column .canvas-wrap {
+  min-height: 0;
+  height: 100%;
+  border: 1px solid rgba(248, 235, 215, 0.12);
+  overflow: hidden;
+  box-shadow: 0 24px 50px rgba(9, 14, 14, 0.28);
+}
+
+.editor-document-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.editor-document-meta strong {
+  font-size: 1rem;
+}
+
+.editor-document-meta span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.editor-summary-panel,
+.editor-help-panel {
+  gap: 16px;
+}
+
+.editor-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.editor-summary-metric {
+  padding: 14px;
+  border: 1px solid rgba(103, 115, 103, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 251, 245, 0.84);
+  display: grid;
+  gap: 4px;
+}
+
+.editor-summary-metric span {
+  color: #69766a;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-summary-metric strong {
+  color: #23312c;
+  font-size: 1.2rem;
+}
+
+.editor-summary-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-help-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+}
+
+.optimization-mini {
+  position: static;
+  width: auto;
+  margin: 0;
+}
+
+.optimization-mini-actions .optimization-dock-btn,
+.optimization-dock-btn {
+  width: 100%;
+}
+
+.optimization-modal-backdrop {
+  position: fixed;
+}
+
+.statusbar {
+  right: 20px;
+  bottom: 20px;
+}
+
+@media (max-width: 1180px) {
+  .drawing-library-overview,
+  .editor-workspace-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-primary-rail,
+  .editor-secondary-rail {
+    min-height: auto;
+  }
+
+  .editor-rail-scroll {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 900px) {
+  .drawing-library-filter-panel,
+  .drawing-library-group-header,
+  .drawing-library-row-top,
+  .editor-stage-toolbar,
+  .editor-header {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .drawing-library-customer-filter {
+    min-width: 0;
+  }
+
+  .drawing-library-card {
+    grid-template-columns: 1fr;
+  }
+
+  .drawing-library-card-actions {
+    justify-content: flex-start;
+  }
+
+  .drawing-library-overview-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-page {
+    padding: 14px;
+  }
+
+  .editor-header-meta {
+    justify-content: flex-start;
+  }
+
+  .editor-toolbar {
+    justify-content: stretch;
+  }
+
+  .editor-toolbar-button {
+    flex: 1 1 140px;
+  }
+
+  .statusbar {
+    right: 14px;
+    left: 14px;
+    bottom: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .drawing-library-overview,
+  .editor-header,
+  .editor-stage-column .canvas-wrap {
+    border-radius: 22px;
+  }
+
+  .editor-page {
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .editor-summary-metrics,
+  .portal-stat-grid-secondary,
+  .portal-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-route-nav,
+  .drawing-library-card-actions {
+    display: grid;
+    gap: 8px;
+  }
+
+  .editor-route-nav .editor-link-btn,
+  .drawing-library-card-actions .portal-primary-button,
+  .drawing-library-card-actions .portal-secondary-button {
+    width: 100%;
+  }
+
+  .editor-toolbar-button {
+    min-width: 0;
+  }
+
+  .statusbar-item {
+    min-width: 100%;
+  }
+}
+
+/* Editor density pass */
+.editor-page {
+  gap: 12px;
+  padding: 14px;
+}
+
+.editor-header {
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.editor-header-main {
+  gap: 12px;
+}
+
+.editor-header-copy {
+  gap: 6px;
+}
+
+.editor-header-copy h1 {
+  font-size: clamp(1.45rem, 2vw, 2.1rem);
+}
+
+.editor-header-copy p {
+  max-width: 62ch;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.editor-document-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-document-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(260px, 1fr);
+  gap: 10px;
+  flex: 1 1 520px;
+  min-width: min(100%, 520px);
+}
+
+.editor-document-name {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: rgba(246, 238, 226, 0.78);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-document-name input {
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 235, 215, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.92);
+  color: #22302a;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.editor-document-actions-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-document-actions-compact button,
+.editor-route-nav .editor-link-btn,
+.editor-summary-panel .editor-link-btn,
+.editor-help-panel .editor-link-btn {
+  width: auto;
+  min-height: 36px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+}
+
+.editor-session-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 235, 215, 0.12);
+  background: rgba(247, 242, 234, 0.08);
+  color: rgba(246, 238, 226, 0.82);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.editor-header-meta {
+  gap: 8px;
+  align-content: flex-start;
+}
+
+.editor-route-nav {
+  gap: 8px;
+}
+
+.editor-save-pill,
+.editor-header .portal-user-chip {
+  padding: 8px 11px;
+  font-size: 0.72rem;
+}
+
+.editor-workspace-shell {
+  grid-template-columns: minmax(200px, 228px) minmax(0, 1fr) minmax(220px, 252px);
+  gap: 12px;
+}
+
+.editor-rail-scroll {
+  gap: 10px;
+}
+
+.editor-primary-rail .panel-block,
+.editor-secondary-rail .panel-block {
+  padding: 11px;
+  border-radius: 16px;
+}
+
+.editor-primary-rail .panel-block h2,
+.editor-secondary-rail .panel-block h2 {
+  font-size: 0.94rem;
+}
+
+.editor-primary-rail .muted-line,
+.editor-secondary-rail .muted-line,
+.editor-primary-rail label,
+.editor-secondary-rail label,
+.editor-primary-rail .dense-list,
+.editor-secondary-rail .dense-list {
+  font-size: 0.72rem;
+}
+
+.editor-primary-rail .mode-toggle-btn {
+  min-height: 38px;
+  padding: 8px 9px;
+  font-size: 0.68rem;
+}
+
+.editor-primary-rail select,
+.editor-primary-rail input[type="text"],
+.editor-primary-rail input[type="email"],
+.editor-primary-rail input[type="password"],
+.editor-primary-rail input[type="number"] {
+  height: 34px;
+  font-size: 0.76rem;
+}
+
+.editor-stage-column {
+  gap: 10px;
+}
+
+.editor-stage-toolbar-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-stage-toolbar-copy {
+  gap: 4px;
+}
+
+.editor-stage-toolbar-copy h2 {
+  font-size: 1rem;
+}
+
+.editor-stage-toolbar-copy .portal-section-kicker {
+  padding: 5px 8px;
+  font-size: 0.62rem;
+}
+
+.editor-toolbar {
+  gap: 8px;
+}
+
+.editor-toolbar-button {
+  min-width: 88px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  font-size: 0.76rem;
+}
+
+.editor-toolbar-button em {
+  font-size: 0.58rem;
+}
+
+.editor-stage-column .canvas-wrap {
+}
+
+.editor-summary-panel .panel-heading,
+.editor-help-panel .panel-heading {
+  align-items: flex-start;
+}
+
+.editor-summary-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.editor-summary-metric {
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.editor-summary-metric strong {
+  font-size: 1.05rem;
+}
+
+.editor-summary-breakdown {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms ease;
+}
+
+.editor-summary-breakdown.is-open {
+  grid-template-rows: 1fr;
+}
+
+.editor-summary-breakdown-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-summary-groups {
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.editor-help-list {
+  margin-top: 2px;
+  font-size: 0.72rem;
+}
+
+.editor-secondary-rail .optimization-mini {
+  padding: 11px;
+  border-radius: 16px;
+}
+
+.editor-secondary-rail .optimization-mini-headline {
+  font-size: 0.9rem;
+}
+
+.editor-secondary-rail .optimization-mini-subline {
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .editor-workspace-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .editor-document-bar,
+  .editor-header-meta {
+    align-items: stretch;
+  }
+
+  .editor-document-fields {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .editor-document-name {
+    min-width: 0;
+  }
+
+  .editor-document-actions-compact {
+    width: 100%;
+  }
+
+  .editor-document-actions-compact button {
+    flex: 1 1 120px;
+  }
+
+  .editor-stage-toolbar-compact {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-page {
+    padding: 10px;
+  }
+
+  .editor-header {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .editor-route-nav,
+  .editor-document-actions-compact {
+    display: grid;
+    gap: 8px;
+  }
+
+  .editor-route-nav .editor-link-btn,
+  .editor-document-actions-compact button,
+  .editor-summary-panel .editor-link-btn,
+  .editor-help-panel .editor-link-btn {
+    width: 100%;
+  }
+}
+
+/* Editor interaction mechanics */
+.editor-page {
+  --editor-stage-top: 170px;
+}
+
+.editor-page.is-header-compact {
+  --editor-stage-top: 82px;
+}
+
+.editor-header {
+  position: sticky;
+  top: 10px;
+  z-index: 80;
+  transition:
+    padding 180ms ease,
+    border-radius 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.editor-page.is-header-compact .editor-header {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(19, 28, 28, 0.86);
+  box-shadow: 0 14px 30px rgba(9, 14, 14, 0.28);
+}
+
+.editor-page.is-header-compact .editor-header-main {
+  gap: 8px;
+}
+
+.editor-page.is-header-compact .editor-header-copy {
+  gap: 2px;
+}
+
+.editor-page.is-header-compact .editor-header .portal-eyebrow,
+.editor-page.is-header-compact .editor-header-copy p,
+.editor-page.is-header-compact .editor-document-bar,
+.editor-page.is-header-compact .editor-session-chip {
+  display: none;
+}
+
+.editor-page.is-header-compact .editor-header-copy h1 {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.editor-workspace-shell {
+  align-items: start;
+}
+
+.editor-rail-scroll {
+  height: auto;
+  overflow: visible;
+}
+
+.editor-stage-column {
+  min-height: 0;
+  min-width: 0;
+}
+
+.editor-stage-shell {
+  position: sticky;
+  top: var(--editor-stage-top);
+  height: calc(100vh - var(--editor-stage-top) - 14px);
+  min-height: 420px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.editor-stage-shell .canvas-wrap {
+  height: 100%;
+}
+
+.editor-stage-toolbar-compact {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 25;
+  width: auto;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 250, 242, 0.92);
+  box-shadow: 0 14px 28px rgba(9, 14, 14, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.editor-stage-toolbar-copy h2 {
+  font-size: 0.92rem;
+}
+
+.editor-stage-toolbar-compact .editor-toolbar {
+  justify-content: flex-end;
+}
+
+.editor-stage-toolbar-compact .editor-toolbar-button {
+  min-width: 78px;
+  padding: 8px 9px;
+  box-shadow: 0 8px 16px rgba(179, 92, 60, 0.14);
+}
+
+@media (max-width: 1180px) {
+  .editor-page {
+    --editor-stage-top: 122px;
+  }
+
+  .editor-page.is-header-compact {
+    --editor-stage-top: 74px;
+  }
+
+  .editor-stage-shell {
+    position: relative;
+    top: auto;
+    height: min(72vh, 780px);
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 900px) {
+  .editor-page {
+    --editor-stage-top: 102px;
+  }
+
+  .editor-stage-toolbar-compact {
+    left: 10px;
+    right: 10px;
+    top: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-header {
+    position: static;
+  }
+
+  .editor-page,
+  .editor-page.is-header-compact {
+    --editor-stage-top: 0px;
+  }
+
+  .editor-stage-shell {
+    position: relative;
+    height: 58vh;
+    min-height: 340px;
+  }
+
+  .editor-stage-toolbar-compact {
+    position: static;
+    margin-bottom: 8px;
+  }
+}
+
+/* Stable compact header and measured stage sizing */
+.editor-page {
+  --editor-stage-top: 42px;
+}
+
+.editor-header {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  transition: none;
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+
+.editor-stage-shell {
+  top: var(--editor-stage-top);
+  height: calc(100vh - var(--editor-stage-top) - 18px);
+}
+
+.editor-canvas-frame {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-stage-shell .canvas-wrap {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.canvas-wrap,
+.editor-canvas-frame {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (max-width: 1180px) {
+  .editor-stage-shell {
+    position: relative;
+    top: auto;
+    height: min(72vh, 780px);
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-page {
+    --editor-stage-top: 0px;
+  }
+}
+

@@ -1,0 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --bg-base: #f4efe7;
+  --bg-raised: rgba(255, 250, 242, 0.88);
+  --bg-panel: rgba(255, 248, 239, 0.94);
+  --bg-panel-alt: #f3ebdc;
+  --bg-strong: #e9dece;
+  --text-main: #1e2722;
+  --text-muted: #667267;
+  --text-subtle: #879284;
+  --line-strong: rgba(86, 99, 87, 0.16);
+  --action: #b35c3c;
+  --action-strong: #964626;
+  --action-soft: rgba(179, 92, 60, 0.12);
+  --action-ghost: #2f5d50;
+  --action-ghost-soft: rgba(47, 93, 80, 0.12);
+  --border: rgba(114, 125, 111, 0.22);
+  --shadow-soft: 0 18px 46px rgba(79, 61, 39, 0.12);
+  --shadow-strong: 0 26px 64px rgba(68, 50, 31, 0.18);
+  --editor-canvas: #1f2b2a;
+  --editor-panel: rgba(252, 247, 238, 0.9);
+  --editor-panel-strong: rgba(255, 252, 246, 0.95);
+  --editor-border: rgba(245, 229, 208, 0.16);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top left, rgba(185, 116, 78, 0.1), transparent 28%),
+    radial-gradient(circle at right 20%, rgba(73, 122, 103, 0.08), transparent 24%),
+    linear-gradient(180deg, #f8f4ee 0%, #f3ede3 48%, #efe8dd 100%);
+  background-attachment: fixed;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(179, 92, 60, 0.28);
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
