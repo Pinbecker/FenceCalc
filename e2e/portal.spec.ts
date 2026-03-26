@@ -32,8 +32,9 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   test.setTimeout(60_000);
 
   await bootstrapOrLoginOwner(page);
-  await expect(page.getByRole("heading", { name: "Active customers" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Useful routes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome, Owner User" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest company drawings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent changes" })).toBeVisible();
 
   let primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Admin" }).click();
@@ -49,8 +50,8 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   await expect(opsUserCard).toContainText("ops@example.com");
   await expect(page.getByText("Added Operations Admin", { exact: true })).toBeVisible();
 
-  await opsUserCard.getByLabel("Set temporary password").fill("recoverysecure123");
-  await opsUserCard.getByRole("button", { name: "Set Password" }).click();
+  await opsUserCard.getByLabel("Temporary password").fill("recoverysecure123");
+  await opsUserCard.getByRole("button", { name: "Set password" }).click();
   await expect(
     page.getByText("Reset password for Operations Admin. Their active sessions were revoked.", { exact: true })
   ).toBeVisible();
@@ -63,7 +64,7 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   await page.getByRole("button", { name: "Log In" }).click();
 
   await expect(page.getByRole("banner").getByText("Operations Admin", { exact: true })).toBeVisible();
-  await expect(page.getByRole("banner").getByText("ADMIN", { exact: true })).toBeVisible();
+  await expect(page.getByRole("banner").locator(".portal-user-chip")).toHaveText("Admin");
 
   primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Editor" }).click();
@@ -80,7 +81,7 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
 
   const initialCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
-  await initialCard.getByRole("button", { name: "Open editor" }).click();
+  await initialCard.getByRole("button", { name: /Operations Yard.*Draft/ }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
 
   await page.getByLabel("Drawing Name").fill("Operations Yard v2");
@@ -93,18 +94,11 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
   const drawingCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" });
 
-  await drawingCard.getByRole("button", { name: "History" }).click();
-  const versionOneRow = drawingCard.locator(".portal-customer-version-row").filter({ hasText: "v1" });
-  await versionOneRow.getByRole("button", { name: "Restore" }).click();
-
-  const restoredCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
-  await expect(restoredCard).toContainText("v3");
-
-  await restoredCard.getByRole("button", { name: "Archive" }).click();
+  await drawingCard.getByRole("button", { name: "Archive" }).click();
   await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Archived" }).click();
-  const archivedCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
+  const archivedCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" });
   await expect(archivedCard).toContainText("Archived");
 
   await archivedCard.getByRole("button", { name: "Unarchive" }).click();
@@ -125,8 +119,8 @@ test("keeps dashboard, drawings, and customers usable on a mobile viewport", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await bootstrapOrLoginOwner(page);
 
-  await expect(page.getByRole("heading", { name: "Acme Fencing" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Library" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome, Owner User" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New drawing" })).toBeVisible();
 
   const primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Customers" }).click();

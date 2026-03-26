@@ -43,6 +43,13 @@ export async function requireAuth(
     return null;
   }
 
+  request.sentryContext = {
+    sessionId: authenticated.session.id,
+    companyId: authenticated.company.id,
+    userId: authenticated.user.id,
+    userRole: authenticated.user.role
+  };
+
   return {
     session: {
       id: authenticated.session.id,

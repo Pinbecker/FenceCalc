@@ -30,6 +30,12 @@ export function captureApiException(error: unknown, request: FastifyRequest): vo
     scope.setTag("request_id", request.id);
     scope.setTag("method", request.method);
     scope.setTag("route", request.routeOptions.url);
+    if (request.sentryContext) {
+      scope.setTag("company_id", request.sentryContext.companyId);
+      scope.setTag("user_id", request.sentryContext.userId);
+      scope.setTag("user_role", request.sentryContext.userRole);
+      scope.setTag("session_id", request.sentryContext.sessionId);
+    }
     scope.setContext("request", {
       method: request.method,
       route: request.routeOptions.url,

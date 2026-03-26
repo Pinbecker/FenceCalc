@@ -10,7 +10,7 @@ services:
       PORT: 3001
       TRUST_PROXY: ${TRUST_PROXY:-true}
       DATABASE_PATH: ${DATABASE_PATH:-/var/lib/fence-estimator/fence-estimator.db}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4173}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localhost:8443}
       BODY_LIMIT_BYTES: ${BODY_LIMIT_BYTES:-262144}
       WRITE_RATE_LIMIT_WINDOW_MS: ${WRITE_RATE_LIMIT_WINDOW_MS:-60000}
       WRITE_RATE_LIMIT_MAX_REQUESTS: ${WRITE_RATE_LIMIT_MAX_REQUESTS:-120}
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
       target: web-runtime
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://localhost:8443}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
         VITE_SENTRY_ENVIRONMENT: ${VITE_SENTRY_ENVIRONMENT:-production}
         VITE_SENTRY_RELEASE: ${VITE_SENTRY_RELEASE:-}
@@ -60,6 +60,26 @@ services:
         condition: service_healthy
     ports:
       - "4173:4173"
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: proxy-runtime
+    environment:
+      PROXY_HOSTNAME: ${PROXY_HOSTNAME:-localhost}
+      PROXY_HTTPS_PORT: 8443
+      PROXY_HTTP_PORT: 8080
+      API_UPSTREAM: http://api:3001
+      WEB_UPSTREAM: http://web:4173
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    ports:
+      - "8080:8080"
+      - "8443:8443"
 
 volumes:
   fence_estimator_data:

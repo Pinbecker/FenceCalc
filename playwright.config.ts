@@ -7,7 +7,7 @@ mkdirSync(tempDir, { recursive: true });
 
 const databasePath = resolve(tempDir, `e2e-${Date.now()}.db`);
 const apiUrl = "http://127.0.0.1:3101";
-const webUrl = "http://127.0.0.1:4173";
+const webUrl = "https://localhost:4443";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -16,6 +16,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: webUrl,
+    ignoreHTTPSErrors: true,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -35,7 +36,7 @@ export default defineConfig({
         PORT: "3101",
         DATABASE_PATH: databasePath,
         ALLOWED_ORIGINS: webUrl,
-        SESSION_COOKIE_SECURE: "false",
+        SESSION_COOKIE_SECURE: "true",
         BOOTSTRAP_OWNER_SECRET: "test-bootstrap-secret",
         NODE_ENV: "test"
       }
@@ -49,6 +50,20 @@ export default defineConfig({
         ...process.env,
         HOST: "127.0.0.1",
         PORT: "4173"
+      }
+    },
+    {
+      command: "node scripts/https-reverse-proxy.mjs",
+      port: 4443,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        PROXY_HOSTNAME: "localhost",
+        PROXY_HTTPS_PORT: "4443",
+        PROXY_HTTP_PORT: "",
+        API_UPSTREAM: apiUrl,
+        WEB_UPSTREAM: "http://127.0.0.1:4173"
       }
     }
   ]

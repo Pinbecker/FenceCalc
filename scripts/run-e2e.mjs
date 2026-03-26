@@ -29,7 +29,7 @@ cleanDistDirectory(webDistDir);
 run("npm", ["run", "build"], {
   env: {
     ...process.env,
-    VITE_API_BASE_URL: "http://127.0.0.1:3101"
+    VITE_API_BASE_URL: "https://localhost:4443"
   }
 });
 run("npx", ["playwright", "test"]);

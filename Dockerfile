@@ -6,7 +6,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-ARG VITE_API_BASE_URL=http://127.0.0.1:3001
+ARG VITE_API_BASE_URL=https://localhost:8443
 ARG VITE_SENTRY_DSN=
 ARG VITE_SENTRY_ENVIRONMENT=production
 ARG VITE_SENTRY_RELEASE=
@@ -81,3 +81,21 @@ COPY --from=build /app/apps/web/scripts/serve-dist.mjs ./apps/web/scripts/serve-
 EXPOSE 4173
 
 CMD ["node", "apps/web/scripts/serve-dist.mjs"]
+
+FROM node:20-bookworm-slim AS proxy-runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PROXY_HOSTNAME=localhost
+ENV PROXY_HTTPS_PORT=8443
+ENV PROXY_HTTP_PORT=8080
+
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/scripts/https-reverse-proxy.mjs ./scripts/https-reverse-proxy.mjs
+
+EXPOSE 8080
+EXPOSE 8443
+
+CMD ["node", "scripts/https-reverse-proxy.mjs"]
