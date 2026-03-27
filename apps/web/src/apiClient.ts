@@ -12,6 +12,11 @@ import type {
   DrawingSummary,
   DrawingVersionRecord,
   EstimateWorkbookManualEntry,
+  JobCommercialInputs,
+  JobRecord,
+  JobStage,
+  JobSummary,
+  JobTaskRecord,
   LayoutModel,
   PricingConfigRecord,
   PricedEstimateResult,
@@ -40,7 +45,7 @@ export interface AuditLogQueryOptions {
   before?: string;
   from?: string;
   to?: string;
-  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER";
+  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "JOB";
   search?: string;
 }
 
@@ -89,11 +94,43 @@ export interface UpdateCustomerInput {
   notes?: string;
 }
 
+export interface CreateJobInput {
+  customerId: string;
+  name: string;
+  notes: string;
+}
+
+export interface UpdateJobInput {
+  name?: string;
+  stage?: JobStage;
+  commercialInputs?: JobCommercialInputs;
+  notes?: string;
+  ownerUserId?: string | null;
+  archived?: boolean;
+}
+
+export interface CreateJobTaskInput {
+  title: string;
+  assignedUserId?: string | null;
+  dueAtIso?: string | null;
+}
+
+export interface UpdateJobTaskInput {
+  title?: string;
+  assignedUserId?: string | null;
+  dueAtIso?: string | null;
+  isCompleted?: boolean;
+}
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value.trim());
 }
 
 export class ApiClientError extends Error {
@@ -184,19 +221,18 @@ async function executeRequest<T>(path: string, options: RequestOptions = {}): Pr
   const timeoutId = globalThis.setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
 
   try {
+    const headers: Record<string, string> = { ...(options.headers ?? {}) };
     const requestInit: RequestInit = {
       method: options.method ?? "GET",
       credentials: "include",
-      headers: {
-        "content-type": "application/json",
-        ...(options.headers ?? {})
-      }
+      headers
     };
     const signal = mergeSignals([options.signal, timeoutController.signal]);
     if (signal) {
       requestInit.signal = signal;
     }
     if (options.body !== undefined) {
+      headers["content-type"] = "application/json";
       requestInit.body = JSON.stringify(options.body);
     }
 
@@ -365,6 +401,135 @@ export async function listDrawings(search = ""): Promise<DrawingSummary[]> {
   if (search.trim()) params.set("search", search.trim());
   const response = await requestJson<{ drawings: DrawingSummary[] }>(`/api/v1/drawings?${params.toString()}`);
   return response.drawings;
+}
+
+export async function listJobs(options: {
+  scope?: "ALL" | "ACTIVE" | "ARCHIVED";
+  search?: string;
+  customerId?: string;
+} = {}): Promise<JobSummary[]> {
+  const params = new URLSearchParams({ scope: options.scope ?? "ACTIVE" });
+  if (options.search?.trim()) {
+    params.set("search", options.search.trim());
+  }
+  if (options.customerId?.trim()) {
+    params.set("customerId", options.customerId.trim());
+  }
+  const response = await requestJson<{ jobs: JobSummary[] }>(`/api/v1/jobs?${params.toString()}`);
+  return response.jobs;
+}
+
+export async function createJob(input: CreateJobInput): Promise<JobRecord> {
+  const response = await requestJson<{ job: JobRecord }>("/api/v1/jobs", {
+    method: "POST",
+    body: input
+  });
+  return response.job;
+}
+
+export async function getJob(jobId: string): Promise<JobRecord> {
+  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}`);
+  return response.job;
+}
+
+export async function updateJob(jobId: string, input: UpdateJobInput): Promise<JobRecord> {
+  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}`, {
+    method: "PUT",
+    body: input
+  });
+  return response.job;
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/api/v1/jobs/${encodePathSegment(jobId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listJobDrawings(jobId: string): Promise<DrawingSummary[]> {
+  const response = await requestJson<{ drawings: DrawingSummary[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/drawings`);
+  return response.drawings;
+}
+
+export async function createJobDrawing(
+  jobId: string,
+  input: { name?: string; sourceDrawingId?: string }
+): Promise<DrawingRecord> {
+  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/drawings`, {
+    method: "POST",
+    body: input
+  });
+  return response.drawing;
+}
+
+export async function setJobPrimaryDrawing(jobId: string, drawingId: string): Promise<JobRecord> {
+  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/primary-drawing`, {
+    method: "PUT",
+    body: { drawingId }
+  });
+  return response.job;
+}
+
+export async function getJobEstimate(jobId: string, drawingId?: string | null): Promise<PricedEstimateResult> {
+  const params = new URLSearchParams();
+  if (drawingId?.trim()) {
+    params.set("drawingId", drawingId.trim());
+  }
+  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`
+  );
+  return response.pricedEstimate;
+}
+
+export async function listJobQuotes(jobId: string): Promise<QuoteRecord[]> {
+  const response = await requestJson<{ quotes: QuoteRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/quotes`);
+  return response.quotes;
+}
+
+export async function createJobQuoteSnapshot(
+  jobId: string,
+  ancillaryItems: AncillaryEstimateItem[] = [],
+  manualEntries: EstimateWorkbookManualEntry[] = [],
+  drawingId?: string | null
+): Promise<QuoteRecord> {
+  const response = await requestJson<{ quote: QuoteRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/quotes`, {
+    method: "POST",
+    body: {
+      ...(drawingId ? { drawingId } : {}),
+      ancillaryItems,
+      manualEntries
+    }
+  });
+  return response.quote;
+}
+
+export async function listJobTasks(jobId: string): Promise<JobTaskRecord[]> {
+  const response = await requestJson<{ tasks: JobTaskRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/tasks`);
+  return response.tasks;
+}
+
+export async function createJobTask(jobId: string, input: CreateJobTaskInput): Promise<JobTaskRecord> {
+  const response = await requestJson<{ task: JobTaskRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/tasks`, {
+    method: "POST",
+    body: input
+  });
+  return response.task;
+}
+
+export async function updateJobTask(jobId: string, taskId: string, input: UpdateJobTaskInput): Promise<JobTaskRecord> {
+  const response = await requestJson<{ task: JobTaskRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
+    {
+      method: "PUT",
+      body: input
+    }
+  );
+  return response.task;
+}
+
+export async function listJobActivity(jobId: string): Promise<AuditLogRecord[]> {
+  const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/activity`);
+  return response.entries;
 }
 
 export async function deleteDrawing(drawingId: string): Promise<void> {

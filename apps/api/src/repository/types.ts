@@ -9,11 +9,17 @@ import type {
   CustomerRecord,
   CustomerSummary,
   DrawingCanvasViewport,
+  DrawingJobRole,
   DrawingRecord,
   DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
   EstimateResult,
+  JobCommercialInputs,
+  JobRecord,
+  JobStage,
+  JobSummary,
+  JobTaskRecord,
   LayoutModel,
   PricingConfigRecord,
   QuoteRecord
@@ -69,6 +75,8 @@ export interface CreateUserInput {
 export interface CreateDrawingInput {
   id: string;
   companyId: string;
+  jobId?: string | null;
+  jobRole?: DrawingJobRole | null;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -87,6 +95,8 @@ export interface UpdateDrawingInput {
   drawingId: string;
   companyId: string;
   expectedVersionNumber: number;
+  jobId?: string | null;
+  jobRole?: DrawingJobRole | null;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -210,6 +220,78 @@ export interface DeleteCustomerInput {
   companyId: string;
 }
 
+export interface DeleteJobInput {
+  jobId: string;
+  companyId: string;
+}
+
+export interface CreateJobInput {
+  id: string;
+  companyId: string;
+  customerId: string;
+  customerName: string;
+  name: string;
+  stage: JobStage;
+  primaryDrawingId: string | null;
+  commercialInputs: JobCommercialInputs;
+  notes: string;
+  ownerUserId: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateJobInput {
+  jobId: string;
+  companyId: string;
+  name: string;
+  stage: JobStage;
+  commercialInputs: JobCommercialInputs;
+  notes: string;
+  ownerUserId: string | null;
+  archived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
+  stageChangedAtIso: string | null;
+  stageChangedByUserId: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetJobPrimaryDrawingInput {
+  jobId: string;
+  companyId: string;
+  drawingId: string;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface CreateJobTaskInput {
+  id: string;
+  companyId: string;
+  jobId: string;
+  title: string;
+  assignedUserId: string | null;
+  dueAtIso: string | null;
+  createdByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateJobTaskInput {
+  taskId: string;
+  companyId: string;
+  jobId: string;
+  title: string;
+  assignedUserId: string | null;
+  dueAtIso: string | null;
+  isCompleted: boolean;
+  completedAtIso: string | null;
+  completedByUserId: string | null;
+  updatedAtIso: string;
+}
+
 export type CreateQuoteInput = QuoteRecord;
 
 export interface PasswordResetConsumption {
@@ -251,7 +333,18 @@ export interface AppRepository {
   updateCustomer(input: UpdateCustomerInput): Promise<CustomerRecord | null>;
   setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
   deleteCustomer(input: DeleteCustomerInput): Promise<boolean>;
+  deleteJob(input: DeleteJobInput): Promise<boolean>;
+  createJob(input: CreateJobInput): Promise<JobRecord>;
+  listJobs(companyId: string, scope?: CustomerScope, search?: string, customerId?: string): Promise<JobSummary[]>;
+  listJobsForCustomer(customerId: string, companyId: string): Promise<JobSummary[]>;
+  getJobById(jobId: string, companyId: string): Promise<JobRecord | null>;
+  updateJob(input: UpdateJobInput): Promise<JobRecord | null>;
+  setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): Promise<JobRecord | null>;
+  listJobTasks(jobId: string, companyId: string): Promise<JobTaskRecord[]>;
+  createJobTask(input: CreateJobTaskInput): Promise<JobTaskRecord>;
+  updateJobTask(input: UpdateJobTaskInput): Promise<JobTaskRecord | null>;
   listDrawingsForCustomer(customerId: string, companyId: string): Promise<DrawingSummary[]>;
+  listDrawingsForJob(jobId: string, companyId: string): Promise<DrawingSummary[]>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
   listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED", search?: string): Promise<DrawingSummary[]>;
   getDrawingById(drawingId: string, companyId: string): Promise<DrawingRecord | null>;
@@ -262,6 +355,7 @@ export interface AppRepository {
   listDrawingVersions(drawingId: string, companyId: string): Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion(input: RestoreDrawingVersionInput): Promise<DrawingRecord | null>;
   createQuote(input: CreateQuoteInput): Promise<QuoteRecord>;
+  listQuotesForJob(jobId: string, companyId: string): Promise<QuoteRecord[]>;
   listQuotesForDrawing(drawingId: string, companyId: string): Promise<QuoteRecord[]>;
   getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
   upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;

@@ -20,6 +20,11 @@ const CustomerPage = lazy(async () => {
   return { default: module.CustomerPage };
 });
 
+const JobPage = lazy(async () => {
+  const module = await import("./JobPage");
+  return { default: module.JobPage };
+});
+
 const EstimatePage = lazy(async () => {
   const module = await import("./EstimatePage");
   return { default: module.EstimatePage };
@@ -89,7 +94,7 @@ function PortalNav(props: {
           <button
             type="button"
             className={
-              props.currentRoute === "customers" || props.currentRoute === "drawings" || props.currentRoute === "customer"
+              props.currentRoute === "customers" || props.currentRoute === "drawings" || props.currentRoute === "customer" || props.currentRoute === "job"
                 ? "is-active"
                 : undefined
             }
@@ -178,7 +183,7 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "estimate" || route === "editor";
+  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "estimate" || route === "editor";
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
@@ -231,13 +236,14 @@ export function App() {
     if (shouldRefreshPortalDrawings(route)) {
       void portal.refreshCustomers();
       void portal.refreshDrawings();
+      void portal.refreshJobs();
     }
 
     if (shouldRefreshPortalAdminData(route, showAdmin)) {
       void portal.refreshUsers();
       void portal.refreshAuditLog();
     }
-  }, [portal.refreshAuditLog, portal.refreshDrawings, portal.refreshUsers, portal.session, route, showAdmin]);
+  }, [portal.refreshAuditLog, portal.refreshDrawings, portal.refreshJobs, portal.refreshUsers, portal.session, route, showAdmin]);
 
   if (portal.isRestoringSession) {
     return <PortalLoadingCard label="Loading workspace..." />;
@@ -323,12 +329,13 @@ export function App() {
         <Suspense fallback={<PortalLoadingCard label="Loading page..." />}>
           <ErrorBoundary>
             {modalBaseRoute === "dashboard" ? (
-              <DashboardPage session={portal.session} drawings={portal.drawings} customers={portal.customers} onNavigate={navigate} />
+              <DashboardPage session={portal.session} customers={portal.customers} jobs={portal.jobs} drawings={portal.drawings} onNavigate={navigate} />
             ) : null}
             {modalBaseRoute === "customer" ? (
               <CustomerPage
                 query={modalBaseQuery}
                 customers={portal.customers}
+                jobs={portal.jobs}
                 drawings={portal.drawings}
                 userRole={portal.session.user.role}
                 isSavingCustomer={portal.isSavingCustomer}
@@ -336,17 +343,26 @@ export function App() {
                 errorMessage={portal.errorMessage}
                 noticeMessage={portal.noticeMessage}
                 onSaveCustomer={portal.saveCustomer}
+                onCreateJob={portal.createJob}
                 onSetCustomerArchived={portal.setCustomerArchived}
+                onOpenJob={(jobId) => navigate("job", { jobId })}
                 onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
-                onOpenEstimate={(drawingId) => navigate("estimate", { drawingId })}
-                onCreateDrawing={() => navigate("editor")}
-                onToggleDrawingArchived={portal.setDrawingArchived}
-                onChangeDrawingStatus={portal.changeDrawingStatus}
-                onLoadVersions={portal.loadDrawingVersions}
-                onRestoreVersion={portal.restoreDrawingVersion}
-                onDeleteDrawing={portal.deleteDrawing}
+                onOpenEstimate={(jobId, drawingId) => navigate("job", { jobId, tab: "estimate", ...(drawingId ? { drawingId } : {}) })}
                 onDeleteCustomer={portal.deleteCustomer}
                 onNavigate={navigate}
+              />
+            ) : null}
+            {modalBaseRoute === "job" ? (
+              <JobPage
+                session={portal.session}
+                query={modalBaseQuery}
+                customers={portal.customers}
+                users={portal.users}
+                onNavigate={navigate}
+                onRefreshJobs={portal.refreshJobs}
+                onRefreshDrawings={portal.refreshDrawings}
+                onToggleDrawingArchived={portal.setDrawingArchived}
+                onDeleteJob={portal.deleteJob}
               />
             ) : null}
             {modalBaseRoute === "estimate" ? (

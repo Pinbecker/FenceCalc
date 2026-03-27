@@ -1,4 +1,4 @@
-import type { CustomerRecord, DrawingRecord, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { CustomerRecord, DrawingRecord, DrawingSummary, DrawingVersionRecord, JobRecord, JobTaskRecord, QuoteRecord } from "@fence-estimator/contracts";
 
 import { toDrawingSummary } from "./shared.js";
 import type {
@@ -15,6 +15,9 @@ export interface InMemoryDrawingState {
   customers: Map<string, CustomerRecord>;
   drawings: Map<string, DrawingRecord>;
   drawingVersions: Map<string, DrawingVersionRecord[]>;
+  jobs: Map<string, JobRecord>;
+  jobTasks: Map<string, JobTaskRecord[]>;
+  quotesByJobId: Map<string, QuoteRecord[]>;
   users: Map<string, StoredUser>;
 }
 
@@ -120,6 +123,13 @@ export class InMemoryDrawingStore {
       .map((drawing) => this.toSummary(drawing));
   }
 
+  public listDrawingsForJob(jobId: string, companyId: string): DrawingSummary[] {
+    return [...this.state.drawings.values()]
+      .filter((drawing) => drawing.companyId === companyId && drawing.jobId === jobId)
+      .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
+      .map((drawing) => this.toSummary(drawing));
+  }
+
   public deleteDrawing(input: DeleteDrawingInput): boolean {
     const existing = this.state.drawings.get(input.drawingId);
     if (!existing || existing.companyId !== input.companyId) {
@@ -127,6 +137,31 @@ export class InMemoryDrawingStore {
     }
     this.state.drawings.delete(input.drawingId);
     this.state.drawingVersions.delete(input.drawingId);
+    if (existing.jobId) {
+      const remaining = [...this.state.drawings.values()]
+        .filter((drawing) => drawing.companyId === input.companyId && drawing.jobId === existing.jobId)
+        .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
+      if (remaining.length === 0) {
+        this.state.jobTasks.delete(existing.jobId);
+        this.state.quotesByJobId.delete(existing.jobId);
+        this.state.jobs.delete(existing.jobId);
+      } else {
+        const nextPrimaryId = remaining[0]?.id ?? null;
+        for (const drawing of remaining) {
+          this.state.drawings.set(drawing.id, {
+            ...drawing,
+            jobRole: drawing.id === nextPrimaryId ? "PRIMARY" : "SECONDARY"
+          });
+        }
+        const job = this.state.jobs.get(existing.jobId);
+        if (job) {
+          this.state.jobs.set(existing.jobId, {
+            ...job,
+            primaryDrawingId: nextPrimaryId
+          });
+        }
+      }
+    }
     return true;
   }
 

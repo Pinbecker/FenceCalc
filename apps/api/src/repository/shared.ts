@@ -7,6 +7,7 @@ import type {
   CompanyUserRole,
   CustomerRecord,
   CustomerSummary,
+  DrawingJobRole,
   DrawingRecord,
   DrawingStatus,
   DrawingSummary,
@@ -15,6 +16,10 @@ import type {
   EstimateWorkbook,
   EstimateWorkbookManualEntry,
   EstimateResult,
+  JobCommercialInputs,
+  JobRecord,
+  JobSummary,
+  JobTaskRecord,
   LayoutModel,
   PricingConfigRecord,
   PricedEstimateResult,
@@ -23,11 +28,16 @@ import type {
 import {
   DRAWING_SCHEMA_VERSION,
   DRAWING_STATUSES,
+  buildDefaultJobCommercialInputs,
   buildDefaultPricingWorkbookConfig,
   customerRecordSchema,
   customerSummarySchema,
   drawingCanvasViewportSchema,
   estimateResultSchema,
+  jobCommercialInputsSchema,
+  jobRecordSchema,
+  jobSummarySchema,
+  jobTaskRecordSchema,
   layoutModelSchema,
   pricingConfigRecordSchema,
   quoteRecordSchema
@@ -99,6 +109,8 @@ export interface CustomerSummaryRow extends CustomerRow {
 export interface DrawingRow {
   id: string;
   company_id: string;
+  job_id: string | null;
+  job_role: string | null;
   name: string;
   customer_id: string | null;
   customer_name: string;
@@ -151,6 +163,44 @@ export interface AuditLogRow {
   created_at_iso: string;
 }
 
+export interface JobRow {
+  id: string;
+  company_id: string;
+  customer_id: string;
+  customer_name: string;
+  resolved_customer_name?: string | null;
+  name: string;
+  stage: string;
+  primary_drawing_id: string | null;
+  commercial_inputs_json: string;
+  notes: string;
+  owner_user_id: string | null;
+  owner_display_name?: string | null;
+  is_archived: number;
+  archived_at_iso: string | null;
+  archived_by_user_id: string | null;
+  stage_changed_at_iso: string | null;
+  stage_changed_by_user_id: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  updated_by_display_name?: string | null;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface JobSummaryRow extends JobRow {
+  drawing_count: number;
+  open_task_count: number;
+  completed_task_count: number;
+  last_activity_at_iso: string | null;
+  latest_quote_total: number | null;
+  latest_quote_created_at_iso: string | null;
+  latest_estimate_total: number | null;
+  primary_drawing_name: string | null;
+  primary_drawing_updated_at_iso: string | null;
+  primary_layout_json: string | null;
+}
+
 export interface PricingConfigRow {
   company_id: string;
   config_json: string;
@@ -161,11 +211,31 @@ export interface PricingConfigRow {
 export interface QuoteRow {
   id: string;
   company_id: string;
+  job_id: string;
+  source_drawing_id: string;
+  source_drawing_version_number: number;
   drawing_id: string;
   drawing_version_number: number;
   quote_json: string;
   created_by_user_id: string;
   created_at_iso: string;
+}
+
+export interface JobTaskRow {
+  id: string;
+  company_id: string;
+  job_id: string;
+  title: string;
+  is_completed: number;
+  assigned_user_id: string | null;
+  assigned_user_display_name?: string | null;
+  due_at_iso: string | null;
+  completed_at_iso: string | null;
+  completed_by_user_id: string | null;
+  completed_by_display_name?: string | null;
+  created_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
 }
 
 export interface PasswordResetTokenRow {
@@ -270,17 +340,21 @@ function parseOptionalStoredJson<T>(raw: string | null | undefined, schema: ZodT
 }
 
 function buildPreviewLayout(layout: LayoutModel): LayoutModel {
-  return {
-    segments: layout.segments.slice(0, 40),
-    gates: (layout.gates ?? []).slice(0, 12),
-    basketballFeatures: (layout.basketballFeatures ?? []).slice(0, 20),
-    basketballPosts: (layout.basketballPosts ?? []).slice(0, 20),
-    floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20),
-    goalUnits: (layout.goalUnits ?? []).slice(0, 12),
-    kickboards: (layout.kickboards ?? []).slice(0, 20),
-    pitchDividers: (layout.pitchDividers ?? []).slice(0, 12),
-    sideNettings: (layout.sideNettings ?? []).slice(0, 20)
-  };
+  return layoutModelSchema.parse(
+    JSON.parse(
+      JSON.stringify({
+        segments: layout.segments.slice(0, 40),
+        gates: (layout.gates ?? []).slice(0, 12),
+        basketballFeatures: (layout.basketballFeatures ?? []).slice(0, 20),
+        basketballPosts: (layout.basketballPosts ?? []).slice(0, 20),
+        floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20),
+        goalUnits: (layout.goalUnits ?? []).slice(0, 12),
+        kickboards: (layout.kickboards ?? []).slice(0, 20),
+        pitchDividers: (layout.pitchDividers ?? []).slice(0, 12),
+        sideNettings: (layout.sideNettings ?? []).slice(0, 20)
+      })
+    )
+  ) as LayoutModel;
 }
 
 function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
@@ -307,6 +381,21 @@ function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
 function parseDrawingStatus(raw: string | undefined | null): DrawingStatus {
   const value = raw ?? "DRAFT";
   return (DRAWING_STATUSES as readonly string[]).includes(value) ? (value as DrawingStatus) : "DRAFT";
+}
+
+function parseDrawingJobRole(raw: string | undefined | null): DrawingJobRole | null {
+  if (raw === "PRIMARY" || raw === "SECONDARY") {
+    return raw;
+  }
+  return null;
+}
+
+function normalizeJobCommercialInputs(inputs: unknown): JobCommercialInputs {
+  const parsed = jobCommercialInputsSchema.safeParse(inputs);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  return buildDefaultJobCommercialInputs();
 }
 
 type ParsedEstimateResult = Omit<EstimateResult, "corners"> & {
@@ -369,6 +458,8 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
   return {
     id: row.id,
     companyId: row.company_id,
+    jobId: row.job_id,
+    jobRole: parseDrawingJobRole(row.job_role),
     name: row.name,
     customerId: row.customer_id,
     customerName: row.resolved_customer_name ?? row.customer_name,
@@ -402,6 +493,8 @@ export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<Draw
   return {
     id: drawing.id,
     companyId: drawing.companyId,
+    ...(drawing.jobId !== undefined ? { jobId: drawing.jobId } : {}),
+    ...(drawing.jobRole !== undefined ? { jobRole: drawing.jobRole } : {}),
     name: drawing.name,
     customerId: drawing.customerId,
     customerName: drawing.customerName,
@@ -477,6 +570,81 @@ export function toAuditLog(row: AuditLogRow): AuditLogRecord {
   };
 }
 
+export function toJob(row: JobRow): JobRecord {
+  let commercialInputs: unknown = buildDefaultJobCommercialInputs();
+  try {
+    commercialInputs = JSON.parse(row.commercial_inputs_json);
+  } catch {
+    commercialInputs = buildDefaultJobCommercialInputs();
+  }
+
+  return jobRecordSchema.parse({
+    id: row.id,
+    companyId: row.company_id,
+    customerId: row.customer_id,
+    customerName: row.resolved_customer_name ?? row.customer_name,
+    name: row.name,
+    stage: row.stage,
+    primaryDrawingId: row.primary_drawing_id,
+    commercialInputs: normalizeJobCommercialInputs(commercialInputs),
+    notes: row.notes,
+    ownerUserId: row.owner_user_id,
+    ownerDisplayName: row.owner_display_name ?? "",
+    isArchived: row.is_archived === 1,
+    archivedAtIso: row.archived_at_iso,
+    archivedByUserId: row.archived_by_user_id,
+    stageChangedAtIso: row.stage_changed_at_iso,
+    stageChangedByUserId: row.stage_changed_by_user_id,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    updatedByDisplayName: row.updated_by_display_name ?? "",
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso
+  });
+}
+
+export function toJobSummary(row: JobSummaryRow): JobSummary {
+  const base = toJob(row);
+  const primaryPreviewLayout = row.primary_layout_json
+    ? buildPreviewLayout(
+        buildStoredLayout(parseStoredJson(row.primary_layout_json, layoutModelSchema, `primary layout for job ${row.id}`))
+      )
+    : null;
+
+  return jobSummarySchema.parse({
+    ...base,
+    drawingCount: row.drawing_count,
+    openTaskCount: row.open_task_count,
+    completedTaskCount: row.completed_task_count,
+    lastActivityAtIso: row.last_activity_at_iso,
+    latestQuoteTotal: row.latest_quote_total,
+    latestQuoteCreatedAtIso: row.latest_quote_created_at_iso,
+    latestEstimateTotal: row.latest_estimate_total,
+    primaryDrawingName: row.primary_drawing_name,
+    primaryDrawingUpdatedAtIso: row.primary_drawing_updated_at_iso,
+    primaryPreviewLayout
+  }) as JobSummary;
+}
+
+export function toJobTask(row: JobTaskRow): JobTaskRecord {
+  return jobTaskRecordSchema.parse({
+    id: row.id,
+    companyId: row.company_id,
+    jobId: row.job_id,
+    title: row.title,
+    isCompleted: row.is_completed === 1,
+    assignedUserId: row.assigned_user_id,
+    assignedUserDisplayName: row.assigned_user_display_name ?? "",
+    dueAtIso: row.due_at_iso,
+    completedAtIso: row.completed_at_iso,
+    completedByUserId: row.completed_by_user_id,
+    completedByDisplayName: row.completed_by_display_name ?? "",
+    createdByUserId: row.created_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso
+  });
+}
+
 export function normalizePricingConfigRecord(pricingConfig: PricingConfigRecord): PricingConfigRecord {
   return pricingConfig.workbook
     ? pricingConfig
@@ -515,6 +683,9 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
   return {
     id: row.id,
     companyId: row.company_id,
+    jobId: row.job_id,
+    sourceDrawingId: row.source_drawing_id,
+    sourceDrawingVersionNumber: row.source_drawing_version_number,
     drawingId: row.drawing_id,
     drawingVersionNumber: row.drawing_version_number,
     pricedEstimate: normalizePricedEstimateResult(parsed.pricedEstimate as ParsedPricedEstimateResult),

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DrawingCanvasViewport, DrawingRecord, DrawingStatus, LayoutModel } from "@fence-estimator/contracts";
+import { buildDefaultJobCommercialInputs, type DrawingCanvasViewport, type DrawingRecord, type DrawingStatus, type LayoutModel } from "@fence-estimator/contracts";
 
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { writeAuditLog } from "../auditLogSupport.js";
@@ -45,6 +45,7 @@ export type DrawingMutationResult =
 interface DrawingCreateInput {
   name: string;
   customerId: string;
+  jobId?: string | undefined;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -78,6 +79,17 @@ async function resolveCustomerForWrite(repository: AppRepository, companyId: str
   return { kind: "success" as const, customer };
 }
 
+async function resolveJobForWrite(repository: AppRepository, companyId: string, jobId: string) {
+  const job = await repository.getJobById(jobId, companyId);
+  if (!job) {
+    return { kind: "invalid_customer" as const, message: "Job not found" };
+  }
+  if (job.isArchived) {
+    return { kind: "invalid_customer" as const, message: "Archived jobs cannot receive new drawings" };
+  }
+  return { kind: "success" as const, job };
+}
+
 export async function createDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
@@ -90,22 +102,85 @@ export async function createDrawingForCompany(
     }
     const result = buildEstimate(input.layout);
     const nowIso = new Date().toISOString();
-    const drawing = await repository.createDrawing({
-      id: randomUUID(),
-      companyId: authenticated.company.id,
-      name: input.name,
-      customerId: customerResult.customer.id,
-      customerName: customerResult.customer.name,
-      layout: result.layout,
-      savedViewport: input.savedViewport ?? null,
-      estimate: result.estimate,
-      schemaVersion: result.schemaVersion,
-      rulesVersion: result.rulesVersion,
-      createdByUserId: authenticated.user.id,
-      updatedByUserId: authenticated.user.id,
-      createdAtIso: nowIso,
-      updatedAtIso: nowIso
+    let createdDrawingId: string | null = null;
+    let createdJobId: string | null = null;
+
+    await repository.runInTransaction(async () => {
+      let targetJobId = input.jobId ?? null;
+      let jobHadPrimaryDrawing = false;
+
+      if (targetJobId) {
+        const jobResult = await resolveJobForWrite(repository, authenticated.company.id, targetJobId);
+        if (jobResult.kind !== "success") {
+          throw new Error(jobResult.message);
+        }
+        if (jobResult.job.customerId !== customerResult.customer.id) {
+          throw new Error("Selected job belongs to a different customer");
+        }
+        jobHadPrimaryDrawing = jobResult.job.primaryDrawingId !== null;
+      } else {
+        const createdJob = await repository.createJob({
+          id: randomUUID(),
+          companyId: authenticated.company.id,
+          customerId: customerResult.customer.id,
+          customerName: customerResult.customer.name,
+          name: input.name,
+          stage: "DRAFT",
+          primaryDrawingId: null,
+          commercialInputs: buildDefaultJobCommercialInputs(),
+          notes: "",
+          ownerUserId: authenticated.user.id,
+          createdByUserId: authenticated.user.id,
+          updatedByUserId: authenticated.user.id,
+          createdAtIso: nowIso,
+          updatedAtIso: nowIso
+        });
+        targetJobId = createdJob.id;
+        createdJobId = createdJob.id;
+      }
+
+      const createdDrawing = await repository.createDrawing({
+        id: randomUUID(),
+        companyId: authenticated.company.id,
+        jobId: targetJobId,
+        jobRole: jobHadPrimaryDrawing ? "SECONDARY" : "PRIMARY",
+        name: input.name,
+        customerId: customerResult.customer.id,
+        customerName: customerResult.customer.name,
+        layout: result.layout,
+        savedViewport: input.savedViewport ?? null,
+        estimate: result.estimate,
+        schemaVersion: result.schemaVersion,
+        rulesVersion: result.rulesVersion,
+        createdByUserId: authenticated.user.id,
+        updatedByUserId: authenticated.user.id,
+        createdAtIso: nowIso,
+        updatedAtIso: nowIso
+      });
+      if (!jobHadPrimaryDrawing && targetJobId) {
+        await repository.setJobPrimaryDrawing({
+          jobId: targetJobId,
+          companyId: authenticated.company.id,
+          drawingId: createdDrawing.id,
+          updatedByUserId: authenticated.user.id,
+          updatedAtIso: nowIso
+        });
+      }
+      createdDrawingId = createdDrawing.id;
     });
+
+    if (!createdDrawingId) {
+      return {
+        kind: "invalid_layout",
+        message: "Drawing could not be created"
+      };
+    }
+    const drawing = await repository.getDrawingById(createdDrawingId, authenticated.company.id);
+    if (!drawing) {
+      return {
+        kind: "drawing_not_found"
+      };
+    }
     await writeAuditLog(repository, {
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
@@ -116,12 +191,51 @@ export async function createDrawingForCompany(
       createdAtIso: nowIso,
       metadata: { versionNumber: drawing.versionNumber }
     });
+    if (createdJobId) {
+      await writeAuditLog(repository, {
+        companyId: authenticated.company.id,
+        actorUserId: authenticated.user.id,
+        entityType: "JOB",
+        entityId: createdJobId,
+        action: "JOB_CREATED",
+        summary: `${authenticated.user.displayName} created job ${input.name}`,
+        createdAtIso: nowIso,
+        metadata: {
+          customerId: customerResult.customer.id,
+          primaryDrawingId: drawing.id
+        }
+      });
+    } else if (drawing.jobId) {
+      await writeAuditLog(repository, {
+        companyId: authenticated.company.id,
+        actorUserId: authenticated.user.id,
+        entityType: "JOB",
+        entityId: drawing.jobId,
+        action: "JOB_DRAWING_ADDED",
+        summary: `${authenticated.user.displayName} added drawing ${drawing.name} to a job`,
+        createdAtIso: nowIso,
+        metadata: {
+          drawingId: drawing.id
+        }
+      });
+    }
 
     return { kind: "success", drawing };
   } catch (error) {
+    const message = (error as Error).message;
+    if (
+      message === "Job not found" ||
+      message === "Archived jobs cannot receive new drawings" ||
+      message === "Selected job belongs to a different customer"
+    ) {
+      return {
+        kind: "invalid_customer",
+        message
+      };
+    }
     return {
       kind: "invalid_layout",
-      message: (error as Error).message
+      message
     };
   }
 }
@@ -157,6 +271,8 @@ export async function updateDrawingForCompany(
       drawingId: existing.id,
       companyId: authenticated.company.id,
       expectedVersionNumber: input.expectedVersionNumber,
+      ...(existing.jobId !== undefined ? { jobId: existing.jobId } : {}),
+      ...(existing.jobRole !== undefined ? { jobRole: existing.jobRole } : {}),
       name: input.name ?? existing.name,
       customerId: nextCustomer?.customer.id ?? existing.customerId,
       customerName: nextCustomer?.customer.name ?? existing.customerName,
@@ -319,6 +435,37 @@ export async function setDrawingStatusForCompany(
   }
 
   const previousStatus = existing.status;
+  if (drawing.jobId) {
+    const job = await repository.getJobById(drawing.jobId, authenticated.company.id);
+    if (job && job.stage !== input.status) {
+      await repository.updateJob({
+        jobId: job.id,
+        companyId: authenticated.company.id,
+        name: job.name,
+        stage: input.status,
+        commercialInputs: job.commercialInputs,
+        notes: job.notes,
+        ownerUserId: job.ownerUserId,
+        archived: job.isArchived,
+        archivedAtIso: job.archivedAtIso,
+        archivedByUserId: job.archivedByUserId,
+        stageChangedAtIso: updatedAtIso,
+        stageChangedByUserId: authenticated.user.id,
+        updatedByUserId: authenticated.user.id,
+        updatedAtIso
+      });
+      await writeAuditLog(repository, {
+        companyId: authenticated.company.id,
+        actorUserId: authenticated.user.id,
+        entityType: "JOB",
+        entityId: job.id,
+        action: "JOB_STAGE_CHANGED",
+        summary: `${authenticated.user.displayName} changed ${job.name} from ${job.stage} to ${input.status}`,
+        createdAtIso: updatedAtIso,
+        metadata: { previousStage: job.stage, newStage: input.status }
+      });
+    }
+  }
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,

@@ -101,13 +101,13 @@ describe("DashboardPage", () => {
 
     expect(html).toContain("Workspace overview");
     expect(html).toContain("Welcome, Jane Doe");
-    expect(html).toContain("Recent drawings");
-    expect(html).toContain("Recent changes");
+    expect(html).toContain("My recent jobs");
+    expect(html).toContain("Recent job movement");
     expect(html).toContain("Jane Doe");
     expect(html).toContain("Front perimeter");
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Drawing preview for Front perimeter");
-    expect(html).toContain("v3");
+    expect(html).toContain("1 drawings");
     expect(html).not.toContain("Signed in");
     expect(html).not.toContain("Access");
   });
@@ -126,7 +126,7 @@ describe("DashboardPage", () => {
 
     expect(html).not.toContain("Front perimeter");
     expect(html).not.toContain("Cleveland Land Services");
-    expect(html).toContain("No drawings saved yet");
+    expect(html).toContain("No jobs saved yet");
   });
 
   it("excludes archived drawings from both sections", () => {
@@ -142,7 +142,7 @@ describe("DashboardPage", () => {
     );
 
     expect(html).not.toContain("Front perimeter");
-    expect(html).toContain("No drawings saved yet");
+    expect(html).toContain("No jobs saved yet");
     expect(html).toContain("No activity yet");
   });
 });

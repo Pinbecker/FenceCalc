@@ -5,12 +5,15 @@ import type {
   CustomerSummary,
   DrawingRecord,
   DrawingVersionRecord,
+  JobRecord,
+  JobTaskRecord,
   PricingConfigRecord,
   QuoteRecord
 } from "@fence-estimator/contracts";
 
 import { InMemoryCustomerStore } from "./inMemoryCustomerStore.js";
 import { InMemoryDrawingStore } from "./inMemoryDrawingStore.js";
+import { InMemoryJobStore } from "./inMemoryJobStore.js";
 import { InMemoryPricingStore } from "./inMemoryPricingStore.js";
 import { InMemoryQuoteStore } from "./inMemoryQuoteStore.js";
 import {
@@ -24,19 +27,25 @@ import type {
   CreateAuditLogInput,
   CreateCustomerInput,
   CreateDrawingInput,
+  CreateJobInput,
+  CreateJobTaskInput,
   CreatePasswordResetTokenInput,
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   DeleteCustomerInput,
+  DeleteJobInput,
   DeleteDrawingInput,
   RestoreDrawingVersionInput,
   CustomerScope,
   SessionRecord,
+  SetJobPrimaryDrawingInput,
   SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
   SetDrawingStatusInput,
   StoredUser,
+  UpdateJobInput,
+  UpdateJobTaskInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
   UpdateDrawingInput
@@ -49,7 +58,9 @@ export class InMemoryAppRepository implements AppRepository {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly drawingsMap = new Map<string, DrawingRecord>();
   private readonly drawingVersionsMap = new Map<string, DrawingVersionRecord[]>();
-  private readonly quotesByDrawingId = new Map<string, QuoteRecord[]>();
+  private readonly jobsMap = new Map<string, JobRecord>();
+  private readonly jobTasksMap = new Map<string, JobTaskRecord[]>();
+  private readonly quotesByJobId = new Map<string, QuoteRecord[]>();
   private readonly pricingConfigs = new Map<string, PricingConfigRecord>();
   private readonly auditLog: AuditLogRecord[] = [];
   private readonly passwordResetTokens = new Map<string, InMemoryPasswordResetTokenRecord>();
@@ -62,9 +73,21 @@ export class InMemoryAppRepository implements AppRepository {
     customers: this.customersMap,
     drawings: this.drawingsMap
   });
+  private readonly jobs = new InMemoryJobStore({
+    customers: this.customersMap,
+    drawings: this.drawingsMap,
+    drawingVersions: this.drawingVersionsMap,
+    jobs: this.jobsMap,
+    jobTasks: this.jobTasksMap,
+    quotesByJobId: this.quotesByJobId,
+    users: this.users
+  });
   private readonly drawings = new InMemoryDrawingStore({
     drawings: this.drawingsMap,
     drawingVersions: this.drawingVersionsMap,
+    jobs: this.jobsMap,
+    jobTasks: this.jobTasksMap,
+    quotesByJobId: this.quotesByJobId,
     users: this.users,
     customers: this.customersMap
   });
@@ -72,7 +95,7 @@ export class InMemoryAppRepository implements AppRepository {
     pricingConfigs: this.pricingConfigs
   });
   private readonly quotes = new InMemoryQuoteStore({
-    quotesByDrawingId: this.quotesByDrawingId
+    quotesByJobId: this.quotesByJobId
   });
   private readonly support = new InMemorySupportStore({
     companies: this.companies,
@@ -173,8 +196,52 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.customers.deleteCustomer(input));
   }
 
+  public deleteJob(input: DeleteJobInput) {
+    return Promise.resolve(this.jobs.deleteJob(input));
+  }
+
+  public createJob(input: CreateJobInput) {
+    return Promise.resolve(this.jobs.createJob(input));
+  }
+
+  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string) {
+    return Promise.resolve(this.jobs.listJobs(companyId, scope, search, customerId));
+  }
+
+  public listJobsForCustomer(customerId: string, companyId: string) {
+    return Promise.resolve(this.jobs.listJobsForCustomer(customerId, companyId));
+  }
+
+  public getJobById(jobId: string, companyId: string) {
+    return Promise.resolve(this.jobs.getJobById(jobId, companyId));
+  }
+
+  public updateJob(input: UpdateJobInput) {
+    return Promise.resolve(this.jobs.updateJob(input));
+  }
+
+  public setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput) {
+    return Promise.resolve(this.jobs.setJobPrimaryDrawing(input));
+  }
+
+  public listJobTasks(jobId: string, companyId: string) {
+    return Promise.resolve(this.jobs.listJobTasks(jobId, companyId));
+  }
+
+  public createJobTask(input: CreateJobTaskInput) {
+    return Promise.resolve(this.jobs.createJobTask(input));
+  }
+
+  public updateJobTask(input: UpdateJobTaskInput) {
+    return Promise.resolve(this.jobs.updateJobTask(input));
+  }
+
   public listDrawingsForCustomer(customerId: string, companyId: string) {
     return Promise.resolve(this.drawings.listDrawingsForCustomer(customerId, companyId));
+  }
+
+  public listDrawingsForJob(jobId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listDrawingsForJob(jobId, companyId));
   }
 
   public createDrawing(input: CreateDrawingInput) {
@@ -215,6 +282,10 @@ export class InMemoryAppRepository implements AppRepository {
 
   public createQuote(input: CreateQuoteInput) {
     return Promise.resolve(this.quotes.createQuote(input));
+  }
+
+  public listQuotesForJob(jobId: string, companyId: string) {
+    return Promise.resolve(this.quotes.listQuotesForJob(jobId, companyId));
   }
 
   public listQuotesForDrawing(drawingId: string, companyId: string) {

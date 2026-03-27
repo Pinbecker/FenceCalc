@@ -431,7 +431,12 @@ describe("apiClient", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(14, "/api/v1/auth/reset-password", expect.objectContaining({ method: "POST" }));
     const firstRequest = fetchMock.mock.calls[0]?.[1];
     expect(firstRequest?.credentials).toBe("include");
-    expect(firstRequest?.headers).toMatchObject({ "content-type": "application/json" });
+    // GET requests should NOT include content-type (no body to describe)
+    expect(firstRequest?.headers).not.toHaveProperty("content-type");
+
+    // Requests with a body should include content-type: application/json
+    const requestWithBody = fetchMock.mock.calls.find(([, opts]) => opts?.body)?.[1];
+    expect(requestWithBody?.headers).toMatchObject({ "content-type": "application/json" });
   });
 
   it("loads server-priced estimates from the drawing route", async () => {

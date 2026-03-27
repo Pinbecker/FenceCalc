@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { buildDefaultJobCommercialInputs } from "@fence-estimator/contracts";
 
 export function migrateSqliteDatabase(database: Database.Database): void {
   database.exec(`
@@ -223,6 +224,71 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE drawings ADD COLUMN status_changed_at_iso TEXT;
         ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT;
       `
+    },
+    {
+      name: "011_jobs",
+      sql: `
+        CREATE TABLE IF NOT EXISTS jobs (
+          id TEXT PRIMARY KEY,
+          company_id TEXT NOT NULL,
+          customer_id TEXT NOT NULL,
+          customer_name TEXT NOT NULL,
+          name TEXT NOT NULL,
+          stage TEXT NOT NULL DEFAULT 'DRAFT',
+          primary_drawing_id TEXT,
+          commercial_inputs_json TEXT NOT NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          owner_user_id TEXT,
+          is_archived INTEGER NOT NULL DEFAULT 0,
+          archived_at_iso TEXT,
+          archived_by_user_id TEXT,
+          stage_changed_at_iso TEXT,
+          stage_changed_by_user_id TEXT,
+          created_by_user_id TEXT NOT NULL,
+          updated_by_user_id TEXT NOT NULL,
+          created_at_iso TEXT NOT NULL,
+          updated_at_iso TEXT NOT NULL,
+          FOREIGN KEY (company_id) REFERENCES companies(id),
+          FOREIGN KEY (customer_id) REFERENCES customers(id),
+          FOREIGN KEY (owner_user_id) REFERENCES users(id),
+          FOREIGN KEY (archived_by_user_id) REFERENCES users(id),
+          FOREIGN KEY (stage_changed_by_user_id) REFERENCES users(id),
+          FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+          FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_company_customer_updated
+        ON jobs(company_id, customer_id, is_archived, updated_at_iso DESC);
+
+        CREATE TABLE IF NOT EXISTS job_tasks (
+          id TEXT PRIMARY KEY,
+          company_id TEXT NOT NULL,
+          job_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          is_completed INTEGER NOT NULL DEFAULT 0,
+          assigned_user_id TEXT,
+          due_at_iso TEXT,
+          completed_at_iso TEXT,
+          completed_by_user_id TEXT,
+          created_by_user_id TEXT NOT NULL,
+          created_at_iso TEXT NOT NULL,
+          updated_at_iso TEXT NOT NULL,
+          FOREIGN KEY (company_id) REFERENCES companies(id),
+          FOREIGN KEY (job_id) REFERENCES jobs(id),
+          FOREIGN KEY (assigned_user_id) REFERENCES users(id),
+          FOREIGN KEY (completed_by_user_id) REFERENCES users(id),
+          FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_job_tasks_job_updated
+        ON job_tasks(company_id, job_id, updated_at_iso DESC);
+
+        ALTER TABLE drawings ADD COLUMN job_id TEXT;
+        ALTER TABLE drawings ADD COLUMN job_role TEXT;
+        ALTER TABLE quotes ADD COLUMN job_id TEXT;
+        ALTER TABLE quotes ADD COLUMN source_drawing_id TEXT;
+        ALTER TABLE quotes ADD COLUMN source_drawing_version_number INTEGER;
+      `
     }
   ] as const;
 
@@ -255,6 +321,7 @@ function hasColumn(database: Database.Database, tableName: string, columnName: s
 }
 
 function ensureLegacySchemaPatched(database: Database.Database): void {
+  const defaultCommercialInputsJson = JSON.stringify(buildDefaultJobCommercialInputs());
   if (tableExists(database, "sessions") && !hasColumn(database, "sessions", "revoked_at_iso")) {
     database.exec("ALTER TABLE sessions ADD COLUMN revoked_at_iso TEXT");
   }
@@ -482,5 +549,432 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   }
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status_changed_by_user_id")) {
     database.exec("ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT");
+  }
+
+  if (!tableExists(database, "jobs")) {
+    database.exec(`
+      CREATE TABLE jobs (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        customer_id TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        stage TEXT NOT NULL DEFAULT 'DRAFT',
+        primary_drawing_id TEXT,
+        commercial_inputs_json TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        owner_user_id TEXT,
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        archived_at_iso TEXT,
+        archived_by_user_id TEXT,
+        stage_changed_at_iso TEXT,
+        stage_changed_by_user_id TEXT,
+        created_by_user_id TEXT NOT NULL,
+        updated_by_user_id TEXT NOT NULL,
+        created_at_iso TEXT NOT NULL,
+        updated_at_iso TEXT NOT NULL,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (customer_id) REFERENCES customers(id),
+        FOREIGN KEY (owner_user_id) REFERENCES users(id),
+        FOREIGN KEY (archived_by_user_id) REFERENCES users(id),
+        FOREIGN KEY (stage_changed_by_user_id) REFERENCES users(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+        FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+      )
+    `);
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "customer_name")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "stage")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN stage TEXT NOT NULL DEFAULT 'DRAFT'");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "primary_drawing_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN primary_drawing_id TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "commercial_inputs_json")) {
+    database.exec(`ALTER TABLE jobs ADD COLUMN commercial_inputs_json TEXT NOT NULL DEFAULT '${defaultCommercialInputsJson.replace(/'/g, "''")}'`);
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "notes")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "owner_user_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN owner_user_id TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "is_archived")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "archived_at_iso")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN archived_at_iso TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "archived_by_user_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN archived_by_user_id TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "stage_changed_at_iso")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN stage_changed_at_iso TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "stage_changed_by_user_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN stage_changed_by_user_id TEXT");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "created_by_user_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN created_by_user_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "updated_by_user_id")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN updated_by_user_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "created_at_iso")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN created_at_iso TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "updated_at_iso")) {
+    database.exec("ALTER TABLE jobs ADD COLUMN updated_at_iso TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "jobs")) {
+    database.exec(`
+      UPDATE jobs
+      SET customer_name = COALESCE(
+        NULLIF(TRIM(customer_name), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(d.customer_name), ''), 'Unknown customer')
+          FROM drawings d
+          LEFT JOIN customers c ON c.id = jobs.customer_id AND c.company_id = jobs.company_id
+          WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+          ORDER BY CASE WHEN d.job_role = 'PRIMARY' THEN 0 ELSE 1 END, COALESCE(d.updated_at_iso, d.created_at_iso) DESC
+          LIMIT 1
+        ),
+        (
+          SELECT COALESCE(NULLIF(TRIM(c.name), ''), 'Unknown customer')
+          FROM customers c
+          WHERE c.id = jobs.customer_id AND c.company_id = jobs.company_id
+          LIMIT 1
+        ),
+        'Unknown customer'
+      )
+      WHERE TRIM(COALESCE(customer_name, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET stage = CASE
+        WHEN stage IN ('DRAFT', 'DESIGNING', 'ESTIMATING', 'READY_TO_QUOTE', 'QUOTED', 'FOLLOW_UP', 'WON', 'LOST', 'ON_HOLD') THEN stage
+        ELSE 'DRAFT'
+      END
+    `);
+    database.prepare("UPDATE jobs SET commercial_inputs_json = ? WHERE TRIM(COALESCE(commercial_inputs_json, '')) = ''").run(defaultCommercialInputsJson);
+    database.exec(`
+      UPDATE jobs
+      SET primary_drawing_id = (
+        SELECT d.id
+        FROM drawings d
+        WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+        ORDER BY CASE WHEN d.job_role = 'PRIMARY' THEN 0 ELSE 1 END, COALESCE(d.updated_at_iso, d.created_at_iso) DESC
+        LIMIT 1
+      )
+      WHERE TRIM(COALESCE(primary_drawing_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET owner_user_id = (
+        SELECT COALESCE(NULLIF(TRIM(d.updated_by_user_id), ''), NULLIF(TRIM(d.created_by_user_id), ''))
+        FROM drawings d
+        WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+        ORDER BY COALESCE(d.updated_at_iso, d.created_at_iso) DESC
+        LIMIT 1
+      )
+      WHERE TRIM(COALESCE(owner_user_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET created_by_user_id = COALESCE(
+        NULLIF(TRIM(created_by_user_id), ''),
+        NULLIF(TRIM(owner_user_id), ''),
+        (
+          SELECT NULLIF(TRIM(d.created_by_user_id), '')
+          FROM drawings d
+          WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+          ORDER BY COALESCE(d.created_at_iso, d.updated_at_iso) ASC
+          LIMIT 1
+        ),
+        (
+          SELECT u.id
+          FROM users u
+          WHERE u.company_id = jobs.company_id
+          ORDER BY u.created_at_iso ASC
+          LIMIT 1
+        ),
+        'system:migration'
+      )
+      WHERE TRIM(COALESCE(created_by_user_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET updated_by_user_id = COALESCE(
+        NULLIF(TRIM(updated_by_user_id), ''),
+        NULLIF(TRIM(owner_user_id), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(d.updated_by_user_id), ''), NULLIF(TRIM(d.created_by_user_id), ''))
+          FROM drawings d
+          WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+          ORDER BY COALESCE(d.updated_at_iso, d.created_at_iso) DESC
+          LIMIT 1
+        ),
+        (
+          SELECT u.id
+          FROM users u
+          WHERE u.company_id = jobs.company_id
+          ORDER BY u.created_at_iso ASC
+          LIMIT 1
+        ),
+        'system:migration'
+      )
+      WHERE TRIM(COALESCE(updated_by_user_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET created_at_iso = COALESCE(
+        NULLIF(TRIM(created_at_iso), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(d.created_at_iso), ''), NULLIF(TRIM(d.updated_at_iso), ''))
+          FROM drawings d
+          WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+          ORDER BY COALESCE(d.created_at_iso, d.updated_at_iso) ASC
+          LIMIT 1
+        ),
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      WHERE TRIM(COALESCE(created_at_iso, '')) = ''
+    `);
+    database.exec(`
+      UPDATE jobs
+      SET updated_at_iso = COALESCE(
+        NULLIF(TRIM(updated_at_iso), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(d.updated_at_iso), ''), NULLIF(TRIM(d.created_at_iso), ''))
+          FROM drawings d
+          WHERE d.company_id = jobs.company_id AND d.job_id = jobs.id
+          ORDER BY COALESCE(d.updated_at_iso, d.created_at_iso) DESC
+          LIMIT 1
+        ),
+        NULLIF(TRIM(created_at_iso), ''),
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      WHERE TRIM(COALESCE(updated_at_iso, '')) = ''
+    `);
+    database.exec("UPDATE jobs SET notes = '' WHERE notes IS NULL");
+    database.exec("UPDATE jobs SET is_archived = 0 WHERE is_archived IS NULL");
+    database.exec("UPDATE jobs SET stage_changed_at_iso = NULLIF(TRIM(stage_changed_at_iso), '') WHERE stage_changed_at_iso IS NOT NULL");
+    database.exec("UPDATE jobs SET stage_changed_by_user_id = NULLIF(TRIM(stage_changed_by_user_id), '') WHERE stage_changed_by_user_id IS NOT NULL");
+  }
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_jobs_company_customer_updated
+    ON jobs(company_id, customer_id, is_archived, updated_at_iso DESC)
+  `);
+  if (!tableExists(database, "job_tasks")) {
+    database.exec(`
+      CREATE TABLE job_tasks (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        job_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        assigned_user_id TEXT,
+        due_at_iso TEXT,
+        completed_at_iso TEXT,
+        completed_by_user_id TEXT,
+        created_by_user_id TEXT NOT NULL,
+        created_at_iso TEXT NOT NULL,
+        updated_at_iso TEXT NOT NULL,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (job_id) REFERENCES jobs(id),
+        FOREIGN KEY (assigned_user_id) REFERENCES users(id),
+        FOREIGN KEY (completed_by_user_id) REFERENCES users(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+      )
+    `);
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "assigned_user_id")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN assigned_user_id TEXT");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "due_at_iso")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN due_at_iso TEXT");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "completed_at_iso")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN completed_at_iso TEXT");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "completed_by_user_id")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN completed_by_user_id TEXT");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "created_by_user_id")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN created_by_user_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "created_at_iso")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN created_at_iso TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "updated_at_iso")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN updated_at_iso TEXT NOT NULL DEFAULT ''");
+  }
+  if (tableExists(database, "job_tasks")) {
+    database.exec(`
+      UPDATE job_tasks
+      SET created_by_user_id = COALESCE(
+        NULLIF(TRIM(created_by_user_id), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(j.updated_by_user_id), ''), NULLIF(TRIM(j.created_by_user_id), ''))
+          FROM jobs j
+          WHERE j.id = job_tasks.job_id AND j.company_id = job_tasks.company_id
+          LIMIT 1
+        ),
+        (
+          SELECT u.id
+          FROM users u
+          WHERE u.company_id = job_tasks.company_id
+          ORDER BY u.created_at_iso ASC
+          LIMIT 1
+        ),
+        'system:migration'
+      )
+      WHERE TRIM(COALESCE(created_by_user_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE job_tasks
+      SET created_at_iso = COALESCE(
+        NULLIF(TRIM(created_at_iso), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(j.created_at_iso), ''), NULLIF(TRIM(j.updated_at_iso), ''))
+          FROM jobs j
+          WHERE j.id = job_tasks.job_id AND j.company_id = job_tasks.company_id
+          LIMIT 1
+        ),
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      WHERE TRIM(COALESCE(created_at_iso, '')) = ''
+    `);
+    database.exec(`
+      UPDATE job_tasks
+      SET updated_at_iso = COALESCE(
+        NULLIF(TRIM(updated_at_iso), ''),
+        NULLIF(TRIM(completed_at_iso), ''),
+        NULLIF(TRIM(created_at_iso), ''),
+        (
+          SELECT COALESCE(NULLIF(TRIM(j.updated_at_iso), ''), NULLIF(TRIM(j.created_at_iso), ''))
+          FROM jobs j
+          WHERE j.id = job_tasks.job_id AND j.company_id = job_tasks.company_id
+          LIMIT 1
+        ),
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      WHERE TRIM(COALESCE(updated_at_iso, '')) = ''
+    `);
+    database.exec("UPDATE job_tasks SET due_at_iso = NULLIF(TRIM(due_at_iso), '') WHERE due_at_iso IS NOT NULL");
+    database.exec("UPDATE job_tasks SET completed_at_iso = NULLIF(TRIM(completed_at_iso), '') WHERE completed_at_iso IS NOT NULL");
+    database.exec("UPDATE job_tasks SET completed_by_user_id = NULLIF(TRIM(completed_by_user_id), '') WHERE completed_by_user_id IS NOT NULL");
+  }
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_job_tasks_job_updated
+    ON job_tasks(company_id, job_id, updated_at_iso DESC)
+  `);
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "job_id")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN job_id TEXT");
+  }
+  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "job_role")) {
+    database.exec("ALTER TABLE drawings ADD COLUMN job_role TEXT");
+  }
+  if (tableExists(database, "quotes") && !hasColumn(database, "quotes", "job_id")) {
+    database.exec("ALTER TABLE quotes ADD COLUMN job_id TEXT");
+  }
+  if (tableExists(database, "quotes") && !hasColumn(database, "quotes", "source_drawing_id")) {
+    database.exec("ALTER TABLE quotes ADD COLUMN source_drawing_id TEXT");
+  }
+  if (tableExists(database, "quotes") && !hasColumn(database, "quotes", "source_drawing_version_number")) {
+    database.exec("ALTER TABLE quotes ADD COLUMN source_drawing_version_number INTEGER");
+  }
+
+  if (tableExists(database, "drawings") && tableExists(database, "jobs")) {
+    database
+      .prepare(`
+        INSERT INTO jobs (
+          id,
+          company_id,
+          customer_id,
+          customer_name,
+          name,
+          stage,
+          primary_drawing_id,
+          commercial_inputs_json,
+          notes,
+          owner_user_id,
+          is_archived,
+          archived_at_iso,
+          archived_by_user_id,
+          stage_changed_at_iso,
+          stage_changed_by_user_id,
+          created_by_user_id,
+          updated_by_user_id,
+          created_at_iso,
+          updated_at_iso
+        )
+        SELECT
+          'job:' || d.id,
+          d.company_id,
+          d.customer_id,
+          COALESCE(NULLIF(TRIM(c.name), ''), d.customer_name),
+          d.name,
+          CASE
+            WHEN d.status IN ('DRAFT', 'QUOTED', 'WON', 'LOST', 'ON_HOLD') THEN d.status
+            ELSE 'DRAFT'
+          END,
+          d.id,
+          ?,
+          '',
+          d.created_by_user_id,
+          d.is_archived,
+          d.archived_at_iso,
+          d.archived_by_user_id,
+          COALESCE(d.status_changed_at_iso, d.updated_at_iso),
+          COALESCE(d.status_changed_by_user_id, d.updated_by_user_id),
+          d.created_by_user_id,
+          d.updated_by_user_id,
+          d.created_at_iso,
+          d.updated_at_iso
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE TRIM(COALESCE(d.customer_id, '')) <> ''
+          AND NOT EXISTS (
+            SELECT 1
+            FROM jobs j
+            WHERE j.id = 'job:' || d.id
+          )
+      `)
+      .run(defaultCommercialInputsJson);
+
+    database.exec(`
+      UPDATE drawings
+      SET job_id = 'job:' || id
+      WHERE TRIM(COALESCE(customer_id, '')) <> ''
+        AND TRIM(COALESCE(job_id, '')) = ''
+    `);
+
+    database.exec(`
+      UPDATE drawings
+      SET job_role = 'PRIMARY'
+      WHERE TRIM(COALESCE(job_id, '')) <> ''
+        AND TRIM(COALESCE(job_role, '')) = ''
+    `);
+  }
+
+  if (tableExists(database, "quotes")) {
+    database.exec(`
+      UPDATE quotes
+      SET job_id = 'job:' || drawing_id
+      WHERE TRIM(COALESCE(job_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE quotes
+      SET source_drawing_id = drawing_id
+      WHERE TRIM(COALESCE(source_drawing_id, '')) = ''
+    `);
+    database.exec(`
+      UPDATE quotes
+      SET source_drawing_version_number = drawing_version_number
+      WHERE source_drawing_version_number IS NULL
+    `);
   }
 }

@@ -1,4 +1,4 @@
-import type { FenceHeightKey, FeatureQuantityKind, GateType, TwinBarVariant } from "./domain.js";
+import type { FenceHeightKey, FeatureQuantityKind, GateType, JobCommercialInputs, TwinBarVariant } from "./domain.js";
 
 export const PRICING_WORKBOOK_SHEETS = ["MATERIALS", "LABOUR"] as const;
 export type PricingWorkbookSheet = (typeof PRICING_WORKBOOK_SHEETS)[number];
@@ -1151,6 +1151,21 @@ export function buildDefaultPricingWorkbookConfig(): PricingWorkbookConfig {
       buildPanelLabourSection(),
       buildSiteWorksLabourSection()
     ]
+  };
+}
+
+export function buildDefaultJobCommercialInputs(): JobCommercialInputs {
+  const workbook = buildDefaultPricingWorkbookConfig();
+  return {
+    labourOverheadPercent: workbook.settings.labourOverheadPercent,
+    travelLodgePerDay: workbook.settings.travelLodgePerDay,
+    travelDays: 0,
+    markupRate: workbook.settings.markupRate,
+    markupUnits: 0,
+    distributionCharge: workbook.settings.distributionCharge,
+    concretePricePerCube: workbook.settings.concretePricePerCube,
+    hardDig: workbook.settings.hardDigDefault,
+    clearSpoils: workbook.settings.clearSpoilsDefault
   };
 }
 

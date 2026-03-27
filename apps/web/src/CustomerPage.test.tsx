@@ -136,11 +136,12 @@ describe("CustomerPage", () => {
     expect(html).toContain("Browse customers");
   });
 
-  it("does not render inline status messages", () => {
+  it("renders inline status messages when provided", () => {
     const html = renderToStaticMarkup(
       <CustomerPage
         query={{ customerId: "customer-1" }}
         customers={[customer]}
+        jobs={[]}
         drawings={drawings}
         userRole="OWNER"
         isSavingCustomer={false}
@@ -162,8 +163,8 @@ describe("CustomerPage", () => {
       />
     );
 
-    expect(html).not.toContain("Customer name already exists");
-    expect(html).not.toContain("Updated customer Cleveland Land Services");
+    expect(html).toContain("Customer name already exists");
+    expect(html).toContain("Updated customer Cleveland Land Services");
   });
 
   it("keeps customer edits available when the save request fails", async () => {

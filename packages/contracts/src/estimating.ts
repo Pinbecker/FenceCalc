@@ -140,6 +140,9 @@ export interface QuoteDrawingSnapshot {
 export interface QuoteRecord {
   id: string;
   companyId: string;
+  jobId?: string | undefined;
+  sourceDrawingId?: string | undefined;
+  sourceDrawingVersionNumber?: number | undefined;
   drawingId: string;
   drawingVersionNumber: number;
   pricedEstimate: PricedEstimateResult;

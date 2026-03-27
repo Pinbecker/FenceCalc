@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import { migrateSqliteDatabase } from "./sqliteSchema.js";
 import { SqliteCustomerStore } from "./sqliteCustomerStore.js";
 import { SqliteDrawingStore } from "./sqliteDrawingStore.js";
+import { SqliteJobStore } from "./sqliteJobStore.js";
 import { SqlitePricingStore } from "./sqlitePricingStore.js";
 import { SqliteQuoteStore } from "./sqliteQuoteStore.js";
 import { SqliteSupportStore } from "./sqliteSupportStore.js";
@@ -15,17 +16,23 @@ import type {
   CreateAuditLogInput,
   CreateCustomerInput,
   CreateDrawingInput,
+  CreateJobInput,
+  CreateJobTaskInput,
   CreatePasswordResetTokenInput,
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   DeleteCustomerInput,
+  DeleteJobInput,
   DeleteDrawingInput,
   RestoreDrawingVersionInput,
   CustomerScope,
+  SetJobPrimaryDrawingInput,
   SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
   SetDrawingStatusInput,
+  UpdateJobInput,
+  UpdateJobTaskInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
   UpdateDrawingInput
@@ -35,6 +42,7 @@ export class SqliteAppRepository implements AppRepository {
   private readonly database: Database.Database;
   private readonly userSessions: SqliteUserSessionStore;
   private readonly customers: SqliteCustomerStore;
+  private readonly jobs: SqliteJobStore;
   private readonly drawings: SqliteDrawingStore;
   private readonly pricing: SqlitePricingStore;
   private readonly quotes: SqliteQuoteStore;
@@ -51,6 +59,7 @@ export class SqliteAppRepository implements AppRepository {
     }
     this.userSessions = new SqliteUserSessionStore(this.database);
     this.customers = new SqliteCustomerStore(this.database);
+    this.jobs = new SqliteJobStore(this.database);
     this.drawings = new SqliteDrawingStore(this.database);
     this.pricing = new SqlitePricingStore(this.database);
     this.quotes = new SqliteQuoteStore(this.database);
@@ -155,8 +164,52 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.customers.deleteCustomer(input));
   }
 
+  public deleteJob(input: DeleteJobInput) {
+    return Promise.resolve(this.jobs.deleteJob(input));
+  }
+
+  public createJob(input: CreateJobInput) {
+    return Promise.resolve(this.jobs.createJob(input));
+  }
+
+  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string) {
+    return Promise.resolve(this.jobs.listJobs(companyId, scope, search, customerId));
+  }
+
+  public listJobsForCustomer(customerId: string, companyId: string) {
+    return Promise.resolve(this.jobs.listJobsForCustomer(customerId, companyId));
+  }
+
+  public getJobById(jobId: string, companyId: string) {
+    return Promise.resolve(this.jobs.getJobById(jobId, companyId));
+  }
+
+  public updateJob(input: UpdateJobInput) {
+    return Promise.resolve(this.jobs.updateJob(input));
+  }
+
+  public setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput) {
+    return Promise.resolve(this.jobs.setJobPrimaryDrawing(input));
+  }
+
+  public listJobTasks(jobId: string, companyId: string) {
+    return Promise.resolve(this.jobs.listJobTasks(jobId, companyId));
+  }
+
+  public createJobTask(input: CreateJobTaskInput) {
+    return Promise.resolve(this.jobs.createJobTask(input));
+  }
+
+  public updateJobTask(input: UpdateJobTaskInput) {
+    return Promise.resolve(this.jobs.updateJobTask(input));
+  }
+
   public listDrawingsForCustomer(customerId: string, companyId: string) {
     return Promise.resolve(this.drawings.listDrawingsForCustomer(customerId, companyId));
+  }
+
+  public listDrawingsForJob(jobId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listDrawingsForJob(jobId, companyId));
   }
 
   public createDrawing(input: CreateDrawingInput) {
@@ -197,6 +250,10 @@ export class SqliteAppRepository implements AppRepository {
 
   public createQuote(input: CreateQuoteInput) {
     return Promise.resolve(this.quotes.createQuote(input));
+  }
+
+  public listQuotesForJob(jobId: string, companyId: string) {
+    return Promise.resolve(this.quotes.listQuotesForJob(jobId, companyId));
   }
 
   public listQuotesForDrawing(drawingId: string, companyId: string) {

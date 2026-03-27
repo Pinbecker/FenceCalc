@@ -351,9 +351,82 @@ export interface CustomerSummary extends CustomerRecord {
   lastActivityAtIso: string | null;
 }
 
+export const JOB_STAGES = ["DRAFT", "DESIGNING", "ESTIMATING", "READY_TO_QUOTE", "QUOTED", "FOLLOW_UP", "WON", "LOST", "ON_HOLD"] as const;
+export type JobStage = (typeof JOB_STAGES)[number];
+
+export interface JobCommercialInputs {
+  labourOverheadPercent: number;
+  travelLodgePerDay: number;
+  travelDays: number;
+  markupRate: number;
+  markupUnits: number;
+  distributionCharge: number;
+  concretePricePerCube: number;
+  hardDig: boolean;
+  clearSpoils: boolean;
+}
+
+export interface JobRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  customerName: string;
+  name: string;
+  stage: JobStage;
+  primaryDrawingId: string | null;
+  commercialInputs: JobCommercialInputs;
+  notes: string;
+  ownerUserId: string | null;
+  ownerDisplayName: string;
+  isArchived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
+  stageChangedAtIso: string | null;
+  stageChangedByUserId: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  updatedByDisplayName: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface JobSummary extends JobRecord {
+  drawingCount: number;
+  openTaskCount: number;
+  completedTaskCount: number;
+  lastActivityAtIso: string | null;
+  latestQuoteTotal: number | null;
+  latestQuoteCreatedAtIso: string | null;
+  latestEstimateTotal: number | null;
+  primaryDrawingName: string | null;
+  primaryDrawingUpdatedAtIso: string | null;
+  primaryPreviewLayout: LayoutModel | null;
+}
+
+export interface JobTaskRecord {
+  id: string;
+  companyId: string;
+  jobId: string;
+  title: string;
+  isCompleted: boolean;
+  assignedUserId: string | null;
+  assignedUserDisplayName: string;
+  dueAtIso: string | null;
+  completedAtIso: string | null;
+  completedByUserId: string | null;
+  completedByDisplayName: string;
+  createdByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export type DrawingJobRole = "PRIMARY" | "SECONDARY";
+
 export interface DrawingRecord {
   id: string;
   companyId: string;
+  jobId?: string | null;
+  jobRole?: DrawingJobRole | null;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -378,6 +451,8 @@ export interface DrawingRecord {
 export interface DrawingSummary {
   id: string;
   companyId: string;
+  jobId?: string | null;
+  jobRole?: DrawingJobRole | null;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -426,7 +501,7 @@ export interface DrawingVersionRecord {
   createdAtIso: string;
 }
 
-export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER";
+export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "JOB";
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
   | "LOGIN_SUCCEEDED"
@@ -442,6 +517,16 @@ export type AuditAction =
   | "DRAWING_STATUS_CHANGED"
   | "DRAWING_VERSION_RESTORED"
   | "QUOTE_CREATED"
+  | "JOB_CREATED"
+  | "JOB_UPDATED"
+  | "JOB_ARCHIVED"
+  | "JOB_UNARCHIVED"
+  | "JOB_STAGE_CHANGED"
+  | "JOB_PRIMARY_DRAWING_CHANGED"
+  | "JOB_DRAWING_ADDED"
+  | "JOB_TASK_CREATED"
+  | "JOB_TASK_UPDATED"
+  | "JOB_DELETED"
   | "CUSTOMER_CREATED"
   | "CUSTOMER_UPDATED"
   | "CUSTOMER_ARCHIVED"

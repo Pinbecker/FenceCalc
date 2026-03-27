@@ -94,14 +94,16 @@ export class SqliteDrawingStore {
         .prepare(
           `
             INSERT INTO drawings (
-              id, company_id, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
+              id, company_id, job_id, job_role, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
               created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
           input.id,
           input.companyId,
+          input.jobId,
+          input.jobRole,
           input.name,
           input.customerId,
           input.customerName,
@@ -222,11 +224,13 @@ export class SqliteDrawingStore {
         .prepare(
           `
             UPDATE drawings
-            SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+            SET job_id = ?, job_role = ?, name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
             WHERE id = ? AND company_id = ? AND version_number = ?
           `,
         )
         .run(
+          input.jobId,
+          input.jobRole,
           input.name,
           input.customerId,
           input.customerName,
@@ -484,10 +488,44 @@ export class SqliteDrawingStore {
     });
   }
 
+  public listDrawingsForJob(jobId: string, companyId: string): DrawingSummary[] {
+    const rows = this.database
+      .prepare(`
+        SELECT d.*, c.name AS resolved_customer_name
+        FROM drawings d
+        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+        WHERE d.company_id = ? AND d.job_id = ?
+        ORDER BY d.updated_at_iso DESC
+      `)
+      .all(companyId, jobId) as DrawingRow[];
+    const metadata = this.buildContributorMetadata(
+      companyId,
+      rows.map((row) => row.id)
+    );
+    return rows.flatMap((row) => {
+      const drawing = this.tryReadDrawing(row);
+      if (!drawing) {
+        return [];
+      }
+      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
+      contributorIds.add(drawing.createdByUserId);
+      contributorIds.add(drawing.updatedByUserId);
+      const contributorUserIds = [...contributorIds];
+      return [toDrawingSummary(drawing, {
+        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
+        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
+        contributorUserIds,
+        contributorDisplayNames: contributorUserIds
+          .map((userId) => metadata.userDisplayNameById.get(userId))
+          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
+      })];
+    });
+  }
+
   public deleteDrawing(input: DeleteDrawingInput): boolean {
     const existing = this.database
-      .prepare("SELECT id, is_archived FROM drawings WHERE id = ? AND company_id = ?")
-      .get(input.drawingId, input.companyId) as { id: string; is_archived: number } | undefined;
+      .prepare("SELECT id, is_archived, job_id FROM drawings WHERE id = ? AND company_id = ?")
+      .get(input.drawingId, input.companyId) as { id: string; is_archived: number; job_id: string | null } | undefined;
     if (!existing) {
       return false;
     }
@@ -496,11 +534,36 @@ export class SqliteDrawingStore {
         .prepare("DELETE FROM drawing_versions WHERE drawing_id = ? AND company_id = ?")
         .run(input.drawingId, input.companyId);
       this.database
-        .prepare("DELETE FROM quotes WHERE drawing_id = ? AND company_id = ?")
-        .run(input.drawingId, input.companyId);
-      this.database
         .prepare("DELETE FROM drawings WHERE id = ? AND company_id = ?")
         .run(input.drawingId, input.companyId);
+
+      if (existing.job_id) {
+        const remaining = this.database
+          .prepare(`
+            SELECT id
+            FROM drawings
+            WHERE job_id = ? AND company_id = ?
+            ORDER BY updated_at_iso DESC
+          `)
+          .all(existing.job_id, input.companyId) as Array<{ id: string }>;
+
+        if (remaining.length === 0) {
+          this.database.prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
+          this.database.prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
+          this.database.prepare("DELETE FROM jobs WHERE id = ? AND company_id = ?").run(existing.job_id, input.companyId);
+        } else {
+          const nextPrimaryId = remaining[0]?.id ?? null;
+          this.database.prepare("UPDATE drawings SET job_role = 'SECONDARY' WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
+          if (nextPrimaryId) {
+            this.database
+              .prepare("UPDATE drawings SET job_role = 'PRIMARY' WHERE id = ? AND job_id = ? AND company_id = ?")
+              .run(nextPrimaryId, existing.job_id, input.companyId);
+          }
+          this.database
+            .prepare("UPDATE jobs SET primary_drawing_id = ? WHERE id = ? AND company_id = ?")
+            .run(nextPrimaryId, existing.job_id, input.companyId);
+        }
+      }
     });
     doDelete();
     return true;

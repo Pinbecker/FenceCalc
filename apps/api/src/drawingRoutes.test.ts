@@ -526,6 +526,53 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
+  it("allows admins to permanently delete jobs and removes them from follow-up loads", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const createJob = await app.inject({
+      method: "POST",
+      url: "/api/v1/jobs",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "Delete me",
+        notes: ""
+      }
+    });
+
+    expect(createJob.statusCode).toBe(201);
+    const jobId = createJob.json<{ job: { id: string } }>().job.id;
+
+    const removeJob = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/jobs/${jobId}`,
+      headers: cookieHeader
+    });
+
+    expect(removeJob.statusCode).toBe(200);
+    expect(removeJob.json<{ deleted: boolean }>().deleted).toBe(true);
+
+    const loadDeletedJob = await app.inject({
+      method: "GET",
+      url: `/api/v1/jobs/${jobId}`,
+      headers: cookieHeader
+    });
+
+    expect(loadDeletedJob.statusCode).toBe(404);
+
+    const listJobs = await app.inject({
+      method: "GET",
+      url: "/api/v1/jobs?scope=ALL",
+      headers: cookieHeader
+    });
+
+    expect(listJobs.statusCode).toBe(200);
+    expect(listJobs.json<{ jobs: Array<{ id: string }> }>().jobs.some((job) => job.id === jobId)).toBe(false);
+
+    await app.close();
+  });
+
   it("rejects drawing access without a valid session", async () => {
     const app = buildApp({ repository: new InMemoryAppRepository() });
     const response = await app.inject({
