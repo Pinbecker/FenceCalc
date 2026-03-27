@@ -92,6 +92,8 @@ export function DrawingPreview({ layout, label = "Drawing", variant = "card" }: 
     <svg
       className={`drawing-preview drawing-preview-${variant}`}
       viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
       role="img"
       aria-label={`Drawing preview for ${label}`}
     >

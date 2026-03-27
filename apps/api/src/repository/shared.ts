@@ -340,21 +340,27 @@ function parseOptionalStoredJson<T>(raw: string | null | undefined, schema: ZodT
 }
 
 function buildPreviewLayout(layout: LayoutModel): LayoutModel {
-  return layoutModelSchema.parse(
-    JSON.parse(
-      JSON.stringify({
-        segments: layout.segments.slice(0, 40),
-        gates: (layout.gates ?? []).slice(0, 12),
-        basketballFeatures: (layout.basketballFeatures ?? []).slice(0, 20),
-        basketballPosts: (layout.basketballPosts ?? []).slice(0, 20),
-        floodlightColumns: (layout.floodlightColumns ?? []).slice(0, 20),
-        goalUnits: (layout.goalUnits ?? []).slice(0, 12),
-        kickboards: (layout.kickboards ?? []).slice(0, 20),
-        pitchDividers: (layout.pitchDividers ?? []).slice(0, 12),
-        sideNettings: (layout.sideNettings ?? []).slice(0, 20)
-      })
-    )
-  ) as LayoutModel;
+  const segments = layout.segments.slice(0, 40);
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const preview = {
+    segments,
+    gates: (layout.gates ?? []).filter((gate) => segmentIds.has(gate.segmentId)).slice(0, 12),
+    basketballFeatures: (layout.basketballFeatures ?? []).filter((feature) => segmentIds.has(feature.segmentId)).slice(0, 20),
+    basketballPosts: (layout.basketballPosts ?? []).filter((post) => segmentIds.has(post.segmentId)).slice(0, 20),
+    floodlightColumns: (layout.floodlightColumns ?? []).filter((column) => segmentIds.has(column.segmentId)).slice(0, 20),
+    goalUnits: (layout.goalUnits ?? []).filter((unit) => segmentIds.has(unit.segmentId)).slice(0, 12),
+    kickboards: (layout.kickboards ?? []).filter((kickboard) => segmentIds.has(kickboard.segmentId)).slice(0, 20),
+    pitchDividers: (layout.pitchDividers ?? [])
+      .filter((divider) => segmentIds.has(divider.startAnchor.segmentId) && segmentIds.has(divider.endAnchor.segmentId))
+      .slice(0, 12),
+    sideNettings: (layout.sideNettings ?? []).filter((netting) => segmentIds.has(netting.segmentId)).slice(0, 20)
+  };
+
+  const result = layoutModelSchema.safeParse(JSON.parse(JSON.stringify(preview)));
+  if (result.success) {
+    return result.data as LayoutModel;
+  }
+  return { segments, gates: [], basketballFeatures: [], basketballPosts: [], floodlightColumns: [], goalUnits: [], kickboards: [], pitchDividers: [], sideNettings: [] };
 }
 
 function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
@@ -605,11 +611,17 @@ export function toJob(row: JobRow): JobRecord {
 
 export function toJobSummary(row: JobSummaryRow): JobSummary {
   const base = toJob(row);
-  const primaryPreviewLayout = row.primary_layout_json
-    ? buildPreviewLayout(
+  let primaryPreviewLayout: LayoutModel | null = null;
+  if (row.primary_layout_json) {
+    try {
+      primaryPreviewLayout = buildPreviewLayout(
         buildStoredLayout(parseStoredJson(row.primary_layout_json, layoutModelSchema, `primary layout for job ${row.id}`))
-      )
-    : null;
+      );
+    } catch {
+      // Corrupt layout data for this job — degrade gracefully instead of
+      // crashing the entire job list (the fallback query loses ALL layouts).
+    }
+  }
 
   return jobSummarySchema.parse({
     ...base,
