@@ -272,6 +272,8 @@ export interface CreateJobTaskInput {
   companyId: string;
   jobId: string;
   title: string;
+  description: string;
+  priority: string;
   assignedUserId: string | null;
   dueAtIso: string | null;
   createdByUserId: string;
@@ -284,6 +286,8 @@ export interface UpdateJobTaskInput {
   companyId: string;
   jobId: string;
   title: string;
+  description: string;
+  priority: string;
   assignedUserId: string | null;
   dueAtIso: string | null;
   isCompleted: boolean;
@@ -341,8 +345,10 @@ export interface AppRepository {
   updateJob(input: UpdateJobInput): Promise<JobRecord | null>;
   setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): Promise<JobRecord | null>;
   listJobTasks(jobId: string, companyId: string): Promise<JobTaskRecord[]>;
+  listCompanyTasks(companyId: string): Promise<JobTaskRecord[]>;
   createJobTask(input: CreateJobTaskInput): Promise<JobTaskRecord>;
   updateJobTask(input: UpdateJobTaskInput): Promise<JobTaskRecord | null>;
+  deleteJobTask(taskId: string, jobId: string, companyId: string): Promise<boolean>;
   listDrawingsForCustomer(customerId: string, companyId: string): Promise<DrawingSummary[]>;
   listDrawingsForJob(jobId: string, companyId: string): Promise<DrawingSummary[]>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;

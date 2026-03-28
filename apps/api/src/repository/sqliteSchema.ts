@@ -289,6 +289,13 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE quotes ADD COLUMN source_drawing_id TEXT;
         ALTER TABLE quotes ADD COLUMN source_drawing_version_number INTEGER;
       `
+    },
+    {
+      name: "012_task_enhancements",
+      sql: `
+        ALTER TABLE job_tasks ADD COLUMN description TEXT NOT NULL DEFAULT '';
+        ALTER TABLE job_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'NORMAL';
+      `
     }
   ] as const;
 

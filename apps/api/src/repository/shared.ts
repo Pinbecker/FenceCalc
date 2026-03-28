@@ -225,7 +225,10 @@ export interface JobTaskRow {
   id: string;
   company_id: string;
   job_id: string;
+  job_name?: string | null;
   title: string;
+  description: string | null;
+  priority: string | null;
   is_completed: number;
   assigned_user_id: string | null;
   assigned_user_display_name?: string | null;
@@ -643,7 +646,10 @@ export function toJobTask(row: JobTaskRow): JobTaskRecord {
     id: row.id,
     companyId: row.company_id,
     jobId: row.job_id,
+    jobName: row.job_name ?? "",
     title: row.title,
+    description: row.description ?? "",
+    priority: row.priority ?? "NORMAL",
     isCompleted: row.is_completed === 1,
     assignedUserId: row.assigned_user_id,
     assignedUserDisplayName: row.assigned_user_display_name ?? "",

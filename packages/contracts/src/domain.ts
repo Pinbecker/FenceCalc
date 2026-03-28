@@ -403,11 +403,17 @@ export interface JobSummary extends JobRecord {
   primaryPreviewLayout: LayoutModel | null;
 }
 
+export type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
+export const TASK_PRIORITIES: readonly TaskPriority[] = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
+
 export interface JobTaskRecord {
   id: string;
   companyId: string;
   jobId: string;
+  jobName: string;
   title: string;
+  description: string;
+  priority: TaskPriority;
   isCompleted: boolean;
   assignedUserId: string | null;
   assignedUserDisplayName: string;

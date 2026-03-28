@@ -18,6 +18,7 @@ import type {
   JobSummary,
   JobTaskRecord,
   LayoutModel,
+  TaskPriority,
   PricingConfigRecord,
   PricedEstimateResult,
   QuoteRecord,
@@ -113,6 +114,8 @@ export interface CreateJobTaskInput {
   title: string;
   assignedUserId?: string | null;
   dueAtIso?: string | null;
+  description?: string;
+  priority?: TaskPriority;
 }
 
 export interface UpdateJobTaskInput {
@@ -120,6 +123,8 @@ export interface UpdateJobTaskInput {
   assignedUserId?: string | null;
   dueAtIso?: string | null;
   isCompleted?: boolean;
+  description?: string;
+  priority?: TaskPriority;
 }
 
 interface RequestOptions {
@@ -525,6 +530,18 @@ export async function updateJobTask(jobId: string, taskId: string, input: Update
     }
   );
   return response.task;
+}
+
+export async function deleteJobTask(jobId: string, taskId: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function listCompanyTasks(): Promise<JobTaskRecord[]> {
+  const response = await requestJson<{ tasks: JobTaskRecord[] }>("/api/v1/tasks");
+  return response.tasks;
 }
 
 export async function listJobActivity(jobId: string): Promise<AuditLogRecord[]> {

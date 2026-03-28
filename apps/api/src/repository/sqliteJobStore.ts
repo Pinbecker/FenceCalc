@@ -60,9 +60,11 @@ export class SqliteJobStore {
       .prepare(`
         SELECT
           t.*,
+          j.name AS job_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
+        LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.id = ? AND t.job_id = ? AND t.company_id = ?
@@ -340,15 +342,40 @@ export class SqliteJobStore {
       .prepare(`
         SELECT
           t.*,
+          j.name AS job_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
+        LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.job_id = ? AND t.company_id = ?
         ORDER BY t.is_completed ASC, COALESCE(t.due_at_iso, '9999-12-31T00:00:00.000Z') ASC, t.created_at_iso ASC
       `)
       .all(jobId, companyId) as JobTaskRow[];
+    return rows.map((row) => toJobTask(row));
+  }
+
+  public listCompanyTasks(companyId: string): JobTaskRecord[] {
+    const rows = this.database
+      .prepare(`
+        SELECT
+          t.*,
+          j.name AS job_name,
+          assigned.display_name AS assigned_user_display_name,
+          completed.display_name AS completed_by_display_name
+        FROM job_tasks t
+        LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
+        LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
+        LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
+        WHERE t.company_id = ? AND t.is_completed = 0
+        ORDER BY
+          CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END ASC,
+          COALESCE(t.due_at_iso, '9999-12-31T00:00:00.000Z') ASC,
+          t.created_at_iso ASC
+        LIMIT 50
+      `)
+      .all(companyId) as JobTaskRow[];
     return rows.map((row) => toJobTask(row));
   }
 
@@ -360,6 +387,8 @@ export class SqliteJobStore {
           company_id,
           job_id,
           title,
+          description,
+          priority,
           is_completed,
           assigned_user_id,
           due_at_iso,
@@ -368,13 +397,15 @@ export class SqliteJobStore {
           created_by_user_id,
           created_at_iso,
           updated_at_iso
-        ) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
       `)
       .run(
         input.id,
         input.companyId,
         input.jobId,
         input.title,
+        input.description,
+        input.priority,
         input.assignedUserId,
         input.dueAtIso,
         input.createdByUserId,
@@ -394,6 +425,8 @@ export class SqliteJobStore {
         UPDATE job_tasks
         SET
           title = ?,
+          description = ?,
+          priority = ?,
           assigned_user_id = ?,
           due_at_iso = ?,
           is_completed = ?,
@@ -404,6 +437,8 @@ export class SqliteJobStore {
       `)
       .run(
         input.title,
+        input.description,
+        input.priority,
         input.assignedUserId,
         input.dueAtIso,
         input.isCompleted ? 1 : 0,
@@ -419,5 +454,12 @@ export class SqliteJobStore {
     }
     const row = this.getTaskRow(input.taskId, input.jobId, input.companyId);
     return row ? toJobTask(row) : null;
+  }
+
+  public deleteJobTask(taskId: string, jobId: string, companyId: string): boolean {
+    const result = this.database
+      .prepare("DELETE FROM job_tasks WHERE id = ? AND job_id = ? AND company_id = ?")
+      .run(taskId, jobId, companyId);
+    return result.changes > 0;
   }
 }

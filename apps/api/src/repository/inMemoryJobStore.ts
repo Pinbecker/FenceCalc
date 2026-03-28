@@ -181,22 +181,52 @@ export class InMemoryJobStore {
   }
 
   public listJobTasks(jobId: string, companyId: string): JobTaskRecord[] {
+    const job = this.state.jobs.get(jobId);
     return (this.state.jobTasks.get(jobId) ?? [])
       .filter((task) => task.companyId === companyId)
       .map((task) => ({
         ...task,
+        jobName: job?.name ?? "",
         assignedUserDisplayName: task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "",
         completedByDisplayName: task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : ""
       }))
       .sort((left, right) => Number(left.isCompleted) - Number(right.isCompleted) || (left.dueAtIso ?? "").localeCompare(right.dueAtIso ?? ""));
   }
 
+  public listCompanyTasks(companyId: string): JobTaskRecord[] {
+    const allTasks: JobTaskRecord[] = [];
+    for (const [jobId, tasks] of this.state.jobTasks) {
+      const job = this.state.jobs.get(jobId);
+      for (const task of tasks) {
+        if (task.companyId === companyId && !task.isCompleted) {
+          allTasks.push({
+            ...task,
+            jobName: job?.name ?? "",
+            assignedUserDisplayName: task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "",
+            completedByDisplayName: task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : ""
+          });
+        }
+      }
+    }
+    return allTasks.sort((left, right) => {
+      const priorityOrder = ["URGENT", "HIGH", "NORMAL", "LOW"];
+      const lp = priorityOrder.indexOf(left.priority);
+      const rp = priorityOrder.indexOf(right.priority);
+      if (lp !== rp) return lp - rp;
+      return (left.dueAtIso ?? "9999").localeCompare(right.dueAtIso ?? "9999");
+    }).slice(0, 50);
+  }
+
   public createJobTask(input: CreateJobTaskInput): JobTaskRecord {
+    const job = this.state.jobs.get(input.jobId);
     const task: JobTaskRecord = {
       id: input.id,
       companyId: input.companyId,
       jobId: input.jobId,
+      jobName: job?.name ?? "",
       title: input.title,
+      description: input.description,
+      priority: input.priority as JobTaskRecord["priority"],
       isCompleted: false,
       assignedUserId: input.assignedUserId,
       assignedUserDisplayName: input.assignedUserId ? this.state.users.get(input.assignedUserId)?.displayName ?? "" : "",
@@ -221,6 +251,8 @@ export class InMemoryJobStore {
     const updated: JobTaskRecord = {
       ...existing,
       title: input.title,
+      description: input.description,
+      priority: input.priority as JobTaskRecord["priority"],
       assignedUserId: input.assignedUserId,
       assignedUserDisplayName: input.assignedUserId ? this.state.users.get(input.assignedUserId)?.displayName ?? "" : "",
       dueAtIso: input.dueAtIso,
@@ -235,5 +267,15 @@ export class InMemoryJobStore {
       tasks.map((task) => (task.id === input.taskId ? updated : task))
     );
     return updated;
+  }
+
+  public deleteJobTask(taskId: string, jobId: string, companyId: string): boolean {
+    const tasks = this.state.jobTasks.get(jobId) ?? [];
+    const filtered = tasks.filter((task) => !(task.id === taskId && task.companyId === companyId));
+    if (filtered.length === tasks.length) {
+      return false;
+    }
+    this.state.jobTasks.set(jobId, filtered);
+    return true;
   }
 }

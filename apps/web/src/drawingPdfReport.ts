@@ -679,3 +679,366 @@ export function exportDrawingPdfReport(input: DrawingPdfReportInput): boolean {
 export function buildDrawingPdfFileName(drawingTitle: string): string {
   return `${buildFileSafeSlug(drawingTitle)}-report.pdf`;
 }
+
+/* ─── Quote PDF Report ─── */
+
+export interface QuotePdfEstimateRow {
+  label: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  total: number;
+}
+
+export interface QuotePdfEstimateSection {
+  title: string;
+  subtotal: number;
+  rows: QuotePdfEstimateRow[];
+}
+
+export interface QuotePdfReportInput {
+  companyName: string | null;
+  preparedBy: string | null;
+  customerName: string;
+  jobName: string;
+  drawingName: string;
+  revisionLabel: string;
+  generatedAtIso: string;
+  layout: LayoutModel;
+  materialSections: QuotePdfEstimateSection[];
+  labourSections: QuotePdfEstimateSection[];
+  totals: { materialCost: number; labourCost: number; totalCost: number };
+  warnings: Array<{ message: string }>;
+  estimateSegments: LayoutSegment[];
+  segmentOrdinalById: Map<string, number>;
+}
+
+function formatQuoteMoney(value: number): string {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value);
+}
+
+function buildQuoteSectionHtml(section: QuotePdfEstimateSection): string {
+  const rowsHtml = section.rows
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.label)}</td>
+          <td class="quote-number">${escapeHtml(row.unit)}</td>
+          <td class="quote-number">${row.quantity % 1 === 0 ? row.quantity : row.quantity.toFixed(2)}</td>
+          <td class="quote-number">${formatQuoteMoney(row.rate)}</td>
+          <td class="quote-number">${formatQuoteMoney(row.total)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="quote-section">
+      <div class="quote-section-head">
+        <strong>${escapeHtml(section.title)}</strong>
+        <span>${formatQuoteMoney(section.subtotal)}</span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Unit</th><th>Qty</th><th>Rate</th><th>Total</th></tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildQuoteFenceScheduleHtml(input: QuotePdfReportInput): string {
+  if (input.estimateSegments.length === 0) {
+    return "<p>No fence runs defined.</p>";
+  }
+  const rows = input.estimateSegments
+    .map((segment, index) => {
+      const dx = segment.end.x - segment.start.x;
+      const dy = segment.end.y - segment.start.y;
+      const lengthMm = Math.sqrt(dx * dx + dy * dy);
+      return `
+        <tr>
+          <td>Run ${index + 1}</td>
+          <td>${escapeHtml(segment.spec.height)}</td>
+          <td>${formatLengthMm(lengthMm)}</td>
+          <td>${escapeHtml(segment.spec.system)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <table>
+      <thead>
+        <tr><th>Run</th><th>Height</th><th>Length</th><th>System</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+export function buildQuotePdfReportHtml(input: QuotePdfReportInput): string {
+  const isometricSvg = buildOptimizationIsometricSvg(
+    {
+      estimateSegments: input.estimateSegments,
+      segmentOrdinalById: input.segmentOrdinalById,
+      resolvedGatePlacements: [],
+      resolvedBasketballPostPlacements: [],
+      resolvedFloodlightColumnPlacements: []
+    },
+    DEFAULT_ORBIT,
+    `${input.drawingName} isometric view`
+  );
+
+  const materialSectionsHtml = input.materialSections.map(buildQuoteSectionHtml).join("");
+  const labourSectionsHtml = input.labourSections.map(buildQuoteSectionHtml).join("");
+
+  const warningsHtml =
+    input.warnings.length > 0
+      ? `<div class="quote-warnings"><strong>Warnings</strong><ul>${input.warnings.map((w) => `<li>${escapeHtml(w.message)}</li>`).join("")}</ul></div>`
+      : "";
+
+  const fenceScheduleHtml = buildQuoteFenceScheduleHtml(input);
+
+  const fileName = `${buildFileSafeSlug(input.jobName)}-${buildFileSafeSlug(input.revisionLabel)}-quote.pdf`;
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${escapeHtml(fileName)}</title>
+        <style>
+          :root {
+            color-scheme: light;
+            --ink: #20322f;
+            --muted: #66736c;
+            --line: #d7d2c6;
+            --paper: #fffdfa;
+            --panel: #f7f2ea;
+            --accent: #355b87;
+            --accent-soft: #e5eef9;
+          }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            color: var(--ink);
+            background: #ddd6c8;
+          }
+          .report-actions {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 253, 250, 0.96);
+            backdrop-filter: blur(12px);
+          }
+          .report-actions-copy { color: var(--muted); font-size: 13px; }
+          .report-actions-buttons { display: flex; gap: 10px; }
+          .report-action-button {
+            border: 0; border-radius: 999px; padding: 11px 16px;
+            font: inherit; font-weight: 600; cursor: pointer;
+            color: #fff; background: var(--accent);
+          }
+          .report-action-button.is-secondary {
+            color: var(--ink); background: #ebe4d8;
+          }
+          .quote-shell {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            background: var(--paper);
+          }
+          .quote-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid var(--ink);
+            margin-bottom: 24px;
+          }
+          .quote-header h1 { margin: 0; font-size: 28px; }
+          .quote-header-meta { font-size: 13px; color: var(--muted); text-align: right; }
+          .quote-header-meta div { margin-bottom: 4px; }
+
+          .quote-drawing-figure { margin: 0 0 24px; }
+          .quote-drawing-figure svg { width: 100%; height: auto; border-radius: 12px; }
+
+          .quote-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+          }
+          .quote-summary-stat {
+            background: var(--panel);
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 13px;
+          }
+          .quote-summary-stat strong { display: block; font-size: 20px; margin-top: 4px; }
+
+          h2.quote-sheet-title {
+            font-size: 18px;
+            margin: 32px 0 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--line);
+          }
+
+          .quote-section { margin-bottom: 16px; }
+          .quote-section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 14px;
+          }
+          .quote-section-head span { color: var(--accent); font-weight: 600; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          th, td { padding: 6px 10px; text-align: left; }
+          th { background: var(--panel); font-weight: 600; border-bottom: 1px solid var(--line); }
+          td { border-bottom: 1px solid #eee; }
+          .quote-number { text-align: right; }
+
+          .quote-totals {
+            margin-top: 24px;
+            padding: 20px;
+            background: var(--accent-soft);
+            border-radius: 12px;
+          }
+          .quote-totals-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 15px;
+          }
+          .quote-totals-row.is-grand {
+            font-size: 22px;
+            font-weight: 700;
+            padding-top: 12px;
+            margin-top: 8px;
+            border-top: 2px solid var(--accent);
+          }
+
+          .quote-warnings {
+            margin-top: 16px;
+            padding: 14px 18px;
+            background: #fef3cd;
+            border-radius: 8px;
+            font-size: 13px;
+          }
+          .quote-warnings strong { display: block; margin-bottom: 6px; }
+          .quote-warnings ul { margin: 0; padding-left: 20px; }
+
+          .quote-footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid var(--line);
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+          }
+          @media print {
+            .report-actions { display: none; }
+            body { background: white; }
+            .quote-shell { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="report-actions">
+          <span class="report-actions-copy">Use your browser's print function (Ctrl + P) to save as PDF.</span>
+          <div class="report-actions-buttons">
+            <button class="report-action-button is-secondary" onclick="window.close()">Close</button>
+            <button class="report-action-button" onclick="window.print()">Print / Save PDF</button>
+          </div>
+        </div>
+        <main class="quote-shell">
+          <header class="quote-header">
+            <div>
+              <h1>Quote — ${escapeHtml(input.revisionLabel)}</h1>
+              <p style="margin:4px 0 0;color:var(--muted)">${escapeHtml(input.jobName)} &middot; ${escapeHtml(input.drawingName)}</p>
+            </div>
+            <aside class="quote-header-meta">
+              ${input.companyName ? `<div><strong>${escapeHtml(input.companyName)}</strong></div>` : ""}
+              <div>Customer: ${escapeHtml(input.customerName)}</div>
+              ${input.preparedBy ? `<div>Prepared by: ${escapeHtml(input.preparedBy)}</div>` : ""}
+              <div>Date: ${formatTimestamp(input.generatedAtIso)}</div>
+            </aside>
+          </header>
+
+          <figure class="quote-drawing-figure">
+            ${isometricSvg}
+          </figure>
+
+          <div class="quote-summary-grid">
+            <div class="quote-summary-stat"><span>Fence runs</span><strong>${input.estimateSegments.length}</strong></div>
+            <div class="quote-summary-stat"><span>Gates</span><strong>${input.layout.gates?.length ?? 0}</strong></div>
+            <div class="quote-summary-stat"><span>Basketball posts</span><strong>${input.layout.basketballPosts?.length ?? 0}</strong></div>
+            <div class="quote-summary-stat"><span>Materials</span><strong>${formatQuoteMoney(input.totals.materialCost)}</strong></div>
+            <div class="quote-summary-stat"><span>Labour</span><strong>${formatQuoteMoney(input.totals.labourCost)}</strong></div>
+            <div class="quote-summary-stat"><span>Total</span><strong>${formatQuoteMoney(input.totals.totalCost)}</strong></div>
+          </div>
+
+          <h2 class="quote-sheet-title">Fence Schedule</h2>
+          ${fenceScheduleHtml}
+
+          <h2 class="quote-sheet-title">Materials</h2>
+          ${materialSectionsHtml || "<p>No material items.</p>"}
+
+          <h2 class="quote-sheet-title">Labour</h2>
+          ${labourSectionsHtml || "<p>No labour items.</p>"}
+
+          <div class="quote-totals">
+            <div class="quote-totals-row"><span>Materials subtotal</span><strong>${formatQuoteMoney(input.totals.materialCost)}</strong></div>
+            <div class="quote-totals-row"><span>Labour subtotal</span><strong>${formatQuoteMoney(input.totals.labourCost)}</strong></div>
+            <div class="quote-totals-row is-grand"><span>Total</span><strong>${formatQuoteMoney(input.totals.totalCost)}</strong></div>
+          </div>
+
+          ${warningsHtml}
+
+          <footer class="quote-footer">
+            Generated by Fence Estimator. Use the print action to save this quote as a PDF.
+          </footer>
+        </main>
+        <script>
+          window.addEventListener("load", () => {
+            document.title = ${JSON.stringify(fileName)};
+            const currentUrl = window.location.href;
+            window.setTimeout(() => {
+              if (currentUrl.startsWith("blob:") && typeof URL.revokeObjectURL === "function") {
+                URL.revokeObjectURL(currentUrl);
+              }
+            }, 60000);
+          });
+        </script>
+      </body>
+    </html>
+  `.trim();
+}
+
+export function exportQuotePdfReport(input: QuotePdfReportInput): boolean {
+  const reportHtml = buildQuotePdfReportHtml(input);
+  const reportBlob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+  const reportUrl = URL.createObjectURL(reportBlob);
+  const reportWindow = window.open(reportUrl, "_blank");
+  if (!reportWindow) {
+    URL.revokeObjectURL(reportUrl);
+    return false;
+  }
+  return true;
+}

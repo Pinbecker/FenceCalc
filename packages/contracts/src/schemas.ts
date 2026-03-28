@@ -987,11 +987,16 @@ export const jobCommercialInputsSchema = z.object({
   clearSpoils: z.boolean()
 });
 
+export const taskPrioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
+
 export const jobTaskRecordSchema = z.object({
   id: z.string().trim().min(1).max(120),
   companyId: z.string().trim().min(1).max(120),
   jobId: z.string().trim().min(1).max(120),
+  jobName: z.string().trim().max(200),
   title: jobTaskTitleSchema,
+  description: z.string().trim().max(2_000),
+  priority: taskPrioritySchema,
   isCompleted: z.boolean(),
   assignedUserId: z.string().trim().min(1).max(120).nullable(),
   assignedUserDisplayName: z.string().trim().max(120),
@@ -1074,6 +1079,8 @@ export const jobUpdateRequestSchema = z
 
 export const jobTaskCreateRequestSchema = z.object({
   title: jobTaskTitleSchema,
+  description: z.string().trim().max(2_000).optional(),
+  priority: taskPrioritySchema.optional(),
   assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
   dueAtIso: z.string().datetime().nullable().optional()
 });
@@ -1081,6 +1088,8 @@ export const jobTaskCreateRequestSchema = z.object({
 export const jobTaskUpdateRequestSchema = z
   .object({
     title: jobTaskTitleSchema.optional(),
+    description: z.string().trim().max(2_000).optional(),
+    priority: taskPrioritySchema.optional(),
     assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
     dueAtIso: z.string().datetime().nullable().optional(),
     isCompleted: z.boolean().optional()
@@ -1088,6 +1097,8 @@ export const jobTaskUpdateRequestSchema = z
   .superRefine((value, context) => {
     if (
       value.title === undefined &&
+      value.description === undefined &&
+      value.priority === undefined &&
       value.assignedUserId === undefined &&
       value.dueAtIso === undefined &&
       value.isCompleted === undefined

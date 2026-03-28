@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "../authorization.js";
 import { mergeJobCommercialManualEntries } from "../jobEstimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
-import { createJobDrawingForCompany, createJobForCompany, createJobTaskForCompany, deleteJobForCompany, setJobPrimaryDrawingForCompany, updateJobForCompany, updateJobTaskForCompany } from "../services/jobService.js";
+import { createJobDrawingForCompany, createJobForCompany, createJobTaskForCompany, deleteJobForCompany, deleteJobTaskForCompany, setJobPrimaryDrawingForCompany, updateJobForCompany, updateJobTaskForCompany } from "../services/jobService.js";
 import { createQuoteForJob } from "../services/quoteService.js";
 
 const jobScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
@@ -445,6 +445,41 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
       return reply.code(400).send({ error: "Unable to update task" });
     }
     return reply.code(200).send({ task: result.task });
+  });
+
+  app.delete("/api/v1/jobs/:id/tasks/:taskId", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    const params = jobTaskRouteParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      return reply.code(400).send({
+        error: "Invalid task route parameters",
+        details: params.error.flatten()
+      });
+    }
+
+    const result = await deleteJobTaskForCompany(repository, authenticated, params.data.id, params.data.taskId);
+    if (result.kind !== "success") {
+      if (result.kind === "job_not_found") {
+        return reply.code(404).send({ error: "Job not found" });
+      }
+      if (result.kind === "task_not_found") {
+        return reply.code(404).send({ error: "Task not found" });
+      }
+      return reply.code(400).send({ error: "Unable to delete task" });
+    }
+    return reply.code(200).send({ success: true });
+  });
+
+  app.get("/api/v1/tasks", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    const tasks = await repository.listCompanyTasks(authenticated.company.id);
+    return reply.code(200).send({ tasks });
   });
 
   app.get("/api/v1/jobs/:id/activity", async (request, reply) => {

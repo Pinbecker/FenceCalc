@@ -1,6 +1,9 @@
-import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, JobStage, JobSummary } from "@fence-estimator/contracts";
+import { useEffect, useState } from "react";
+
+import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, JobStage, JobSummary, JobTaskRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
+import { listCompanyTasks } from "./apiClient";
 import { buildFallbackJobSummaries, hasLegacyJoblessDrawings, resolveJobWorkspaceTarget } from "./jobFallbacks";
 import type { PortalRoute } from "./useHashRoute";
 
@@ -53,6 +56,15 @@ function formatMoney(value: number | null): string {
 }
 
 export function DashboardPage({ session, customers, jobs = [], drawings = [], onNavigate }: DashboardPageProps) {
+  const [companyTasks, setCompanyTasks] = useState<JobTaskRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCompanyTasks().then((tasks) => {
+      if (!cancelled) setCompanyTasks(tasks);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const archivedCustomerIds = new Set(customers.filter((customer) => customer.isArchived).map((customer) => customer.id));
   const activeDrawings = drawings
     .filter((drawing) => !drawing.isArchived)
@@ -147,6 +159,35 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
         </section>
 
         <div className="portal-dashboard-side">
+          {companyTasks.length > 0 ? (
+            <section className="portal-surface-card portal-dashboard-activity portal-dashboard-tasks-panel">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Action items</span>
+                  <h2>Open tasks</h2>
+                </div>
+              </div>
+              <div className="portal-dashboard-activity-list">
+                {companyTasks.map((task) => (
+                  <button type="button" key={task.id} className="portal-dashboard-activity-row portal-dashboard-task-row" onClick={() => onNavigate("job", { jobId: task.jobId, tab: "overview" })}>
+                    <div className="portal-dashboard-activity-copy">
+                      <div className="portal-dashboard-task-title-row">
+                        <strong>{task.title}</strong>
+                        {task.priority !== "NORMAL" ? (
+                          <span className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
+                        ) : null}
+                      </div>
+                      <span>
+                        {task.jobName || "Job"}
+                        {task.assignedUserDisplayName ? ` · ${task.assignedUserDisplayName}` : ""}
+                        {task.dueAtIso ? ` · Due ${formatTimestamp(task.dueAtIso)}` : ""}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <section className="portal-surface-card portal-dashboard-activity">
             <div className="portal-section-heading">
               <div>

@@ -295,7 +295,7 @@ export async function createJobDrawingForCompany(
 
   const existingDrawings = await repository.listDrawingsForJob(job.id, authenticated.company.id);
   return createDrawingForCompany(repository, authenticated, {
-    name: input.name?.trim() || (sourceDrawing ? `${sourceDrawing.name} Copy` : buildNextJobDrawingName(job, existingDrawings.length)),
+    name: input.name?.trim() || (sourceDrawing ? `${job.name} REV ${existingDrawings.length}` : buildNextJobDrawingName(job, existingDrawings.length)),
     customerId: job.customerId,
     jobId: job.id,
     layout: sourceDrawing?.layout ?? EMPTY_LAYOUT,
@@ -348,7 +348,7 @@ export async function createJobTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   jobId: string,
-  input: { title: string; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined }
+  input: { title: string; description?: string | undefined; priority?: string | undefined; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined }
 ): Promise<JobTaskMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -366,6 +366,8 @@ export async function createJobTaskForCompany(
     companyId: authenticated.company.id,
     jobId,
     title: input.title,
+    description: input.description ?? "",
+    priority: input.priority ?? "NORMAL",
     assignedUserId: ownerResult?.ownerUserId ?? null,
     dueAtIso: input.dueAtIso ?? null,
     createdByUserId: authenticated.user.id,
@@ -392,7 +394,7 @@ export async function updateJobTaskForCompany(
   authenticated: AuthenticatedRequestContext,
   jobId: string,
   taskId: string,
-  input: { title?: string | undefined; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined; isCompleted?: boolean | undefined }
+  input: { title?: string | undefined; description?: string | undefined; priority?: string | undefined; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined; isCompleted?: boolean | undefined }
 ): Promise<JobTaskMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -416,6 +418,8 @@ export async function updateJobTaskForCompany(
     companyId: authenticated.company.id,
     jobId,
     title: input.title ?? existing.title,
+    description: input.description ?? existing.description,
+    priority: input.priority ?? existing.priority,
     assignedUserId: ownerResult?.ownerUserId ?? existing.assignedUserId,
     dueAtIso: input.dueAtIso ?? existing.dueAtIso,
     isCompleted,
@@ -439,4 +443,33 @@ export async function updateJobTaskForCompany(
   });
 
   return { kind: "success", task };
+}
+
+export async function deleteJobTaskForCompany(
+  repository: AppRepository,
+  authenticated: AuthenticatedRequestContext,
+  jobId: string,
+  taskId: string
+): Promise<{ kind: "success" } | { kind: "job_not_found" } | { kind: "task_not_found" }> {
+  const job = await repository.getJobById(jobId, authenticated.company.id);
+  if (!job) {
+    return { kind: "job_not_found" };
+  }
+  const deleted = await repository.deleteJobTask(taskId, jobId, authenticated.company.id);
+  if (!deleted) {
+    return { kind: "task_not_found" };
+  }
+
+  await writeAuditLog(repository, {
+    companyId: authenticated.company.id,
+    actorUserId: authenticated.user.id,
+    entityType: "JOB",
+    entityId: jobId,
+    action: "JOB_TASK_DELETED",
+    summary: `${authenticated.user.displayName} deleted a task from ${job.name}`,
+    createdAtIso: new Date().toISOString(),
+    metadata: { taskId }
+  });
+
+  return { kind: "success" };
 }

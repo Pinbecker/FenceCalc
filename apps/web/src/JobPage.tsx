@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   JOB_STAGES,
+  TASK_PRIORITIES,
   type AncillaryEstimateItem,
   type AuditLogRecord,
   type AuthSessionEnvelope,
@@ -16,14 +17,17 @@ import {
   type JobTaskRecord,
   type LayoutModel,
   type PricedEstimateResult,
-  type QuoteRecord
+  type QuoteRecord,
+  type TaskPriority
 } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
+import { exportQuotePdfReport } from "./drawingPdfReport";
 import {
   createJobDrawing,
   createJobQuoteSnapshot,
   createJobTask,
+  deleteJobTask,
   getDrawing,
   getJob,
   getJobEstimate,
@@ -31,7 +35,6 @@ import {
   listJobDrawings,
   listJobQuotes,
   listJobTasks,
-  setJobPrimaryDrawing,
   updateJob,
   updateJobTask
 } from "./apiClient";
@@ -48,13 +51,12 @@ import {
 import type { PortalRoute } from "./useHashRoute";
 import { buildEstimateDisplaySections, formatQuantityForDisplay } from "./workbookPresentation";
 
-type JobTab = "overview" | "drawings" | "estimate" | "quotes" | "activity";
+type JobTab = "overview" | "drawings" | "estimate" | "activity";
 
 const JOB_TAB_LABELS: Record<JobTab, string> = {
   overview: "Overview",
   drawings: "Drawings",
   estimate: "Estimate",
-  quotes: "Quotes",
   activity: "Activity"
 };
 
@@ -140,12 +142,6 @@ function buildCommercialInputs(
   };
 }
 
-function quoteLabel(quote: QuoteRecord): string {
-  return `${formatTimestamp(quote.createdAtIso)} | v${quote.sourceDrawingVersionNumber ?? quote.drawingVersionNumber} | ${formatMoney(
-    quote.pricedEstimate.totals.totalCost
-  )}`;
-}
-
 interface JobPageProps {
   session: AuthSessionEnvelope;
   query?: Record<string, string>;
@@ -172,7 +168,7 @@ export function JobPage({
   const jobId = query?.jobId ?? null;
   const requestedDrawingId = query?.drawingId ?? null;
   const tabValue = (query?.tab as JobTab | undefined) ?? "overview";
-  const currentTab: JobTab = ["overview", "drawings", "estimate", "quotes", "activity"].includes(tabValue) ? tabValue : "overview";
+  const currentTab: JobTab = ["overview", "drawings", "estimate", "activity"].includes(tabValue) ? tabValue : "overview";
   const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
 
   const [job, setJob] = useState<JobRecord | null>(null);
@@ -187,6 +183,9 @@ export function JobPage({
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskAssignee, setTaskAssignee] = useState<string | null>(null);
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskPriority, setTaskPriority] = useState<TaskPriority>("NORMAL");
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [isSavingStage, setIsSavingStage] = useState(false);
@@ -239,17 +238,25 @@ export function JobPage({
   );
 
   const sortedTasks = useMemo(() => {
+    const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
     return [...tasks].sort((a, b) => {
       if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
-      if (!a.isCompleted && a.dueAtIso && b.dueAtIso) return a.dueAtIso.localeCompare(b.dueAtIso);
-      if (!a.isCompleted && a.dueAtIso) return -1;
-      if (!a.isCompleted && b.dueAtIso) return 1;
+      if (!a.isCompleted) {
+        const pa = priorityOrder[a.priority] ?? 2;
+        const pb = priorityOrder[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        if (a.dueAtIso && b.dueAtIso) return a.dueAtIso.localeCompare(b.dueAtIso);
+        if (a.dueAtIso) return -1;
+        if (b.dueAtIso) return 1;
+      }
       return b.createdAtIso.localeCompare(a.createdAtIso);
     });
   }, [tasks]);
   const openTaskCount = tasks.filter((entry) => !entry.isCompleted).length;
   const latestQuote = quotes[0] ?? null;
-  const secondaryDrawings = drawings.filter((entry) => entry.id !== job?.primaryDrawingId);
+  const sortedDrawings = useMemo(() => {
+    return [...drawings].sort((a, b) => a.createdAtIso.localeCompare(b.createdAtIso));
+  }, [drawings]);
 
   const navigateToJob = useCallback(
     (nextTab: JobTab, nextDrawingId?: string | null) => {
@@ -419,22 +426,6 @@ export function JobPage({
     }
   };
 
-  const handleSetPrimaryDrawing = async (drawingId: string) => {
-    if (!job) {
-      return;
-    }
-    setErrorMessage(null);
-    try {
-      const updated = await setJobPrimaryDrawing(job.id, drawingId);
-      setJob(updated);
-      await Promise.all([loadWorkspace(job.id), onRefreshJobs(), onRefreshDrawings()]);
-      navigateToJob(currentTab, drawingId);
-      setNoticeMessage("Primary drawing updated.");
-    } catch (error) {
-      setErrorMessage((error as Error).message);
-    }
-  };
-
   const handleAddDrawing = async (sourceDrawingId?: string) => {
     if (!job) {
       return;
@@ -462,17 +453,53 @@ export function JobPage({
       await createJobTask(job.id, {
         title: taskTitle.trim(),
         assignedUserId: taskAssignee,
-        dueAtIso: taskDueDate ? new Date(`${taskDueDate}T09:00:00`).toISOString() : null
+        dueAtIso: taskDueDate ? new Date(`${taskDueDate}T09:00:00`).toISOString() : null,
+        description: taskDescription.trim() || undefined,
+        priority: taskPriority !== "NORMAL" ? taskPriority : undefined
       });
       setTaskTitle("");
       setTaskDueDate("");
       setTaskAssignee(null);
+      setTaskDescription("");
+      setTaskPriority("NORMAL");
       await Promise.all([loadWorkspace(job.id), onRefreshJobs()]);
       setNoticeMessage("Task added.");
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
       setIsSavingTask(false);
+    }
+  };
+
+  const handleUpdateTaskField = async (task: JobTaskRecord, field: Partial<{ title: string; description: string; priority: TaskPriority; assignedUserId: string | null; dueAtIso: string | null }>) => {
+    if (!job) {
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      const updated = await updateJobTask(job.id, task.id, field);
+      setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      await onRefreshJobs();
+    } catch (error) {
+      setErrorMessage((error as Error).message);
+    }
+  };
+
+  const handleDeleteTask = async (task: JobTaskRecord) => {
+    if (!job) {
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      await deleteJobTask(job.id, task.id);
+      setTasks((current) => current.filter((entry) => entry.id !== task.id));
+      if (expandedTaskId === task.id) {
+        setExpandedTaskId(null);
+      }
+      await onRefreshJobs();
+      setNoticeMessage("Task deleted.");
+    } catch (error) {
+      setErrorMessage((error as Error).message);
     }
   };
 
@@ -513,8 +540,8 @@ export function JobPage({
     }
   };
 
-  const handleSaveQuote = async () => {
-    if (!job || !selectedDrawing) {
+  const handleGenerateQuotePdf = async () => {
+    if (!job || !selectedDrawing || !selectedDrawingRecord || !pricedEstimate) {
       return;
     }
     setIsSavingQuote(true);
@@ -523,7 +550,44 @@ export function JobPage({
       const quote = await createJobQuoteSnapshot(job.id, ancillaryItems, manualEntries, selectedDrawing.id);
       setQuotes((current) => [quote, ...current]);
       await onRefreshJobs();
-      setNoticeMessage(`Saved quote snapshot at ${formatTimestamp(quote.createdAtIso)}.`);
+
+      const drawingIndex = sortedDrawings.findIndex((d) => d.id === selectedDrawing.id);
+      const revisionLabel = drawingIndex <= 0 ? "Original" : `REV ${drawingIndex}`;
+
+      const layout = selectedDrawingRecord.layout ?? EMPTY_LAYOUT;
+      const segments = layout.segments ?? [];
+      const ordinalMap = new Map(segments.map((s, i) => [s.id, i + 1]));
+
+      const opened = exportQuotePdfReport({
+        companyName: session.company.name ?? null,
+        preparedBy: session.user.displayName ?? null,
+        customerName: customer?.name ?? "",
+        jobName: job.name,
+        drawingName: selectedDrawing.name,
+        revisionLabel,
+        generatedAtIso: new Date().toISOString(),
+        layout,
+        materialSections: materialSections.map((s) => ({
+          title: s.title,
+          subtotal: s.subtotal,
+          rows: s.rows.map((r) => ({ label: r.label, unit: r.unit, quantity: r.quantity, rate: r.rate, total: r.total }))
+        })),
+        labourSections: labourSections.map((s) => ({
+          title: s.title,
+          subtotal: s.subtotal,
+          rows: s.rows.map((r) => ({ label: r.label, unit: r.unit, quantity: r.quantity, rate: r.rate, total: r.total }))
+        })),
+        totals: pricedEstimate.totals,
+        warnings: pricedEstimate.warnings,
+        estimateSegments: segments,
+        segmentOrdinalById: ordinalMap
+      });
+
+      if (!opened) {
+        setErrorMessage("Could not open quote PDF. Please allow pop-ups for this site and try again.");
+      } else {
+        setNoticeMessage("Quote saved and PDF generated.");
+      }
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -569,7 +633,7 @@ export function JobPage({
       <section className="portal-page">
         <div className="portal-empty-state">
           <h1>No job selected</h1>
-          <p>Open a customer workspace and choose a job to review drawings, estimate, quotes, and activity.</p>
+          <p>Open a customer workspace and choose a job to review drawings, estimates, and activity.</p>
           <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("customers")}>
             Browse customers
           </button>
@@ -644,23 +708,6 @@ export function JobPage({
           <button type="button" className="portal-secondary-button portal-compact-button" onClick={handleOpenEditDetails}>
             Edit details
           </button>
-          {job.primaryDrawingId ? (
-            <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("editor", { drawingId: job.primaryDrawingId! })}>
-              Open primary drawing
-            </button>
-          ) : null}
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleAddDrawing()} disabled={isAddingDrawing}>
-            {isAddingDrawing ? "Adding..." : "Add drawing"}
-          </button>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => navigateToJob("estimate", selectedDrawing?.id ?? null)}>
-            Review estimate
-          </button>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => navigateToJob("quotes", selectedDrawing?.id ?? null)}>
-            Quotes
-          </button>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("customer", { customerId: job.customerId })}>
-            Customer page
-          </button>
           <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleArchiveToggle()} disabled={isSavingStage}>
             {job.isArchived ? "Restore job" : "Archive job"}
           </button>
@@ -695,19 +742,11 @@ export function JobPage({
           <div className="portal-job-workflow-grid">
             <button type="button" className="portal-job-workflow-step" disabled={!job.primaryDrawingId} onClick={() => job.primaryDrawingId && onNavigate("editor", { drawingId: job.primaryDrawingId })}>
               <strong>Design</strong>
-              <span>{job.primaryDrawingId ? "Open the primary drawing and keep the layout moving." : "Add a drawing first to start designing."}</span>
+              <span>{job.primaryDrawingId ? "Open the latest drawing and keep the layout moving." : "Add a drawing first to start designing."}</span>
             </button>
             <button type="button" className="portal-job-workflow-step" onClick={() => navigateToJob("estimate", selectedDrawing?.id ?? null)}>
               <strong>Estimate</strong>
               <span>Review quantities, commercial inputs, and material build-up.</span>
-            </button>
-            <button type="button" className="portal-job-workflow-step" onClick={() => navigateToJob("quotes", selectedDrawing?.id ?? null)}>
-              <strong>Quote</strong>
-              <span>Check saved snapshots and move the job through the pipeline.</span>
-            </button>
-            <button type="button" className="portal-job-workflow-step" onClick={() => onNavigate("customer", { customerId: job.customerId })}>
-              <strong>Customer</strong>
-              <span>Jump back to the customer workspace for site context and related jobs.</span>
             </button>
           </div>
         </section>
@@ -743,14 +782,26 @@ export function JobPage({
             </div>
 
             <div className="portal-job-task-form">
-              <input placeholder="Add follow-up task" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask(); }} />
-              <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} />
-              <select value={taskAssignee ?? ""} onChange={(event) => setTaskAssignee(event.target.value || null)}>
-                <option value="">Unassigned</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>{user.displayName}</option>
-                ))}
-              </select>
+              <div className="portal-job-task-form-row">
+                <input placeholder="Add follow-up task" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask(); }} />
+                <select className="portal-task-priority-select" value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}>
+                  {TASK_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="portal-job-task-form-row">
+                <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} />
+                <select value={taskAssignee ?? ""} onChange={(event) => setTaskAssignee(event.target.value || null)}>
+                  <option value="">Unassigned</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>{user.displayName}</option>
+                  ))}
+                </select>
+              </div>
+              {taskTitle.trim() ? (
+                <textarea className="portal-task-description-input" placeholder="Description (optional)" rows={2} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} />
+              ) : null}
               <button type="button" className="portal-primary-button" onClick={() => void handleCreateTask()} disabled={isSavingTask || !taskTitle.trim()}>
                 {isSavingTask ? "Saving..." : "Add task"}
               </button>
@@ -758,27 +809,74 @@ export function JobPage({
 
             <div className="portal-job-task-list">
               {sortedTasks.length === 0 ? <p className="portal-empty-copy">No tasks on this job yet.</p> : null}
-              {sortedTasks.map((task) => (
-                <div key={task.id} className={`portal-dashboard-row portal-job-task-row${task.isCompleted ? " is-complete" : ""}`}>
-                  <div className="portal-dashboard-row-copy">
-                    <div className="portal-dashboard-row-title">
-                      <strong>{task.title}</strong>
-                      <p>
-                        {task.assignedUserDisplayName || "Unassigned"}
-                        {task.dueAtIso ? ` | Due ${formatTimestamp(task.dueAtIso)}` : ""}
-                      </p>
+              {sortedTasks.map((task) => {
+                const isExpanded = expandedTaskId === task.id;
+                return (
+                  <div key={task.id} className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}`}>
+                    <div className="portal-job-task-card-header" role="button" tabIndex={0} onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setExpandedTaskId(isExpanded ? null : task.id); }}>
+                      <div className="portal-job-task-card-left">
+                        <button type="button" className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`} onClick={(event) => { event.stopPropagation(); void handleToggleTask(task); }} title={task.isCompleted ? "Reopen task" : "Complete task"}>
+                          {task.isCompleted ? "✓" : ""}
+                        </button>
+                        <div className="portal-job-task-card-title">
+                          <strong className={task.isCompleted ? "portal-task-done-text" : ""}>{task.title}</strong>
+                          <span className="portal-job-task-card-meta">
+                            {task.assignedUserDisplayName || "Unassigned"}
+                            {task.dueAtIso ? ` · Due ${formatTimestamp(task.dueAtIso)}` : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="portal-job-task-card-right">
+                        {task.priority !== "NORMAL" ? (
+                          <span className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
+                        ) : null}
+                        <span className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}>
+                          {task.isCompleted ? "Done" : "Open"}
+                        </span>
+                      </div>
                     </div>
+                    {task.description && !isExpanded ? (
+                      <p className="portal-job-task-card-description-preview">{task.description}</p>
+                    ) : null}
+                    {isExpanded ? (
+                      <div className="portal-job-task-card-detail">
+                        {task.description ? <p className="portal-job-task-card-description">{task.description}</p> : null}
+                        <div className="portal-job-task-card-fields">
+                          <label className="portal-customer-edit-field">
+                            <span>Priority</span>
+                            <select value={task.priority} onChange={(event) => void handleUpdateTaskField(task, { priority: event.target.value as TaskPriority })}>
+                              {TASK_PRIORITIES.map((p) => (
+                                <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="portal-customer-edit-field">
+                            <span>Assignee</span>
+                            <select value={task.assignedUserId ?? ""} onChange={(event) => void handleUpdateTaskField(task, { assignedUserId: event.target.value || null })}>
+                              <option value="">Unassigned</option>
+                              {users.map((user) => (
+                                <option key={user.id} value={user.id}>{user.displayName}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="portal-customer-edit-field">
+                            <span>Due date</span>
+                            <input type="date" value={task.dueAtIso ? task.dueAtIso.slice(0, 10) : ""} onChange={(event) => void handleUpdateTaskField(task, { dueAtIso: event.target.value ? new Date(`${event.target.value}T09:00:00`).toISOString() : null })} />
+                          </label>
+                        </div>
+                        <div className="portal-job-task-card-actions">
+                          <button type="button" className="portal-text-button" onClick={() => void handleToggleTask(task)}>
+                            {task.isCompleted ? "Reopen" : "Complete"}
+                          </button>
+                          <button type="button" className="portal-text-button portal-danger-text" onClick={() => void handleDeleteTask(task)}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="portal-dashboard-row-trail">
-                    <span className={`portal-dashboard-row-status ${task.isCompleted ? "drawing-status-won" : "drawing-status-draft"}`}>
-                      {task.isCompleted ? "Done" : "Open"}
-                    </span>
-                    <button type="button" className="portal-text-button" onClick={() => void handleToggleTask(task)}>
-                      {task.isCompleted ? "Reopen" : "Complete"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -825,51 +923,42 @@ export function JobPage({
           <section className="portal-surface-card portal-job-primary-card">
             <div className="portal-section-heading">
               <div>
-                <span className="portal-section-kicker">Primary drawing</span>
-                <h2>{selectedDrawing?.name ?? "No drawing selected"}</h2>
+                <span className="portal-section-kicker">Revisions</span>
+                <h2>Drawing revisions</h2>
               </div>
-              {selectedDrawing ? (
-                <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("editor", { drawingId: selectedDrawing.id })}>
-                  Open editor
-                </button>
-              ) : null}
-            </div>
-            <div className="portal-customer-drawing-card-preview">
-              <DrawingPreview layout={selectedDrawing?.previewLayout ?? EMPTY_LAYOUT} label={selectedDrawing?.name ?? "Drawing"} variant="card" />
-            </div>
-          </section>
-
-          <section className="portal-surface-card">
-            <div className="portal-section-heading">
-              <div>
-                <span className="portal-section-kicker">Drawings</span>
-                <h2>Other job drawings</h2>
-              </div>
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleAddDrawing()} disabled={isAddingDrawing}>
+                {isAddingDrawing ? "Adding..." : "New drawing"}
+              </button>
             </div>
             <div className="portal-customer-drawing-grid">
-              {secondaryDrawings.length === 0 ? <p className="portal-empty-copy">No secondary drawings yet.</p> : null}
-              {secondaryDrawings.map((drawing) => (
+              {sortedDrawings.length === 0 ? <p className="portal-empty-copy">No drawings yet. Create a drawing to get started.</p> : null}
+              {sortedDrawings.map((drawing, index) => (
                 <article key={drawing.id} className="portal-customer-drawing-card">
-                  <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => navigateToJob("estimate", drawing.id)} onKeyDown={(event) => {
+                  <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => onNavigate("editor", { drawingId: drawing.id })} onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
-                      navigateToJob("estimate", drawing.id);
+                      onNavigate("editor", { drawingId: drawing.id });
                     }
                   }}>
                     <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
                   </div>
                   <div className="portal-customer-drawing-card-body">
                     <div className="portal-customer-drawing-card-copy">
-                      <h3>{drawing.name}</h3>
+                      <h3>{index === 0 ? "Original" : `REV ${index}`}</h3>
+                      <span>{drawing.name}</span>
                     </div>
                     <div className="portal-customer-drawing-card-meta">
+                      <span>{drawing.segmentCount} segments | {drawing.gateCount} gates</span>
                       <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
                     </div>
                     <div className="portal-customer-drawing-card-footer">
                       <button type="button" className="portal-text-button" onClick={() => onNavigate("editor", { drawingId: drawing.id })}>
                         Open editor
                       </button>
-                      <button type="button" className="portal-text-button" onClick={() => void handleSetPrimaryDrawing(drawing.id)}>
-                        Make primary
+                      <button type="button" className="portal-text-button" onClick={() => void handleAddDrawing(drawing.id)} disabled={isAddingDrawing}>
+                        Create revision
+                      </button>
+                      <button type="button" className="portal-text-button" onClick={() => navigateToJob("estimate", drawing.id)}>
+                        Estimate
                       </button>
                     </div>
                   </div>
@@ -882,19 +971,26 @@ export function JobPage({
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Quotes</span>
-                <h2>Recent snapshots</h2>
+                <h2>Revision quotes</h2>
               </div>
             </div>
             <div className="estimate-ancillary-list">
-              {quotes.length === 0 ? <p className="portal-empty-copy">No quote snapshots saved yet.</p> : null}
-              {quotes.slice(0, 4).map((quote) => (
-                <article key={quote.id} className="estimate-ancillary-row">
-                  <div className="estimate-item-copy">
-                    <strong>{quote.pricedEstimate.drawing.drawingName}</strong>
-                    <span>{quoteLabel(quote)}</span>
-                  </div>
-                </article>
-              ))}
+              {sortedDrawings.length === 0 ? <p className="portal-empty-copy">Add a drawing to generate a quote.</p> : null}
+              {sortedDrawings.map((drawing, index) => {
+                const drawingQuote = quotes.find((q) => q.drawingId === drawing.id || q.sourceDrawingId === drawing.id);
+                return (
+                  <article key={drawing.id} className="estimate-ancillary-row">
+                    <div className="estimate-item-copy">
+                      <strong>{index === 0 ? "Original" : `REV ${index}`}</strong>
+                      <span>{drawing.name}</span>
+                    </div>
+                    <span>{drawingQuote ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost) : "No quote yet"}</span>
+                    <button type="button" className="portal-text-button" onClick={() => navigateToJob("estimate", drawing.id)}>
+                      {drawingQuote ? "Update" : "Generate"}
+                    </button>
+                  </article>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -905,20 +1001,20 @@ export function JobPage({
         <section className="portal-surface-card portal-customer-drawings-panel">
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Job drawings</span>
-              <h2>Drawings</h2>
+              <span className="portal-section-kicker">Drawing revisions</span>
+              <h2>Revisions</h2>
             </div>
             <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleAddDrawing()} disabled={isAddingDrawing}>
-              {isAddingDrawing ? "Adding..." : "Add blank drawing"}
+              {isAddingDrawing ? "Adding..." : "New drawing"}
             </button>
           </div>
 
           <div className="portal-customer-drawing-grid">
-            {drawings.map((drawing) => (
-              <article key={drawing.id} className={`portal-customer-drawing-card${drawing.id === job.primaryDrawingId ? " is-primary" : ""}`}>
-                <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => navigateToJob("estimate", drawing.id)} onKeyDown={(event) => {
+            {sortedDrawings.map((drawing, index) => (
+              <article key={drawing.id} className="portal-customer-drawing-card">
+                <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => onNavigate("editor", { drawingId: drawing.id })} onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
-                    navigateToJob("estimate", drawing.id);
+                    onNavigate("editor", { drawingId: drawing.id });
                   }
                 }}>
                   <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
@@ -926,10 +1022,10 @@ export function JobPage({
                 <div className="portal-customer-drawing-card-body">
                   <div className="portal-customer-drawing-card-head">
                     <div className="portal-customer-drawing-card-copy">
-                      <h3>{drawing.name}</h3>
+                      <h3>{index === 0 ? "Original" : `REV ${index}`}</h3>
+                      <span>{drawing.name}</span>
                     </div>
                     <div className="portal-customer-drawing-card-badges">
-                      {drawing.id === job.primaryDrawingId ? <span className="portal-customer-drawing-badge">Primary</span> : null}
                       {drawing.isArchived ? <span className="portal-customer-drawing-badge is-archived">Archived</span> : null}
                     </div>
                   </div>
@@ -941,13 +1037,8 @@ export function JobPage({
                     <button type="button" className="portal-text-button" onClick={() => onNavigate("editor", { drawingId: drawing.id })}>
                       Open editor
                     </button>
-                    {drawing.id !== job.primaryDrawingId ? (
-                      <button type="button" className="portal-text-button" onClick={() => void handleSetPrimaryDrawing(drawing.id)}>
-                        Set primary
-                      </button>
-                    ) : null}
-                    <button type="button" className="portal-text-button" onClick={() => void handleAddDrawing(drawing.id)}>
-                      Duplicate
+                    <button type="button" className="portal-text-button" onClick={() => void handleAddDrawing(drawing.id)} disabled={isAddingDrawing}>
+                      Create revision
                     </button>
                     <button type="button" className="portal-text-button" onClick={() => void onToggleDrawingArchived(drawing.id, !drawing.isArchived)}>
                       {drawing.isArchived ? "Unarchive" : "Archive"}
@@ -972,8 +1063,8 @@ export function JobPage({
                 <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleSaveControls()} disabled={isSavingControls || !pricedEstimate}>
                   {isSavingControls ? "Saving..." : "Save controls"}
                 </button>
-                <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleSaveQuote()} disabled={isSavingQuote || !pricedEstimate}>
-                  {isSavingQuote ? "Saving quote..." : "Save quote snapshot"}
+                <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleGenerateQuotePdf()} disabled={isSavingQuote || !pricedEstimate}>
+                  {isSavingQuote ? "Generating..." : "Generate quote PDF"}
                 </button>
               </div>
             </div>
@@ -1148,29 +1239,6 @@ export function JobPage({
         </>
       ) : null}
 
-      {currentTab === "quotes" ? (
-        <section className="portal-surface-card">
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">Quote pipeline</span>
-              <h2>Saved quotes</h2>
-            </div>
-          </div>
-          <div className="estimate-ancillary-list">
-            {quotes.length === 0 ? <p className="portal-empty-copy">No quotes saved yet.</p> : null}
-            {quotes.map((quote) => (
-              <article key={quote.id} className="estimate-ancillary-row">
-                <div className="estimate-item-copy">
-                  <strong>{quote.pricedEstimate.drawing.drawingName}</strong>
-                  <span>{quoteLabel(quote)}</span>
-                </div>
-                <span>{quote.pricedEstimate.pricingSnapshot.source === "DEFAULT" ? "Default pricing" : "Company pricing"}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {currentTab === "activity" ? (
         <section className="portal-surface-card portal-dashboard-activity">
           <div className="portal-section-heading">
@@ -1192,14 +1260,6 @@ export function JobPage({
             ))}
           </div>
         </section>
-      ) : null}
-
-      {canManagePricing && currentTab !== "estimate" ? (
-        <div className="portal-header-actions">
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("pricing")}>
-            Pricing workbook
-          </button>
-        </div>
       ) : null}
 
       {isEditingJobDetails ? (

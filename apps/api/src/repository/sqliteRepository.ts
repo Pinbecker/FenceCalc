@@ -196,12 +196,20 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.jobs.listJobTasks(jobId, companyId));
   }
 
+  public listCompanyTasks(companyId: string) {
+    return Promise.resolve(this.jobs.listCompanyTasks(companyId));
+  }
+
   public createJobTask(input: CreateJobTaskInput) {
     return Promise.resolve(this.jobs.createJobTask(input));
   }
 
   public updateJobTask(input: UpdateJobTaskInput) {
     return Promise.resolve(this.jobs.updateJobTask(input));
+  }
+
+  public deleteJobTask(taskId: string, jobId: string, companyId: string) {
+    return Promise.resolve(this.jobs.deleteJobTask(taskId, jobId, companyId));
   }
 
   public listDrawingsForCustomer(customerId: string, companyId: string) {
