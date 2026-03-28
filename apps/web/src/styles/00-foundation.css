@@ -1,27 +1,46 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 
 :root {
-  --bg-base: #f4efe7;
-  --bg-raised: rgba(255, 250, 242, 0.88);
-  --bg-panel: rgba(255, 248, 239, 0.94);
-  --bg-panel-alt: #f3ebdc;
-  --bg-strong: #e9dece;
-  --text-main: #1e2722;
-  --text-muted: #667267;
-  --text-subtle: #879284;
-  --line-strong: rgba(86, 99, 87, 0.16);
-  --action: #b35c3c;
-  --action-strong: #964626;
-  --action-soft: rgba(179, 92, 60, 0.12);
-  --action-ghost: #2f5d50;
-  --action-ghost-soft: rgba(47, 93, 80, 0.12);
-  --border: rgba(114, 125, 111, 0.22);
-  --shadow-soft: 0 18px 46px rgba(79, 61, 39, 0.12);
-  --shadow-strong: 0 26px 64px rgba(68, 50, 31, 0.18);
-  --editor-canvas: #1f2b2a;
-  --editor-panel: rgba(252, 247, 238, 0.9);
-  --editor-panel-strong: rgba(255, 252, 246, 0.95);
-  --editor-border: rgba(245, 229, 208, 0.16);
+  --ui-bg: #eef1ef;
+  --ui-bg-raised: rgba(249, 251, 250, 0.92);
+  --ui-bg-muted: #e4e9e6;
+  --ui-panel: rgba(255, 255, 255, 0.92);
+  --ui-panel-strong: rgba(255, 255, 255, 0.98);
+  --ui-text: #182220;
+  --ui-text-muted: #5d6c67;
+  --ui-text-soft: #7b8782;
+  --ui-line: rgba(55, 73, 68, 0.14);
+  --ui-line-strong: rgba(34, 49, 45, 0.22);
+  --ui-sage: #45605a;
+  --ui-sage-strong: #344843;
+  --ui-sage-soft: rgba(69, 96, 90, 0.12);
+  --ui-clay: #aa785c;
+  --ui-clay-strong: #93644b;
+  --ui-clay-soft: rgba(170, 120, 92, 0.12);
+  --ui-shadow-soft: 0 18px 40px rgba(18, 29, 27, 0.08);
+  --ui-shadow-strong: 0 28px 64px rgba(18, 29, 27, 0.12);
+  --ui-focus-outline: rgba(69, 96, 90, 0.24);
+  --bg-base: var(--ui-bg);
+  --bg-raised: var(--ui-bg-raised);
+  --bg-panel: rgba(250, 252, 251, 0.94);
+  --bg-panel-alt: var(--ui-bg-muted);
+  --bg-strong: #dfe5e2;
+  --text-main: var(--ui-text);
+  --text-muted: var(--ui-text-muted);
+  --text-subtle: var(--ui-text-soft);
+  --line-strong: var(--ui-line-strong);
+  --action: var(--ui-sage);
+  --action-strong: var(--ui-sage-strong);
+  --action-soft: var(--ui-sage-soft);
+  --action-ghost: #5d756f;
+  --action-ghost-soft: rgba(93, 117, 111, 0.12);
+  --border: rgba(55, 73, 68, 0.16);
+  --shadow-soft: var(--ui-shadow-soft);
+  --shadow-strong: var(--ui-shadow-strong);
+  --editor-canvas: #18211f;
+  --editor-panel: rgba(248, 250, 249, 0.88);
+  --editor-panel-strong: rgba(255, 255, 255, 0.94);
+  --editor-border: rgba(219, 228, 223, 0.14);
 }
 
 *,
@@ -42,9 +61,9 @@ body {
   font-family: "Manrope", "Segoe UI", sans-serif;
   color: var(--text-main);
   background:
-    radial-gradient(circle at top left, rgba(185, 116, 78, 0.1), transparent 28%),
-    radial-gradient(circle at right 20%, rgba(73, 122, 103, 0.08), transparent 24%),
-    linear-gradient(180deg, #f8f4ee 0%, #f3ede3 48%, #efe8dd 100%);
+    radial-gradient(circle at top left, rgba(69, 96, 90, 0.1), transparent 30%),
+    radial-gradient(circle at right 18%, rgba(170, 120, 92, 0.08), transparent 24%),
+    linear-gradient(180deg, #f8faf9 0%, #f0f3f1 50%, #e9eeeb 100%);
   background-attachment: fixed;
 }
 
@@ -53,7 +72,7 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(179, 92, 60, 0.28);
+  outline: 3px solid var(--ui-focus-outline);
   outline-offset: 2px;
 }
 
