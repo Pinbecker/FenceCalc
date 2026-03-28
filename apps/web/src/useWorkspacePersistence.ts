@@ -6,6 +6,7 @@ import type {
   CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
+  DrawingStatus,
   DrawingSummary,
   LayoutModel,
 } from "@fence-estimator/contracts";
@@ -36,6 +37,7 @@ export interface WorkspacePersistenceState {
   drawings: DrawingSummary[];
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentDrawingStatus: DrawingStatus | null;
   currentJobId: string | null;
   currentCustomerId: string | null;
   currentCustomerName: string;
@@ -74,6 +76,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [currentDrawingVersion, setCurrentDrawingVersion] = useState<number | null>(null);
   const [currentDrawingName, setCurrentDrawingName] = useState("");
+  const [currentDrawingStatus, setCurrentDrawingStatus] = useState<DrawingStatus | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [currentCustomerId, setCurrentCustomerIdState] = useState<string | null>(null);
   const [currentCustomerName, setCurrentCustomerName] = useState("");
@@ -115,10 +118,27 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     }
   }, [currentCustomerId, currentCustomerName, customers]);
 
+  useEffect(() => {
+    if (!currentDrawingId) {
+      return;
+    }
+    const drawing = drawings.find((entry) => entry.id === currentDrawingId);
+    if (!drawing) {
+      return;
+    }
+    if (drawing.versionNumber !== currentDrawingVersion) {
+      setCurrentDrawingVersion(drawing.versionNumber);
+    }
+    if (drawing.status !== currentDrawingStatus) {
+      setCurrentDrawingStatus(drawing.status);
+    }
+  }, [currentDrawingId, currentDrawingStatus, currentDrawingVersion, drawings]);
+
   const applyPersistedDrawing = useCallback((drawing: DrawingRecord) => {
     setCurrentDrawingId(drawing.id);
     setCurrentDrawingVersion(drawing.versionNumber);
     setCurrentDrawingName(drawing.name);
+    setCurrentDrawingStatus(drawing.status);
     setCurrentJobId(drawing.jobId ?? null);
     setCurrentCustomerIdState(drawing.customerId);
     setCurrentCustomerName(drawing.customerName);
@@ -144,6 +164,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentDrawingStatus(null);
       setCurrentJobId(null);
       setCurrentCustomerIdState(null);
       setCurrentCustomerName("");
@@ -160,6 +181,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentDrawingStatus(null);
       setCurrentJobId(null);
       setCurrentCustomerIdState(null);
       setCurrentCustomerName("");
@@ -274,6 +296,10 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setErrorMessage("Create a drawing before saving.");
       return;
     }
+    if (currentDrawingStatus === "QUOTED") {
+      setErrorMessage("Quoted drawings open in view-only mode. Create a new revision from the job page before making changes.");
+      return;
+    }
 
     const drawingName = currentDrawingName.trim();
     if (!drawingName) {
@@ -335,6 +361,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     currentCustomerId,
     currentDrawingId,
     currentDrawingName,
+    currentDrawingStatus,
     currentDrawingVersion,
     getSavedViewport,
     normalizedLayout,
@@ -352,6 +379,10 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     }
 
     clearMessages();
+    if (currentDrawingStatus === "QUOTED") {
+      setErrorMessage("Quoted drawings open in view-only mode. Create a new revision from the job page instead of saving over this quote.");
+      return false;
+    }
 
     const drawingName = input.name.trim();
     if (!drawingName) {
@@ -389,6 +420,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     applyPersistedDrawing,
     clearMessages,
     currentJobId,
+    currentDrawingStatus,
     getSavedViewport,
     normalizedLayout,
     refreshCustomers,
@@ -403,6 +435,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setCurrentDrawingId(null);
     setCurrentDrawingVersion(null);
     setCurrentDrawingName("");
+    setCurrentDrawingStatus(null);
     setCurrentJobId(null);
     setCurrentCustomerIdState(null);
     setCurrentCustomerName("");
@@ -415,6 +448,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     drawings,
     currentDrawingId,
     currentDrawingName,
+    currentDrawingStatus,
     currentJobId,
     currentCustomerId,
     currentCustomerName,

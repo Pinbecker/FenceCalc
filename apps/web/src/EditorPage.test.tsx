@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingStatus } from "@fence-estimator/contracts";
 
 type InteractionMode =
   | "DRAW"
@@ -146,6 +146,7 @@ const mockWorkspace = {
   customers: [baseCustomer],
   currentDrawingId: "drawing-1" as string | null,
   currentDrawingName: "Perimeter A",
+  currentDrawingStatus: "DRAFT" as DrawingStatus | null,
   currentCustomerId: "customer-1" as string | null,
   currentCustomerName: "Cleveland Land Services",
   isDirty: false,
@@ -296,13 +297,27 @@ vi.mock("./EditorLengthEditor", () => ({
 }));
 
 vi.mock("./EditorMenuBar", () => ({
-  EditorMenuBar: ({ drawingTitle, currentCustomerName, isDirty, session }: { drawingTitle: string; currentCustomerName: string; isDirty: boolean; session: { user: { displayName: string } } | null }) => (
-    <div>{`MenuBar title:${drawingTitle} customer:${currentCustomerName} save:${isDirty ? "Unsaved changes" : "Saved"} user:${session?.user?.displayName ?? ""}`}</div>
+  EditorMenuBar: ({
+    drawingTitle,
+    currentCustomerName,
+    currentDrawingStatus,
+    isDirty,
+    isReadOnly,
+    session
+  }: {
+    drawingTitle: string;
+    currentCustomerName: string;
+    currentDrawingStatus: string | null;
+    isDirty: boolean;
+    isReadOnly?: boolean;
+    session: { user: { displayName: string } } | null;
+  }) => (
+    <div>{`MenuBar title:${drawingTitle} customer:${currentCustomerName} status:${currentDrawingStatus ?? ""} mode:${isReadOnly ? "view-only" : "editable"} save:${isDirty ? "Unsaved changes" : "Saved"} user:${session?.user?.displayName ?? ""}`}</div>
   )
 }));
 
 vi.mock("./EditorToolPalette", () => ({
-  EditorToolPalette: ({ interactionMode }: { interactionMode: string }) => <div>{`ToolPalette ${interactionMode}`}</div>
+  EditorToolPalette: ({ interactionMode, isReadOnly }: { interactionMode: string; isReadOnly?: boolean }) => <div>{`ToolPalette ${interactionMode} readonly:${isReadOnly ? "yes" : "no"}`}</div>
 }));
 
 vi.mock("./EditorFloatingPanels", () => ({
@@ -315,8 +330,10 @@ vi.mock("./OptimizationPlanner", () => ({
   OptimizationPlanner: ({ canInspect }: { canInspect: boolean }) => <div>{`OptimizationPlanner ${canInspect}`}</div>
 }));
 
+const mockUseEditorCommands = vi.fn((_options?: unknown) => mockCommands);
+
 vi.mock("./editor/useEditorCommands", () => ({
-  useEditorCommands: () => mockCommands
+  useEditorCommands: (options: unknown) => mockUseEditorCommands(options)
 }));
 
 vi.mock("./editor/useEditorDerivedState", () => ({
@@ -433,6 +450,7 @@ describe("EditorPage", () => {
     mockWorkspace.customers = [baseCustomer];
     mockWorkspace.currentDrawingId = "drawing-1";
     mockWorkspace.currentDrawingName = "Perimeter A";
+    mockWorkspace.currentDrawingStatus = "DRAFT";
     mockWorkspace.currentCustomerId = "customer-1";
     mockWorkspace.currentCustomerName = "Cleveland Land Services";
     mockWorkspace.isDirty = false;
@@ -449,8 +467,9 @@ describe("EditorPage", () => {
 
     expect(html).toContain("MenuBar title:Perimeter A");
     expect(html).toContain("customer:Cleveland Land Services");
+    expect(html).toContain("mode:editable");
     expect(html).toContain("user:Jane Owner");
-    expect(html).toContain("ToolPalette SELECT");
+    expect(html).toContain("ToolPalette SELECT readonly:no");
     expect(html).toContain("CanvasStage");
     expect(html).toContain("FloatingPanels panels:6 runs:3");
     expect(html).toContain("LengthEditorClosed");
@@ -464,7 +483,7 @@ describe("EditorPage", () => {
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
-    expect(html).toContain("ToolPalette GATE");
+    expect(html).toContain("ToolPalette GATE readonly:no");
     expect(html).toContain("CanvasStage");
     expect(html).toContain("MenuBar title:New drawing draft");
   });
@@ -481,7 +500,7 @@ describe("EditorPage", () => {
 
     expect(html).toContain("title:Untitled drawing");
     expect(html).toContain("save:Unsaved changes");
-    expect(html).toContain("ToolPalette RECTANGLE");
+    expect(html).toContain("ToolPalette RECTANGLE readonly:no");
     expect(html).toContain("LengthEditorOpen");
   });
 
@@ -511,6 +530,21 @@ describe("EditorPage", () => {
 
     expect(html).toContain("user:Casey Member");
     expect(html).toContain("CanvasStage");
-    expect(html).toContain("ToolPalette SELECT");
+    expect(html).toContain("ToolPalette SELECT readonly:no");
+  });
+
+  it("forces quoted drawings into view-only select mode", () => {
+    mockWorkspace.currentDrawingStatus = "QUOTED";
+    mockShellState.interactionMode = "DRAW";
+
+    const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
+
+    expect(html).toContain("status:QUOTED");
+    expect(html).toContain("mode:view-only");
+    expect(html).toContain("ToolPalette SELECT readonly:yes");
+    expect(mockUseEditorCommands).toHaveBeenLastCalledWith(expect.objectContaining({
+      interactionMode: "SELECT",
+      isReadOnly: true
+    }));
   });
 });

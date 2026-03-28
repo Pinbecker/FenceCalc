@@ -34,6 +34,10 @@ export function EditorCanvasStage({
   const cursor =
     props.isPanning
       ? "grabbing"
+      : props.isReadOnly
+        ? props.hoveredBasketballPostId || props.hoveredFloodlightColumnId || props.hoveredGateId || props.hoveredSegmentId
+          ? "pointer"
+          : "default"
       : props.interactionMode === "DRAW"
         ? DRAW_CURSOR
         : props.interactionMode === "RECESS" ||

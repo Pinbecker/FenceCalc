@@ -45,6 +45,7 @@ export interface EditorCanvasStageProps {
   interactionMode: InteractionMode;
   gateType: GateType;
   disableSnap: boolean;
+  isReadOnly?: boolean;
   isPanning: boolean;
   drawStart: PointMm | null;
   rectangleStart: PointMm | null;

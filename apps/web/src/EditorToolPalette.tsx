@@ -160,6 +160,7 @@ function FlyoutPanel(props: { children: React.ReactNode; onClose: () => void }) 
 /* ──────────────────────────── Props ──────────────────────────── */
 
 export interface EditorToolPaletteProps {
+  isReadOnly?: boolean;
   interactionMode: InteractionMode;
   activeSpec: FenceSpec;
   activeHeightOptions: FenceHeightKey[];
@@ -207,6 +208,7 @@ export interface EditorToolPaletteProps {
 /* ──────────────────────────── Component ──────────────────────────── */
 
 export function EditorToolPalette({
+  isReadOnly = false,
   interactionMode,
   activeSpec,
   activeHeightOptions,
@@ -258,6 +260,9 @@ export function EditorToolPalette({
 
   const selectTool = useCallback(
     (mode: InteractionMode) => {
+      if (isReadOnly) {
+        return;
+      }
       onSetInteractionMode(mode);
       const tool = TOOLS.find((t) => t.id === mode);
       if (tool?.hasParams && mode !== interactionMode) {
@@ -268,7 +273,7 @@ export function EditorToolPalette({
         setOpenFlyout(null);
       }
     },
-    [interactionMode, onSetInteractionMode],
+    [interactionMode, isReadOnly, onSetInteractionMode],
   );
 
   const closeFlyout = useCallback(() => {
@@ -276,8 +281,15 @@ export function EditorToolPalette({
     setIsFenceConfigOpen(false);
   }, []);
 
+  useEffect(() => {
+    if (!isReadOnly) {
+      return;
+    }
+    closeFlyout();
+  }, [closeFlyout, isReadOnly]);
+
   return (
-    <div className="tool-palette">
+    <div className={`tool-palette${isReadOnly ? " is-read-only" : ""}`}>
       {/* Tool buttons */}
       <div className="tool-palette-tools">
         {TOOLS.map((tool) => (
@@ -285,8 +297,9 @@ export function EditorToolPalette({
             key={tool.id}
             type="button"
             className={`tool-btn${interactionMode === tool.id ? " active" : ""}${tool.hasParams && interactionMode === tool.id ? " has-flyout" : ""}`}
-            title={`${tool.label} (${tool.shortcut})`}
+            title={isReadOnly ? `${tool.label} disabled in view-only mode` : `${tool.label} (${tool.shortcut})`}
             onClick={() => selectTool(tool.id)}
+            disabled={isReadOnly}
           >
             <ToolIcon icon={tool.icon} />
             {tool.hasParams && interactionMode === tool.id ? <span className="tool-btn-arrow">▸</span> : null}
@@ -299,15 +312,20 @@ export function EditorToolPalette({
       <button
         type="button"
         className={`tool-btn tool-btn-fence${isFenceConfigOpen ? " active" : ""}`}
-        title="Fence specification"
+        title={isReadOnly ? "Fence specification is locked in view-only mode" : "Fence specification"}
         onClick={() => {
+          if (isReadOnly) {
+            return;
+          }
           setIsFenceConfigOpen((current) => !current);
           setOpenFlyout((current) => (current === "fence" ? null : "fence"));
         }}
+        disabled={isReadOnly}
       >
         <span className="fence-swatch" style={{ background: fenceColorSwatch }} />
         <span className="fence-label">{activeSpec.height}</span>
       </button>
+      {isReadOnly ? <span className="tool-palette-lock">View only</span> : null}
 
       {/* Fence config flyout */}
       {openFlyout === "fence" ? (

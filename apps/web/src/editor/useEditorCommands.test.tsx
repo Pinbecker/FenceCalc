@@ -36,6 +36,7 @@ interface CommandHarnessState {
   floodlightColumnPreview: FloodlightColumnInsertionPreview | null;
   gatePreview: GateInsertionPreview | null;
   interactionMode: InteractionMode;
+  isReadOnly: boolean;
   isLengthEditorOpen: boolean;
   isPanning: boolean;
   isSpacePressed: boolean;
@@ -96,6 +97,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     floodlightColumnPreview: null,
     gatePreview: buildGatePreview(baseSegments[0]!, 1700, 1000),
     interactionMode: "SELECT",
+    isReadOnly: false,
     isLengthEditorOpen: false,
     isPanning: false,
     isSpacePressed: false,
@@ -221,6 +223,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         resolvedFloodlightColumnById,
         connectivity,
         activeSpec: defaultFenceSpec(),
+        isReadOnly: state.isReadOnly,
         interactionMode: state.interactionMode,
         gateType: "SINGLE_LEAF",
         drawStart: state.drawStart,
@@ -751,5 +754,40 @@ describe("useEditorCommands", () => {
     ]);
 
     uuidSpy.mockRestore();
+  });
+
+  it("blocks mutating editor commands when the drawing is read only", () => {
+    const harness = createCommandHarness({
+      interactionMode: "DRAW",
+      isReadOnly: true,
+      selectedSegmentId: "s1",
+      selectedGateId: "g1"
+    });
+
+    harness.stage.pointer = { x: 100, y: 100 };
+    harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
+    expect(harness.state.drawStart).toBeNull();
+    expect(harness.state.layout.segments).toHaveLength(2);
+
+    harness.commands.openLengthEditor("s1");
+    expect(harness.state.isLengthEditorOpen).toBe(false);
+
+    harness.commands.startSelectedSegmentDrag("s1");
+    harness.commands.startSelectedGateDrag("g1");
+    expect(harness.state.activeSegmentDrag).toBeNull();
+    expect(harness.state.activeGateDrag).toBeNull();
+
+    harness.commands.handleDeleteSelection();
+    expect(harness.state.layout.gates).toHaveLength(1);
+    expect(harness.state.layout.segments).toHaveLength(2);
+
+    harness.commands.handleClearLayout();
+    expect(harness.state.layout.segments).toHaveLength(2);
+
+    harness.commands.updateSegment("s1", (current) => ({
+      ...current,
+      end: { x: 5200, y: 0 }
+    }));
+    expect(harness.state.layout.segments[0]?.end.x).toBe(5000);
   });
 });

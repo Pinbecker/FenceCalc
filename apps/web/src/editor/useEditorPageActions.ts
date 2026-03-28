@@ -10,6 +10,7 @@ import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement
 interface EditorPageActionsWorkspace {
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentDrawingStatus: DrawingStatus | null;
   currentCustomerId: string | null;
   currentCustomerName: string | null;
   isDirty: boolean;
@@ -113,6 +114,9 @@ export function useEditorPageActions({
   const handleChangeDrawingStatus = useCallback(
     async (nextStatus: DrawingStatus) => {
       if (!workspace.currentDrawingId || !currentDrawingSummary) {
+        return;
+      }
+      if (workspace.currentDrawingStatus === "QUOTED" || currentDrawingSummary.status === "QUOTED") {
         return;
       }
       setIsChangingStatus(true);

@@ -125,6 +125,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onRestoreViewport: restoreView
   });
+  const isQuotedViewOnly = workspace.currentDrawingStatus === "QUOTED";
+  const interactionMode = isQuotedViewOnly ? "SELECT" : shellState.interactionMode;
 
   const undoSegments = useCallback(() => {
     undoLayout();
@@ -263,7 +265,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   } = useEditorInteractionPreviews({
     segments,
     lineSnapSegments: estimateSegments,
-    interactionMode: shellState.interactionMode,
+    interactionMode,
     pointerWorld,
     drawStart: selectionState.drawStart,
     drawChainStart: selectionState.drawChainStart,
@@ -333,7 +335,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolvedFloodlightColumnById,
     connectivity,
     activeSpec: shellState.activeSpec,
-    interactionMode: shellState.interactionMode,
+    isReadOnly: isQuotedViewOnly,
+    interactionMode,
     goalUnitDepthMm: shellState.goalUnitDepthMm,
     goalUnitHeightMm: shellState.goalUnitHeightMm,
     gateType: shellState.gateType,
@@ -410,13 +413,28 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
 
   const keyboardShortcutOptions = useMemo(
     () => ({
-      undo: undoSegments,
-      redo: redoSegments,
+      undo: () => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        undoSegments();
+      },
+      redo: () => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        redoSegments();
+      },
       deleteSelectedBasketballPost,
       deleteSelectedFloodlightColumn,
       deleteSelectedGate,
       deleteSelectedSegment,
-      setInteractionMode: shellState.setInteractionMode,
+      setInteractionMode: (mode: Parameters<typeof shellState.setInteractionMode>[0]) => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        shellState.setInteractionMode(mode);
+      },
       setIsSpacePressed,
       setDisableSnap: shellState.setDisableSnap,
       cancelActiveDrawing,
@@ -428,6 +446,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       deleteSelectedFloodlightColumn,
       deleteSelectedGate,
       deleteSelectedSegment,
+      isQuotedViewOnly,
       redoSegments,
       setIsSpacePressed,
       shellState.setDisableSnap,
@@ -454,6 +473,18 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setDrawingModalMode((current) => (current === "create" ? null : current));
   }, [session, workspace.currentDrawingId]);
 
+  useEffect(() => {
+    if (!isQuotedViewOnly) {
+      return;
+    }
+    if (shellState.interactionMode !== "SELECT") {
+      shellState.setInteractionMode("SELECT");
+    }
+    selectionState.setIsLengthEditorOpen(false);
+    setIsEndpointDragActive(false);
+    setDrawingModalMode((current) => (current === "saveAs" ? null : current));
+  }, [isQuotedViewOnly, selectionState.setIsLengthEditorOpen, shellState.interactionMode, shellState.setInteractionMode]);
+
   const {
     canManageAdmin,
     canManagePricing,
@@ -469,7 +500,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     workspace,
     session,
     currentLayout,
-    interactionMode: shellState.interactionMode,
+    interactionMode,
     estimate,
     estimateSegments,
     segmentOrdinalById,
@@ -482,7 +513,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onNavigate
   });
   const canDeleteSelection =
-    shellState.interactionMode === "SELECT" &&
+    !isQuotedViewOnly &&
+    interactionMode === "SELECT" &&
     (!!selectionState.selectedSegmentId ||
       !!selectionState.selectedGateId ||
       !!selectionState.selectedBasketballPostId ||
@@ -509,12 +541,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     currentCustomerName: workspace.currentCustomerName,
     isDirty: workspace.isDirty,
     isSavingDrawing: workspace.isSavingDrawing,
-    currentDrawingStatus: currentDrawingSummary?.status ?? null,
+    currentDrawingStatus: workspace.currentDrawingStatus ?? currentDrawingSummary?.status ?? null,
+    isReadOnly: isQuotedViewOnly,
     isChangingStatus,
     canManagePricing,
     canManageAdmin,
-    canUndo,
-    canRedo,
+    canUndo: !isQuotedViewOnly && canUndo,
+    canRedo: !isQuotedViewOnly && canRedo,
     canDeleteSelection,
     isItemCountsVisible,
     isPostKeyVisible,
@@ -527,12 +560,25 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       void workspace.saveDrawing();
     },
     onOpenSaveAs: () => {
+      if (isQuotedViewOnly) {
+        return;
+      }
       setDrawingModalMode("saveAs");
     },
     onExportPdf: handleExportPdf,
     onStartNewDraft: handleStartNewDraft,
-    onUndo: undoSegments,
-    onRedo: redoSegments,
+    onUndo: () => {
+      if (isQuotedViewOnly) {
+        return;
+      }
+      undoSegments();
+    },
+    onRedo: () => {
+      if (isQuotedViewOnly) {
+        return;
+      }
+      redoSegments();
+    },
     onDeleteSelection: handleDeleteSelection,
     onClearLayout: handleClearLayout,
     onToggleItemCounts: toggleItemCounts,
@@ -566,7 +612,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   };
   const workspaceShellProps = {
     toolPaletteProps: {
-      interactionMode: shellState.interactionMode,
+      isReadOnly: isQuotedViewOnly,
+      interactionMode,
       activeSpec: shellState.activeSpec,
       activeHeightOptions,
       twinBarHeightOptions: TWIN_BAR_HEIGHT_OPTIONS,
@@ -593,7 +640,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       formatLengthMm,
       formatMetersInputFromMm,
       getSegmentColor,
-      onSetInteractionMode: shellState.setInteractionMode,
+      onSetInteractionMode: (mode: Parameters<typeof shellState.setInteractionMode>[0]) => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        shellState.setInteractionMode(mode);
+      },
       onRecessWidthInputChange,
       onRecessDepthInputChange,
       onNormalizeRecessInputs: normalizeRecessInputs,
@@ -618,9 +670,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       visibleBounds,
       verticalLines,
       horizontalLines,
-      interactionMode: shellState.interactionMode,
+      interactionMode,
       gateType: shellState.gateType,
       disableSnap: shellState.disableSnap,
+      isReadOnly: isQuotedViewOnly,
       isPanning,
       drawStart: selectionState.drawStart,
       rectangleStart: selectionState.rectangleStart,
@@ -697,8 +750,18 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onUpdateSegmentEndpoint: (segmentId: string, endpoint: "start" | "end", point: { x: number; y: number }) => {
         updateSegment(segmentId, (current) => ({ ...current, [endpoint]: point }));
       },
-      onStartSegmentEndpointDrag: () => setIsEndpointDragActive(true),
-      onEndSegmentEndpointDrag: () => setIsEndpointDragActive(false),
+      onStartSegmentEndpointDrag: () => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        setIsEndpointDragActive(true);
+      },
+      onEndSegmentEndpointDrag: () => {
+        if (isQuotedViewOnly) {
+          return;
+        }
+        setIsEndpointDragActive(false);
+      },
       onSelectGate: (gateId: string) => {
         selectionState.setSelectedSegmentId(null);
         selectionState.setSelectedGateId(gateId);
@@ -781,10 +844,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onToggleItemCounts: toggleItemCounts,
       onTogglePostKey: togglePostKey
     },
-    isOptimizationVisible: shellState.isOptimizationInspectorOpen
+    isOptimizationVisible: shellState.isOptimizationInspectorOpen,
+    isReadOnly: isQuotedViewOnly
   };
   const lengthEditorProps = {
-    isOpen: selectionState.isLengthEditorOpen && selectedSegment !== null,
+    isOpen: !isQuotedViewOnly && selectionState.isLengthEditorOpen && selectedSegment !== null,
     selectedComponentClosed,
     selectedLengthInputM: selectionState.selectedLengthInputM,
     inputStepM: RECESS_INPUT_STEP_M,

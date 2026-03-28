@@ -106,6 +106,7 @@ interface UseEditorCommandsOptions {
   resolvedFloodlightColumnById?: Map<string, ResolvedFloodlightColumnPlacement>;
   connectivity: SegmentConnectivity;
   activeSpec: FenceSpec;
+  isReadOnly?: boolean;
   interactionMode: InteractionMode;
   goalUnitDepthMm?: number;
   goalUnitHeightMm?: 3000 | 4000;
@@ -194,6 +195,7 @@ export function useEditorCommands({
   resolvedFloodlightColumnById = new Map(),
   connectivity,
   activeSpec,
+  isReadOnly = false,
   interactionMode,
   goalUnitDepthMm = 1200,
   goalUnitHeightMm = 3000,
@@ -270,11 +272,14 @@ export function useEditorCommands({
 }: UseEditorCommandsOptions) {
   const updateSegment = useCallback(
     (segmentId: string, updater: (segment: LayoutSegment) => LayoutSegment): void => {
+      if (isReadOnly) {
+        return;
+      }
       applySegments((previous) =>
         previous.map((segment) => (segment.id === segmentId ? updater(segment) : segment))
       );
     },
-    [applySegments]
+    [applySegments, isReadOnly]
   );
 
   const onRecessWidthInputChange = useCallback(
@@ -321,6 +326,9 @@ export function useEditorCommands({
 
   const openLengthEditor = useCallback(
     (segmentId: string): void => {
+      if (isReadOnly) {
+        return;
+      }
       if (interactionMode !== "SELECT") {
         return;
       }
@@ -334,6 +342,7 @@ export function useEditorCommands({
     },
     [
       interactionMode,
+      isReadOnly,
       segmentsById,
       setIsLengthEditorOpen,
       setSelectedLengthInputM,
@@ -351,6 +360,9 @@ export function useEditorCommands({
   );
 
   const applySelectedLengthEdit = useCallback((): void => {
+    if (isReadOnly) {
+      return;
+    }
     if (!selectedSegmentId) {
       return;
     }
@@ -360,7 +372,7 @@ export function useEditorCommands({
     }
     resizeSegmentLength(selectedSegmentId, parsedLengthMm);
     setIsLengthEditorOpen(false);
-  }, [resizeSegmentLength, selectedLengthInputM, selectedSegmentId, setIsLengthEditorOpen]);
+  }, [isReadOnly, resizeSegmentLength, selectedLengthInputM, selectedSegmentId, setIsLengthEditorOpen]);
 
   const offsetSegmentPerpendicular = useCallback(
     (segmentId: string, dragDelta: PointMm): void => {
@@ -371,6 +383,9 @@ export function useEditorCommands({
 
   const startSelectedSegmentDrag = useCallback(
     (segmentId: string): void => {
+      if (isReadOnly) {
+        return;
+      }
       if (interactionMode !== "SELECT") {
         return;
       }
@@ -390,7 +405,7 @@ export function useEditorCommands({
       setActiveBasketballPostDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveGateAlongSegment = useCallback(
@@ -422,6 +437,9 @@ export function useEditorCommands({
 
   const startSelectedGateDrag = useCallback(
     (gateId: string): void => {
+      if (isReadOnly) {
+        return;
+      }
       if (interactionMode !== "SELECT") {
         return;
       }
@@ -441,7 +459,7 @@ export function useEditorCommands({
       setActiveBasketballPostDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveBasketballPostAlongSegment = useCallback(
@@ -480,6 +498,9 @@ export function useEditorCommands({
 
   const startSelectedBasketballPostDrag = useCallback(
     (basketballPostId: string): void => {
+      if (isReadOnly) {
+        return;
+      }
       if (interactionMode !== "SELECT") {
         return;
       }
@@ -499,7 +520,7 @@ export function useEditorCommands({
       setActiveSegmentDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveFloodlightColumnAlongSegment = useCallback(
@@ -538,6 +559,9 @@ export function useEditorCommands({
 
   const startSelectedFloodlightColumnDrag = useCallback(
     (floodlightColumnId: string): void => {
+      if (isReadOnly) {
+        return;
+      }
       if (interactionMode !== "SELECT") {
         return;
       }
@@ -557,7 +581,7 @@ export function useEditorCommands({
       setActiveSegmentDrag(null);
       setActiveBasketballPostDrag(null);
     },
-    [interactionMode, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const startOrCommitDrawing = useCallback(
@@ -996,6 +1020,10 @@ export function useEditorCommands({
         return;
       }
 
+      if (isReadOnly) {
+        return;
+      }
+
       if (interactionMode === "RECESS") {
         if (recessPreview) {
           insertRecess(recessPreview);
@@ -1127,6 +1155,7 @@ export function useEditorCommands({
       applySideNettingAttachment,
       resolveBasketballPostPreview,
       resolveFloodlightColumnPreview,
+      isReadOnly,
       stageRef,
       startOrCommitDrawing,
       startOrCommitRectangle,
@@ -1145,6 +1174,15 @@ export function useEditorCommands({
       return;
     }
     const world = toWorld(pointer);
+
+    if (isPanning && updatePan(pointer)) {
+      return;
+    }
+
+    if (isReadOnly) {
+      setPointerWorld(world);
+      return;
+    }
 
     if (activeBasketballPostDrag) {
       const basketballPost = resolvedBasketballPostById.get(activeBasketballPostDrag.basketballPostId);
@@ -1277,10 +1315,6 @@ export function useEditorCommands({
       return;
     }
 
-    if (isPanning && updatePan(pointer)) {
-      return;
-    }
-
     setPointerWorld(world);
   }, [
     activeBasketballPostDrag,
@@ -1290,6 +1324,7 @@ export function useEditorCommands({
     basketballPostPreview,
     floodlightColumnPreview,
     gatePreview,
+    isReadOnly,
     isPanning,
     moveBasketballPostAlongSegment,
     moveBasketballPostToPreview,
@@ -1350,15 +1385,21 @@ export function useEditorCommands({
   );
 
   const deleteSelectedGate = useCallback((): boolean => {
+    if (isReadOnly) {
+      return false;
+    }
     if (!selectedGateId) {
       return false;
     }
     applyGatePlacements((previous) => previous.filter((gate) => gate.id !== selectedGateId));
     setSelectedGateId(null);
     return true;
-  }, [applyGatePlacements, selectedGateId, setSelectedGateId]);
+  }, [applyGatePlacements, isReadOnly, selectedGateId, setSelectedGateId]);
 
   const deleteSelectedBasketballPost = useCallback((): boolean => {
+    if (isReadOnly) {
+      return false;
+    }
     if (!selectedBasketballPostId) {
       return false;
     }
@@ -1367,9 +1408,12 @@ export function useEditorCommands({
     );
     setSelectedBasketballPostId(null);
     return true;
-  }, [applyBasketballPostPlacements, selectedBasketballPostId, setSelectedBasketballPostId]);
+  }, [applyBasketballPostPlacements, isReadOnly, selectedBasketballPostId, setSelectedBasketballPostId]);
 
   const deleteSelectedFloodlightColumn = useCallback((): boolean => {
+    if (isReadOnly) {
+      return false;
+    }
     if (!selectedFloodlightColumnId) {
       return false;
     }
@@ -1378,9 +1422,12 @@ export function useEditorCommands({
     );
     setSelectedFloodlightColumnId(null);
     return true;
-  }, [applyFloodlightColumnPlacements, selectedFloodlightColumnId, setSelectedFloodlightColumnId]);
+  }, [applyFloodlightColumnPlacements, isReadOnly, selectedFloodlightColumnId, setSelectedFloodlightColumnId]);
 
   const deleteSelectedSegment = useCallback((): boolean => {
+    if (isReadOnly) {
+      return false;
+    }
     if (!selectedSegmentId) {
       return false;
     }
@@ -1389,7 +1436,7 @@ export function useEditorCommands({
     );
     setSelectedSegmentId(null);
     return true;
-  }, [applySegments, selectedSegmentId, setSelectedSegmentId]);
+  }, [applySegments, isReadOnly, selectedSegmentId, setSelectedSegmentId]);
 
   const cancelActiveDrawing = useCallback((): void => {
     setDrawStart(null);
@@ -1447,6 +1494,9 @@ export function useEditorCommands({
   ]);
 
   const handleDeleteSelection = useCallback((): void => {
+    if (isReadOnly) {
+      return;
+    }
     if (deleteSelectedGate()) {
       return;
     }
@@ -1457,9 +1507,12 @@ export function useEditorCommands({
       return;
     }
     void deleteSelectedSegment();
-  }, [deleteSelectedBasketballPost, deleteSelectedFloodlightColumn, deleteSelectedGate, deleteSelectedSegment]);
+  }, [deleteSelectedBasketballPost, deleteSelectedFloodlightColumn, deleteSelectedGate, deleteSelectedSegment, isReadOnly]);
 
   const handleClearLayout = useCallback((): void => {
+    if (isReadOnly) {
+      return;
+    }
     applyLayout(() => ({
       segments: [],
       gates: [],
@@ -1480,6 +1533,7 @@ export function useEditorCommands({
     setSelectedFloodlightColumnId(null);
   }, [
     applyLayout,
+    isReadOnly,
     setDrawChainStart,
     setDrawStart,
     setPendingPitchDividerStart,

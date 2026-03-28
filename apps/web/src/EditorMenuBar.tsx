@@ -22,6 +22,7 @@ interface EditorMenuBarProps {
   isDirty: boolean;
   isSavingDrawing: boolean;
   currentDrawingStatus: DrawingStatus | null;
+  isReadOnly?: boolean;
   isChangingStatus: boolean;
   canManagePricing: boolean;
   canManageAdmin: boolean;
@@ -80,6 +81,7 @@ export function EditorMenuBar({
   isDirty,
   isSavingDrawing,
   currentDrawingStatus,
+  isReadOnly = false,
   isChangingStatus,
   canManagePricing,
   canManageAdmin,
@@ -117,7 +119,7 @@ export function EditorMenuBar({
   const [isEditingName, setIsEditingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
-  const isQuotedLocked = currentDrawingStatus === "QUOTED";
+  const readOnlyTitle = "Quoted drawings open in view-only mode. Create a new revision from the job page to continue.";
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
@@ -142,6 +144,12 @@ export function EditorMenuBar({
       nameInputRef.current.select();
     }
   }, [isEditingName]);
+
+  useEffect(() => {
+    if (isReadOnly) {
+      setIsEditingName(false);
+    }
+  }, [isReadOnly]);
 
   function toggleMenu(id: MenuId) {
     setOpenMenu((current) => (current === id ? null : id));
@@ -173,12 +181,18 @@ export function EditorMenuBar({
                     type="button"
                     role="menuitem"
                     onClick={() => menuAction(onSaveDrawing)}
-                    disabled={isSavingDrawing || !currentDrawingId || isQuotedLocked}
-                    title={isQuotedLocked ? "Quoted drawings are locked. Create a new revision to continue." : undefined}
+                    disabled={isSavingDrawing || !currentDrawingId || isReadOnly}
+                    title={isReadOnly ? readOnlyTitle : undefined}
                   >
                     Save<em>Ctrl+S</em>
                   </button>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onOpenSaveAs)} disabled={isSavingDrawing || !currentDrawingId}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => menuAction(onOpenSaveAs)}
+                    disabled={isSavingDrawing || !currentDrawingId || isReadOnly}
+                    title={isReadOnly ? readOnlyTitle : undefined}
+                  >
                     Save As...
                   </button>
                   <button type="button" role="menuitem" onClick={() => menuAction(onStartNewDraft)}>
@@ -212,17 +226,17 @@ export function EditorMenuBar({
           </button>
           {openMenu === "edit" ? (
             <div className="menu-bar-panel" role="menu">
-              <button type="button" role="menuitem" disabled={!canUndo} onClick={() => menuAction(onUndo)}>
+              <button type="button" role="menuitem" disabled={!canUndo || isReadOnly} onClick={() => menuAction(onUndo)} title={isReadOnly ? readOnlyTitle : undefined}>
                 Undo<em>Ctrl+Z</em>
               </button>
-              <button type="button" role="menuitem" disabled={!canRedo} onClick={() => menuAction(onRedo)}>
+              <button type="button" role="menuitem" disabled={!canRedo || isReadOnly} onClick={() => menuAction(onRedo)} title={isReadOnly ? readOnlyTitle : undefined}>
                 Redo<em>Ctrl+Y</em>
               </button>
               <div className="menu-bar-divider" />
-              <button type="button" role="menuitem" disabled={!canDeleteSelection} onClick={() => menuAction(onDeleteSelection)}>
+              <button type="button" role="menuitem" disabled={!canDeleteSelection || isReadOnly} onClick={() => menuAction(onDeleteSelection)} title={isReadOnly ? readOnlyTitle : undefined}>
                 Delete Selection<em>Del</em>
               </button>
-              <button type="button" role="menuitem" className="menu-item-danger" onClick={() => menuAction(onClearLayout)}>
+              <button type="button" role="menuitem" className="menu-item-danger" disabled={isReadOnly} title={isReadOnly ? readOnlyTitle : undefined} onClick={() => menuAction(onClearLayout)}>
                 Clear All
               </button>
             </div>
@@ -254,7 +268,7 @@ export function EditorMenuBar({
       </div>
 
       <div className="menu-bar-center">
-        {isEditingName ? (
+        {isEditingName && !isReadOnly ? (
           <input
             ref={nameInputRef}
             className="menu-bar-name-input"
@@ -274,9 +288,9 @@ export function EditorMenuBar({
             type="button"
             className="menu-bar-drawing-name"
             onClick={() => {
-              if (session && currentDrawingId) setIsEditingName(true);
+              if (session && currentDrawingId && !isReadOnly) setIsEditingName(true);
             }}
-            title={session && currentDrawingId ? "Click to rename" : drawingTitle}
+            title={isReadOnly ? readOnlyTitle : session && currentDrawingId ? "Click to rename" : drawingTitle}
           >
             {drawingTitle}
           </button>
@@ -312,18 +326,24 @@ export function EditorMenuBar({
         ) : null}
 
         {currentDrawingId && currentDrawingStatus && session ? (
-          <select
-            className="menu-bar-status-select"
-            value={currentDrawingStatus}
-            disabled={isChangingStatus}
-            onChange={(event) => onChangeDrawingStatus(event.target.value as DrawingStatus)}
-          >
-            {DRAWING_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {JOB_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
+          isReadOnly ? (
+            <span className="menu-bar-status-badge is-read-only" title={readOnlyTitle}>
+              {JOB_STATUS_LABELS[currentDrawingStatus]} · View only
+            </span>
+          ) : (
+            <select
+              className="menu-bar-status-select"
+              value={currentDrawingStatus}
+              disabled={isChangingStatus}
+              onChange={(event) => onChangeDrawingStatus(event.target.value as DrawingStatus)}
+            >
+              {DRAWING_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {JOB_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+          )
         ) : null}
       </div>
 
@@ -358,8 +378,8 @@ export function EditorMenuBar({
           </nav>
         ) : null}
         {session ? (
-          <span className={`menu-bar-save-pill${isDirty ? " dirty" : ""}`}>
-            {isDirty ? "Unsaved" : "Saved"}
+          <span className={`menu-bar-save-pill${isDirty ? " dirty" : ""}${isReadOnly ? " is-read-only" : ""}`}>
+            {isReadOnly ? "View only" : isDirty ? "Unsaved" : "Saved"}
           </span>
         ) : null}
         {session ? (

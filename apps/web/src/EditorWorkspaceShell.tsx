@@ -12,6 +12,7 @@ interface EditorWorkspaceShellProps {
   optimizationPlannerProps: ComponentProps<typeof OptimizationPlanner>;
   floatingPanelsProps: ComponentProps<typeof EditorFloatingPanels>;
   isOptimizationVisible: boolean;
+  isReadOnly?: boolean;
 }
 
 export function EditorWorkspaceShell({
@@ -20,12 +21,19 @@ export function EditorWorkspaceShell({
   canvasStageProps,
   optimizationPlannerProps,
   floatingPanelsProps,
-  isOptimizationVisible
+  isOptimizationVisible,
+  isReadOnly = false
 }: EditorWorkspaceShellProps) {
   return (
     <div className="editor-workspace-shell">
       <div className="editor-canvas-viewport" ref={canvasFrameRef}>
         <EditorCanvasStage {...canvasStageProps} />
+        {isReadOnly ? (
+          <div className="editor-read-only-banner" role="status" aria-live="polite">
+            <strong>Quoted revision</strong>
+            <span>View only. Create the next revision from the job page to keep this quote unchanged.</span>
+          </div>
+        ) : null}
         <EditorToolPalette {...toolPaletteProps} />
         <div className="editor-floating-right">
           <EditorFloatingPanels {...floatingPanelsProps} />

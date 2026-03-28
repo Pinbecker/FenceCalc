@@ -313,6 +313,32 @@
   color: #ffd7c6;
 }
 
+.menu-bar-save-pill.is-read-only {
+  border-color: rgba(199, 164, 104, 0.32);
+  background: rgba(199, 164, 104, 0.16);
+  color: rgba(255, 230, 188, 0.9);
+}
+
+.menu-bar-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(248, 235, 215, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(246, 238, 226, 0.72);
+}
+
+.menu-bar-status-badge.is-read-only {
+  border-color: rgba(199, 164, 104, 0.28);
+  background: rgba(199, 164, 104, 0.14);
+  color: rgba(255, 230, 188, 0.9);
+}
+
 .menu-bar-user {
   font-size: 0.64rem;
   font-weight: 600;
@@ -340,6 +366,38 @@
   background:
     radial-gradient(circle at top left, rgba(205, 143, 104, 0.06), transparent 30%),
     linear-gradient(180deg, #30413e 0%, #263532 100%);
+}
+
+.editor-read-only-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 35;
+  display: grid;
+  gap: 2px;
+  min-width: min(460px, calc(100% - 168px));
+  max-width: min(560px, calc(100% - 168px));
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(199, 164, 104, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(53, 46, 33, 0.92), rgba(38, 34, 27, 0.9));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  color: rgba(255, 239, 208, 0.9);
+  pointer-events: none;
+}
+
+.editor-read-only-banner strong {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.editor-read-only-banner span {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgba(255, 234, 196, 0.8);
 }
 
 /* â”€â”€ Floating tool palette â”€â”€ */
@@ -385,6 +443,16 @@
   color: rgba(246, 238, 226, 0.92);
 }
 
+.tool-btn:disabled {
+  cursor: default;
+  opacity: 0.34;
+}
+
+.tool-btn:disabled:hover {
+  background: transparent;
+  color: rgba(246, 238, 226, 0.62);
+}
+
 .tool-btn.active {
   background: rgba(79, 103, 97, 0.48);
   color: rgba(246, 238, 226, 1);
@@ -412,6 +480,20 @@
   padding: 4px 8px;
   gap: 5px;
   border-radius: 8px;
+}
+
+.tool-palette.is-read-only {
+  border-color: rgba(199, 164, 104, 0.18);
+  background: rgba(34, 39, 35, 0.86);
+}
+
+.tool-palette-lock {
+  padding-top: 4px;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 188, 0.68);
 }
 
 .fence-swatch {
@@ -827,6 +909,13 @@
   .editor-floating-right {
     top: 8px;
     right: 8px;
+  }
+
+  .editor-read-only-banner {
+    top: 8px;
+    min-width: calc(100% - 112px);
+    max-width: calc(100% - 112px);
+    padding: 8px 10px;
   }
 }
 
