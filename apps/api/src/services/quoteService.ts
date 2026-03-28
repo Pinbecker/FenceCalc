@@ -64,11 +64,26 @@ export async function createQuoteForDrawing(
       estimate: drawing.estimate,
       schemaVersion: drawing.schemaVersion,
       rulesVersion: drawing.rulesVersion,
-      versionNumber: drawing.versionNumber
+      versionNumber: drawing.versionNumber,
+      revisionNumber: drawing.revisionNumber
     },
     createdByUserId: authenticated.user.id,
     createdAtIso
   });
+
+  // Auto-set drawing status to QUOTED
+  if (drawing.status === "DRAFT") {
+    await repository.setDrawingStatus({
+      drawingId: drawing.id,
+      companyId: authenticated.company.id,
+      expectedVersionNumber: drawing.versionNumber,
+      status: "QUOTED",
+      statusChangedAtIso: createdAtIso,
+      statusChangedByUserId: authenticated.user.id,
+      updatedAtIso: createdAtIso,
+      updatedByUserId: authenticated.user.id
+    });
+  }
 
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
@@ -134,11 +149,26 @@ export async function createQuoteForJob(
       estimate: drawing.estimate,
       schemaVersion: drawing.schemaVersion,
       rulesVersion: drawing.rulesVersion,
-      versionNumber: drawing.versionNumber
+      versionNumber: drawing.versionNumber,
+      revisionNumber: drawing.revisionNumber
     },
     createdByUserId: authenticated.user.id,
     createdAtIso
   });
+
+  // Auto-set drawing status to QUOTED
+  if (drawing.status === "DRAFT") {
+    await repository.setDrawingStatus({
+      drawingId: drawing.id,
+      companyId: authenticated.company.id,
+      expectedVersionNumber: drawing.versionNumber,
+      status: "QUOTED",
+      statusChangedAtIso: createdAtIso,
+      statusChangedByUserId: authenticated.user.id,
+      updatedAtIso: createdAtIso,
+      updatedByUserId: authenticated.user.id
+    });
+  }
 
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,

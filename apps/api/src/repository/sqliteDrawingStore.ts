@@ -89,14 +89,15 @@ export class SqliteDrawingStore {
   }
 
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
+    const revisionNumber = input.revisionNumber ?? 0;
     const insert = this.database.transaction(() => {
       this.database
         .prepare(
           `
             INSERT INTO drawings (
-              id, company_id, job_id, job_role, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
+              id, company_id, job_id, job_role, parent_drawing_id, revision_number, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
               created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -104,6 +105,8 @@ export class SqliteDrawingStore {
           input.companyId,
           input.jobId,
           input.jobRole,
+          input.parentDrawingId ?? null,
+          revisionNumber,
           input.name,
           input.customerId,
           input.customerName,
@@ -150,6 +153,7 @@ export class SqliteDrawingStore {
     insert();
     return {
       ...input,
+      revisionNumber,
       versionNumber: 1,
       status: "DRAFT" as const,
       isArchived: false,

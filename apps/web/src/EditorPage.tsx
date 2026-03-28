@@ -43,7 +43,7 @@ import {
 interface EditorPageProps {
   initialDrawingId?: string | null;
   onNavigate: (
-    route: "dashboard" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
+    route: "dashboard" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin" | "login",
     query?: Record<string, string>
   ) => void;
 }
@@ -503,6 +503,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     session,
     drawingTitle,
     currentDrawingId: workspace.currentDrawingId,
+    currentJobId: workspace.currentJobId,
     currentCustomerId: workspace.currentCustomerId,
     currentDrawingName: workspace.currentDrawingName,
     currentCustomerName: workspace.currentCustomerName,
@@ -539,6 +540,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onToggleOptimization: toggleOptimization,
     onGoToLogin: () => guardedNavigate("login"),
     onNavigateDashboard: () => guardedNavigate("dashboard"),
+    onNavigateJob: () => {
+      if (!workspace.currentJobId) {
+        return;
+      }
+      guardedNavigate("job", { jobId: workspace.currentJobId });
+    },
     onNavigateCurrentCustomer: () => {
       if (!workspace.currentCustomerId) {
         return;

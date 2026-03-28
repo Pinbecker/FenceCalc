@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CustomerSummary, DrawingSummary, DrawingVersionRecord } from "@fence-estimator/contracts";
+import type { CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
 
 import { CustomerPage, saveCustomerProfile, validateCustomerProfileInput } from "./CustomerPage.js";
 
@@ -40,6 +40,7 @@ const drawings: DrawingSummary[] = [
     schemaVersion: 1,
     rulesVersion: "2026-03-11",
     versionNumber: 3,
+    revisionNumber: 0,
     isArchived: false,
     archivedAtIso: null,
     archivedByUserId: null,
@@ -57,7 +58,7 @@ const drawings: DrawingSummary[] = [
   }
 ];
 
-const versions: DrawingVersionRecord[] = [];
+
 
 describe("CustomerPage", () => {
   it("renders customer details and that customer's drawings", () => {
@@ -78,8 +79,6 @@ describe("CustomerPage", () => {
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
         onChangeDrawingStatus={() => Promise.resolve(true)}
-        onLoadVersions={() => Promise.resolve(versions)}
-        onRestoreVersion={() => Promise.resolve(true)}
         onDeleteDrawing={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
@@ -124,8 +123,6 @@ describe("CustomerPage", () => {
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
         onChangeDrawingStatus={() => Promise.resolve(true)}
-        onLoadVersions={() => Promise.resolve(versions)}
-        onRestoreVersion={() => Promise.resolve(true)}
         onDeleteDrawing={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
@@ -155,8 +152,6 @@ describe("CustomerPage", () => {
         onCreateDrawing={() => undefined}
         onToggleDrawingArchived={() => Promise.resolve(true)}
         onChangeDrawingStatus={() => Promise.resolve(true)}
-        onLoadVersions={() => Promise.resolve(versions)}
-        onRestoreVersion={() => Promise.resolve(true)}
         onDeleteDrawing={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}

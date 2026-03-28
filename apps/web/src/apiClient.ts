@@ -550,7 +550,13 @@ export async function listJobActivity(jobId: string): Promise<AuditLogRecord[]> 
 }
 
 export async function deleteDrawing(drawingId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${drawingId}`, {
+  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${encodePathSegment(drawingId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function deleteRevision(drawingId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${encodePathSegment(drawingId)}/revision`, {
     method: "DELETE"
   });
 }
@@ -587,6 +593,7 @@ export async function createDrawing(input: {
   customerId: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
+  jobId?: string;
 }): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
     method: "POST",

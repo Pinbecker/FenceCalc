@@ -36,6 +36,7 @@ export interface WorkspacePersistenceState {
   drawings: DrawingSummary[];
   currentDrawingId: string | null;
   currentDrawingName: string;
+  currentJobId: string | null;
   currentCustomerId: string | null;
   currentCustomerName: string;
   isDirty: boolean;
@@ -73,6 +74,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [currentDrawingVersion, setCurrentDrawingVersion] = useState<number | null>(null);
   const [currentDrawingName, setCurrentDrawingName] = useState("");
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [currentCustomerId, setCurrentCustomerIdState] = useState<string | null>(null);
   const [currentCustomerName, setCurrentCustomerName] = useState("");
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
@@ -117,6 +119,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setCurrentDrawingId(drawing.id);
     setCurrentDrawingVersion(drawing.versionNumber);
     setCurrentDrawingName(drawing.name);
+    setCurrentJobId(drawing.jobId ?? null);
     setCurrentCustomerIdState(drawing.customerId);
     setCurrentCustomerName(drawing.customerName);
     savedState.rememberSavedState(normalizeLayout(drawing.layout), drawing.name, drawing.customerId);
@@ -141,6 +144,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentJobId(null);
       setCurrentCustomerIdState(null);
       setCurrentCustomerName("");
       savedState.resetSavedState();
@@ -156,6 +160,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
       setCurrentDrawingId(null);
       setCurrentDrawingVersion(null);
       setCurrentDrawingName("");
+      setCurrentJobId(null);
       setCurrentCustomerIdState(null);
       setCurrentCustomerName("");
       savedState.resetSavedState();
@@ -365,7 +370,8 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
         name: drawingName,
         customerId: input.customerId,
         layout: normalizedLayout,
-        savedViewport
+        savedViewport,
+        ...(currentJobId ? { jobId: currentJobId } : {})
       });
 
       applyPersistedDrawing(drawing);
@@ -382,6 +388,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
   }, [
     applyPersistedDrawing,
     clearMessages,
+    currentJobId,
     getSavedViewport,
     normalizedLayout,
     refreshCustomers,
@@ -396,6 +403,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     setCurrentDrawingId(null);
     setCurrentDrawingVersion(null);
     setCurrentDrawingName("");
+    setCurrentJobId(null);
     setCurrentCustomerIdState(null);
     setCurrentCustomerName("");
     savedState.resetSavedState();
@@ -407,6 +415,7 @@ export function useWorkspacePersistence({ layout, getSavedViewport, onLoadDrawin
     drawings,
     currentDrawingId,
     currentDrawingName,
+    currentJobId,
     currentCustomerId,
     currentCustomerName,
     isDirty: savedState.isDirty,

@@ -135,6 +135,7 @@ export interface QuoteDrawingSnapshot {
   schemaVersion: number;
   rulesVersion: string;
   versionNumber: number;
+  revisionNumber?: number | undefined;
 }
 
 export interface QuoteRecord {

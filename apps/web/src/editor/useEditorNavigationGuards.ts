@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 
-export type EditorRoute = "dashboard" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login";
+export type EditorRoute = "dashboard" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin" | "login";
 
 interface UseEditorNavigationGuardsOptions {
   isDirty: boolean;

@@ -54,6 +54,7 @@ const drawings: DrawingSummary[] = [
     schemaVersion: TEST_SCHEMA_VERSION,
     rulesVersion: TEST_RULES_VERSION,
     versionNumber: 3,
+    revisionNumber: 0,
     isArchived: false,
     archivedAtIso: null,
     archivedByUserId: null,

@@ -47,6 +47,7 @@ function buildDrawing(): DrawingRecord {
     schemaVersion: 1,
     rulesVersion: "2026-03-11",
     versionNumber: 1,
+    revisionNumber: 0,
     isArchived: false,
     archivedAtIso: null,
     archivedByUserId: null,
@@ -99,16 +100,15 @@ describe("buildEstimateFromDrawing", () => {
     const floodlightGroup = result.groups.find((group) => group.key === "floodlight-columns");
     const basketballGroup = result.groups.find((group) => group.key === "basketball-posts");
 
-    expect(panelsGroup?.rows[0]?.quantity).toBe(3);
-    expect(panelsGroup?.rows[0]?.totalCost).toBe(36);
+    expect(panelsGroup?.rows[0]?.quantity).toBe(2);
+    expect(panelsGroup?.subtotalCost).toBeCloseTo(166.32, 2);
 
-    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_END")?.quantity).toBe(2);
-    expect(postsGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")?.quantity).toBe(1);
+    expect(postsGroup?.rows.find((row) => row.itemCode === "MAT_2000_INTERS_ENDS")?.quantity).toBe(3);
+    expect(postsGroup?.rows.find((row) => row.itemCode === "LAB_2000_INTERS_ENDS")?.quantity).toBe(3);
 
-    expect(concreteGroup?.rows[0]?.quantity).toBeCloseTo(0.229, 3);
-    expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.quantity).toBe(4);
-    expect(floodlightGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX")?.quantity).toBe(8);
-    expect(basketballGroup?.rows.find((row) => row.itemCode === "TWIN_BAR_BASKETBALL_POST")?.quantity).toBe(1);
+    expect(concreteGroup?.rows[0]?.quantity).toBe(3);
+    expect(floodlightGroup?.rows.find((row) => row.itemCode === "MAT_FEATURE_FLOODLIGHT_COLUMNS")?.quantity).toBe(1);
+    expect(basketballGroup?.rows.find((row) => row.itemCode === "MAT_FEATURE_BASKETBALL_DEDICATED")?.quantity).toBe(1);
     expect(result.totals.totalCost).toBeGreaterThan(0);
   });
 
@@ -127,8 +127,8 @@ describe("buildEstimateFromDrawing", () => {
     ]);
 
     const ancillaryGroup = result.groups.find((group) => group.key === "ancillary-items");
-    expect(ancillaryGroup?.rows).toHaveLength(1);
-    expect(ancillaryGroup?.rows[0]?.totalCost).toBe(60);
+    expect(ancillaryGroup?.rows).toHaveLength(2);
+    expect(ancillaryGroup?.rows.find((row) => row.itemCode === null)?.totalCost).toBe(60);
   });
 
   it("surfaces warnings instead of provisional rows for unsupported pricing paths", () => {
@@ -162,7 +162,7 @@ describe("buildEstimateFromDrawing", () => {
     const result = buildEstimateFromDrawing(drawing, buildPricingConfig());
 
     expect(result.warnings.map((warning) => warning.code)).toEqual(
-      expect.arrayContaining(["UNSUPPORTED_FENCE_SYSTEM", "CUSTOM_GATES", "FIXINGS_EXCLUDED"])
+      expect.arrayContaining(["UNSUPPORTED_FENCE_SYSTEM", "CUSTOM_GATES"])
     );
     expect(result.groups.find((group) => group.key === "fixings")).toBeUndefined();
     expect(result.groups.find((group) => group.key === "gates")).toBeUndefined();

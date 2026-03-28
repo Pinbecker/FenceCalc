@@ -77,6 +77,8 @@ export interface CreateDrawingInput {
   companyId: string;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
+  parentDrawingId?: string | null;
+  revisionNumber?: number;
   name: string;
   customerId: string | null;
   customerName: string;

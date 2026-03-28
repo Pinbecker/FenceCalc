@@ -36,7 +36,7 @@ type TaskNotFound = { kind: "task_not_found" };
 
 export type JobMutationResult = JobMutationSuccess | JobNotFound | InvalidCustomer | InvalidUser | DrawingNotFound;
 export type JobTaskMutationResult = JobTaskMutationSuccess | JobNotFound | InvalidUser | TaskNotFound;
-export type JobDeleteResult = { kind: "success" } | JobNotFound;
+export type JobDeleteResult = { kind: "success" } | JobNotFound | { kind: "not_archived" };
 
 async function resolveCustomerForJob(repository: AppRepository, companyId: string, customerId: string) {
   const customer = await repository.getCustomerById(customerId, companyId);
@@ -255,6 +255,9 @@ export async function deleteJobForCompany(
   if (!existing) {
     return { kind: "job_not_found" };
   }
+  if (!existing.isArchived) {
+    return { kind: "not_archived" };
+  }
 
   await repository.deleteJob({
     jobId,
@@ -294,10 +297,31 @@ export async function createJobDrawingForCompany(
   }
 
   const existingDrawings = await repository.listDrawingsForJob(job.id, authenticated.company.id);
+
+  // When creating a revision, link to the root parent drawing
+  let parentDrawingId: string | null = null;
+  let revisionNumber = 0;
+  if (sourceDrawing) {
+    parentDrawingId = sourceDrawing.parentDrawingId ?? sourceDrawing.id;
+    // Count existing revisions for this root drawing to assign next revision number
+    const existingRevisions = existingDrawings.filter((d) => d.parentDrawingId === parentDrawingId);
+    revisionNumber = existingRevisions.length + 1;
+  }
+
+  // For new root drawings, count only other root drawings (exclude revisions)
+  const rootDrawingCount = existingDrawings.filter((d) => !d.parentDrawingId).length;
+
+  // Revision inherits the root drawing's name; new drawings get "Drawing N"
+  const rootDrawing = parentDrawingId
+    ? existingDrawings.find((d) => d.id === parentDrawingId)
+    : null;
+
   return createDrawingForCompany(repository, authenticated, {
-    name: input.name?.trim() || (sourceDrawing ? `${job.name} REV ${existingDrawings.length}` : buildNextJobDrawingName(job, existingDrawings.length)),
+    name: input.name?.trim() || (rootDrawing ? rootDrawing.name : buildNextJobDrawingName(job, rootDrawingCount)),
     customerId: job.customerId,
     jobId: job.id,
+    parentDrawingId,
+    revisionNumber,
     layout: sourceDrawing?.layout ?? EMPTY_LAYOUT,
     savedViewport: sourceDrawing?.savedViewport ?? null
   });

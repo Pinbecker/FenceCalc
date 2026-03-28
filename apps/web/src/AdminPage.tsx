@@ -318,7 +318,7 @@ export function AdminPage({
                   disabled={isArchivingCustomerId === customer.id}
                   onClick={() => void onRestoreCustomer(customer.id)}
                 >
-                  {isArchivingCustomerId === customer.id ? "Restoring..." : "Restore"}
+                  {isArchivingCustomerId === customer.id ? "Restoring..." : "Restore customer"}
                 </button>
               </article>
             ))}

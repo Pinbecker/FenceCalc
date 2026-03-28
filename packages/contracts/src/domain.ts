@@ -433,6 +433,8 @@ export interface DrawingRecord {
   companyId: string;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
+  parentDrawingId?: string | null;
+  revisionNumber: number;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -459,6 +461,8 @@ export interface DrawingSummary {
   companyId: string;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
+  parentDrawingId?: string | null;
+  revisionNumber: number;
   name: string;
   customerId: string | null;
   customerName: string;
@@ -532,6 +536,7 @@ export type AuditAction =
   | "JOB_DRAWING_ADDED"
   | "JOB_TASK_CREATED"
   | "JOB_TASK_UPDATED"
+  | "JOB_TASK_DELETED"
   | "JOB_DELETED"
   | "CUSTOMER_CREATED"
   | "CUSTOMER_UPDATED"

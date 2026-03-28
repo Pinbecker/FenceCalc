@@ -200,6 +200,16 @@
   color: #2c5f51;
 }
 
+.portal-inline-warning {
+  border: 1px solid rgba(180, 140, 40, 0.3);
+  background: rgba(200, 160, 50, 0.1);
+  color: #7a5e10;
+}
+
+.portal-text-danger {
+  color: #b15842 !important;
+}
+
 .portal-primary-button,
 .portal-secondary-button,
 .portal-text-button,

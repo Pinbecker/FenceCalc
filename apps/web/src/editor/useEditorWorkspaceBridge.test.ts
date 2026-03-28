@@ -65,6 +65,7 @@ const sampleDrawing = {
   schemaVersion: 1,
   rulesVersion: "2026-03-11",
   versionNumber: 3,
+  revisionNumber: 0,
   isArchived: false,
   archivedAtIso: null,
   archivedByUserId: null,

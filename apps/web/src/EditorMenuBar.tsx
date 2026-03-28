@@ -15,6 +15,7 @@ interface EditorMenuBarProps {
   session: AuthSessionEnvelope | null;
   drawingTitle: string;
   currentDrawingId: string | null;
+  currentJobId: string | null;
   currentCustomerId: string | null;
   currentDrawingName: string;
   currentCustomerName: string;
@@ -45,6 +46,7 @@ interface EditorMenuBarProps {
   onToggleOptimization: () => void;
   onGoToLogin: () => void;
   onNavigateDashboard: () => void;
+  onNavigateJob: () => void;
   onNavigateCurrentCustomer: () => void;
   onNavigateCustomers: () => void;
   onNavigateEstimate: () => void;
@@ -71,6 +73,7 @@ export function EditorMenuBar({
   session,
   drawingTitle,
   currentDrawingId,
+  currentJobId,
   currentCustomerId,
   currentDrawingName,
   currentCustomerName,
@@ -101,6 +104,7 @@ export function EditorMenuBar({
   onToggleOptimization,
   onGoToLogin,
   onNavigateDashboard,
+  onNavigateJob,
   onNavigateCurrentCustomer,
   onNavigateCustomers,
   onNavigateEstimate,
@@ -113,6 +117,7 @@ export function EditorMenuBar({
   const [isEditingName, setIsEditingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
+  const isQuotedLocked = currentDrawingStatus === "QUOTED";
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
@@ -164,7 +169,13 @@ export function EditorMenuBar({
             <div className="menu-bar-panel" role="menu">
               {session ? (
                 <>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onSaveDrawing)} disabled={isSavingDrawing || !currentDrawingId}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => menuAction(onSaveDrawing)}
+                    disabled={isSavingDrawing || !currentDrawingId || isQuotedLocked}
+                    title={isQuotedLocked ? "Quoted drawings are locked. Create a new revision to continue." : undefined}
+                  >
                     Save<em>Ctrl+S</em>
                   </button>
                   <button type="button" role="menuitem" onClick={() => menuAction(onOpenSaveAs)} disabled={isSavingDrawing || !currentDrawingId}>
@@ -273,6 +284,16 @@ export function EditorMenuBar({
 
         {session ? (
           <div className="menu-bar-customer-wrap">
+            {currentJobId ? (
+              <button
+                type="button"
+                className="menu-bar-customer-label menu-bar-customer-link"
+                onClick={onNavigateJob}
+                title="Back to job"
+              >
+                ← Back to job
+              </button>
+            ) : null}
             {currentCustomerId ? (
               <button
                 type="button"

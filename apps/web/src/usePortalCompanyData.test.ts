@@ -38,6 +38,7 @@ const sampleDrawings: DrawingSummary[] = [
     schemaVersion: 1,
     rulesVersion: "2026-03-11",
     versionNumber: 2,
+    revisionNumber: 0,
     isArchived: false,
     archivedAtIso: null,
     archivedByUserId: null,
@@ -261,17 +262,20 @@ async function loadUsePortalCompanyData(options?: {
     restoreDrawingVersion: vi.fn(() => Promise.resolve({
       id: "drawing-1",
       name: "Restored boundary",
-      versionNumber: 3
+      versionNumber: 3,
+      revisionNumber: 0
     })),
     setDrawingArchivedState: vi.fn(() => Promise.resolve({
       id: "drawing-1",
       name: "Archived boundary",
-      versionNumber: 3
+      versionNumber: 3,
+      revisionNumber: 0
     })),
     setDrawingStatus: vi.fn(() => Promise.resolve({
       id: "drawing-1",
       name: "Boundary fence",
       versionNumber: 3,
+      revisionNumber: 0,
       status: "QUOTED"
     })),
     setUserPassword: vi.fn(() => Promise.resolve()),
@@ -297,7 +301,7 @@ async function loadUsePortalCompanyData(options?: {
       users: sampleUsers,
       auditLog: sampleAuditLog
     })),
-    updateDrawingSummaryFromRecord: vi.fn((drawing: { id: string; name: string; versionNumber: number }) => ({
+    updateDrawingSummaryFromRecord: vi.fn((drawing: { id: string; name: string; versionNumber: number; revisionNumber?: number }) => ({
       id: drawing.id,
       companyId: "company-1",
       name: drawing.name,
@@ -309,6 +313,7 @@ async function loadUsePortalCompanyData(options?: {
       schemaVersion: 1,
       rulesVersion: "2026-03-11",
       versionNumber: drawing.versionNumber,
+      revisionNumber: drawing.revisionNumber ?? 0,
       isArchived: false,
       archivedAtIso: null,
       archivedByUserId: null,

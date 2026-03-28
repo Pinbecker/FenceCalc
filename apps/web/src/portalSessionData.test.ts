@@ -57,6 +57,7 @@ describe("portalSessionData", () => {
       schemaVersion: 1,
       rulesVersion: "1.0.0",
       versionNumber: 2,
+      revisionNumber: 0,
       isArchived: false,
       archivedAtIso: null,
       archivedByUserId: null,
@@ -72,6 +73,7 @@ describe("portalSessionData", () => {
     expect(summary.segmentCount).toBe(1);
     expect(summary.gateCount).toBe(1);
     expect(summary.customerName).toBe("Cleveland Land Services");
+    expect(summary.revisionNumber).toBe(0);
     expect(summary.previewLayout.gates?.[0]?.id).toBe("gate-1");
   });
 });

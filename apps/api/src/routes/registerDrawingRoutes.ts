@@ -17,6 +17,7 @@ import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
   deleteDrawingForCompany,
+  deleteRevisionForCompany,
   restoreDrawingVersionForCompany,
   setDrawingArchivedStateForCompany,
   setDrawingStatusForCompany,
@@ -37,7 +38,8 @@ function sendDrawingMutationFailure(
     | { kind: "drawing_not_found" }
     | { kind: "version_not_found" }
     | { kind: "invalid_layout"; message: string }
-    | { kind: "invalid_customer"; message: string },
+    | { kind: "invalid_customer"; message: string }
+    | { kind: "quoted_locked"; message: string },
 ) {
   if (result.kind === "conflict") {
     return reply.code(409).send({
@@ -62,6 +64,13 @@ function sendDrawingMutationFailure(
   if (result.kind === "invalid_customer") {
     return reply.code(400).send({
       error: "Invalid customer selection",
+      details: result.message
+    });
+  }
+
+  if (result.kind === "quoted_locked") {
+    return reply.code(409).send({
+      error: "Quoted drawing is locked",
       details: result.message
     });
   }
@@ -397,6 +406,34 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     }
     if (result.kind === "not_archived") {
       return reply.code(400).send({ error: "Drawing must be archived before it can be deleted" });
+    }
+
+    return reply.code(200).send({ deleted: true });
+  });
+
+  app.delete("/api/v1/drawings/:id/revision", async (request, reply) => {
+    const authenticated = await requireAuth(request, reply, repository, config);
+    if (!authenticated) {
+      return reply;
+    }
+    if (!writeLimiter.allow(`revision-delete:${request.ip}`)) {
+      return reply.code(429).send({ error: "Rate limit exceeded" });
+    }
+
+    const params = request.params as { id?: string };
+    if (!params.id) {
+      return reply.code(400).send({ error: "Missing drawing id" });
+    }
+
+    const result = await deleteRevisionForCompany(repository, authenticated, params.id);
+    if (result.kind === "drawing_not_found") {
+      return reply.code(404).send({ error: "Drawing not found" });
+    }
+    if (result.kind === "not_a_revision") {
+      return reply.code(400).send({ error: "Only revisions can be deleted through this endpoint" });
+    }
+    if (result.kind === "not_last_revision") {
+      return reply.code(400).send({ error: "Only the last revision can be deleted" });
     }
 
     return reply.code(200).send({ deleted: true });

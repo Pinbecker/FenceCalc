@@ -25,6 +25,11 @@ const JobPage = lazy(async () => {
   return { default: module.JobPage };
 });
 
+const DrawingPage = lazy(async () => {
+  const module = await import("./DrawingPage");
+  return { default: module.DrawingPage };
+});
+
 const EstimatePage = lazy(async () => {
   const module = await import("./EstimatePage");
   return { default: module.EstimatePage };
@@ -183,7 +188,7 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "estimate" || route === "editor";
+  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "drawing" || route === "estimate" || route === "editor";
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
@@ -349,6 +354,8 @@ export function App() {
                 onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
                 onOpenEstimate={(jobId, drawingId) => navigate("job", { jobId, tab: "estimate", ...(drawingId ? { drawingId } : {}) })}
                 onDeleteCustomer={portal.deleteCustomer}
+                onSetJobArchived={portal.setJobArchived}
+                onDeleteJob={portal.deleteJob}
                 onNavigate={navigate}
               />
             ) : null}
@@ -363,6 +370,15 @@ export function App() {
                 onRefreshDrawings={portal.refreshDrawings}
                 onToggleDrawingArchived={portal.setDrawingArchived}
                 onDeleteJob={portal.deleteJob}
+              />
+            ) : null}
+            {modalBaseRoute === "drawing" ? (
+              <DrawingPage
+                session={portal.session}
+                query={modalBaseQuery}
+                onNavigate={navigate}
+                onRefreshJobs={portal.refreshJobs}
+                onRefreshDrawings={portal.refreshDrawings}
               />
             ) : null}
             {modalBaseRoute === "estimate" ? (

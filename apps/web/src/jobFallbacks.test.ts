@@ -16,6 +16,7 @@ const baseDrawing: DrawingSummary = {
   schemaVersion: 1,
   rulesVersion: "2026-03-27",
   versionNumber: 2,
+  revisionNumber: 0,
   status: "DRAFT",
   isArchived: false,
   archivedAtIso: null,

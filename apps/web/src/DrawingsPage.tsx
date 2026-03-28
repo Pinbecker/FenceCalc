@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { DRAWING_STATUSES, type AuthSessionEnvelope, type CustomerSummary, type DrawingStatus, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
+import { DRAWING_STATUSES, type AuthSessionEnvelope, type CustomerSummary, type DrawingStatus, type DrawingSummary } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 
@@ -28,8 +28,6 @@ interface DrawingsPageProps {
   onCreateDrawing(this: void): void;
   onToggleArchive(this: void, drawingId: string, archived: boolean): Promise<boolean>;
   onChangeStatus(this: void, drawingId: string, status: DrawingStatus): Promise<boolean>;
-  onLoadVersions(this: void, drawingId: string): Promise<DrawingVersionRecord[]>;
-  onRestoreVersion(this: void, drawingId: string, versionNumber: number): Promise<boolean>;
   onDeleteDrawing?(this: void, drawingId: string): Promise<boolean>;
   onSearch?(this: void, search: string): void;
   userRole?: string;
@@ -58,8 +56,6 @@ export function DrawingsPage({
   onCreateDrawing,
   onToggleArchive,
   onChangeStatus,
-  onLoadVersions,
-  onRestoreVersion,
   onDeleteDrawing,
   onSearch,
   userRole
@@ -70,9 +66,6 @@ export function DrawingsPage({
   const [ownershipFilter, setOwnershipFilter] = useState<DrawingOwnershipFilter>("COMPANY");
   const [selectedCustomer, setSelectedCustomer] = useState("ALL_CUSTOMERS");
   const [searchText, setSearchText] = useState("");
-  const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null);
-  const [versionsByDrawingId, setVersionsByDrawingId] = useState<Record<string, DrawingVersionRecord[]>>({});
-  const [isLoadingVersionsForId, setIsLoadingVersionsForId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeletingDrawing, setIsDeletingDrawing] = useState(false);
 
@@ -164,23 +157,6 @@ export function DrawingsPage({
     : statusFilter === "ARCHIVED"
       ? "Archived drawings only"
       : "Active and archived drawings";
-
-  const handleToggleHistory = async (drawingId: string) => {
-    if (expandedDrawingId === drawingId) {
-      setExpandedDrawingId(null);
-      return;
-    }
-
-    setExpandedDrawingId(drawingId);
-    if (versionsByDrawingId[drawingId]) {
-      return;
-    }
-
-    setIsLoadingVersionsForId(drawingId);
-    const versions = await onLoadVersions(drawingId);
-    setVersionsByDrawingId((current) => ({ ...current, [drawingId]: versions }));
-    setIsLoadingVersionsForId(null);
-  };
 
   return (
     <section className="portal-page portal-drawings-page">
@@ -343,14 +319,12 @@ export function DrawingsPage({
 
             <div className="drawing-library-list">
               {customerDrawings.map((drawing) => {
-                const versions = versionsByDrawingId[drawing.id] ?? [];
-                const isLoadingVersions = isLoadingVersionsForId === drawing.id;
                 const isMine = drawing.contributorUserIds.includes(session.user.id);
 
                 return (
                   <article
                     key={drawing.id}
-                    className={`drawing-library-row${expandedDrawingId === drawing.id ? " is-expanded" : ""}${drawing.isArchived ? " is-archived" : ""}`}
+                    className={`drawing-library-row${drawing.isArchived ? " is-archived" : ""}`}
                   >
                     <div className="drawing-library-row-main">
                       <div className="drawing-library-row-preview">
@@ -418,13 +392,6 @@ export function DrawingsPage({
                           >
                             {drawing.isArchived ? "Unarchive" : "Archive"}
                           </button>
-                          <button
-                            type="button"
-                            className="portal-secondary-button drawing-library-utility-button"
-                            onClick={() => void handleToggleHistory(drawing.id)}
-                          >
-                            {expandedDrawingId === drawing.id ? "Hide history" : "Version history"}
-                          </button>
                           {isAdmin && drawing.isArchived && onDeleteDrawing ? (
                             <button
                               type="button"
@@ -437,33 +404,6 @@ export function DrawingsPage({
                         </div>
                       </div>
                     </div>
-
-                    {expandedDrawingId === drawing.id ? (
-                      <div className="drawing-history-panel">
-                        <div className="drawing-history-panel-heading">
-                          <span className="portal-section-kicker">History</span>
-                          <strong>{drawing.name}</strong>
-                        </div>
-                        {isLoadingVersions ? <p className="portal-empty-copy">Loading versions...</p> : null}
-                        {versions.map((version) => (
-                          <div key={version.id} className="drawing-history-row">
-                            <div>
-                              <strong>Version {version.versionNumber}</strong>
-                              <span>
-                                {version.source} / {version.customerName} / {formatTimestamp(version.createdAtIso)}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="portal-text-button"
-                              onClick={() => void onRestoreVersion(drawing.id, version.versionNumber)}
-                            >
-                              Restore
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
                   </article>
                 );
               })}

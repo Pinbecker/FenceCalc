@@ -126,19 +126,20 @@ describe("buildPricedEstimate", () => {
     ]);
 
     expect(result.pricingSnapshot.source).toBe("COMPANY_CONFIG");
-    expect(result.groups.find((group) => group.key === "panels")?.rows[0]?.quantity).toBe(3);
-    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_END")?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")).toBeUndefined();
-    expect(result.groups.find((group) => group.key === "concrete")?.rows[0]?.quantity).toBeCloseTo(0.153, 3);
+    expect(result.groups.find((group) => group.key === "panels")?.rows[0]?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "panels")?.subtotalCost).toBeCloseTo(166.32, 2);
+    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "MAT_2000_INTERS_ENDS")?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "LAB_2000_INTERS_ENDS")?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "concrete")?.rows[0]?.quantity).toBe(2);
     expect(
-      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.quantity
-    ).toBe(4);
-    expect(
-      result.groups.find((group) => group.key === "basketball-posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_BASKETBALL_POST")?.quantity
+      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "MAT_FEATURE_FLOODLIGHT_COLUMNS")?.quantity
     ).toBe(1);
-    expect(result.groups.find((group) => group.key === "ancillary-items")?.rows[0]?.totalCost).toBe(60);
+    expect(
+      result.groups.find((group) => group.key === "basketball-posts")?.rows.find((row) => row.itemCode === "MAT_FEATURE_BASKETBALL_DEDICATED")?.quantity
+    ).toBe(1);
+    expect(result.groups.find((group) => group.key === "ancillary-items")?.rows.find((row) => row.itemCode === null)?.totalCost).toBe(60);
     expect(result.totals.totalCost).toBeGreaterThan(0);
-    expect(result.warnings.map((warning) => warning.code)).toContain("FIXINGS_EXCLUDED");
+    expect(result.warnings).toEqual([]);
   });
 
   it("surfaces unsupported-system/manual-review warnings and default pricing snapshots", () => {
@@ -195,13 +196,12 @@ describe("buildPricedEstimate", () => {
         "UNSUPPORTED_FENCE_SYSTEM",
         "CUSTOM_GATES",
         "INLINE_JOIN_OR_JUNCTION_POSTS",
-        "UNCLASSIFIED_CORNERS",
-        "FIXINGS_EXCLUDED"
+        "UNCLASSIFIED_CORNERS"
       ])
     );
   });
 
-  it("adds pricing notes when items are missing or inactive", () => {
+  it("keeps workbook output stable when legacy pricing item codes are missing or inactive", () => {
     const drawing = buildTwinBarDrawing();
     const pricingConfig = buildPricingConfig();
     const result = buildPricedEstimate(drawing, {
@@ -218,11 +218,9 @@ describe("buildPricedEstimate", () => {
         )
     });
 
-    expect(
-      result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "TWIN_BAR_POST_INTERMEDIATE")?.notes
-    ).toContain("Pricing item is inactive.");
-    expect(
-      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS")?.notes
-    ).toContain("Pricing item is missing from configuration.");
+    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "MAT_2000_INTERS_ENDS")?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "MAT_FEATURE_FLOODLIGHT_COLUMNS")?.quantity).toBe(1);
+    expect(result.groups.flatMap((group) => group.rows).some((row) => row.notes?.includes("Pricing item is inactive.") ?? false)).toBe(false);
+    expect(result.groups.flatMap((group) => group.rows).some((row) => row.notes?.includes("Pricing item is missing from configuration.") ?? false)).toBe(false);
   });
 });

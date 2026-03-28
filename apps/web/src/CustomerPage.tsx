@@ -82,9 +82,9 @@ interface CustomerPageProps {
   onCreateDrawing?(this: void): void;
   onToggleDrawingArchived?(this: void, drawingId: string, archived: boolean): Promise<boolean>;
   onChangeDrawingStatus?(this: void, drawingId: string, status: string): Promise<boolean>;
-  onLoadVersions?(this: void, drawingId: string): Promise<unknown[]>;
-  onRestoreVersion?(this: void, drawingId: string, versionNumber: number): Promise<boolean>;
   onDeleteDrawing?(this: void, drawingId: string): Promise<boolean>;
+  onSetJobArchived?(this: void, jobId: string, archived: boolean): Promise<boolean>;
+  onDeleteJob?(this: void, jobId: string): Promise<boolean>;
   onDeleteCustomer(this: void, customerId: string): Promise<boolean>;
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
@@ -210,6 +210,8 @@ export function CustomerPage({
   onOpenDrawing,
   onOpenEstimate,
   onCreateDrawing,
+  onSetJobArchived,
+  onDeleteJob,
   onDeleteCustomer,
   onNavigate,
 }: CustomerPageProps) {
@@ -225,6 +227,12 @@ export function CustomerPage({
   const [cascadeOnArchive, setCascadeOnArchive] = useState(false);
   const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
   const [isCreatingJob, setIsCreatingJob] = useState(false);
+  const [isNewJobOpen, setIsNewJobOpen] = useState(false);
+  const [newJobName, setNewJobName] = useState("");
+  const [newJobNotes, setNewJobNotes] = useState("");
+  const [confirmDeleteJobId, setConfirmDeleteJobId] = useState<string | null>(null);
+  const [isDeletingJob, setIsDeletingJob] = useState(false);
+  const [archivingJobId, setArchivingJobId] = useState<string | null>(null);
 
   const customer = useMemo(
     () => customers.find((entry) => entry.id === customerId) ?? null,
@@ -337,21 +345,28 @@ export function CustomerPage({
     closeEditModal();
   };
 
+  const openNewJobModal = () => {
+    if (!customer) return;
+    setNewJobName(buildNextJobName(customer, existingJobCount));
+    setNewJobNotes("");
+    setIsNewJobOpen(true);
+  };
+
   const handleCreateJob = async () => {
-    if (!customer) {
-      return;
-    }
+    if (!customer) return;
     if (!onCreateJob) {
       onCreateDrawing?.();
       return;
     }
+    const name = newJobName.trim() || buildNextJobName(customer, existingJobCount);
     setIsCreatingJob(true);
     const job = await onCreateJob({
       customerId: customer.id,
-      name: buildNextJobName(customer, existingJobCount),
-      notes: ""
+      name,
+      notes: newJobNotes.trim()
     });
     setIsCreatingJob(false);
+    setIsNewJobOpen(false);
     if (job) {
       if (onOpenJob) {
         onOpenJob(job.id);
@@ -459,7 +474,7 @@ export function CustomerPage({
             }}
             disabled={isArchivingCustomerId === customer.id}
           >
-            {isArchivingCustomerId === customer.id ? "Updating..." : customer.isArchived ? "Restore" : "Archive"}
+            {isArchivingCustomerId === customer.id ? "Updating..." : customer.isArchived ? "Restore customer" : "Archive customer"}
           </button>
           {isAdmin && customer.isArchived ? (
             <button
@@ -471,11 +486,25 @@ export function CustomerPage({
               {isDeletingCustomer ? "Deleting..." : "Delete customer"}
             </button>
           ) : null}
-          <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleCreateJob()} disabled={isCreatingJob}>
+          <button type="button" className="portal-primary-button portal-compact-button" onClick={openNewJobModal} disabled={isCreatingJob}>
             {isCreatingJob ? "Creating..." : "New job"}
           </button>
         </div>
       </header>
+
+      {customer.isArchived ? (
+        <div className="portal-inline-message portal-inline-warning" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+          <span>This customer is archived. Restore the customer to make it active again.</span>
+          <button
+            type="button"
+            className="portal-secondary-button portal-compact-button"
+            disabled={isArchivingCustomerId === customer.id}
+            onClick={() => void onSetCustomerArchived(customer.id, false, false)}
+          >
+            {isArchivingCustomerId === customer.id ? "Restoring..." : "Restore customer"}
+          </button>
+        </div>
+      ) : null}
 
       {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
       {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
@@ -567,16 +596,21 @@ export function CustomerPage({
 
                   <div className="portal-customer-drawing-card-footer">
                     <button type="button" className="portal-text-button" onClick={() => openJobWorkspace(job)}>
-                      Open job
+                      Open
                     </button>
-                    {job.primaryDrawingId ? (
-                      <button type="button" className="portal-text-button" onClick={() => onOpenDrawing(job.primaryDrawingId!)}>
-                        Open editor
+                    {onSetJobArchived ? (
+                      <button
+                        type="button"
+                        className="portal-text-button"
+                        disabled={archivingJobId === job.id}
+                        onClick={() => {
+                          setArchivingJobId(job.id);
+                          void onSetJobArchived(job.id, !job.isArchived).finally(() => setArchivingJobId(null));
+                        }}
+                      >
+                        {archivingJobId === job.id ? "Updating..." : job.isArchived ? "Restore" : "Archive"}
                       </button>
                     ) : null}
-                    <button type="button" className="portal-text-button" onClick={() => openJobEstimate(job)}>
-                      Estimate
-                    </button>
                   </div>
                 </div>
               </article>
@@ -584,6 +618,58 @@ export function CustomerPage({
           </div>
         )}
       </section>
+
+      {isNewJobOpen ? (
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setIsNewJobOpen(false)}>
+          <div
+            className="portal-customer-edit-modal portal-modal-card"
+            role="dialog"
+            aria-label="New job"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
+              <h2>New job</h2>
+              <button type="button" className="portal-text-button" onClick={() => setIsNewJobOpen(false)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body portal-modal-body">
+              <label className="portal-customer-edit-field">
+                <span>Job name</span>
+                <input
+                  value={newJobName}
+                  onChange={(event) => setNewJobName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && newJobName.trim()) {
+                      void handleCreateJob();
+                    }
+                  }}
+                  autoFocus
+                />
+              </label>
+              <label className="portal-customer-edit-field">
+                <span>Notes (optional)</span>
+                <textarea
+                  value={newJobNotes}
+                  onChange={(event) => setNewJobNotes(event.target.value)}
+                  rows={3}
+                />
+              </label>
+            </div>
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsNewJobOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-primary-button portal-compact-button"
+                disabled={isCreatingJob || !newJobName.trim()}
+                onClick={() => void handleCreateJob()}
+              >
+                {isCreatingJob ? "Creating..." : "Create job"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {confirmDeleteCustomer ? (
         <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteCustomer(false)}>
@@ -621,6 +707,45 @@ export function CustomerPage({
                 }}
               >
                 {isDeletingCustomer ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDeleteJobId && onDeleteJob ? (
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteJobId(null)}>
+          <div
+            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
+            role="dialog"
+            aria-label="Confirm delete job"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="portal-customer-edit-modal-header portal-modal-header">
+              <h2>Permanently delete job?</h2>
+              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteJobId(null)}>Close</button>
+            </div>
+            <div className="portal-customer-edit-modal-body portal-modal-body">
+              <p>This will permanently remove the job and all its drawings, estimates, and history. This action cannot be undone.</p>
+            </div>
+            <div className="portal-customer-edit-modal-footer portal-modal-footer">
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteJobId(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="portal-danger-button portal-compact-button"
+                disabled={isDeletingJob}
+                onClick={() => {
+                  void (async () => {
+                    setIsDeletingJob(true);
+                    await onDeleteJob(confirmDeleteJobId);
+                    setIsDeletingJob(false);
+                    setConfirmDeleteJobId(null);
+                  })();
+                }}
+              >
+                {isDeletingJob ? "Deleting..." : "Delete permanently"}
               </button>
             </div>
           </div>

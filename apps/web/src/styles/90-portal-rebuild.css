@@ -1290,6 +1290,11 @@ svg.drawing-preview {
   opacity: 0.82;
 }
 
+.portal-customer-drawing-card.is-active {
+  border-color: rgba(148, 83, 46, 0.28);
+  box-shadow: 0 18px 38px rgba(148, 83, 46, 0.12);
+}
+
 .portal-customer-drawing-card-preview {
   padding: 10px;
   background: rgba(242, 246, 244, 0.82);
@@ -1335,13 +1340,66 @@ svg.drawing-preview {
   justify-content: flex-start;
 }
 
+.portal-customer-drawing-badge.is-current {
+  background: rgba(180, 118, 49, 0.14);
+  color: #8b5525;
+}
+
+.portal-customer-drawing-badge.is-quoted {
+  background: rgba(54, 111, 92, 0.14);
+  color: #2d6152;
+}
+
 .portal-customer-drawing-card-meta span {
   font-size: 0.72rem;
   line-height: 1.4;
 }
 
+.portal-revision-chain-group {
+  display: grid;
+  gap: 8px;
+}
+
+.portal-revision-chain-header {
+  margin-bottom: 0.2rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--portal-line);
+}
+
 .portal-customer-drawing-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--portal-line);
+}
+
+.portal-customer-drawing-card-footer .portal-text-button {
+  padding: 4px 10px;
+  border: 1px solid var(--portal-line);
+  border-radius: 8px;
+  background: rgba(244, 247, 246, 0.6);
+  color: var(--portal-accent);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.portal-customer-drawing-card-footer .portal-text-button:hover {
+  background: rgba(244, 247, 246, 0.92);
+  border-color: var(--portal-accent);
+  color: var(--portal-accent-strong);
+}
+
+.portal-customer-drawing-card-footer .portal-text-danger {
+  color: #b15842;
+  border-color: rgba(177, 88, 66, 0.18);
+}
+
+.portal-customer-drawing-card-footer .portal-text-danger:hover {
+  background: rgba(177, 88, 66, 0.08);
+  border-color: rgba(177, 88, 66, 0.26);
 }
 
 .portal-customer-drawing-card-utility,
@@ -2217,20 +2275,54 @@ svg.drawing-preview {
   gap: 8px;
 }
 
-.portal-job-workflow-card {
+.portal-job-drawing-timeline-card {
   gap: 12px;
 }
 
-.portal-job-workflow-grid {
+.portal-job-drawing-timeline {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
 }
 
-.portal-job-workflow-step {
+.portal-job-drawing-timeline-group {
+  display: grid;
+  gap: 10px;
+  min-width: max-content;
+}
+
+.portal-job-drawing-timeline-group-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portal-job-drawing-timeline-group-header h3 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+  color: var(--portal-text);
+}
+
+.portal-job-drawing-timeline-chain {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: max-content;
+}
+
+.portal-job-drawing-timeline-node-wrap {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.portal-job-drawing-timeline-node {
   all: unset;
   display: grid;
-  gap: 6px;
+  gap: 4px;
+  min-width: 168px;
   padding: 12px 13px;
   border: 1px solid var(--portal-line);
   border-radius: var(--portal-radius-md);
@@ -2239,30 +2331,51 @@ svg.drawing-preview {
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
-.portal-job-workflow-step strong {
+.portal-job-drawing-timeline-node-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+}
+
+.portal-job-drawing-timeline-node strong {
   font-size: 0.88rem;
   color: var(--portal-text);
 }
 
-.portal-job-workflow-step span {
+.portal-job-drawing-timeline-node span:last-child {
   font-size: 0.79rem;
   line-height: 1.5;
   color: var(--portal-text-muted);
 }
 
-.portal-job-workflow-step:hover,
-.portal-job-workflow-step:focus-visible {
+.portal-job-drawing-timeline-node:hover,
+.portal-job-drawing-timeline-node:focus-visible {
   border-color: var(--portal-line-strong);
   background: rgba(248, 250, 249, 0.96);
   box-shadow: var(--portal-shadow-1);
   transform: translateY(-1px);
 }
 
-.portal-job-workflow-step:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+.portal-job-drawing-timeline-node.is-latest {
+  border-color: rgba(148, 83, 46, 0.28);
+  box-shadow: 0 10px 22px rgba(148, 83, 46, 0.08);
+}
+
+.portal-job-drawing-timeline-node.is-quoted {
+  background: rgba(241, 248, 245, 0.96);
+}
+
+.portal-job-drawing-timeline-node.is-archived {
+  opacity: 0.76;
+}
+
+.portal-job-drawing-timeline-connector {
+  width: 36px;
+  height: 2px;
+  margin: 0 8px;
+  background: linear-gradient(90deg, rgba(148, 83, 46, 0.18), rgba(90, 112, 103, 0.22));
+  border-radius: 999px;
 }
 
 .portal-job-task-list {
@@ -2288,8 +2401,9 @@ svg.drawing-preview {
     grid-template-columns: 1fr;
   }
 
-  .portal-job-workflow-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .portal-job-drawing-timeline-group-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
@@ -2705,8 +2819,8 @@ svg.drawing-preview {
   .portal-customer-edit-contact-row,
   .workbook-section-grid,
   .pricing-rate-group-grid,
-  .portal-job-workflow-grid {
-    grid-template-columns: 1fr;
+  .portal-job-drawing-timeline-chain {
+    padding-bottom: 4px;
   }
 }
 

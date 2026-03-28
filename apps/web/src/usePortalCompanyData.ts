@@ -28,6 +28,7 @@ import {
   listJobs,
   listUsers,
   restoreDrawingVersion,
+  updateJob,
   setCustomerArchivedState,
   setDrawingArchivedState,
   setDrawingStatus,
@@ -545,6 +546,25 @@ export function usePortalCompanyData({
     [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
+  const setJobArchived = useCallback(
+    async (jobId: string, archived: boolean) => {
+      if (!session) return false;
+      clearMessages();
+      try {
+        await updateJob(jobId, { archived });
+        const nextJobs = await listJobs({ scope: jobListScope });
+        setJobs(nextJobs);
+        await loadAuditLog(auditLogQuery);
+        setNoticeMessage(archived ? "Job archived" : "Job restored");
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+  );
+
   const deleteJobPermanently = useCallback(
     async (jobId: string) => {
       if (!session) return false;
@@ -602,6 +622,7 @@ export function usePortalCompanyData({
     restoreDrawingVersion: restoreVersion,
     deleteDrawing: deleteDrawingPermanently,
     deleteCustomer: deleteCustomerPermanently,
+    setJobArchived,
     deleteJob: deleteJobPermanently
   };
 }

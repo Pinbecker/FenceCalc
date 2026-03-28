@@ -65,6 +65,7 @@ export function updateDrawingSummaryFromRecord(drawing: DrawingRecord, current?:
     schemaVersion: drawing.schemaVersion,
     rulesVersion: drawing.rulesVersion,
     versionNumber: drawing.versionNumber,
+    revisionNumber: drawing.revisionNumber,
     isArchived: drawing.isArchived,
     archivedAtIso: drawing.archivedAtIso,
     archivedByUserId: drawing.archivedByUserId,

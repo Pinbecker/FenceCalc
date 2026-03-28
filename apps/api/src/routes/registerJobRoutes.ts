@@ -147,6 +147,9 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (result.kind === "job_not_found") {
       return reply.code(404).send({ error: "Job not found" });
     }
+    if (result.kind === "not_archived") {
+      return reply.code(409).send({ error: "Job must be archived before it can be deleted" });
+    }
 
     return reply.code(200).send({ deleted: true });
   });

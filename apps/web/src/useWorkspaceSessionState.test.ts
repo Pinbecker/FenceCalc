@@ -38,6 +38,7 @@ const sampleDrawings: DrawingSummary[] = [
     schemaVersion: 1,
     rulesVersion: "2026-03-11",
     versionNumber: 2,
+    revisionNumber: 0,
     isArchived: false,
     archivedAtIso: null,
     archivedByUserId: null,

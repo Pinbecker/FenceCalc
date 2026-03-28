@@ -60,6 +60,7 @@ export class InMemoryDrawingStore {
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
     const drawing: DrawingRecord = {
       ...input,
+      revisionNumber: input.revisionNumber ?? 0,
       versionNumber: 1,
       status: "DRAFT",
       isArchived: false,

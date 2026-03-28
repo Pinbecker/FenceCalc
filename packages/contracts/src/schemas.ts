@@ -939,7 +939,8 @@ export const quoteDrawingSnapshotSchema = z.object({
   estimate: estimateResultSchema,
   schemaVersion: z.coerce.number().int().min(1),
   rulesVersion: z.string().trim().min(1).max(120),
-  versionNumber: z.coerce.number().int().min(1)
+  versionNumber: z.coerce.number().int().min(1),
+  revisionNumber: z.coerce.number().int().min(0).optional()
 });
 
 export const quoteRecordSchema = z.object({

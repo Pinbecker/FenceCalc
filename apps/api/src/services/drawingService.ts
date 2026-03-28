@@ -34,18 +34,26 @@ interface DrawingInvalidCustomer {
   message: string;
 }
 
+interface DrawingQuotedLocked {
+  kind: "quoted_locked";
+  message: string;
+}
+
 export type DrawingMutationResult =
   | DrawingMutationSuccess
   | DrawingConflict
   | DrawingNotFound
   | DrawingVersionNotFound
   | DrawingInvalidLayout
-  | DrawingInvalidCustomer;
+  | DrawingInvalidCustomer
+  | DrawingQuotedLocked;
 
 interface DrawingCreateInput {
   name: string;
   customerId: string;
   jobId?: string | undefined;
+  parentDrawingId?: string | null | undefined;
+  revisionNumber?: number | undefined;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null | undefined;
 }
@@ -144,6 +152,8 @@ export async function createDrawingForCompany(
         companyId: authenticated.company.id,
         jobId: targetJobId,
         jobRole: jobHadPrimaryDrawing ? "SECONDARY" : "PRIMARY",
+        parentDrawingId: input.parentDrawingId ?? null,
+        revisionNumber: input.revisionNumber ?? 0,
         name: input.name,
         customerId: customerResult.customer.id,
         customerName: customerResult.customer.name,
@@ -249,6 +259,12 @@ export async function updateDrawingForCompany(
   const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
   if (!existing) {
     return { kind: "drawing_not_found" };
+  }
+  if (existing.status === "QUOTED") {
+    return {
+      kind: "quoted_locked",
+      message: "Quoted drawings are locked. Create a new revision before making changes."
+    };
   }
 
   try {
@@ -435,37 +451,6 @@ export async function setDrawingStatusForCompany(
   }
 
   const previousStatus = existing.status;
-  if (drawing.jobId) {
-    const job = await repository.getJobById(drawing.jobId, authenticated.company.id);
-    if (job && job.stage !== input.status) {
-      await repository.updateJob({
-        jobId: job.id,
-        companyId: authenticated.company.id,
-        name: job.name,
-        stage: input.status,
-        commercialInputs: job.commercialInputs,
-        notes: job.notes,
-        ownerUserId: job.ownerUserId,
-        archived: job.isArchived,
-        archivedAtIso: job.archivedAtIso,
-        archivedByUserId: job.archivedByUserId,
-        stageChangedAtIso: updatedAtIso,
-        stageChangedByUserId: authenticated.user.id,
-        updatedByUserId: authenticated.user.id,
-        updatedAtIso
-      });
-      await writeAuditLog(repository, {
-        companyId: authenticated.company.id,
-        actorUserId: authenticated.user.id,
-        entityType: "JOB",
-        entityId: job.id,
-        action: "JOB_STAGE_CHANGED",
-        summary: `${authenticated.user.displayName} changed ${job.name} from ${job.stage} to ${input.status}`,
-        createdAtIso: updatedAtIso,
-        metadata: { previousStage: job.stage, newStage: input.status }
-      });
-    }
-  }
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
@@ -483,7 +468,9 @@ export async function setDrawingStatusForCompany(
 export type DrawingDeleteResult =
   | { kind: "success" }
   | { kind: "drawing_not_found" }
-  | { kind: "not_archived" };
+  | { kind: "not_archived" }
+  | { kind: "not_a_revision" }
+  | { kind: "not_last_revision" };
 
 export async function deleteDrawingForCompany(
   repository: AppRepository,
@@ -510,6 +497,44 @@ export async function deleteDrawingForCompany(
     entityId: drawingId,
     action: "DRAWING_DELETED",
     summary: `${authenticated.user.displayName} permanently deleted drawing ${existing.name}`,
+    createdAtIso: new Date().toISOString(),
+  });
+
+  return { kind: "success" };
+}
+
+export async function deleteRevisionForCompany(
+  repository: AppRepository,
+  authenticated: AuthenticatedRequestContext,
+  drawingId: string,
+): Promise<DrawingDeleteResult> {
+  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
+  if (!existing) {
+    return { kind: "drawing_not_found" };
+  }
+  if (!existing.parentDrawingId) {
+    return { kind: "not_a_revision" };
+  }
+
+  // Check this is the last (most recent) revision of its parent
+  const siblings = await repository.listDrawingsForJob(existing.jobId!, authenticated.company.id);
+  const sameParentRevisions = siblings
+    .filter((d) => d.parentDrawingId === existing.parentDrawingId)
+    .sort((a, b) => a.createdAtIso.localeCompare(b.createdAtIso));
+  const lastRevision = sameParentRevisions[sameParentRevisions.length - 1];
+  if (!lastRevision || lastRevision.id !== drawingId) {
+    return { kind: "not_last_revision" };
+  }
+
+  await repository.deleteDrawing({ drawingId, companyId: authenticated.company.id });
+
+  await writeAuditLog(repository, {
+    companyId: authenticated.company.id,
+    actorUserId: authenticated.user.id,
+    entityType: "DRAWING",
+    entityId: drawingId,
+    action: "DRAWING_DELETED",
+    summary: `${authenticated.user.displayName} deleted revision ${existing.name}`,
     createdAtIso: new Date().toISOString(),
   });
 

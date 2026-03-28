@@ -406,12 +406,36 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       quote: {
         drawingId: string;
         drawingVersionNumber: number;
+        drawingSnapshot: { revisionNumber?: number };
         pricedEstimate: { ancillaryItems: Array<{ description: string }>; totals: { totalCost: number } };
       };
     }>().quote;
     expect(createdQuote.drawingId).toBe(drawingId);
     expect(createdQuote.drawingVersionNumber).toBe(1);
+    expect(createdQuote.drawingSnapshot.revisionNumber).toBe(0);
     expect(createdQuote.pricedEstimate.ancillaryItems[0]?.description).toBe("Lift hire");
+
+    const quotedDrawing = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawings/${drawingId}`,
+      headers: cookieHeader
+    });
+
+    expect(quotedDrawing.statusCode).toBe(200);
+    expect(quotedDrawing.json<{ drawing: { status: string } }>().drawing.status).toBe("QUOTED");
+
+    const quotedUpdate = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawings/${drawingId}`,
+      headers: cookieHeader,
+      payload: {
+        expectedVersionNumber: 2,
+        name: "Quoted yard revised"
+      }
+    });
+
+    expect(quotedUpdate.statusCode).toBe(409);
+    expect(quotedUpdate.json<{ error: string }>().error).toBe("Quoted drawing is locked");
 
     const quoteList = await app.inject({
       method: "GET",
@@ -550,8 +574,27 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader
     });
 
-    expect(removeJob.statusCode).toBe(200);
-    expect(removeJob.json<{ deleted: boolean }>().deleted).toBe(true);
+    expect(removeJob.statusCode).toBe(409);
+
+    const archiveJob = await app.inject({
+      method: "PUT",
+      url: `/api/v1/jobs/${jobId}`,
+      headers: cookieHeader,
+      payload: {
+        archived: true
+      }
+    });
+
+    expect(archiveJob.statusCode).toBe(200);
+
+    const removeArchivedJob = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/jobs/${jobId}`,
+      headers: cookieHeader
+    });
+
+    expect(removeArchivedJob.statusCode).toBe(200);
+    expect(removeArchivedJob.json<{ deleted: boolean }>().deleted).toBe(true);
 
     const loadDeletedJob = await app.inject({
       method: "GET",
@@ -569,6 +612,109 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     expect(listJobs.statusCode).toBe(200);
     expect(listJobs.json<{ jobs: Array<{ id: string }> }>().jobs.some((job) => job.id === jobId)).toBe(false);
+
+    await app.close();
+  });
+
+  it("assigns revision numbers and only allows deleting the last archived revision", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const createJob = await app.inject({
+      method: "POST",
+      url: "/api/v1/jobs",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "Revision chain",
+        notes: ""
+      }
+    });
+
+    expect(createJob.statusCode).toBe(201);
+    const jobId = createJob.json<{ job: { id: string } }>().job.id;
+
+    const rootCreate = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${jobId}/drawings`,
+      headers: cookieHeader,
+      payload: {}
+    });
+    expect(rootCreate.statusCode).toBe(201);
+    const rootDrawingId = rootCreate.json<{ drawing: { id: string; revisionNumber: number } }>().drawing.id;
+    expect(rootCreate.json<{ drawing: { revisionNumber: number } }>().drawing.revisionNumber).toBe(0);
+
+    const revisionOneCreate = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${jobId}/drawings`,
+      headers: cookieHeader,
+      payload: { sourceDrawingId: rootDrawingId }
+    });
+    expect(revisionOneCreate.statusCode).toBe(201);
+    const revisionOneId = revisionOneCreate.json<{ drawing: { id: string; revisionNumber: number } }>().drawing.id;
+    expect(revisionOneCreate.json<{ drawing: { revisionNumber: number } }>().drawing.revisionNumber).toBe(1);
+
+    const revisionTwoCreate = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${jobId}/drawings`,
+      headers: cookieHeader,
+      payload: { sourceDrawingId: revisionOneId }
+    });
+    expect(revisionTwoCreate.statusCode).toBe(201);
+    const revisionTwoId = revisionTwoCreate.json<{ drawing: { id: string; revisionNumber: number } }>().drawing.id;
+    expect(revisionTwoCreate.json<{ drawing: { revisionNumber: number } }>().drawing.revisionNumber).toBe(2);
+
+    const jobDrawings = await app.inject({
+      method: "GET",
+      url: `/api/v1/jobs/${jobId}/drawings`,
+      headers: cookieHeader
+    });
+
+    expect(jobDrawings.statusCode).toBe(200);
+    expect(jobDrawings.json<{ drawings: Array<{ id: string; revisionNumber: number }> }>().drawings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: rootDrawingId, revisionNumber: 0 }),
+        expect.objectContaining({ id: revisionOneId, revisionNumber: 1 }),
+        expect.objectContaining({ id: revisionTwoId, revisionNumber: 2 })
+      ])
+    );
+
+    const archiveRevisionOne = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawings/${revisionOneId}/archive`,
+      headers: cookieHeader,
+      payload: {
+        expectedVersionNumber: 1,
+        archived: true
+      }
+    });
+    expect(archiveRevisionOne.statusCode).toBe(200);
+
+    const deleteMiddleRevision = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/drawings/${revisionOneId}/revision`,
+      headers: cookieHeader
+    });
+    expect(deleteMiddleRevision.statusCode).toBe(400);
+    expect(deleteMiddleRevision.json<{ error: string }>().error).toBe("Only the last revision can be deleted");
+
+    const archiveRevisionTwo = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawings/${revisionTwoId}/archive`,
+      headers: cookieHeader,
+      payload: {
+        expectedVersionNumber: 1,
+        archived: true
+      }
+    });
+    expect(archiveRevisionTwo.statusCode).toBe(200);
+
+    const deleteLastRevision = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/drawings/${revisionTwoId}/revision`,
+      headers: cookieHeader
+    });
+    expect(deleteLastRevision.statusCode).toBe(200);
 
     await app.close();
   });

@@ -111,6 +111,7 @@ export interface DrawingRow {
   company_id: string;
   job_id: string | null;
   job_role: string | null;
+  parent_drawing_id: string | null;
   name: string;
   customer_id: string | null;
   customer_name: string;
@@ -125,6 +126,7 @@ export interface DrawingRow {
   is_archived: number;
   archived_at_iso: string | null;
   archived_by_user_id: string | null;
+  revision_number: number | null;
   status_changed_at_iso: string | null;
   status_changed_by_user_id: string | null;
   created_by_user_id: string;
@@ -469,6 +471,8 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     companyId: row.company_id,
     jobId: row.job_id,
     jobRole: parseDrawingJobRole(row.job_role),
+    parentDrawingId: row.parent_drawing_id ?? null,
+    revisionNumber: row.revision_number ?? 0,
     name: row.name,
     customerId: row.customer_id,
     customerName: row.resolved_customer_name ?? row.customer_name,
@@ -504,6 +508,8 @@ export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<Draw
     companyId: drawing.companyId,
     ...(drawing.jobId !== undefined ? { jobId: drawing.jobId } : {}),
     ...(drawing.jobRole !== undefined ? { jobRole: drawing.jobRole } : {}),
+    ...(drawing.parentDrawingId !== undefined ? { parentDrawingId: drawing.parentDrawingId } : {}),
+    revisionNumber: drawing.revisionNumber,
     name: drawing.name,
     customerId: drawing.customerId,
     customerName: drawing.customerName,

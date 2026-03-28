@@ -296,6 +296,18 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE job_tasks ADD COLUMN description TEXT NOT NULL DEFAULT '';
         ALTER TABLE job_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'NORMAL';
       `
+    },
+    {
+      name: "013_parent_drawing",
+      sql: `
+        ALTER TABLE drawings ADD COLUMN parent_drawing_id TEXT;
+      `
+    },
+    {
+      name: "014_revision_number",
+      sql: `
+        ALTER TABLE drawings ADD COLUMN revision_number INTEGER NOT NULL DEFAULT 0;
+      `
     }
   ] as const;
 

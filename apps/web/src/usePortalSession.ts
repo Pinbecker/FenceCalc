@@ -72,6 +72,7 @@ export interface PortalSessionState {
   createUser: (input: CreateCompanyUserInput) => Promise<boolean>;
   resetUserPassword: (userId: string, password: string) => Promise<boolean>;
   setDrawingArchived: (drawingId: string, archived: boolean) => Promise<boolean>;
+  setJobArchived: (jobId: string, archived: boolean) => Promise<boolean>;
   changeDrawingStatus: (drawingId: string, status: DrawingStatus) => Promise<boolean>;
   loadDrawingVersions: (drawingId: string) => Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion: (drawingId: string, versionNumber: number) => Promise<boolean>;
@@ -124,6 +125,7 @@ export function usePortalSession(): PortalSessionState {
     createJob,
     setCustomerArchived,
     setDrawingArchived,
+    setJobArchived,
     exportAuditLog,
     deleteDrawing,
     deleteCustomer,
@@ -334,6 +336,7 @@ export function usePortalSession(): PortalSessionState {
     createUser,
     resetUserPassword,
     setDrawingArchived,
+    setJobArchived,
     changeDrawingStatus,
     loadDrawingVersions,
     restoreDrawingVersion,
