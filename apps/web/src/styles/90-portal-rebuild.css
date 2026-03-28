@@ -1340,11 +1340,6 @@ svg.drawing-preview {
   justify-content: flex-start;
 }
 
-.portal-customer-drawing-badge.is-current {
-  background: rgba(180, 118, 49, 0.14);
-  color: #8b5525;
-}
-
 .portal-customer-drawing-badge.is-quoted {
   background: rgba(54, 111, 92, 0.14);
   color: #2d6152;

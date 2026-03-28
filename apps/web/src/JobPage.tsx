@@ -976,34 +976,8 @@ export function JobPage({
             </div>
           </section>
 
-          <div className="portal-dashboard-side">
-            <section className="portal-surface-card portal-dashboard-activity">
-              <div className="portal-section-heading">
-                <div>
-                  <span className="portal-section-kicker">Commercial snapshot</span>
-                  <h2>Current position</h2>
-                </div>
-              </div>
-              <div className="portal-job-commercial-grid">
-                <article>
-                  <span>Selected drawing</span>
-                  <strong>{selectedDrawing ? `${selectedDrawing.name} (${getRevisionLabel(selectedDrawing)})` : "None"}</strong>
-                </article>
-                <article>
-                  <span>Latest quote</span>
-                  <strong>{latestQuote ? formatMoney(latestQuote.pricedEstimate.totals.totalCost) : "No quote yet"}</strong>
-                </article>
-                <article>
-                  <span>Quote date</span>
-                  <strong>{latestQuote ? formatTimestamp(latestQuote.createdAtIso) : "Not saved"}</strong>
-                </article>
-                <article>
-                  <span>Pricing</span>
-                  <strong>{pricedEstimate?.pricingSnapshot.source === "DEFAULT" ? "Default pricing" : "Company pricing"}</strong>
-                </article>
-              </div>
-            </section>
-            {job.notes ? (
+          {job.notes ? (
+            <div className="portal-dashboard-side">
               <section className="portal-surface-card portal-dashboard-activity">
                 <div className="portal-section-heading">
                   <div>
@@ -1013,8 +987,8 @@ export function JobPage({
                 </div>
                 <p className="portal-empty-copy" style={{ whiteSpace: "pre-wrap" }}>{job.notes}</p>
               </section>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           <section className="portal-surface-card portal-job-primary-card">
             <div className="portal-section-heading">
@@ -1189,7 +1163,7 @@ export function JobPage({
             {selectedDrawing ? (
               <div className="portal-job-task-form">
                 <label className="portal-customer-edit-field">
-                  <span>Estimate drawing</span>
+                  <span>Drawing revision</span>
                   <select value={selectedDrawing.id} onChange={(event) => navigateToJob("estimate", event.target.value)}>
                     {drawingGroups.map(({ rootDrawing, chain }) => (
                       <optgroup key={rootDrawing.id} label={rootDrawing.name}>
@@ -1256,7 +1230,7 @@ export function JobPage({
                   <strong>{job.customerName}</strong>
                 </article>
                 <article>
-                  <span>Drawing</span>
+                  <span>Revision</span>
                   <strong>{selectedDrawing ? `${selectedDrawing.name} (${getRevisionLabel(selectedDrawing)})` : "None"}</strong>
                 </article>
                 <article>

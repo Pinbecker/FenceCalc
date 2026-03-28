@@ -147,11 +147,6 @@ export function DrawingPage({
     return [rootDrawing, ...revisions].sort((left, right) => left.revisionNumber - right.revisionNumber);
   }, [rootDrawing, revisions]);
 
-  const selectedDrawing = useMemo(
-    () => allDrawings.find((drawing) => drawing.id === drawingId) ?? rootDrawing,
-    [allDrawings, drawingId, rootDrawing]
-  );
-
   const drawingBeingEdited = useMemo(
     () => allDrawings.find((drawing) => drawing.id === editingDrawingId) ?? null,
     [allDrawings, editingDrawingId]
@@ -250,7 +245,7 @@ export function DrawingPage({
         </div>
       </header>
 
-      {selectedDrawing?.status === "QUOTED" ? (
+      {(allDrawings.find((drawing) => drawing.id === drawingId) ?? rootDrawing)?.status === "QUOTED" ? (
         <div className="portal-inline-message portal-inline-notice">
           This revision has already been quoted and is locked for changes. Create a new revision to continue editing.
         </div>
@@ -263,11 +258,11 @@ export function DrawingPage({
       <div className="portal-customer-drawing-grid">
         {allDrawings.map((drawing) => {
           const isLastRevision = latestDrawing?.id === drawing.id && drawing.revisionNumber > 0;
-          const isActiveDrawing = drawing.id === drawingId;
+          const isLatestDrawing = latestDrawing?.id === drawing.id;
           return (
             <article
               key={drawing.id}
-              className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}${isActiveDrawing ? " is-active" : ""}`}
+              className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}${isLatestDrawing ? " is-active" : ""}`}
             >
               <div
                 className="portal-customer-drawing-card-preview"
@@ -289,8 +284,8 @@ export function DrawingPage({
                     <span>{drawing.name}</span>
                   </div>
                   <div className="portal-customer-drawing-card-badges">
-                    {isActiveDrawing ? (
-                      <span className="portal-customer-drawing-badge is-current">Current</span>
+                    {isLatestDrawing ? (
+                      <span className="portal-customer-drawing-badge">Latest</span>
                     ) : null}
                     {drawing.status === "QUOTED" ? (
                       <span className="portal-customer-drawing-badge is-quoted">Quoted</span>

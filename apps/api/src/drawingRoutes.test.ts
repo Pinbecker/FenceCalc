@@ -616,6 +616,102 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
+  it("filters stale placeholder jobs after drawings move under a real job", async () => {
+    const repository = new InMemoryAppRepository();
+    const app = buildApp({ repository });
+
+    const bootstrap = await app.inject({
+      method: "POST",
+      url: "/api/v1/setup/bootstrap-owner",
+      payload: {
+        companyName: "Acme Fencing",
+        displayName: "Jane Doe",
+        email: "jane@example.com",
+        password: "supersecure123"
+      }
+    });
+    expect(bootstrap.statusCode).toBe(201);
+    const cookieHeader = getCookieHeader(bootstrap);
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const createJob = await app.inject({
+      method: "POST",
+      url: "/api/v1/jobs",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "PSG Home ground",
+        notes: ""
+      }
+    });
+
+    expect(createJob.statusCode).toBe(201);
+    const createdJob = createJob.json<{ job: Record<string, unknown> & { id: string; primaryDrawingId: string | null; name: string } }>().job;
+    expect(createdJob.primaryDrawingId).not.toBeNull();
+    const primaryDrawingId = createdJob.primaryDrawingId!;
+
+    const renamePrimaryDrawing = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawings/${primaryDrawingId}`,
+      headers: cookieHeader,
+      payload: {
+        expectedVersionNumber: 1,
+        name: "Football pitch"
+      }
+    });
+    expect(renamePrimaryDrawing.statusCode).toBe(200);
+
+    const createRevision = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${createdJob.id}/drawings`,
+      headers: cookieHeader,
+      payload: { sourceDrawingId: primaryDrawingId }
+    });
+    expect(createRevision.statusCode).toBe(201);
+    const revisionDrawing = createRevision.json<{ drawing: { id: string; name: string } }>().drawing;
+
+    const createSecondDrawing = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${createdJob.id}/drawings`,
+      headers: cookieHeader,
+      payload: { name: "Tennis courts" }
+    });
+    expect(createSecondDrawing.statusCode).toBe(201);
+    const secondDrawing = createSecondDrawing.json<{ drawing: { id: string; name: string } }>().drawing;
+
+    const jobsMap = (repository as unknown as { jobsMap: Map<string, Record<string, unknown>> }).jobsMap;
+    const placeholderRows = [
+      { drawingId: primaryDrawingId, name: "Football pitch", updatedAtIso: "2026-03-28T16:03:50.523Z" },
+      { drawingId: revisionDrawing.id, name: revisionDrawing.name, updatedAtIso: "2026-03-28T14:00:43.396Z" },
+      { drawingId: secondDrawing.id, name: secondDrawing.name, updatedAtIso: "2026-03-28T14:01:17.663Z" }
+    ];
+
+    for (const placeholder of placeholderRows) {
+      jobsMap.set(`job:${placeholder.drawingId}`, {
+        ...createdJob,
+        id: `job:${placeholder.drawingId}`,
+        name: placeholder.name,
+        primaryDrawingId: placeholder.drawingId,
+        updatedAtIso: placeholder.updatedAtIso
+      });
+    }
+
+    const params = new URLSearchParams({ scope: "ALL", customerId });
+    const listJobs = await app.inject({
+      method: "GET",
+      url: `/api/v1/jobs?${params.toString()}`,
+      headers: cookieHeader
+    });
+
+    expect(listJobs.statusCode).toBe(200);
+    const jobs = listJobs.json<{ jobs: Array<{ id: string; name: string }> }>().jobs;
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ id: createdJob.id, name: "PSG Home ground" });
+    expect(jobs.some((job) => job.id.startsWith("job:"))).toBe(false);
+
+    await app.close();
+  });
+
   it("assigns revision numbers and only allows deleting the last archived revision", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);

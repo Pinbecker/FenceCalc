@@ -15,6 +15,19 @@ import type {
 export class SqliteJobStore {
   public constructor(private readonly database: Database.Database) {}
 
+  private buildPlaceholderJobExclusionClause(): string {
+    return `
+      AND NOT (
+        j.id LIKE 'job:%'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM drawings live_drawings
+          WHERE live_drawings.company_id = j.company_id AND live_drawings.job_id = j.id
+        )
+      )
+    `;
+  }
+
   private buildJobWhereClause(scope: CustomerScope, customerId?: string, search = "") {
     const archivedClause =
       scope === "ACTIVE" ? "AND j.is_archived = 0" : scope === "ARCHIVED" ? "AND j.is_archived = 1" : "";
@@ -123,6 +136,7 @@ export class SqliteJobStore {
 
   public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string): JobSummary[] {
     const { archivedClause, searchClause, customerClause } = this.buildJobWhereClause(scope, customerId, search);
+    const placeholderExclusionClause = this.buildPlaceholderJobExclusionClause();
     const params = this.buildJobListParams(companyId, customerId, search);
 
     try {
@@ -177,7 +191,7 @@ export class SqliteJobStore {
           LEFT JOIN users owner ON owner.id = j.owner_user_id AND owner.company_id = j.company_id
           LEFT JOIN users updater ON updater.id = j.updated_by_user_id AND updater.company_id = j.company_id
           LEFT JOIN drawings d ON d.id = j.primary_drawing_id AND d.company_id = j.company_id
-          WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause}
+          WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause} ${placeholderExclusionClause}
           ORDER BY COALESCE(j.updated_at_iso, j.created_at_iso) DESC
         `)
         .all(...params) as JobSummaryRow[];
@@ -208,7 +222,7 @@ export class SqliteJobStore {
           LEFT JOIN customers c ON c.id = j.customer_id AND c.company_id = j.company_id
           LEFT JOIN users owner ON owner.id = j.owner_user_id AND owner.company_id = j.company_id
           LEFT JOIN users updater ON updater.id = j.updated_by_user_id AND updater.company_id = j.company_id
-          WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause}
+          WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause} ${placeholderExclusionClause}
           ORDER BY COALESCE(j.updated_at_iso, j.created_at_iso) DESC
         `)
         .all(...params) as JobSummaryRow[];

@@ -25,6 +25,16 @@ export interface InMemoryJobState {
 export class InMemoryJobStore {
   public constructor(private readonly state: InMemoryJobState) {}
 
+  private isStalePlaceholderJob(job: JobRecord): boolean {
+    if (!job.id.startsWith("job:")) {
+      return false;
+    }
+
+    return ![...this.state.drawings.values()].some(
+      (drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id
+    );
+  }
+
   private withDisplayNames(job: JobRecord): JobRecord {
     return {
       ...job,
@@ -84,6 +94,7 @@ export class InMemoryJobStore {
     const normalized = search.trim().toLowerCase();
     return [...this.state.jobs.values()]
       .filter((job) => job.companyId === companyId)
+      .filter((job) => !this.isStalePlaceholderJob(job))
       .filter((job) => {
         if (scope === "ACTIVE") return !job.isArchived;
         if (scope === "ARCHIVED") return job.isArchived;
