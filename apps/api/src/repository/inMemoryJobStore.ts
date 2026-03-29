@@ -2,6 +2,7 @@ import type { CustomerRecord, DrawingRecord, DrawingVersionRecord, JobRecord, Jo
 
 import { toDrawingSummary } from "./shared.js";
 import type {
+  CompanyTaskListOptions,
   DeleteJobInput,
   CreateJobInput,
   CreateJobTaskInput,
@@ -204,28 +205,90 @@ export class InMemoryJobStore {
       .sort((left, right) => Number(left.isCompleted) - Number(right.isCompleted) || (left.dueAtIso ?? "").localeCompare(right.dueAtIso ?? ""));
   }
 
-  public listCompanyTasks(companyId: string): JobTaskRecord[] {
+  public listCompanyTasks(companyId: string, options: CompanyTaskListOptions = {}): JobTaskRecord[] {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const includeCompleted = options.includeCompleted ?? false;
+    const normalizedSearch = options.search?.trim().toLowerCase() ?? "";
+    const normalizedAssignedUserId = options.assignedUserId?.trim();
     const allTasks: JobTaskRecord[] = [];
     for (const [jobId, tasks] of this.state.jobTasks) {
       const job = this.state.jobs.get(jobId);
       for (const task of tasks) {
-        if (task.companyId === companyId && !task.isCompleted) {
-          allTasks.push({
-            ...task,
-            jobName: job?.name ?? "",
-            assignedUserDisplayName: task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "",
-            completedByDisplayName: task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : ""
-          });
+        if (task.companyId !== companyId) {
+          continue;
         }
+        if (!includeCompleted && task.isCompleted) {
+          continue;
+        }
+        if (normalizedAssignedUserId) {
+          if (normalizedAssignedUserId === "unassigned") {
+            if (task.assignedUserId) {
+              continue;
+            }
+          } else if (task.assignedUserId !== normalizedAssignedUserId) {
+            continue;
+          }
+        }
+        if (options.priority && task.priority !== options.priority) {
+          continue;
+        }
+        if (options.dueBucket === "NO_DATE" && task.dueAtIso) {
+          continue;
+        }
+        if (options.dueBucket && options.dueBucket !== "NO_DATE") {
+          if (!task.dueAtIso) {
+            continue;
+          }
+          const taskDate = task.dueAtIso.slice(0, 10);
+          if (options.dueBucket === "OVERDUE" && !(taskDate < todayIso && !task.isCompleted)) {
+            continue;
+          }
+          if (options.dueBucket === "TODAY" && taskDate !== todayIso) {
+            continue;
+          }
+          if (options.dueBucket === "UPCOMING" && taskDate <= todayIso) {
+            continue;
+          }
+        }
+
+        const assignedUserDisplayName = task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "";
+        const completedByDisplayName = task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : "";
+        const jobName = job?.name ?? "";
+        if (normalizedSearch) {
+          const haystack = [task.title, task.description, jobName, assignedUserDisplayName, completedByDisplayName]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(normalizedSearch)) {
+            continue;
+          }
+        }
+
+        allTasks.push({
+          ...task,
+          jobName,
+          assignedUserDisplayName,
+          completedByDisplayName
+        });
       }
     }
-    return allTasks.sort((left, right) => {
+    const sorted = allTasks.sort((left, right) => {
       const priorityOrder = ["URGENT", "HIGH", "NORMAL", "LOW"];
       const lp = priorityOrder.indexOf(left.priority);
       const rp = priorityOrder.indexOf(right.priority);
-      if (lp !== rp) return lp - rp;
-      return (left.dueAtIso ?? "9999").localeCompare(right.dueAtIso ?? "9999");
-    }).slice(0, 50);
+      if (Number(left.isCompleted) !== Number(right.isCompleted)) {
+        return Number(left.isCompleted) - Number(right.isCompleted);
+      }
+      if (lp !== rp) {
+        return lp - rp;
+      }
+      const dueOrder = (left.dueAtIso ?? "9999-12-31T00:00:00.000Z").localeCompare(right.dueAtIso ?? "9999-12-31T00:00:00.000Z");
+      if (dueOrder !== 0) {
+        return dueOrder;
+      }
+      return right.createdAtIso.localeCompare(left.createdAtIso);
+    });
+    const maxItems = options.limit ?? 50;
+    return sorted.slice(0, Math.max(1, maxItems));
   }
 
   public createJobTask(input: CreateJobTaskInput): JobTaskRecord {

@@ -3,6 +3,7 @@ import type { JobRecord, JobSummary, JobTaskRecord } from "@fence-estimator/cont
 
 import { type JobRow, type JobSummaryRow, type JobTaskRow, toJob, toJobSummary, toJobTask } from "./shared.js";
 import type {
+  CompanyTaskListOptions,
   DeleteJobInput,
   CreateJobInput,
   CreateJobTaskInput,
@@ -370,7 +371,43 @@ export class SqliteJobStore {
     return rows.map((row) => toJobTask(row));
   }
 
-  public listCompanyTasks(companyId: string): JobTaskRecord[] {
+  public listCompanyTasks(companyId: string, options: CompanyTaskListOptions = {}): JobTaskRecord[] {
+    const clauses = ["t.company_id = ?"];
+    const params: unknown[] = [companyId];
+    if (!(options.includeCompleted ?? false)) {
+      clauses.push("t.is_completed = 0");
+    }
+    if (options.assignedUserId?.trim()) {
+      if (options.assignedUserId.trim() === "unassigned") {
+        clauses.push("t.assigned_user_id IS NULL");
+      } else {
+        clauses.push("t.assigned_user_id = ?");
+        params.push(options.assignedUserId.trim());
+      }
+    }
+    if (options.priority?.trim()) {
+      clauses.push("t.priority = ?");
+      params.push(options.priority.trim());
+    }
+    if (options.search?.trim()) {
+      clauses.push("(lower(t.title) LIKE ? OR lower(COALESCE(t.description, '')) LIKE ? OR lower(COALESCE(j.name, '')) LIKE ? OR lower(COALESCE(assigned.display_name, '')) LIKE ? OR lower(COALESCE(completed.display_name, '')) LIKE ?)");
+      const normalized = `%${options.search.trim().toLowerCase()}%`;
+      params.push(normalized, normalized, normalized, normalized, normalized);
+    }
+    if (options.dueBucket === "NO_DATE") {
+      clauses.push("t.due_at_iso IS NULL");
+    } else if (options.dueBucket === "OVERDUE") {
+      clauses.push("t.due_at_iso IS NOT NULL");
+      clauses.push("substr(t.due_at_iso, 1, 10) < date('now')");
+      clauses.push("t.is_completed = 0");
+    } else if (options.dueBucket === "TODAY") {
+      clauses.push("t.due_at_iso IS NOT NULL");
+      clauses.push("substr(t.due_at_iso, 1, 10) = date('now')");
+    } else if (options.dueBucket === "UPCOMING") {
+      clauses.push("t.due_at_iso IS NOT NULL");
+      clauses.push("substr(t.due_at_iso, 1, 10) > date('now')");
+    }
+
     const rows = this.database
       .prepare(`
         SELECT
@@ -382,14 +419,15 @@ export class SqliteJobStore {
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
-        WHERE t.company_id = ? AND t.is_completed = 0
+        WHERE ${clauses.join(" AND ")}
         ORDER BY
+          t.is_completed ASC,
           CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END ASC,
           COALESCE(t.due_at_iso, '9999-12-31T00:00:00.000Z') ASC,
-          t.created_at_iso ASC
-        LIMIT 50
+          t.created_at_iso DESC
+        LIMIT ?
       `)
-      .all(companyId) as JobTaskRow[];
+      .all(...params, Math.max(1, options.limit ?? 50)) as JobTaskRow[];
     return rows.map((row) => toJobTask(row));
   }
 

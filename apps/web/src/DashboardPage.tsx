@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { AuthSessionEnvelope, CustomerSummary, DrawingSummary, JobStage, JobSummary, JobTaskRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 import { listCompanyTasks } from "./apiClient";
 import { buildFallbackJobSummaries, hasLegacyJoblessDrawings, resolveJobWorkspaceTarget } from "./jobFallbacks";
+import { formatTaskDate, getTaskDueLabel, getTaskDueTone } from "./taskPresentation";
 import type { PortalRoute } from "./useHashRoute";
 
 const JOB_STATUS_LABELS: Record<JobStage, string> = {
@@ -60,11 +61,12 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
 
   useEffect(() => {
     let cancelled = false;
-    listCompanyTasks().then((tasks) => {
+    listCompanyTasks({ limit: 6 }).then((tasks) => {
       if (!cancelled) setCompanyTasks(tasks);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
+  const overdueTaskCount = useMemo(() => companyTasks.filter((task) => getTaskDueTone(task) === "overdue").length, [companyTasks]);
   const archivedCustomerIds = new Set(customers.filter((customer) => customer.isArchived).map((customer) => customer.id));
   const activeDrawings = drawings
     .filter((drawing) => !drawing.isArchived)
@@ -112,6 +114,9 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
           </div>
         </div>
         <div className="portal-header-actions portal-dashboard-actions">
+          <button type="button" className="portal-secondary-button" onClick={() => onNavigate("tasks")}>
+            Open tasks
+          </button>
           <button type="button" className="portal-primary-button" onClick={() => onNavigate("customers")}>
             Browse customers
           </button>
@@ -166,6 +171,13 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
                   <span className="portal-section-kicker">Action items</span>
                   <h2>Open tasks</h2>
                 </div>
+                <button type="button" className="portal-text-button" onClick={() => onNavigate("tasks")}>
+                  View all tasks
+                </button>
+              </div>
+              <div className="portal-dashboard-task-summary" role="group" aria-label="Task summary">
+                <span>{companyTasks.length} shown</span>
+                <span>{overdueTaskCount} overdue</span>
               </div>
               <div className="portal-dashboard-activity-list">
                 {companyTasks.map((task) => (
@@ -173,6 +185,9 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
                     <div className="portal-dashboard-activity-copy">
                       <div className="portal-dashboard-task-title-row">
                         <strong>{task.title}</strong>
+                        {getTaskDueLabel(task) ? (
+                          <span className={`portal-task-due-badge is-${getTaskDueTone(task)}`}>{getTaskDueLabel(task)}</span>
+                        ) : null}
                         {task.priority !== "NORMAL" ? (
                           <span className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
                         ) : null}
@@ -180,14 +195,27 @@ export function DashboardPage({ session, customers, jobs = [], drawings = [], on
                       <span>
                         {task.jobName || "Job"}
                         {task.assignedUserDisplayName ? ` · ${task.assignedUserDisplayName}` : ""}
-                        {task.dueAtIso ? ` · Due ${formatTimestamp(task.dueAtIso)}` : ""}
+                        {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
                       </span>
                     </div>
                   </button>
                 ))}
               </div>
             </section>
-          ) : null}
+          ) : (
+            <section className="portal-surface-card portal-dashboard-activity portal-dashboard-tasks-panel">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Action items</span>
+                  <h2>Open tasks</h2>
+                </div>
+                <button type="button" className="portal-text-button" onClick={() => onNavigate("tasks")}>
+                  Open tasks
+                </button>
+              </div>
+              <p className="portal-empty-copy">No open tasks right now.</p>
+            </section>
+          )}
           <section className="portal-surface-card portal-dashboard-activity">
             <div className="portal-section-heading">
               <div>

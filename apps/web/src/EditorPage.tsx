@@ -43,7 +43,7 @@ import {
 interface EditorPageProps {
   initialDrawingId?: string | null;
   onNavigate: (
-    route: "dashboard" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin" | "login",
+    route: "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin" | "login",
     query?: Record<string, string>
   ) => void;
 }

@@ -13,6 +13,7 @@ import { SqliteUserSessionStore } from "./sqliteUserSessionStore.js";
 import type {
   AppRepository,
   BootstrapOwnerAccountInput,
+  CompanyTaskListOptions,
   CreateAuditLogInput,
   CreateCustomerInput,
   CreateDrawingInput,
@@ -196,8 +197,8 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.jobs.listJobTasks(jobId, companyId));
   }
 
-  public listCompanyTasks(companyId: string) {
-    return Promise.resolve(this.jobs.listCompanyTasks(companyId));
+  public listCompanyTasks(companyId: string, options?: CompanyTaskListOptions) {
+    return Promise.resolve(this.jobs.listCompanyTasks(companyId, options));
   }
 
   public createJobTask(input: CreateJobTaskInput) {

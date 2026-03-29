@@ -16,6 +16,14 @@ const jobTaskRouteParamsSchema = z.object({
   id: z.string().trim().min(1),
   taskId: z.string().trim().min(1)
 });
+const companyTaskQuerySchema = z.object({
+  includeCompleted: z.enum(["true", "false"]).optional(),
+  assignedUserId: z.string().trim().min(1).optional(),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
+  search: z.string().trim().optional(),
+  dueBucket: z.enum(["OVERDUE", "TODAY", "UPCOMING", "NO_DATE"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional()
+});
 
 export function registerJobRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
   app.get("/api/v1/jobs", async (request, reply) => {
@@ -481,7 +489,21 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!authenticated) {
       return reply;
     }
-    const tasks = await repository.listCompanyTasks(authenticated.company.id);
+    const query = companyTaskQuerySchema.safeParse(request.query ?? {});
+    if (!query.success) {
+      return reply.code(400).send({
+        error: "Invalid task query parameters",
+        details: query.error.flatten()
+      });
+    }
+    const tasks = await repository.listCompanyTasks(authenticated.company.id, {
+      includeCompleted: query.data.includeCompleted === "true",
+      assignedUserId: query.data.assignedUserId,
+      priority: query.data.priority,
+      search: query.data.search,
+      dueBucket: query.data.dueBucket,
+      limit: query.data.limit
+    });
     return reply.code(200).send({ tasks });
   });
 

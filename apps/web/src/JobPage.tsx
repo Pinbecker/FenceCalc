@@ -48,6 +48,7 @@ import {
   COMMERCIAL_TRAVEL_RATE_CODE,
   mergeEstimateWorkbook
 } from "./estimatingWorkbook";
+import { formatTaskDate, formatTaskTimestamp, getTaskDueLabel, getTaskDueTone } from "./taskPresentation";
 import type { PortalRoute } from "./useHashRoute";
 import { buildEstimateDisplaySections, formatQuantityForDisplay } from "./workbookPresentation";
 
@@ -87,6 +88,24 @@ function formatDateOnly(value: string | null): string {
     return "No date";
   }
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value));
+}
+
+interface TaskDraftState {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  assignedUserId: string | null;
+  dueDate: string;
+}
+
+function buildTaskDraft(task: JobTaskRecord): TaskDraftState {
+  return {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    assignedUserId: task.assignedUserId,
+    dueDate: task.dueAtIso ? task.dueAtIso.slice(0, 10) : ""
+  };
 }
 
 function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">): string {
@@ -183,6 +202,7 @@ export function JobPage({
 }: JobPageProps) {
   const jobId = query?.jobId ?? null;
   const requestedDrawingId = query?.drawingId ?? null;
+  const focusTaskId = query?.focusTaskId ?? null;
   const tabValue = (query?.tab as JobTab | undefined) ?? "overview";
   const currentTab: JobTab = ["overview", "drawings", "estimate", "activity"].includes(tabValue) ? tabValue : "overview";
   const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
@@ -201,7 +221,9 @@ export function JobPage({
   const [taskAssignee, setTaskAssignee] = useState<string | null>(null);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("NORMAL");
+  const [isTaskFormExpanded, setIsTaskFormExpanded] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraftState>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [isSavingStage, setIsSavingStage] = useState(false);
@@ -211,6 +233,7 @@ export function JobPage({
   const [isCreatingDrawingModalOpen, setIsCreatingDrawingModalOpen] = useState(false);
   const [newDrawingName, setNewDrawingName] = useState("");
   const [isSavingTask, setIsSavingTask] = useState(false);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [isDeletingJob, setIsDeletingJob] = useState(false);
   const [confirmDeleteJob, setConfirmDeleteJob] = useState(false);
   const [isEditingJobDetails, setIsEditingJobDetails] = useState(false);
@@ -355,6 +378,7 @@ export function JobPage({
         })
       );
       setTasks(nextTasks);
+      setTaskDrafts(Object.fromEntries(nextTasks.map((task) => [task.id, buildTaskDraft(task)])));
       setQuotes(nextQuotes);
       setActivity(nextActivity);
       setErrorMessage(null);
@@ -371,6 +395,7 @@ export function JobPage({
       setJob(null);
       setDrawings([]);
       setTasks([]);
+      setTaskDrafts({});
       setQuotes([]);
       setActivity([]);
       setErrorMessage((error as Error).message);
@@ -384,6 +409,7 @@ export function JobPage({
       setJob(null);
       setDrawings([]);
       setTasks([]);
+      setTaskDrafts({});
       setQuotes([]);
       setActivity([]);
       setBasePricedEstimate(null);
@@ -432,6 +458,13 @@ export function JobPage({
       cancelled = true;
     };
   }, [jobId, selectedDrawing]);
+
+  useEffect(() => {
+    if (!focusTaskId || !tasks.some((task) => task.id === focusTaskId)) {
+      return;
+    }
+    setExpandedTaskId(focusTaskId);
+  }, [focusTaskId, tasks]);
 
   const handleStageChange = async (stage: JobStage) => {
     if (!job) {
@@ -542,6 +575,7 @@ export function JobPage({
       setTaskAssignee(null);
       setTaskDescription("");
       setTaskPriority("NORMAL");
+      setIsTaskFormExpanded(false);
       await Promise.all([loadWorkspace(job.id), onRefreshJobs()]);
       setNoticeMessage("Task added.");
     } catch (error) {
@@ -551,17 +585,61 @@ export function JobPage({
     }
   };
 
-  const handleUpdateTaskField = async (task: JobTaskRecord, field: Partial<{ title: string; description: string; priority: TaskPriority; assignedUserId: string | null; dueAtIso: string | null }>) => {
+  const handleExpandTask = (task: JobTaskRecord) => {
+    setTaskDrafts((current) => ({
+      ...current,
+      [task.id]: current[task.id] ?? buildTaskDraft(task)
+    }));
+    setExpandedTaskId((current) => (current === task.id ? null : task.id));
+  };
+
+  const handleTaskDraftChange = (taskId: string, field: keyof TaskDraftState, value: string | TaskPriority | null) => {
+    setTaskDrafts((current) => ({
+      ...current,
+      [taskId]: {
+        ...(current[taskId] ?? { title: "", description: "", priority: "NORMAL", assignedUserId: null, dueDate: "" }),
+        [field]: value
+      } as TaskDraftState
+    }));
+  };
+
+  const handleResetTaskDraft = (task: JobTaskRecord) => {
+    setTaskDrafts((current) => ({
+      ...current,
+      [task.id]: buildTaskDraft(task)
+    }));
+  };
+
+  const handleSaveTaskDraft = async (task: JobTaskRecord) => {
     if (!job) {
       return;
     }
+    const draft = taskDrafts[task.id] ?? buildTaskDraft(task);
+    if (!draft.title.trim()) {
+      setErrorMessage("Task title is required.");
+      return;
+    }
+    setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
-      const updated = await updateJobTask(job.id, task.id, field);
+      const updated = await updateJobTask(job.id, task.id, {
+        title: draft.title.trim(),
+        description: draft.description.trim(),
+        priority: draft.priority,
+        assignedUserId: draft.assignedUserId,
+        dueAtIso: draft.dueDate ? new Date(`${draft.dueDate}T09:00:00`).toISOString() : null
+      });
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setTaskDrafts((current) => ({
+        ...current,
+        [updated.id]: buildTaskDraft(updated)
+      }));
       await onRefreshJobs();
+      setNoticeMessage("Task details saved.");
     } catch (error) {
       setErrorMessage((error as Error).message);
+    } finally {
+      setSavingTaskId(null);
     }
   };
 
@@ -573,6 +651,11 @@ export function JobPage({
     try {
       await deleteJobTask(job.id, task.id);
       setTasks((current) => current.filter((entry) => entry.id !== task.id));
+      setTaskDrafts((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
       if (expandedTaskId === task.id) {
         setExpandedTaskId(null);
       }
@@ -587,14 +670,21 @@ export function JobPage({
     if (!job) {
       return;
     }
+    setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
       const updated = await updateJobTask(job.id, task.id, { isCompleted: !task.isCompleted });
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setTaskDrafts((current) => ({
+        ...current,
+        [updated.id]: buildTaskDraft(updated)
+      }));
       await onRefreshJobs();
       setNoticeMessage(updated.isCompleted ? "Task completed." : "Task reopened.");
     } catch (error) {
       setErrorMessage((error as Error).message);
+    } finally {
+      setSavingTaskId(null);
     }
   };
 
@@ -878,57 +968,106 @@ export function JobPage({
             </div>
 
             <div className="portal-job-task-form">
-              <div className="portal-job-task-form-row">
-                <input placeholder="Add follow-up task" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask(); }} />
-                <select className="portal-task-priority-select" value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}>
-                  {TASK_PRIORITIES.map((p) => (
-                    <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
-                  ))}
-                </select>
+              <div className="portal-job-task-form-compact-row">
+                <label className="portal-customer-edit-field portal-task-input-field portal-job-task-title-field">
+                  <span>Task title</span>
+                  <input
+                    placeholder="Add follow-up task"
+                    value={taskTitle}
+                    onChange={(event) => setTaskTitle(event.target.value)}
+                    onFocus={() => {
+                      if (taskDescription || taskDueDate || taskAssignee || taskPriority !== "NORMAL") {
+                        setIsTaskFormExpanded(true);
+                      }
+                    }}
+                    onKeyDown={(event) => { if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask(); }}
+                  />
+                </label>
+                <div className="portal-job-task-form-actions">
+                  <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsTaskFormExpanded((current) => !current)}>
+                    {isTaskFormExpanded ? "Hide details" : "Details"}
+                  </button>
+                  <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleCreateTask()} disabled={isSavingTask || !taskTitle.trim()}>
+                    {isSavingTask ? "Saving..." : "Add task"}
+                  </button>
+                </div>
               </div>
-              <div className="portal-job-task-form-row">
-                <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} />
-                <select value={taskAssignee ?? ""} onChange={(event) => setTaskAssignee(event.target.value || null)}>
-                  <option value="">Unassigned</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>{user.displayName}</option>
-                  ))}
-                </select>
-              </div>
-              {taskTitle.trim() ? (
-                <textarea className="portal-task-description-input" placeholder="Description (optional)" rows={2} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} />
+              {isTaskFormExpanded ? (
+                <>
+                  <div className="portal-job-task-form-row">
+                    <label className="portal-customer-edit-field portal-task-input-field">
+                      <span>Due date</span>
+                      <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} />
+                    </label>
+                    <label className="portal-customer-edit-field portal-task-input-field">
+                      <span>Assignee</span>
+                      <select value={taskAssignee ?? ""} onChange={(event) => setTaskAssignee(event.target.value || null)}>
+                        <option value="">Unassigned</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>{user.displayName}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="portal-job-task-form-row portal-job-task-form-row-compact-options">
+                    <label className="portal-customer-edit-field portal-task-input-field">
+                      <span>Priority</span>
+                      <select className="portal-task-priority-select" value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}>
+                        {TASK_PRIORITIES.map((p) => (
+                          <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="portal-customer-edit-field portal-task-input-field">
+                    <span>Description</span>
+                    <textarea className="portal-task-description-input" placeholder="Add notes, handoff context, or next steps" rows={3} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} />
+                  </label>
+                </>
               ) : null}
-              <button type="button" className="portal-primary-button" onClick={() => void handleCreateTask()} disabled={isSavingTask || !taskTitle.trim()}>
-                {isSavingTask ? "Saving..." : "Add task"}
-              </button>
             </div>
 
             <div className="portal-job-task-list">
               {sortedTasks.length === 0 ? <p className="portal-empty-copy">No tasks on this job yet.</p> : null}
               {sortedTasks.map((task) => {
                 const isExpanded = expandedTaskId === task.id;
+                const taskDraft = taskDrafts[task.id] ?? buildTaskDraft(task);
+                const dueTone = getTaskDueTone(task);
+                const dueLabel = getTaskDueLabel(task);
                 return (
-                  <div key={task.id} className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}`}>
-                    <div className="portal-job-task-card-header" role="button" tabIndex={0} onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setExpandedTaskId(isExpanded ? null : task.id); }}>
+                  <div key={task.id} className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}${dueTone === "overdue" ? " is-overdue" : ""}`}>
+                    <div className="portal-job-task-card-header">
                       <div className="portal-job-task-card-left">
-                        <button type="button" className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`} onClick={(event) => { event.stopPropagation(); void handleToggleTask(task); }} title={task.isCompleted ? "Reopen task" : "Complete task"}>
+                        <button type="button" className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`} onClick={() => void handleToggleTask(task)} aria-label={task.isCompleted ? `Reopen task ${task.title}` : `Complete task ${task.title}`} disabled={savingTaskId === task.id}>
                           {task.isCompleted ? "✓" : ""}
                         </button>
                         <div className="portal-job-task-card-title">
-                          <strong className={task.isCompleted ? "portal-task-done-text" : ""}>{task.title}</strong>
+                          <h3 className={`portal-task-card-heading${task.isCompleted ? " portal-task-done-text" : ""}`}>{task.title}</h3>
                           <span className="portal-job-task-card-meta">
                             {task.assignedUserDisplayName || "Unassigned"}
-                            {task.dueAtIso ? ` · Due ${formatTimestamp(task.dueAtIso)}` : ""}
+                            {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
                           </span>
                         </div>
                       </div>
                       <div className="portal-job-task-card-right">
+                        {dueLabel ? (
+                          <span className={`portal-task-due-badge is-${dueTone}`}>{dueLabel}</span>
+                        ) : null}
                         {task.priority !== "NORMAL" ? (
                           <span className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
                         ) : null}
                         <span className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}>
                           {task.isCompleted ? "Done" : "Open"}
                         </span>
+                        <button
+                          type="button"
+                          className="portal-task-expand-button"
+                          onClick={() => handleExpandTask(task)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? `Collapse task ${task.title}` : `Expand task ${task.title}`}
+                        >
+                          {isExpanded ? "Hide" : "Edit"}
+                        </button>
                       </div>
                     </div>
                     {task.description && !isExpanded ? (
@@ -936,11 +1075,20 @@ export function JobPage({
                     ) : null}
                     {isExpanded ? (
                       <div className="portal-job-task-card-detail">
-                        {task.description ? <p className="portal-job-task-card-description">{task.description}</p> : null}
+                        <div className="portal-job-task-card-fields portal-job-task-card-fields-expanded">
+                          <label className="portal-customer-edit-field">
+                            <span>Title</span>
+                            <input value={taskDraft.title} maxLength={240} onChange={(event) => handleTaskDraftChange(task.id, "title", event.target.value)} />
+                          </label>
+                          <label className="portal-customer-edit-field portal-job-task-card-field-wide">
+                            <span>Description</span>
+                            <textarea rows={4} value={taskDraft.description} maxLength={2000} onChange={(event) => handleTaskDraftChange(task.id, "description", event.target.value)} />
+                          </label>
+                        </div>
                         <div className="portal-job-task-card-fields">
                           <label className="portal-customer-edit-field">
                             <span>Priority</span>
-                            <select value={task.priority} onChange={(event) => void handleUpdateTaskField(task, { priority: event.target.value as TaskPriority })}>
+                            <select value={taskDraft.priority} onChange={(event) => handleTaskDraftChange(task.id, "priority", event.target.value as TaskPriority)}>
                               {TASK_PRIORITIES.map((p) => (
                                 <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
                               ))}
@@ -948,7 +1096,7 @@ export function JobPage({
                           </label>
                           <label className="portal-customer-edit-field">
                             <span>Assignee</span>
-                            <select value={task.assignedUserId ?? ""} onChange={(event) => void handleUpdateTaskField(task, { assignedUserId: event.target.value || null })}>
+                            <select value={taskDraft.assignedUserId ?? ""} onChange={(event) => handleTaskDraftChange(task.id, "assignedUserId", event.target.value || null)}>
                               <option value="">Unassigned</option>
                               {users.map((user) => (
                                 <option key={user.id} value={user.id}>{user.displayName}</option>
@@ -957,10 +1105,21 @@ export function JobPage({
                           </label>
                           <label className="portal-customer-edit-field">
                             <span>Due date</span>
-                            <input type="date" value={task.dueAtIso ? task.dueAtIso.slice(0, 10) : ""} onChange={(event) => void handleUpdateTaskField(task, { dueAtIso: event.target.value ? new Date(`${event.target.value}T09:00:00`).toISOString() : null })} />
+                            <input type="date" value={taskDraft.dueDate} onChange={(event) => handleTaskDraftChange(task.id, "dueDate", event.target.value)} />
                           </label>
                         </div>
+                        <div className="portal-job-task-card-history">
+                          <span>Created {formatTaskTimestamp(task.createdAtIso)}</span>
+                          {task.completedAtIso ? <span>Completed {formatTaskTimestamp(task.completedAtIso)} by {task.completedByDisplayName || "Team member"}</span> : null}
+                          <span>Last updated {formatTaskTimestamp(task.updatedAtIso)}</span>
+                        </div>
                         <div className="portal-job-task-card-actions">
+                          <button type="button" className="portal-text-button" onClick={() => void handleSaveTaskDraft(task)} disabled={savingTaskId === task.id || !taskDraft.title.trim()}>
+                            {savingTaskId === task.id ? "Saving..." : "Save changes"}
+                          </button>
+                          <button type="button" className="portal-text-button" onClick={() => handleResetTaskDraft(task)} disabled={savingTaskId === task.id}>
+                            Reset
+                          </button>
                           <button type="button" className="portal-text-button" onClick={() => void handleToggleTask(task)}>
                             {task.isCompleted ? "Reopen" : "Complete"}
                           </button>
@@ -985,7 +1144,7 @@ export function JobPage({
                     <h2>Notes</h2>
                   </div>
                 </div>
-                <p className="portal-empty-copy" style={{ whiteSpace: "pre-wrap" }}>{job.notes}</p>
+                <p className="portal-empty-copy portal-job-notes-copy" style={{ whiteSpace: "pre-wrap" }}>{job.notes}</p>
               </section>
             </div>
           ) : null}

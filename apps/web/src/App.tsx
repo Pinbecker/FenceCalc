@@ -15,6 +15,11 @@ const DashboardPage = lazy(async () => {
   return { default: module.DashboardPage };
 });
 
+const TasksPage = lazy(async () => {
+  const module = await import("./TasksPage");
+  return { default: module.TasksPage };
+});
+
 const CustomerPage = lazy(async () => {
   const module = await import("./CustomerPage");
   return { default: module.CustomerPage };
@@ -73,7 +78,7 @@ function PortalNav(props: {
   userName: string;
   userRole: string;
   currentRoute: string;
-  onNavigate: (route: "dashboard" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
+  onNavigate: (route: "dashboard" | "tasks" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
   onLogout: () => void;
   showAdmin: boolean;
   showPricing: boolean;
@@ -95,6 +100,13 @@ function PortalNav(props: {
             onClick={() => props.onNavigate("dashboard")}
           >
             Dashboard
+          </button>
+          <button
+            type="button"
+            className={props.currentRoute === "tasks" ? "is-active" : undefined}
+            onClick={() => props.onNavigate("tasks")}
+          >
+            Tasks
           </button>
           <button
             type="button"
@@ -188,11 +200,11 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "drawing" || route === "estimate" || route === "editor";
+  return route === "dashboard" || route === "tasks" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "drawing" || route === "estimate" || route === "editor";
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
-  return showAdmin && (route === "admin" || route === "dashboard");
+  return showAdmin && (route === "admin" || route === "dashboard" || route === "tasks");
 }
 
 export function App() {
@@ -247,6 +259,10 @@ export function App() {
     if (shouldRefreshPortalAdminData(route, showAdmin)) {
       void portal.refreshUsers();
       void portal.refreshAuditLog();
+    }
+
+    if (route === "tasks" || route === "job") {
+      void portal.refreshUsers();
     }
   }, [portal.refreshAuditLog, portal.refreshDrawings, portal.refreshJobs, portal.refreshUsers, portal.session, route, showAdmin]);
 
@@ -335,6 +351,9 @@ export function App() {
           <ErrorBoundary>
             {modalBaseRoute === "dashboard" ? (
               <DashboardPage session={portal.session} customers={portal.customers} jobs={portal.jobs} drawings={portal.drawings} onNavigate={navigate} />
+            ) : null}
+            {modalBaseRoute === "tasks" ? (
+              <TasksPage session={portal.session} users={portal.users} onNavigate={navigate} onRefreshJobs={portal.refreshJobs} />
             ) : null}
             {modalBaseRoute === "customer" ? (
               <CustomerPage

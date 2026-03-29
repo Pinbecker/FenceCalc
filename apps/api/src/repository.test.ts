@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { DRAWING_SCHEMA_VERSION, type EstimateResult, type LayoutModel } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 
+import type { AppRepository } from "./repository/types.js";
 import { InMemoryAppRepository, SqliteAppRepository } from "./repository.js";
 
 const emptyLayout: LayoutModel = {
@@ -167,6 +168,93 @@ async function createTestCustomer(
     updatedByUserId: userId,
     createdAtIso: "2026-03-10T00:00:00.000Z",
     updatedAtIso: "2026-03-10T00:00:00.000Z"
+  });
+}
+
+async function createTestJob(repository: AppRepository, companyId: string, userId: string) {
+  return repository.createJob({
+    id: "job-1",
+    companyId,
+    customerId: TEST_CUSTOMER_ID,
+    customerName: TEST_CUSTOMER_NAME,
+    name: "North compound",
+    stage: "FOLLOW_UP",
+    primaryDrawingId: null,
+    commercialInputs: null,
+    notes: "",
+    ownerUserId: userId,
+    createdByUserId: userId,
+    updatedByUserId: userId,
+    createdAtIso: "2026-03-10T00:00:00.000Z",
+    updatedAtIso: "2026-03-10T00:00:00.000Z"
+  });
+}
+
+async function seedCompanyTasks(repository: AppRepository, companyId: string, userId: string) {
+  await createTestCustomer(repository as InMemoryAppRepository | SqliteAppRepository, companyId, userId);
+  await createTestJob(repository, companyId, userId);
+  await repository.createUser({
+    id: "user-2",
+    companyId,
+    displayName: "John Smith",
+    email: "john@example.com",
+    role: "MEMBER",
+    passwordHash: "hash-2",
+    passwordSalt: "salt-2",
+    createdAtIso: "2026-03-10T00:00:00.000Z"
+  });
+  await repository.createJobTask({
+    id: "task-open-overdue",
+    companyId,
+    jobId: "job-1",
+    title: "Call site contact",
+    description: "Confirm site access code",
+    priority: "URGENT",
+    assignedUserId: userId,
+    dueAtIso: "2026-03-01T09:00:00.000Z",
+    createdByUserId: userId,
+    createdAtIso: "2026-03-01T08:00:00.000Z",
+    updatedAtIso: "2026-03-01T08:00:00.000Z"
+  });
+  await repository.createJobTask({
+    id: "task-open-unassigned",
+    companyId,
+    jobId: "job-1",
+    title: "Book installer",
+    description: "",
+    priority: "NORMAL",
+    assignedUserId: null,
+    dueAtIso: null,
+    createdByUserId: userId,
+    createdAtIso: "2026-03-02T08:00:00.000Z",
+    updatedAtIso: "2026-03-02T08:00:00.000Z"
+  });
+  await repository.createJobTask({
+    id: "task-complete",
+    companyId,
+    jobId: "job-1",
+    title: "Send quote",
+    description: "Sent and acknowledged",
+    priority: "HIGH",
+    assignedUserId: "user-2",
+    dueAtIso: "2026-03-15T09:00:00.000Z",
+    createdByUserId: userId,
+    createdAtIso: "2026-03-03T08:00:00.000Z",
+    updatedAtIso: "2026-03-03T08:00:00.000Z"
+  });
+  await repository.updateJobTask({
+    taskId: "task-complete",
+    companyId,
+    jobId: "job-1",
+    title: "Send quote",
+    description: "Sent and acknowledged",
+    priority: "HIGH",
+    assignedUserId: "user-2",
+    dueAtIso: "2026-03-15T09:00:00.000Z",
+    isCompleted: true,
+    completedAtIso: "2026-03-15T10:00:00.000Z",
+    completedByUserId: userId,
+    updatedAtIso: "2026-03-15T10:00:00.000Z"
   });
 }
 
@@ -469,6 +557,33 @@ describe("InMemoryAppRepository", () => {
         }
       }
     });
+  });
+
+  it("filters company tasks by completion, assignee, and search", async () => {
+    const repository = new InMemoryAppRepository();
+    await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    await seedCompanyTasks(repository, "company-1", "user-1");
+
+    await expect(repository.listCompanyTasks("company-1")).resolves.toHaveLength(2);
+    await expect(repository.listCompanyTasks("company-1", { includeCompleted: true })).resolves.toHaveLength(3);
+    await expect(repository.listCompanyTasks("company-1", { assignedUserId: "user-1" })).resolves.toMatchObject([
+      { id: "task-open-overdue" }
+    ]);
+    await expect(repository.listCompanyTasks("company-1", { assignedUserId: "unassigned" })).resolves.toMatchObject([
+      { id: "task-open-unassigned" }
+    ]);
+    await expect(repository.listCompanyTasks("company-1", { includeCompleted: true, search: "acknowledged" })).resolves.toMatchObject([
+      { id: "task-complete" }
+    ]);
   });
 
   it("archives drawings, restores versions, and records audit items", async () => {
@@ -850,6 +965,35 @@ describe("SqliteAppRepository", () => {
         }
       }
     });
+  });
+
+  it("filters company tasks in sqlite storage", async () => {
+    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z"
+    });
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+
+    await seedCompanyTasks(repository, account.company.id, account.user.id);
+
+    await expect(repository.listCompanyTasks(account.company.id)).resolves.toHaveLength(2);
+    await expect(repository.listCompanyTasks(account.company.id, { includeCompleted: true })).resolves.toHaveLength(3);
+    await expect(repository.listCompanyTasks(account.company.id, { assignedUserId: account.user.id })).resolves.toMatchObject([
+      { id: "task-open-overdue" }
+    ]);
+    await expect(repository.listCompanyTasks(account.company.id, { includeCompleted: true, search: "acknowledged" })).resolves.toMatchObject([
+      { id: "task-complete" }
+    ]);
   });
 
   it("patches legacy sqlite databases with missing newer columns", async () => {

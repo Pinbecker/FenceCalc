@@ -298,6 +298,15 @@ export interface UpdateJobTaskInput {
   updatedAtIso: string;
 }
 
+export interface CompanyTaskListOptions {
+  includeCompleted?: boolean;
+  assignedUserId?: string;
+  priority?: string;
+  search?: string;
+  dueBucket?: "OVERDUE" | "TODAY" | "UPCOMING" | "NO_DATE";
+  limit?: number;
+}
+
 export type CreateQuoteInput = QuoteRecord;
 
 export interface PasswordResetConsumption {
@@ -347,7 +356,7 @@ export interface AppRepository {
   updateJob(input: UpdateJobInput): Promise<JobRecord | null>;
   setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): Promise<JobRecord | null>;
   listJobTasks(jobId: string, companyId: string): Promise<JobTaskRecord[]>;
-  listCompanyTasks(companyId: string): Promise<JobTaskRecord[]>;
+  listCompanyTasks(companyId: string, options?: CompanyTaskListOptions): Promise<JobTaskRecord[]>;
   createJobTask(input: CreateJobTaskInput): Promise<JobTaskRecord>;
   updateJobTask(input: UpdateJobTaskInput): Promise<JobTaskRecord | null>;
   deleteJobTask(taskId: string, jobId: string, companyId: string): Promise<boolean>;

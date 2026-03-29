@@ -127,6 +127,15 @@ export interface UpdateJobTaskInput {
   priority?: TaskPriority;
 }
 
+export interface CompanyTaskQueryOptions {
+  includeCompleted?: boolean;
+  assignedUserId?: string;
+  priority?: TaskPriority;
+  search?: string;
+  dueBucket?: "OVERDUE" | "TODAY" | "UPCOMING" | "NO_DATE";
+  limit?: number;
+}
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
@@ -178,6 +187,31 @@ function buildAuditLogQuery(options: AuditLogQueryOptions = {}): string {
   }
   if (options.search?.trim()) {
     params.set("search", options.search.trim());
+  }
+
+  const query = params.toString();
+  return query.length > 0 ? `?${query}` : "";
+}
+
+function buildCompanyTaskQuery(options: CompanyTaskQueryOptions = {}): string {
+  const params = new URLSearchParams();
+  if (options.includeCompleted) {
+    params.set("includeCompleted", "true");
+  }
+  if (options.assignedUserId?.trim()) {
+    params.set("assignedUserId", options.assignedUserId.trim());
+  }
+  if (options.priority) {
+    params.set("priority", options.priority);
+  }
+  if (options.search?.trim()) {
+    params.set("search", options.search.trim());
+  }
+  if (options.dueBucket) {
+    params.set("dueBucket", options.dueBucket);
+  }
+  if (options.limit !== undefined) {
+    params.set("limit", String(options.limit));
   }
 
   const query = params.toString();
@@ -539,8 +573,8 @@ export async function deleteJobTask(jobId: string, taskId: string): Promise<void
   );
 }
 
-export async function listCompanyTasks(): Promise<JobTaskRecord[]> {
-  const response = await requestJson<{ tasks: JobTaskRecord[] }>("/api/v1/tasks");
+export async function listCompanyTasks(options: CompanyTaskQueryOptions = {}): Promise<JobTaskRecord[]> {
+  const response = await requestJson<{ tasks: JobTaskRecord[] }>(`/api/v1/tasks${buildCompanyTaskQuery(options)}`);
   return response.tasks;
 }
 

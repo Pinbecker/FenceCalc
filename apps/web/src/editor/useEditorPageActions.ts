@@ -51,7 +51,7 @@ interface UseEditorPageActionsOptions {
   resetWorkspaceCanvas: () => void;
   resetView: () => void;
   onNavigate: (
-    route: "dashboard" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
+    route: "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
     query?: Record<string, string>
   ) => void;
 }

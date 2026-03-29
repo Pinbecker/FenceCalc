@@ -2035,6 +2035,28 @@ svg.drawing-preview {
   margin-top: 14px;
 }
 
+.portal-job-task-form-compact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.portal-job-task-title-field {
+  min-width: 0;
+}
+
+.portal-job-task-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.portal-task-input-field {
+  min-width: 0;
+}
+
 .portal-job-task-form-row {
   display: grid;
   gap: 10px;
@@ -2043,6 +2065,10 @@ svg.drawing-preview {
 
 .portal-job-task-form-row:nth-child(2) {
   grid-template-columns: minmax(130px, 0.7fr) minmax(130px, 0.7fr);
+}
+
+.portal-job-task-form-row-compact-options {
+  grid-template-columns: minmax(140px, 0.5fr);
 }
 
 .portal-task-priority-select {
@@ -2060,6 +2086,7 @@ svg.drawing-preview {
   background: rgba(255, 255, 255, 0.82);
   color: var(--portal-text);
   font-family: inherit;
+  overflow-wrap: anywhere;
 }
 
 .portal-task-description-input:focus {
@@ -2088,6 +2115,11 @@ svg.drawing-preview {
   box-shadow: var(--portal-shadow-1);
 }
 
+.portal-job-task-card.is-overdue {
+  border-color: var(--portal-line-strong);
+  box-shadow: none;
+}
+
 .portal-job-task-card-header {
   display: flex;
   align-items: center;
@@ -2102,6 +2134,7 @@ svg.drawing-preview {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1 1 320px;
 }
 
 .portal-task-check {
@@ -2133,15 +2166,18 @@ svg.drawing-preview {
 
 .portal-job-task-card-title {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
-.portal-job-task-card-title strong {
-  display: block;
+.portal-task-card-heading {
+  margin: 0;
   font-size: 0.9rem;
+  font-weight: 700;
   color: var(--portal-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .portal-task-done-text {
@@ -2152,9 +2188,9 @@ svg.drawing-preview {
 .portal-job-task-card-meta {
   font-size: 0.79rem;
   color: var(--portal-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .portal-job-task-card-right {
@@ -2162,6 +2198,26 @@ svg.drawing-preview {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: min(42%, 360px);
+}
+
+.portal-task-expand-button {
+  min-height: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--portal-line);
+  border-radius: 999px;
+  background: rgba(245, 248, 247, 0.88);
+  color: var(--portal-text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.portal-task-expand-button:hover,
+.portal-task-expand-button:focus-visible {
+  border-color: var(--portal-line-strong);
+  color: var(--portal-text);
 }
 
 /* Priority badges */
@@ -2177,8 +2233,8 @@ svg.drawing-preview {
 }
 
 .portal-task-priority-badge.priority-urgent {
-  background: #fde8e8;
-  color: #b91c1c;
+  background: rgba(146, 118, 42, 0.14);
+  color: #6d5718;
 }
 
 .portal-task-priority-badge.priority-high {
@@ -2189,6 +2245,33 @@ svg.drawing-preview {
 .portal-task-priority-badge.priority-low {
   background: #e5e7eb;
   color: #6b7280;
+}
+
+.portal-task-due-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.portal-task-due-badge.is-overdue {
+  background: rgba(146, 118, 42, 0.14);
+  color: #6d5718;
+}
+
+.portal-task-due-badge.is-today {
+  background: rgba(48, 67, 64, 0.1);
+  color: var(--portal-accent-strong);
+}
+
+.portal-task-due-badge.is-upcoming {
+  background: rgba(30, 64, 175, 0.1);
+  color: #1e40af;
 }
 
 /* Task status badges */
@@ -2216,9 +2299,11 @@ svg.drawing-preview {
   margin: 0;
   font-size: 0.82rem;
   color: var(--portal-text-muted);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Task card expanded detail */
@@ -2234,6 +2319,7 @@ svg.drawing-preview {
   color: var(--portal-text);
   white-space: pre-wrap;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .portal-job-task-card-fields {
@@ -2243,8 +2329,26 @@ svg.drawing-preview {
   margin-top: 12px;
 }
 
+.portal-job-task-card-fields-expanded {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portal-job-task-card-field-wide {
+  grid-column: 1 / -1;
+}
+
+.portal-job-task-card-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+  color: var(--portal-text-muted);
+  font-size: 0.78rem;
+}
+
 .portal-job-task-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   margin-top: 12px;
   padding-top: 10px;
@@ -2267,7 +2371,66 @@ svg.drawing-preview {
 .portal-dashboard-task-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.portal-dashboard-task-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+  color: var(--portal-text-muted);
+  font-size: 0.78rem;
+}
+
+.portal-job-notes-copy {
+  overflow-wrap: anywhere;
+}
+
+.portal-company-task-card {
+  padding-bottom: 12px;
+}
+
+.portal-company-task-description {
+  padding: 0 12px;
+}
+
+.portal-company-task-footer {
+  padding: 0 12px;
+}
+
+.portal-company-task-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: var(--portal-text-muted);
+  font-size: 0.78rem;
+}
+
+.portal-tasks-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.portal-tasks-toolbar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.portal-tasks-search {
+  grid-column: span 2;
+}
+
+.portal-tasks-list-card {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-tasks-empty-state {
+  min-height: 220px;
 }
 
 .portal-job-drawing-timeline-card {
@@ -2384,6 +2547,14 @@ svg.drawing-preview {
 }
 
 @media (max-width: 860px) {
+  .portal-job-task-form-compact-row {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-job-task-form-actions {
+    justify-content: flex-start;
+  }
+
   .portal-job-task-form-row {
     grid-template-columns: 1fr;
   }
@@ -2396,9 +2567,43 @@ svg.drawing-preview {
     grid-template-columns: 1fr;
   }
 
+  .portal-job-task-card-fields-expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-job-task-form-row-compact-options {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-tasks-toolbar-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .portal-tasks-search {
+    grid-column: 1 / -1;
+  }
+
   .portal-job-drawing-timeline-group-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 560px) {
+  .portal-job-task-card-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .portal-job-task-card-right {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
+    padding-left: 32px;
+  }
+
+  .portal-tasks-toolbar-grid {
+    grid-template-columns: 1fr;
   }
 }
 
