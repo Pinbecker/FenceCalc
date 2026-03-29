@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type {
-  AuthSessionEnvelope,
-  DrawingSummary,
-  JobRecord
-} from "@fence-estimator/contracts";
+import type { AuthSessionEnvelope, DrawingSummary, JobRecord } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
 import {
@@ -12,7 +8,7 @@ import {
   deleteRevision,
   getJob,
   listJobDrawings,
-  updateDrawing
+  updateDrawing,
 } from "./apiClient";
 import type { PortalRoute } from "./useHashRoute";
 
@@ -20,7 +16,9 @@ function formatTimestamp(value: string | null): string {
   if (!value) {
     return "No activity";
   }
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(value),
+  );
 }
 
 function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">): string {
@@ -39,7 +37,7 @@ export function DrawingPage({
   query,
   onNavigate,
   onRefreshJobs,
-  onRefreshDrawings
+  onRefreshDrawings,
 }: DrawingPageProps) {
   const drawingId = query?.drawingId ?? null;
 
@@ -75,7 +73,7 @@ export function DrawingPage({
 
       const [nextJob, allDrawings] = await Promise.all([
         getJob(drawing.jobId),
-        listJobDrawings(drawing.jobId)
+        listJobDrawings(drawing.jobId),
       ]);
 
       setJob(nextJob);
@@ -144,12 +142,14 @@ export function DrawingPage({
 
   const allDrawings = useMemo(() => {
     if (!rootDrawing) return [];
-    return [rootDrawing, ...revisions].sort((left, right) => left.revisionNumber - right.revisionNumber);
+    return [rootDrawing, ...revisions].sort(
+      (left, right) => left.revisionNumber - right.revisionNumber,
+    );
   }, [rootDrawing, revisions]);
 
   const drawingBeingEdited = useMemo(
     () => allDrawings.find((drawing) => drawing.id === editingDrawingId) ?? null,
-    [allDrawings, editingDrawingId]
+    [allDrawings, editingDrawingId],
   );
 
   const latestDrawing = allDrawings[allDrawings.length - 1] ?? null;
@@ -163,7 +163,7 @@ export function DrawingPage({
     try {
       await updateDrawing(drawingBeingEdited.id, {
         expectedVersionNumber: drawingBeingEdited.versionNumber,
-        name: editDrawingName.trim()
+        name: editDrawingName.trim(),
       });
       setEditingDrawingId(null);
       setEditDrawingName("");
@@ -177,7 +177,7 @@ export function DrawingPage({
 
   if (!drawingId) {
     return (
-      <section className="portal-page">
+      <section className="portal-page portal-drawing-page">
         <p className="portal-empty-copy">No drawing selected.</p>
       </section>
     );
@@ -185,7 +185,7 @@ export function DrawingPage({
 
   if (isLoading) {
     return (
-      <section className="portal-page">
+      <section className="portal-page portal-drawing-page">
         <p className="portal-empty-copy">Loading drawing...</p>
       </section>
     );
@@ -193,14 +193,18 @@ export function DrawingPage({
 
   if (errorMessage || !rootDrawing) {
     return (
-      <section className="portal-page">
+      <section className="portal-page portal-drawing-page">
         <header className="portal-page-header">
           <div>
             <h1>Drawing not found</h1>
           </div>
         </header>
         {errorMessage ? <p className="portal-empty-copy">{errorMessage}</p> : null}
-        <button type="button" className="portal-secondary-button" onClick={() => onNavigate("dashboard")}>
+        <button
+          type="button"
+          className="portal-secondary-button"
+          onClick={() => onNavigate("dashboard")}
+        >
           Back to dashboard
         </button>
       </section>
@@ -208,7 +212,7 @@ export function DrawingPage({
   }
 
   return (
-    <section className="portal-page">
+    <section className="portal-page portal-drawing-page">
       <header className="portal-page-header">
         <div>
           {job ? (
@@ -216,7 +220,15 @@ export function DrawingPage({
               <button
                 type="button"
                 className="portal-text-button"
-                style={{ fontSize: "inherit", padding: 0, border: "none", background: "none", color: "inherit", cursor: "pointer", textDecoration: "underline" }}
+                style={{
+                  fontSize: "inherit",
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  color: "inherit",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
                 onClick={() => onNavigate("job", { jobId: job.id })}
               >
                 ← {job.name}
@@ -245,15 +257,15 @@ export function DrawingPage({
         </div>
       </header>
 
-      {(allDrawings.find((drawing) => drawing.id === drawingId) ?? rootDrawing)?.status === "QUOTED" ? (
+      {(allDrawings.find((drawing) => drawing.id === drawingId) ?? rootDrawing)?.status ===
+      "QUOTED" ? (
         <div className="portal-inline-message portal-inline-notice">
-          This revision has already been quoted and is locked for changes. Create a new revision to continue editing.
+          This revision has already been quoted and is locked for changes. Create a new revision to
+          continue editing.
         </div>
       ) : null}
 
-      {errorMessage ? (
-        <div className="portal-notice is-error">{errorMessage}</div>
-      ) : null}
+      {errorMessage ? <div className="portal-notice is-error">{errorMessage}</div> : null}
 
       <div className="portal-customer-drawing-grid">
         {allDrawings.map((drawing) => {
@@ -275,7 +287,11 @@ export function DrawingPage({
                   }
                 }}
               >
-                <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
+                <DrawingPreview
+                  layout={drawing.previewLayout}
+                  label={drawing.name}
+                  variant="card"
+                />
               </div>
               <div className="portal-customer-drawing-card-body">
                 <div className="portal-customer-drawing-card-head">
@@ -296,7 +312,9 @@ export function DrawingPage({
                   </div>
                 </div>
                 <div className="portal-customer-drawing-card-meta">
-                  <span>{drawing.segmentCount} segments | {drawing.gateCount} gates</span>
+                  <span>
+                    {drawing.segmentCount} segments | {drawing.gateCount} gates
+                  </span>
                   <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
                 </div>
                 <div className="portal-customer-drawing-card-footer">
@@ -312,7 +330,11 @@ export function DrawingPage({
                     className="portal-text-button"
                     onClick={() => handleOpenRenameModal(drawing)}
                     disabled={isRenamingDrawing || drawing.status === "QUOTED"}
-                    title={drawing.status === "QUOTED" ? "Quoted drawings are locked. Create a new revision to continue." : undefined}
+                    title={
+                      drawing.status === "QUOTED"
+                        ? "Quoted drawings are locked. Create a new revision to continue."
+                        : undefined
+                    }
                   >
                     Rename
                   </button>
@@ -320,7 +342,9 @@ export function DrawingPage({
                     <button
                       type="button"
                       className="portal-text-button"
-                      onClick={() => onNavigate("job", { jobId: job.id, tab: "estimate", drawingId: drawing.id })}
+                      onClick={() =>
+                        onNavigate("job", { jobId: job.id, tab: "estimate", drawingId: drawing.id })
+                      }
                     >
                       Estimate
                     </button>
@@ -354,7 +378,10 @@ export function DrawingPage({
       </div>
 
       {confirmDeleteId ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteId(null)}>
+        <div
+          className="portal-customer-edit-backdrop portal-modal-backdrop"
+          onClick={() => setConfirmDeleteId(null)}
+        >
           <div
             className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
             role="dialog"
@@ -363,13 +390,23 @@ export function DrawingPage({
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Delete this revision?</h2>
-              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteId(null)}>Close</button>
+              <button
+                type="button"
+                className="portal-text-button"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Close
+              </button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <p>This will permanently remove this revision. This action cannot be undone.</p>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteId(null)}>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => setConfirmDeleteId(null)}
+              >
                 Cancel
               </button>
               <button
@@ -386,7 +423,10 @@ export function DrawingPage({
       ) : null}
 
       {drawingBeingEdited ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setEditingDrawingId(null)}>
+        <div
+          className="portal-customer-edit-backdrop portal-modal-backdrop"
+          onClick={() => setEditingDrawingId(null)}
+        >
           <div
             className="portal-customer-edit-modal portal-modal-card"
             role="dialog"
@@ -395,7 +435,13 @@ export function DrawingPage({
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Rename drawing</h2>
-              <button type="button" className="portal-text-button" onClick={() => setEditingDrawingId(null)}>Close</button>
+              <button
+                type="button"
+                className="portal-text-button"
+                onClick={() => setEditingDrawingId(null)}
+              >
+                Close
+              </button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
@@ -413,7 +459,11 @@ export function DrawingPage({
               </label>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setEditingDrawingId(null)}>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => setEditingDrawingId(null)}
+              >
                 Cancel
               </button>
               <button

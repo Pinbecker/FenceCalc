@@ -1411,6 +1411,11 @@ svg.drawing-preview {
   border-color: rgba(177, 88, 66, 0.26);
 }
 
+.portal-drawing-page .portal-customer-drawing-card-footer {
+  min-height: 104px;
+  align-content: flex-start;
+}
+
 .portal-customer-drawing-card-utility,
 .drawing-library-row-utility-actions {
   display: flex;
