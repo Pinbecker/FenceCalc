@@ -2027,8 +2027,19 @@ svg.drawing-preview {
   gap: 14px;
 }
 
+.portal-job-overview-secondary {
+  display: grid;
+  gap: 14px;
+}
+
 .portal-job-summary-strip {
   margin-top: 10px;
+}
+
+@media (min-width: 1280px) {
+  .portal-job-summary-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .portal-job-meta-grid,
@@ -2129,6 +2140,7 @@ svg.drawing-preview {
   border: 1px solid var(--portal-line);
   border-radius: var(--portal-radius-md);
   background: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
@@ -2154,11 +2166,10 @@ svg.drawing-preview {
 
 .portal-job-task-card-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
+  padding: 12px 12px 10px;
 }
 
 .portal-job-task-card-left {
@@ -2201,6 +2212,8 @@ svg.drawing-preview {
 .portal-job-task-card-title {
   min-width: 0;
   flex: 1 1 auto;
+  display: grid;
+  gap: 6px;
 }
 
 .portal-task-card-heading {
@@ -2219,43 +2232,74 @@ svg.drawing-preview {
   color: var(--portal-text-muted) !important;
 }
 
-.portal-job-task-card-meta {
-  font-size: 0.79rem;
+.portal-job-task-card-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.portal-job-task-context-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid rgba(90, 112, 103, 0.14);
+  border-radius: 999px;
+  background: rgba(245, 248, 247, 0.9);
   color: var(--portal-text-muted);
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.portal-job-task-context-pill.is-drawing {
+  border-color: rgba(148, 83, 46, 0.18);
+  background: rgba(249, 244, 239, 0.96);
+  color: var(--portal-accent-strong);
+}
+
+.portal-job-task-context-pill.is-job {
+  border-color: rgba(30, 64, 175, 0.14);
+  background: rgba(239, 245, 255, 0.9);
+  color: #244a97;
 }
 
 .portal-job-task-card-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
-  max-width: min(42%, 360px);
+  max-width: min(40%, 320px);
+  padding-top: 1px;
 }
 
 .portal-task-expand-button {
   appearance: none;
   -webkit-appearance: none;
-  min-height: 0;
-  padding: 5px 9px;
-  border: 1px solid var(--portal-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(90, 112, 103, 0.14);
   border-radius: 999px;
-  background: rgba(245, 248, 247, 0.88);
+  background: rgba(245, 248, 247, 0.9);
   box-shadow: none;
   color: var(--portal-text-muted);
-  font-size: 0.74rem;
+  font-size: 0.9rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 .portal-task-expand-button:hover,
 .portal-task-expand-button:focus-visible {
-  border-color: var(--portal-line-strong);
+  border-color: rgba(148, 83, 46, 0.22);
+  background: rgba(249, 244, 239, 0.96);
   box-shadow: none;
-  color: var(--portal-text);
+  color: var(--portal-accent-strong);
+  text-decoration: none;
 }
 
 /* Priority badges */
@@ -2333,7 +2377,7 @@ svg.drawing-preview {
 
 /* Task description preview (collapsed) */
 .portal-job-task-card-description-preview {
-  padding: 0 12px 10px 44px;
+  padding: 0 12px 12px 44px;
   margin: 0;
   font-size: 0.82rem;
   color: var(--portal-text-muted);
@@ -2346,9 +2390,10 @@ svg.drawing-preview {
 
 /* Task card expanded detail */
 .portal-job-task-card-detail {
-  padding: 0 12px 12px;
+  padding: 0 12px 10px;
   border-top: 1px solid var(--portal-line);
   margin-top: 2px;
+  background: rgba(248, 250, 249, 0.66);
 }
 
 .portal-job-task-card-description {
@@ -2362,13 +2407,13 @@ svg.drawing-preview {
 
 .portal-job-task-card-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .portal-job-task-card-fields-expanded {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
 }
 
 .portal-job-task-card-field-wide {
@@ -2378,18 +2423,18 @@ svg.drawing-preview {
 .portal-job-task-card-history {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 12px;
+  gap: 6px 12px;
+  margin-top: 10px;
   color: var(--portal-text-muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
 }
 
 .portal-job-task-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 12px;
-  padding-top: 10px;
+  gap: 10px 12px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--portal-line);
 }
 
@@ -2614,11 +2659,45 @@ svg.drawing-preview {
 }
 
 .portal-job-primary-card .portal-customer-drawing-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+  justify-content: start;
 }
 
 .portal-job-primary-card .portal-customer-drawing-card {
   min-width: 0;
+  max-width: 280px;
+}
+
+.portal-job-quotes-card .estimate-ancillary-list {
+  gap: 12px;
+}
+
+.portal-job-quote-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.portal-job-quote-row .estimate-item-copy {
+  min-width: 0;
+}
+
+.portal-job-quote-row-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+}
+
+.portal-job-quote-row-meta strong {
+  font-size: 0.92rem;
+  color: var(--portal-text);
+}
+
+@media (min-width: 1100px) {
+  .portal-job-overview-secondary {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+    align-items: start;
+  }
 }
 
 @media (max-width: 860px) {
@@ -2661,6 +2740,15 @@ svg.drawing-preview {
   .portal-job-drawing-timeline-group-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .portal-job-quote-row {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-job-quote-row-meta {
+    justify-items: start;
+    text-align: left;
   }
 }
 

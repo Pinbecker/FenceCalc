@@ -298,14 +298,24 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       >
                         {task.title}
                       </h2>
-                      <span className="portal-job-task-card-meta">
-                        {task.jobName || "Job"}
-                        {task.drawingName ? ` · ${task.drawingName}` : ""}
-                        {task.assignedUserDisplayName
-                          ? ` · ${task.assignedUserDisplayName}`
-                          : " · Unassigned"}
-                        {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
-                      </span>
+                      <div className="portal-job-task-card-context">
+                        <span className="portal-job-task-context-pill is-job">
+                          {task.jobName || "Job"}
+                        </span>
+                        {task.drawingName ? (
+                          <span className="portal-job-task-context-pill is-drawing">
+                            Drawing: {task.drawingName}
+                          </span>
+                        ) : null}
+                        <span className="portal-job-task-context-pill">
+                          {task.assignedUserDisplayName || "Unassigned"}
+                        </span>
+                        {task.dueAtIso ? (
+                          <span className="portal-job-task-context-pill">
+                            Due {formatTaskDate(task.dueAtIso)}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                   <div className="portal-job-task-card-right">

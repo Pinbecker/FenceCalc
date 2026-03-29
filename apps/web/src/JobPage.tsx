@@ -1147,14 +1147,35 @@ export function JobPage({
                     >
                       {task.title}
                     </h3>
-                    <span className="portal-job-task-card-meta">
-                      {task.drawingName ? `${task.drawingName} · ` : ""}
-                      {task.assignedUserDisplayName || "Unassigned"}
-                      {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
-                    </span>
+                    <div className="portal-job-task-card-context">
+                      {task.drawingName ? (
+                        <span className="portal-job-task-context-pill is-drawing">
+                          Drawing: {task.drawingName}
+                        </span>
+                      ) : null}
+                      <span className="portal-job-task-context-pill">
+                        {task.assignedUserDisplayName || "Unassigned"}
+                      </span>
+                      {task.dueAtIso ? (
+                        <span className="portal-job-task-context-pill">
+                          Due {formatTaskDate(task.dueAtIso)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <div className="portal-job-task-card-right">
+                  <button
+                    type="button"
+                    className="portal-task-expand-button"
+                    onClick={() => handleExpandTask(task)}
+                    aria-expanded={isExpanded}
+                    aria-label={
+                      isExpanded ? `Collapse task ${task.title}` : `Expand task ${task.title}`
+                    }
+                  >
+                    ...
+                  </button>
                   {dueLabel ? (
                     <span className={`portal-task-due-badge is-${dueTone}`}>{dueLabel}</span>
                   ) : null}
@@ -1170,17 +1191,6 @@ export function JobPage({
                   >
                     {task.isCompleted ? "Done" : "Open"}
                   </span>
-                  <button
-                    type="button"
-                    className="portal-task-expand-button"
-                    onClick={() => handleExpandTask(task)}
-                    aria-expanded={isExpanded}
-                    aria-label={
-                      isExpanded ? `Collapse task ${task.title}` : `Expand task ${task.title}`
-                    }
-                  >
-                    {isExpanded ? "Hide" : "Edit"}
-                  </button>
                 </div>
               </div>
               {task.description && !isExpanded ? (
@@ -1202,7 +1212,7 @@ export function JobPage({
                     <label className="portal-customer-edit-field portal-job-task-card-field-wide">
                       <span>Description</span>
                       <textarea
-                        rows={4}
+                        rows={3}
                         value={taskDraft.description}
                         maxLength={2000}
                         onChange={(event) =>
@@ -1513,143 +1523,146 @@ export function JobPage({
               </section>
             ) : null}
 
-            <section className="portal-surface-card portal-job-primary-card">
-              <div className="portal-section-heading">
-                <div>
-                  <span className="portal-section-kicker">Drawings</span>
-                </div>
-                <button
-                  type="button"
-                  className="portal-secondary-button portal-compact-button"
-                  onClick={openCreateDrawingModal}
-                  disabled={isAddingDrawing}
-                >
-                  {isAddingDrawing ? "Adding..." : "New drawing"}
-                </button>
-              </div>
-              <div className="portal-customer-drawing-grid">
-                {sortedDrawings.length === 0 ? (
-                  <p className="portal-empty-copy">
-                    No drawings yet. Create a drawing to get started.
-                  </p>
-                ) : null}
-                {sortedDrawings.map((drawing) => {
-                  const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
-                  const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
-                  return (
-                    <article key={drawing.id} className="portal-customer-drawing-card">
-                      <div
-                        className="portal-customer-drawing-card-preview"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            onNavigate("drawing", { drawingId: drawing.id });
-                          }
-                        }}
-                      >
-                        <DrawingPreview
-                          layout={drawing.previewLayout}
-                          label={drawing.name}
-                          variant="card"
-                        />
-                      </div>
-                      <div className="portal-customer-drawing-card-body">
-                        <div className="portal-customer-drawing-card-head">
-                          <div className="portal-customer-drawing-card-copy">
-                            <h3>{drawing.name}</h3>
-                            <span>Latest: {getRevisionLabel(latestRevision)}</span>
-                          </div>
-                          <div className="portal-customer-drawing-card-badges">
-                            {latestRevision.status === "QUOTED" ? (
-                              <span className="portal-customer-drawing-badge is-quoted">
-                                Quoted
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="portal-customer-drawing-card-meta">
-                          <span>
-                            {drawing.segmentCount} segments | {drawing.gateCount} gates
-                          </span>
-                          <span>
-                            {revCount} revision{revCount !== 1 ? "s" : ""}
-                          </span>
-                          <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                        </div>
-                        <div className="portal-customer-drawing-card-footer">
-                          <button
-                            type="button"
-                            className="portal-text-button"
-                            onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
-                          >
-                            View drawing
-                          </button>
-                          <button
-                            type="button"
-                            className="portal-text-button"
-                            onClick={() => onNavigate("editor", { drawingId: drawing.id })}
-                          >
-                            Open editor
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="portal-surface-card">
-              <div className="portal-section-heading">
-                <div>
-                  <span className="portal-section-kicker">Quotes</span>
-                </div>
-              </div>
-              <div className="estimate-ancillary-list">
-                {drawingGroups.length === 0 ? (
-                  <p className="portal-empty-copy">Add a drawing to generate a quote.</p>
-                ) : null}
-                {drawingGroups.map(({ rootDrawing, chain }) => (
-                  <div key={rootDrawing.id} className="portal-revision-chain-group">
-                    <div className="estimate-item-copy portal-revision-chain-header">
-                      <strong>{rootDrawing.name}</strong>
-                      <span>
-                        {chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    {chain.map((drawing) => {
-                      const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
-                      return (
-                        <article key={drawing.id} className="estimate-ancillary-row">
-                          <div className="estimate-item-copy">
-                            <strong>{getRevisionLabel(drawing)}</strong>
-                            <span>
-                              {drawingQuote
-                                ? `${drawing.name} • ${drawing.status}`
-                                : `${drawing.name} • No quote saved`}
-                            </span>
-                          </div>
-                          <span>
-                            {drawingQuote
-                              ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost)
-                              : "No quote yet"}
-                          </span>
-                          <button
-                            type="button"
-                            className="portal-text-button"
-                            onClick={() => navigateToJob("estimate", drawing.id)}
-                          >
-                            {drawingQuote ? "Update" : "Generate"}
-                          </button>
-                        </article>
-                      );
-                    })}
+            <div className="portal-job-overview-secondary">
+              <section className="portal-surface-card portal-job-primary-card">
+                <div className="portal-section-heading">
+                  <div>
+                    <span className="portal-section-kicker">Drawings</span>
                   </div>
-                ))}
-              </div>
-            </section>
+                  <button
+                    type="button"
+                    className="portal-secondary-button portal-compact-button"
+                    onClick={openCreateDrawingModal}
+                    disabled={isAddingDrawing}
+                  >
+                    {isAddingDrawing ? "Adding..." : "New drawing"}
+                  </button>
+                </div>
+                <div className="portal-customer-drawing-grid">
+                  {sortedDrawings.length === 0 ? (
+                    <p className="portal-empty-copy">
+                      No drawings yet. Create a drawing to get started.
+                    </p>
+                  ) : null}
+                  {sortedDrawings.map((drawing) => {
+                    const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
+                    const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
+                    return (
+                      <article key={drawing.id} className="portal-customer-drawing-card">
+                        <div
+                          className="portal-customer-drawing-card-preview"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              onNavigate("drawing", { drawingId: drawing.id });
+                            }
+                          }}
+                        >
+                          <DrawingPreview
+                            layout={drawing.previewLayout}
+                            label={drawing.name}
+                            variant="card"
+                          />
+                        </div>
+                        <div className="portal-customer-drawing-card-body">
+                          <div className="portal-customer-drawing-card-head">
+                            <div className="portal-customer-drawing-card-copy">
+                              <h3>{drawing.name}</h3>
+                              <span>Latest: {getRevisionLabel(latestRevision)}</span>
+                            </div>
+                            <div className="portal-customer-drawing-card-badges">
+                              {latestRevision.status === "QUOTED" ? (
+                                <span className="portal-customer-drawing-badge is-quoted">
+                                  Quoted
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="portal-customer-drawing-card-meta">
+                            <span>
+                              {drawing.segmentCount} segments | {drawing.gateCount} gates
+                            </span>
+                            <span>
+                              {revCount} revision{revCount !== 1 ? "s" : ""}
+                            </span>
+                            <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
+                          </div>
+                          <div className="portal-customer-drawing-card-footer">
+                            <button
+                              type="button"
+                              className="portal-text-button"
+                              onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                            >
+                              View drawing
+                            </button>
+                            <button
+                              type="button"
+                              className="portal-text-button"
+                              onClick={() => onNavigate("editor", { drawingId: drawing.id })}
+                            >
+                              Open editor
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="portal-surface-card portal-job-quotes-card">
+                <div className="portal-section-heading">
+                  <div>
+                    <span className="portal-section-kicker">Quotes</span>
+                  </div>
+                </div>
+                <div className="estimate-ancillary-list">
+                  {drawingGroups.length === 0 ? (
+                    <p className="portal-empty-copy">Add a drawing to generate a quote.</p>
+                  ) : null}
+                  {drawingGroups.map(({ rootDrawing, chain }) => (
+                    <div key={rootDrawing.id} className="portal-revision-chain-group">
+                      <div className="estimate-item-copy portal-revision-chain-header">
+                        <strong>{rootDrawing.name}</strong>
+                        <span>
+                          {chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {chain.map((drawing) => {
+                        const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
+                        return (
+                          <article
+                            key={drawing.id}
+                            className="estimate-ancillary-row portal-job-quote-row"
+                          >
+                            <div className="estimate-item-copy">
+                              <strong>{getRevisionLabel(drawing)}</strong>
+                              <span>{drawingQuote ? drawing.status : "No quote saved"}</span>
+                            </div>
+                            <div className="portal-job-quote-row-meta">
+                              <strong>
+                                {drawingQuote
+                                  ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost)
+                                  : "No quote yet"}
+                              </strong>
+                              <button
+                                type="button"
+                                className="portal-text-button"
+                                onClick={() => navigateToJob("estimate", drawing.id)}
+                              >
+                                {drawingQuote ? "Update" : "Generate"}
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       ) : null}
