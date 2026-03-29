@@ -1,6 +1,18 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type PortalRoute = "login" | "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin";
+export type PortalRoute =
+  | "login"
+  | "dashboard"
+  | "tasks"
+  | "drawings"
+  | "customers"
+  | "customer"
+  | "job"
+  | "drawing"
+  | "editor"
+  | "estimate"
+  | "pricing"
+  | "admin";
 
 export interface PortalLocation {
   route: PortalRoute;
@@ -8,7 +20,20 @@ export interface PortalLocation {
 }
 
 const DEFAULT_ROUTE: PortalRoute = "dashboard";
-const KNOWN_ROUTES = new Set<PortalRoute>(["login", "dashboard", "tasks", "drawings", "customers", "customer", "job", "drawing", "editor", "estimate", "pricing", "admin"]);
+const KNOWN_ROUTES = new Set<PortalRoute>([
+  "login",
+  "dashboard",
+  "tasks",
+  "drawings",
+  "customers",
+  "customer",
+  "job",
+  "drawing",
+  "editor",
+  "estimate",
+  "pricing",
+  "admin",
+]);
 
 function parseLocation(hash: string): PortalLocation {
   const raw = hash.replace(/^#/, "").trim();
@@ -27,7 +52,7 @@ function parseLocation(hash: string): PortalLocation {
 
   return {
     route,
-    query
+    query,
   };
 }
 
@@ -44,7 +69,9 @@ function buildHash(route: PortalRoute, query?: Record<string, string>): string {
 }
 
 export function useHashRoute() {
-  const [location, setLocation] = useState<PortalLocation>(() => parseLocation(window.location.hash));
+  const [location, setLocation] = useState<PortalLocation>(() =>
+    parseLocation(window.location.hash),
+  );
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -69,9 +96,8 @@ export function useHashRoute() {
   return useMemo(
     () => ({
       ...location,
-      navigate
+      navigate,
     }),
     [location, navigate],
   );
 }
-

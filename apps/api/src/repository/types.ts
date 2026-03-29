@@ -22,7 +22,7 @@ import type {
   JobTaskRecord,
   LayoutModel,
   PricingConfigRecord,
-  QuoteRecord
+  QuoteRecord,
 } from "@fence-estimator/contracts";
 
 export interface StoredUser extends CompanyUserRecord {
@@ -273,6 +273,7 @@ export interface CreateJobTaskInput {
   id: string;
   companyId: string;
   jobId: string;
+  drawingId: string | null;
   title: string;
   description: string;
   priority: string;
@@ -287,6 +288,7 @@ export interface UpdateJobTaskInput {
   taskId: string;
   companyId: string;
   jobId: string;
+  drawingId: string | null;
   title: string;
   description: string;
   priority: string;
@@ -331,26 +333,42 @@ export interface AppRepository {
   checkHealth(): Promise<void>;
   runInTransaction<T>(fn: () => Promise<T>): Promise<T>;
   getUserCount(): Promise<number>;
-  bootstrapOwnerAccount(input: BootstrapOwnerAccountInput): Promise<{ company: CompanyRecord; user: CompanyUserRecord } | null>;
+  bootstrapOwnerAccount(
+    input: BootstrapOwnerAccountInput,
+  ): Promise<{ company: CompanyRecord; user: CompanyUserRecord } | null>;
   createUser(input: CreateUserInput): Promise<CompanyUserRecord>;
   getCompanyById(companyId: string): Promise<CompanyRecord | null>;
   getUserById(userId: string, companyId: string): Promise<CompanyUserRecord | null>;
   getUserByEmail(email: string): Promise<StoredUser | null>;
   listUsers(companyId: string): Promise<CompanyUserRecord[]>;
-  updateUserPassword(userId: string, companyId: string, passwordHash: string, passwordSalt: string): Promise<void>;
+  updateUserPassword(
+    userId: string,
+    companyId: string,
+    passwordHash: string,
+    passwordSalt: string,
+  ): Promise<void>;
   createSession(input: CreateSessionInput): Promise<SessionRecord>;
   revokeSession(tokenHash: string, revokedAtIso: string): Promise<void>;
   revokeSessionsForUser(userId: string, companyId: string, revokedAtIso: string): Promise<void>;
   getAuthenticatedSession(tokenHash: string): Promise<AuthenticatedSession | null>;
   createCustomer(input: CreateCustomerInput): Promise<CustomerRecord>;
-  listCustomers(companyId: string, scope?: CustomerScope, search?: string): Promise<CustomerSummary[]>;
+  listCustomers(
+    companyId: string,
+    scope?: CustomerScope,
+    search?: string,
+  ): Promise<CustomerSummary[]>;
   getCustomerById(customerId: string, companyId: string): Promise<CustomerRecord | null>;
   updateCustomer(input: UpdateCustomerInput): Promise<CustomerRecord | null>;
   setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
   deleteCustomer(input: DeleteCustomerInput): Promise<boolean>;
   deleteJob(input: DeleteJobInput): Promise<boolean>;
   createJob(input: CreateJobInput): Promise<JobRecord>;
-  listJobs(companyId: string, scope?: CustomerScope, search?: string, customerId?: string): Promise<JobSummary[]>;
+  listJobs(
+    companyId: string,
+    scope?: CustomerScope,
+    search?: string,
+    customerId?: string,
+  ): Promise<JobSummary[]>;
   listJobsForCustomer(customerId: string, companyId: string): Promise<JobSummary[]>;
   getJobById(jobId: string, companyId: string): Promise<JobRecord | null>;
   updateJob(input: UpdateJobInput): Promise<JobRecord | null>;
@@ -363,7 +381,11 @@ export interface AppRepository {
   listDrawingsForCustomer(customerId: string, companyId: string): Promise<DrawingSummary[]>;
   listDrawingsForJob(jobId: string, companyId: string): Promise<DrawingSummary[]>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
-  listDrawings(companyId: string, scope?: "ALL" | "ACTIVE" | "ARCHIVED", search?: string): Promise<DrawingSummary[]>;
+  listDrawings(
+    companyId: string,
+    scope?: "ALL" | "ACTIVE" | "ARCHIVED",
+    search?: string,
+  ): Promise<DrawingSummary[]>;
   getDrawingById(drawingId: string, companyId: string): Promise<DrawingRecord | null>;
   updateDrawing(input: UpdateDrawingInput): Promise<DrawingRecord | null>;
   setDrawingArchivedState(input: SetDrawingArchivedStateInput): Promise<DrawingRecord | null>;
@@ -377,7 +399,12 @@ export interface AppRepository {
   getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
   upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;
   createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void>;
-  consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string): Promise<PasswordResetConsumption | null>;
+  consumePasswordResetToken(
+    tokenHash: string,
+    passwordHash: string,
+    passwordSalt: string,
+    consumedAtIso: string,
+  ): Promise<PasswordResetConsumption | null>;
   addAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord>;
   listAuditLog(
     companyId: string,
@@ -390,6 +417,6 @@ export interface AppRepository {
           toCreatedAtIso?: string | null;
           entityType?: AuditEntityType | null;
           search?: string | null;
-        }
+        },
   ): Promise<AuditLogRecord[]>;
 }

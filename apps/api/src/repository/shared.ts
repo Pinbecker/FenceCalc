@@ -23,7 +23,7 @@ import type {
   LayoutModel,
   PricingConfigRecord,
   PricedEstimateResult,
-  QuoteRecord
+  QuoteRecord,
 } from "@fence-estimator/contracts";
 import {
   DRAWING_SCHEMA_VERSION,
@@ -40,7 +40,7 @@ import {
   jobTaskRecordSchema,
   layoutModelSchema,
   pricingConfigRecordSchema,
-  quoteRecordSchema
+  quoteRecordSchema,
 } from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 import type { ZodType } from "zod";
@@ -56,14 +56,16 @@ interface StoredLayoutShape {
   goalUnits?: LayoutModel["goalUnits"] | undefined;
   kickboards?: LayoutModel["kickboards"] | undefined;
   pitchDividers?: LayoutModel["pitchDividers"] | undefined;
-  sideNettings?: Array<{
-    id: string;
-    segmentId: string;
-    additionalHeightMm: number;
-    extendedPostInterval: 3;
-    startOffsetMm?: number | undefined;
-    endOffsetMm?: number | undefined;
-  }> | undefined;
+  sideNettings?:
+    | Array<{
+        id: string;
+        segmentId: string;
+        additionalHeightMm: number;
+        extendedPostInterval: 3;
+        startOffsetMm?: number | undefined;
+        endOffsetMm?: number | undefined;
+      }>
+    | undefined;
 }
 
 export interface CompanyRow {
@@ -228,6 +230,8 @@ export interface JobTaskRow {
   company_id: string;
   job_id: string;
   job_name?: string | null;
+  drawing_id: string | null;
+  drawing_name?: string | null;
   title: string;
   description: string | null;
   priority: string | null;
@@ -260,7 +264,7 @@ export function toPublicUser(user: StoredUser | UserRow): CompanyUserRecord {
       email: user.email,
       displayName: user.displayName,
       role: user.role,
-      createdAtIso: user.createdAtIso
+      createdAtIso: user.createdAtIso,
     };
   }
 
@@ -270,7 +274,7 @@ export function toPublicUser(user: StoredUser | UserRow): CompanyUserRecord {
     email: user.email,
     displayName: user.display_name,
     role: user.role,
-    createdAtIso: user.created_at_iso
+    createdAtIso: user.created_at_iso,
   };
 }
 
@@ -278,7 +282,7 @@ export function toCompany(row: CompanyRow): CompanyRecord {
   return {
     id: row.id,
     name: row.name,
-    createdAtIso: row.created_at_iso
+    createdAtIso: row.created_at_iso,
   };
 }
 
@@ -307,7 +311,7 @@ export function toCustomer(row: CustomerRow): CustomerRecord {
     createdByUserId: row.created_by_user_id,
     updatedByUserId: row.updated_by_user_id,
     createdAtIso: row.created_at_iso,
-    updatedAtIso: row.updated_at_iso
+    updatedAtIso: row.updated_at_iso,
   });
   return parsed;
 }
@@ -317,7 +321,7 @@ export function toCustomerSummary(row: CustomerSummaryRow): CustomerSummary {
     ...toCustomer(row),
     activeDrawingCount: row.active_drawing_count,
     archivedDrawingCount: row.archived_drawing_count,
-    lastActivityAtIso: row.last_activity_at_iso
+    lastActivityAtIso: row.last_activity_at_iso,
   });
   return parsed;
 }
@@ -337,7 +341,11 @@ function parseStoredJson<T>(raw: string, schema: ZodType<T>, label: string): T {
   return result.data;
 }
 
-function parseOptionalStoredJson<T>(raw: string | null | undefined, schema: ZodType<T>, label: string): T | null {
+function parseOptionalStoredJson<T>(
+  raw: string | null | undefined,
+  schema: ZodType<T>,
+  label: string,
+): T | null {
   if (!raw) {
     return null;
   }
@@ -350,22 +358,48 @@ function buildPreviewLayout(layout: LayoutModel): LayoutModel {
   const preview = {
     segments,
     gates: (layout.gates ?? []).filter((gate) => segmentIds.has(gate.segmentId)).slice(0, 12),
-    basketballFeatures: (layout.basketballFeatures ?? []).filter((feature) => segmentIds.has(feature.segmentId)).slice(0, 20),
-    basketballPosts: (layout.basketballPosts ?? []).filter((post) => segmentIds.has(post.segmentId)).slice(0, 20),
-    floodlightColumns: (layout.floodlightColumns ?? []).filter((column) => segmentIds.has(column.segmentId)).slice(0, 20),
-    goalUnits: (layout.goalUnits ?? []).filter((unit) => segmentIds.has(unit.segmentId)).slice(0, 12),
-    kickboards: (layout.kickboards ?? []).filter((kickboard) => segmentIds.has(kickboard.segmentId)).slice(0, 20),
-    pitchDividers: (layout.pitchDividers ?? [])
-      .filter((divider) => segmentIds.has(divider.startAnchor.segmentId) && segmentIds.has(divider.endAnchor.segmentId))
+    basketballFeatures: (layout.basketballFeatures ?? [])
+      .filter((feature) => segmentIds.has(feature.segmentId))
+      .slice(0, 20),
+    basketballPosts: (layout.basketballPosts ?? [])
+      .filter((post) => segmentIds.has(post.segmentId))
+      .slice(0, 20),
+    floodlightColumns: (layout.floodlightColumns ?? [])
+      .filter((column) => segmentIds.has(column.segmentId))
+      .slice(0, 20),
+    goalUnits: (layout.goalUnits ?? [])
+      .filter((unit) => segmentIds.has(unit.segmentId))
       .slice(0, 12),
-    sideNettings: (layout.sideNettings ?? []).filter((netting) => segmentIds.has(netting.segmentId)).slice(0, 20)
+    kickboards: (layout.kickboards ?? [])
+      .filter((kickboard) => segmentIds.has(kickboard.segmentId))
+      .slice(0, 20),
+    pitchDividers: (layout.pitchDividers ?? [])
+      .filter(
+        (divider) =>
+          segmentIds.has(divider.startAnchor.segmentId) &&
+          segmentIds.has(divider.endAnchor.segmentId),
+      )
+      .slice(0, 12),
+    sideNettings: (layout.sideNettings ?? [])
+      .filter((netting) => segmentIds.has(netting.segmentId))
+      .slice(0, 20),
   };
 
   const result = layoutModelSchema.safeParse(JSON.parse(JSON.stringify(preview)));
   if (result.success) {
     return result.data as LayoutModel;
   }
-  return { segments, gates: [], basketballFeatures: [], basketballPosts: [], floodlightColumns: [], goalUnits: [], kickboards: [], pitchDividers: [], sideNettings: [] };
+  return {
+    segments,
+    gates: [],
+    basketballFeatures: [],
+    basketballPosts: [],
+    floodlightColumns: [],
+    goalUnits: [],
+    kickboards: [],
+    pitchDividers: [],
+    sideNettings: [],
+  };
 }
 
 function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
@@ -383,15 +417,19 @@ function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
       segmentId: sideNetting.segmentId,
       additionalHeightMm: sideNetting.additionalHeightMm,
       extendedPostInterval: sideNetting.extendedPostInterval,
-      ...(sideNetting.startOffsetMm === undefined ? {} : { startOffsetMm: sideNetting.startOffsetMm }),
-      ...(sideNetting.endOffsetMm === undefined ? {} : { endOffsetMm: sideNetting.endOffsetMm })
-    }))
+      ...(sideNetting.startOffsetMm === undefined
+        ? {}
+        : { startOffsetMm: sideNetting.startOffsetMm }),
+      ...(sideNetting.endOffsetMm === undefined ? {} : { endOffsetMm: sideNetting.endOffsetMm }),
+    })),
   };
 }
 
 function parseDrawingStatus(raw: string | undefined | null): DrawingStatus {
   const value = raw ?? "DRAFT";
-  return (DRAWING_STATUSES as readonly string[]).includes(value) ? (value as DrawingStatus) : "DRAFT";
+  return (DRAWING_STATUSES as readonly string[]).includes(value)
+    ? (value as DrawingStatus)
+    : "DRAFT";
 }
 
 function parseDrawingJobRole(raw: string | undefined | null): DrawingJobRole | null {
@@ -429,19 +467,21 @@ function normalizeEstimateResult(estimate: ParsedEstimateResult): EstimateResult
     ...estimate,
     corners: {
       ...estimate.corners,
-      byHeightMm: estimate.corners.byHeightMm ?? {}
-    }
+      byHeightMm: estimate.corners.byHeightMm ?? {},
+    },
   };
 }
 
 function normalizeEstimateWorkbook(workbook: ParsedEstimateWorkbook): EstimateWorkbook {
   return {
     ...workbook,
-    manualEntries: workbook.manualEntries ?? []
+    manualEntries: workbook.manualEntries ?? [],
   };
 }
 
-function normalizePricedEstimateResult(pricedEstimate: ParsedPricedEstimateResult): PricedEstimateResult {
+function normalizePricedEstimateResult(
+  pricedEstimate: ParsedPricedEstimateResult,
+): PricedEstimateResult {
   return {
     drawing: pricedEstimate.drawing,
     groups: pricedEstimate.groups,
@@ -450,20 +490,30 @@ function normalizePricedEstimateResult(pricedEstimate: ParsedPricedEstimateResul
     totals: pricedEstimate.totals,
     warnings: pricedEstimate.warnings,
     pricingSnapshot: pricedEstimate.pricingSnapshot,
-    ...(pricedEstimate.workbook ? { workbook: normalizeEstimateWorkbook(pricedEstimate.workbook) } : {})
+    ...(pricedEstimate.workbook
+      ? { workbook: normalizeEstimateWorkbook(pricedEstimate.workbook) }
+      : {}),
   };
 }
 
 export function toDrawing(row: DrawingRow): DrawingRecord {
-  const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing ${row.id}`);
+  const parsedLayout = parseStoredJson(
+    row.layout_json,
+    layoutModelSchema,
+    `layout for drawing ${row.id}`,
+  );
   const savedViewport = parseOptionalStoredJson(
     row.viewport_json,
     drawingCanvasViewportSchema,
-    `viewport for drawing ${row.id}`
+    `viewport for drawing ${row.id}`,
   );
   const layout = buildStoredLayout(parsedLayout);
   const estimate = normalizeEstimateResult(
-    parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing ${row.id}`) as ParsedEstimateResult
+    parseStoredJson(
+      row.estimate_json,
+      estimateResultSchema,
+      `estimate for drawing ${row.id}`,
+    ) as ParsedEstimateResult,
   );
 
   return {
@@ -491,7 +541,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     createdByUserId: row.created_by_user_id,
     updatedByUserId: row.updated_by_user_id,
     createdAtIso: row.created_at_iso,
-    updatedAtIso: row.updated_at_iso
+    updatedAtIso: row.updated_at_iso,
   };
 }
 
@@ -502,7 +552,10 @@ interface DrawingSummaryMetadata {
   contributorDisplayNames: string[];
 }
 
-export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<DrawingSummaryMetadata>): DrawingSummary {
+export function toDrawingSummary(
+  drawing: DrawingRecord,
+  metadata?: Partial<DrawingSummaryMetadata>,
+): DrawingSummary {
   return {
     id: drawing.id,
     companyId: drawing.companyId,
@@ -532,20 +585,28 @@ export function toDrawingSummary(drawing: DrawingRecord, metadata?: Partial<Draw
     contributorUserIds: metadata?.contributorUserIds ?? [],
     contributorDisplayNames: metadata?.contributorDisplayNames ?? [],
     createdAtIso: drawing.createdAtIso,
-    updatedAtIso: drawing.updatedAtIso
+    updatedAtIso: drawing.updatedAtIso,
   };
 }
 
 export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
-  const parsedLayout = parseStoredJson(row.layout_json, layoutModelSchema, `layout for drawing version ${row.id}`);
+  const parsedLayout = parseStoredJson(
+    row.layout_json,
+    layoutModelSchema,
+    `layout for drawing version ${row.id}`,
+  );
   const savedViewport = parseOptionalStoredJson(
     row.viewport_json,
     drawingCanvasViewportSchema,
-    `viewport for drawing version ${row.id}`
+    `viewport for drawing version ${row.id}`,
   );
   const layout = buildStoredLayout(parsedLayout);
   const estimate = normalizeEstimateResult(
-    parseStoredJson(row.estimate_json, estimateResultSchema, `estimate for drawing version ${row.id}`) as ParsedEstimateResult
+    parseStoredJson(
+      row.estimate_json,
+      estimateResultSchema,
+      `estimate for drawing version ${row.id}`,
+    ) as ParsedEstimateResult,
   );
 
   return {
@@ -563,7 +624,7 @@ export function toDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord {
     ...(savedViewport ? { savedViewport } : {}),
     estimate,
     createdByUserId: row.created_by_user_id,
-    createdAtIso: row.created_at_iso
+    createdAtIso: row.created_at_iso,
   };
 }
 
@@ -581,7 +642,7 @@ export function toAuditLog(row: AuditLogRow): AuditLogRecord {
     action: row.action,
     summary: row.summary,
     createdAtIso: row.created_at_iso,
-    ...(metadata ? { metadata } : {})
+    ...(metadata ? { metadata } : {}),
   };
 }
 
@@ -614,7 +675,7 @@ export function toJob(row: JobRow): JobRecord {
     updatedByUserId: row.updated_by_user_id,
     updatedByDisplayName: row.updated_by_display_name ?? "",
     createdAtIso: row.created_at_iso,
-    updatedAtIso: row.updated_at_iso
+    updatedAtIso: row.updated_at_iso,
   });
 }
 
@@ -624,7 +685,13 @@ export function toJobSummary(row: JobSummaryRow): JobSummary {
   if (row.primary_layout_json) {
     try {
       primaryPreviewLayout = buildPreviewLayout(
-        buildStoredLayout(parseStoredJson(row.primary_layout_json, layoutModelSchema, `primary layout for job ${row.id}`))
+        buildStoredLayout(
+          parseStoredJson(
+            row.primary_layout_json,
+            layoutModelSchema,
+            `primary layout for job ${row.id}`,
+          ),
+        ),
       );
     } catch {
       // Corrupt layout data for this job — degrade gracefully instead of
@@ -643,7 +710,7 @@ export function toJobSummary(row: JobSummaryRow): JobSummary {
     latestEstimateTotal: row.latest_estimate_total,
     primaryDrawingName: row.primary_drawing_name,
     primaryDrawingUpdatedAtIso: row.primary_drawing_updated_at_iso,
-    primaryPreviewLayout
+    primaryPreviewLayout,
   }) as JobSummary;
 }
 
@@ -653,6 +720,8 @@ export function toJobTask(row: JobTaskRow): JobTaskRecord {
     companyId: row.company_id,
     jobId: row.job_id,
     jobName: row.job_name ?? "",
+    drawingId: row.drawing_id,
+    drawingName: row.drawing_name ?? "",
     title: row.title,
     description: row.description ?? "",
     priority: row.priority ?? "NORMAL",
@@ -665,26 +734,32 @@ export function toJobTask(row: JobTaskRow): JobTaskRecord {
     completedByDisplayName: row.completed_by_display_name ?? "",
     createdByUserId: row.created_by_user_id,
     createdAtIso: row.created_at_iso,
-    updatedAtIso: row.updated_at_iso
+    updatedAtIso: row.updated_at_iso,
   });
 }
 
-export function normalizePricingConfigRecord(pricingConfig: PricingConfigRecord): PricingConfigRecord {
+export function normalizePricingConfigRecord(
+  pricingConfig: PricingConfigRecord,
+): PricingConfigRecord {
   return pricingConfig.workbook
     ? pricingConfig
     : {
         ...pricingConfig,
-        workbook: buildDefaultPricingWorkbookConfig()
+        workbook: buildDefaultPricingWorkbookConfig(),
       };
 }
 
 export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
-  const parsed = parseStoredJson(row.config_json, pricingConfigRecordSchema, `pricing config for company ${row.company_id}`);
+  const parsed = parseStoredJson(
+    row.config_json,
+    pricingConfigRecordSchema,
+    `pricing config for company ${row.company_id}`,
+  );
   return normalizePricingConfigRecord({
     ...parsed,
     companyId: row.company_id,
     updatedAtIso: row.updated_at_iso,
-    updatedByUserId: row.updated_by_user_id
+    updatedByUserId: row.updated_by_user_id,
   });
 }
 
@@ -702,7 +777,7 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
     versionNumber: parsed.drawingSnapshot.versionNumber,
     ...(parsed.drawingSnapshot.savedViewport !== undefined
       ? { savedViewport: parsed.drawingSnapshot.savedViewport }
-      : {})
+      : {}),
   };
   return {
     id: row.id,
@@ -712,9 +787,11 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
     sourceDrawingVersionNumber: row.source_drawing_version_number,
     drawingId: row.drawing_id,
     drawingVersionNumber: row.drawing_version_number,
-    pricedEstimate: normalizePricedEstimateResult(parsed.pricedEstimate as ParsedPricedEstimateResult),
+    pricedEstimate: normalizePricedEstimateResult(
+      parsed.pricedEstimate as ParsedPricedEstimateResult,
+    ),
     drawingSnapshot,
     createdByUserId: row.created_by_user_id,
-    createdAtIso: row.created_at_iso
+    createdAtIso: row.created_at_iso,
   };
 }

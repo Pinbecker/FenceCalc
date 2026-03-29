@@ -18,7 +18,7 @@ import {
   type LayoutModel,
   type PricedEstimateResult,
   type QuoteRecord,
-  type TaskPriority
+  type TaskPriority,
 } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
@@ -36,7 +36,7 @@ import {
   listJobQuotes,
   listJobTasks,
   updateJob,
-  updateJobTask
+  updateJobTask,
 } from "./apiClient";
 import {
   COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE,
@@ -46,9 +46,14 @@ import {
   COMMERCIAL_MARKUP_UNITS_CODE,
   COMMERCIAL_TRAVEL_DAYS_CODE,
   COMMERCIAL_TRAVEL_RATE_CODE,
-  mergeEstimateWorkbook
+  mergeEstimateWorkbook,
 } from "./estimatingWorkbook";
-import { formatTaskDate, formatTaskTimestamp, getTaskDueLabel, getTaskDueTone } from "./taskPresentation";
+import {
+  formatTaskDate,
+  formatTaskTimestamp,
+  getTaskDueLabel,
+  getTaskDueTone,
+} from "./taskPresentation";
 import type { PortalRoute } from "./useHashRoute";
 import { buildEstimateDisplaySections, formatQuantityForDisplay } from "./workbookPresentation";
 
@@ -58,7 +63,7 @@ const JOB_TAB_LABELS: Record<JobTab, string> = {
   overview: "Overview",
   drawings: "Drawings",
   estimate: "Estimate",
-  activity: "Activity"
+  activity: "Activity",
 };
 
 const EMPTY_LAYOUT: LayoutModel = {
@@ -69,7 +74,7 @@ const EMPTY_LAYOUT: LayoutModel = {
   goalUnits: [],
   kickboards: [],
   pitchDividers: [],
-  sideNettings: []
+  sideNettings: [],
 };
 
 function formatMoney(value: number | null | undefined): string {
@@ -80,7 +85,9 @@ function formatTimestamp(value: string | null): string {
   if (!value) {
     return "No activity";
   }
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(value),
+  );
 }
 
 function formatDateOnly(value: string | null): string {
@@ -95,6 +102,7 @@ interface TaskDraftState {
   description: string;
   priority: TaskPriority;
   assignedUserId: string | null;
+  drawingId: string | null;
   dueDate: string;
 }
 
@@ -104,8 +112,18 @@ function buildTaskDraft(task: JobTaskRecord): TaskDraftState {
     description: task.description,
     priority: task.priority,
     assignedUserId: task.assignedUserId,
-    dueDate: task.dueAtIso ? task.dueAtIso.slice(0, 10) : ""
+    drawingId: task.drawingId,
+    dueDate: task.dueAtIso ? task.dueAtIso.slice(0, 10) : "",
   };
+}
+
+function getTaskRootDrawingId(
+  drawing: Pick<DrawingSummary, "id" | "parentDrawingId"> | null | undefined,
+): string | null {
+  if (!drawing) {
+    return null;
+  }
+  return drawing.parentDrawingId ?? drawing.id;
 }
 
 function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">): string {
@@ -114,7 +132,9 @@ function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">): stri
 
 function getEstimateOptionLabel(drawing: DrawingSummary): string {
   const baseLabel = getRevisionLabel(drawing);
-  return drawing.revisionNumber === 0 ? `${baseLabel} • ${drawing.name}` : `${baseLabel} • ${drawing.status}`;
+  return drawing.revisionNumber === 0
+    ? `${baseLabel} • ${drawing.name}`
+    : `${baseLabel} • ${drawing.status}`;
 }
 
 function buildAncillaryItem(): AncillaryEstimateItem {
@@ -123,20 +143,28 @@ function buildAncillaryItem(): AncillaryEstimateItem {
     description: "",
     quantity: 1,
     materialCost: 0,
-    labourCost: 0
+    labourCost: 0,
   };
 }
 
-function upsertManualEntry(current: EstimateWorkbookManualEntry[], code: string, quantity: number): EstimateWorkbookManualEntry[] {
+function upsertManualEntry(
+  current: EstimateWorkbookManualEntry[],
+  code: string,
+  quantity: number,
+): EstimateWorkbookManualEntry[] {
   const existing = current.find((entry) => entry.code === code);
   const nextQuantity = Number.isFinite(quantity) ? quantity : 0;
   if (existing) {
-    return current.map((entry) => (entry.code === code ? { ...entry, quantity: nextQuantity } : entry));
+    return current.map((entry) =>
+      entry.code === code ? { ...entry, quantity: nextQuantity } : entry,
+    );
   }
   return [...current, { code, quantity: nextQuantity }];
 }
 
-function buildInitialManualEntries(pricedEstimate: PricedEstimateResult): EstimateWorkbookManualEntry[] {
+function buildInitialManualEntries(
+  pricedEstimate: PricedEstimateResult,
+): EstimateWorkbookManualEntry[] {
   const current = [...(pricedEstimate.manualEntries ?? [])];
   const workbook = pricedEstimate.workbook;
   if (!workbook) {
@@ -145,19 +173,26 @@ function buildInitialManualEntries(pricedEstimate: PricedEstimateResult): Estima
   if (workbook.settings.hardDigDefault && !current.some((entry) => entry.code === "LAB_HARD_DIG")) {
     current.push({ code: "LAB_HARD_DIG", quantity: 1 });
   }
-  if (workbook.settings.clearSpoilsDefault && !current.some((entry) => entry.code === "LAB_CLEAR_SPOILS")) {
+  if (
+    workbook.settings.clearSpoilsDefault &&
+    !current.some((entry) => entry.code === "LAB_CLEAR_SPOILS")
+  ) {
     current.push({ code: "LAB_CLEAR_SPOILS", quantity: 1 });
   }
   return current;
 }
 
-function getManualEntryValue(entries: EstimateWorkbookManualEntry[], code: string, fallback: number): number {
+function getManualEntryValue(
+  entries: EstimateWorkbookManualEntry[],
+  code: string,
+  fallback: number,
+): number {
   return entries.find((entry) => entry.code === code)?.quantity ?? fallback;
 }
 
 function buildCommercialInputs(
   pricedEstimate: PricedEstimateResult | null,
-  manualEntries: EstimateWorkbookManualEntry[]
+  manualEntries: EstimateWorkbookManualEntry[],
 ): JobCommercialInputs | null {
   const workbook = pricedEstimate?.workbook;
   if (!workbook) {
@@ -172,8 +207,15 @@ function buildCommercialInputs(
     markupUnits: workbook.commercialInputs.markupUnits,
     distributionCharge: workbook.settings.distributionCharge,
     concretePricePerCube: workbook.settings.concretePricePerCube,
-    hardDig: getManualEntryValue(manualEntries, "LAB_HARD_DIG", workbook.settings.hardDigDefault ? 1 : 0) > 0,
-    clearSpoils: getManualEntryValue(manualEntries, "LAB_CLEAR_SPOILS", workbook.settings.clearSpoilsDefault ? 1 : 0) > 0
+    hardDig:
+      getManualEntryValue(manualEntries, "LAB_HARD_DIG", workbook.settings.hardDigDefault ? 1 : 0) >
+      0,
+    clearSpoils:
+      getManualEntryValue(
+        manualEntries,
+        "LAB_CLEAR_SPOILS",
+        workbook.settings.clearSpoilsDefault ? 1 : 0,
+      ) > 0,
   };
 }
 
@@ -198,14 +240,15 @@ export function JobPage({
   onRefreshJobs,
   onRefreshDrawings,
   onToggleDrawingArchived,
-  onDeleteJob
+  onDeleteJob,
 }: JobPageProps) {
   const jobId = query?.jobId ?? null;
   const requestedDrawingId = query?.drawingId ?? null;
   const focusTaskId = query?.focusTaskId ?? null;
   const tabValue = (query?.tab as JobTab | undefined) ?? "overview";
-  const currentTab: JobTab = ["overview", "drawings", "estimate", "activity"].includes(tabValue) ? tabValue : "overview";
-  const canManagePricing = session.user.role === "OWNER" || session.user.role === "ADMIN";
+  const currentTab: JobTab = ["overview", "drawings", "estimate", "activity"].includes(tabValue)
+    ? tabValue
+    : "overview";
 
   const [job, setJob] = useState<JobRecord | null>(null);
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
@@ -219,6 +262,7 @@ export function JobPage({
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskAssignee, setTaskAssignee] = useState<string | null>(null);
+  const [taskDrawingId, setTaskDrawingId] = useState<string | null>(null);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("NORMAL");
   const [isTaskFormExpanded, setIsTaskFormExpanded] = useState(false);
@@ -251,14 +295,17 @@ export function JobPage({
     return () => globalThis.clearTimeout(timer);
   }, [noticeMessage]);
 
-  const customer = useMemo(() => customers.find((entry) => entry.id === job?.customerId) ?? null, [customers, job?.customerId]);
+  const customer = useMemo(
+    () => customers.find((entry) => entry.id === job?.customerId) ?? null,
+    [customers, job?.customerId],
+  );
   const selectedDrawing = useMemo(
     () =>
       drawings.find((entry) => entry.id === requestedDrawingId) ??
       drawings.find((entry) => entry.id === job?.primaryDrawingId) ??
       drawings[0] ??
       null,
-    [drawings, job?.primaryDrawingId, requestedDrawingId]
+    [drawings, job?.primaryDrawingId, requestedDrawingId],
   );
 
   const pricedEstimate = useMemo(() => {
@@ -270,12 +317,18 @@ export function JobPage({
 
   const workbook = pricedEstimate?.workbook ?? null;
   const materialSections = useMemo(
-    () => (selectedDrawingRecord && workbook ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "MATERIALS") : []),
-    [selectedDrawingRecord, workbook]
+    () =>
+      selectedDrawingRecord && workbook
+        ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "MATERIALS")
+        : [],
+    [selectedDrawingRecord, workbook],
   );
   const labourSections = useMemo(
-    () => (selectedDrawingRecord && workbook ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "LABOUR") : []),
-    [selectedDrawingRecord, workbook]
+    () =>
+      selectedDrawingRecord && workbook
+        ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "LABOUR")
+        : [],
+    [selectedDrawingRecord, workbook],
   );
 
   const sortedTasks = useMemo(() => {
@@ -293,8 +346,25 @@ export function JobPage({
       return b.createdAtIso.localeCompare(a.createdAtIso);
     });
   }, [tasks]);
+  const rootDrawings = useMemo(
+    () =>
+      drawings
+        .filter((drawing) => !drawing.parentDrawingId)
+        .sort((left, right) => left.createdAtIso.localeCompare(right.createdAtIso)),
+    [drawings],
+  );
+  const preferredTaskDrawingId = useMemo(() => {
+    const selectedRootDrawingId = getTaskRootDrawingId(selectedDrawing);
+    if (selectedRootDrawingId) {
+      return selectedRootDrawingId;
+    }
+    const primaryDrawing = job?.primaryDrawingId
+      ? (drawings.find((drawing) => drawing.id === job.primaryDrawingId) ?? null)
+      : null;
+    const primaryRootDrawingId = getTaskRootDrawingId(primaryDrawing);
+    return primaryRootDrawingId ?? rootDrawings[0]?.id ?? null;
+  }, [drawings, job?.primaryDrawingId, rootDrawings, selectedDrawing]);
   const openTaskCount = tasks.filter((entry) => !entry.isCompleted).length;
-  const latestQuote = quotes[0] ?? null;
   const latestQuoteByDrawingId = useMemo(() => {
     const latestByDrawingId = new Map<string, QuoteRecord>();
     for (const quote of quotes) {
@@ -322,13 +392,18 @@ export function JobPage({
               return left.revisionNumber - right.revisionNumber;
             }
             return left.createdAtIso.localeCompare(right.createdAtIso);
-          })
-      ]
+          }),
+      ],
     }));
   }, [drawings, sortedDrawings]);
 
   const latestDrawingByRootId = useMemo(() => {
-    return new Map(drawingGroups.map(({ rootDrawing, chain }) => [rootDrawing.id, chain[chain.length - 1] ?? rootDrawing]));
+    return new Map(
+      drawingGroups.map(({ rootDrawing, chain }) => [
+        rootDrawing.id,
+        chain[chain.length - 1] ?? rootDrawing,
+      ]),
+    );
   }, [drawingGroups]);
 
   const revisionCountByDrawing = useMemo(() => {
@@ -349,60 +424,67 @@ export function JobPage({
       onNavigate("job", {
         jobId,
         tab: nextTab,
-        ...(nextDrawingId ? { drawingId: nextDrawingId } : {})
+        ...(nextDrawingId ? { drawingId: nextDrawingId } : {}),
       });
     },
-    [jobId, onNavigate]
+    [jobId, onNavigate],
   );
 
-  const loadWorkspace = useCallback(async (targetJobId: string) => {
-    setIsLoading(true);
-    try {
-      const [nextJob, nextDrawings, nextTasks, nextQuotes, nextActivity] = await Promise.all([
-        getJob(targetJobId),
-        listJobDrawings(targetJobId),
-        listJobTasks(targetJobId),
-        listJobQuotes(targetJobId),
-        listJobActivity(targetJobId)
-      ]);
-      setJob(nextJob);
-      setDrawings(
-        [...nextDrawings].sort((left, right) => {
-          if (left.id === nextJob.primaryDrawingId) {
-            return -1;
-          }
-          if (right.id === nextJob.primaryDrawingId) {
-            return 1;
-          }
-          return right.updatedAtIso.localeCompare(left.updatedAtIso);
-        })
-      );
-      setTasks(nextTasks);
-      setTaskDrafts(Object.fromEntries(nextTasks.map((task) => [task.id, buildTaskDraft(task)])));
-      setQuotes(nextQuotes);
-      setActivity(nextActivity);
-      setErrorMessage(null);
-    } catch (error) {
+  const loadWorkspace = useCallback(
+    async (targetJobId: string) => {
+      setIsLoading(true);
       try {
-        const drawing = await getDrawing(targetJobId);
-        if (drawing.jobId && drawing.jobId !== targetJobId) {
-          onNavigate("job", { jobId: drawing.jobId, tab: currentTab, drawingId: requestedDrawingId ?? drawing.id });
-          return;
+        const [nextJob, nextDrawings, nextTasks, nextQuotes, nextActivity] = await Promise.all([
+          getJob(targetJobId),
+          listJobDrawings(targetJobId),
+          listJobTasks(targetJobId),
+          listJobQuotes(targetJobId),
+          listJobActivity(targetJobId),
+        ]);
+        setJob(nextJob);
+        setDrawings(
+          [...nextDrawings].sort((left, right) => {
+            if (left.id === nextJob.primaryDrawingId) {
+              return -1;
+            }
+            if (right.id === nextJob.primaryDrawingId) {
+              return 1;
+            }
+            return right.updatedAtIso.localeCompare(left.updatedAtIso);
+          }),
+        );
+        setTasks(nextTasks);
+        setTaskDrafts(Object.fromEntries(nextTasks.map((task) => [task.id, buildTaskDraft(task)])));
+        setQuotes(nextQuotes);
+        setActivity(nextActivity);
+        setErrorMessage(null);
+      } catch (error) {
+        try {
+          const drawing = await getDrawing(targetJobId);
+          if (drawing.jobId && drawing.jobId !== targetJobId) {
+            onNavigate("job", {
+              jobId: drawing.jobId,
+              tab: currentTab,
+              drawingId: requestedDrawingId ?? drawing.id,
+            });
+            return;
+          }
+        } catch {
+          // Fall back to the original job error below if the ID is not a drawing either.
         }
-      } catch {
-        // Fall back to the original job error below if the ID is not a drawing either.
+        setJob(null);
+        setDrawings([]);
+        setTasks([]);
+        setTaskDrafts({});
+        setQuotes([]);
+        setActivity([]);
+        setErrorMessage((error as Error).message);
+      } finally {
+        setIsLoading(false);
       }
-      setJob(null);
-      setDrawings([]);
-      setTasks([]);
-      setTaskDrafts({});
-      setQuotes([]);
-      setActivity([]);
-      setErrorMessage((error as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentTab, onNavigate, requestedDrawingId]);
+    },
+    [currentTab, onNavigate, requestedDrawingId],
+  );
 
   useEffect(() => {
     if (!jobId) {
@@ -433,7 +515,10 @@ export function JobPage({
     setIsLoadingEstimate(true);
     void (async () => {
       try {
-        const [nextEstimate, nextDrawingRecord] = await Promise.all([getJobEstimate(jobId, selectedDrawing.id), getDrawing(selectedDrawing.id)]);
+        const [nextEstimate, nextDrawingRecord] = await Promise.all([
+          getJobEstimate(jobId, selectedDrawing.id),
+          getDrawing(selectedDrawing.id),
+        ]);
         if (cancelled) {
           return;
         }
@@ -466,6 +551,15 @@ export function JobPage({
     setExpandedTaskId(focusTaskId);
   }, [focusTaskId, tasks]);
 
+  useEffect(() => {
+    setTaskDrawingId((current) => {
+      if (current && rootDrawings.some((drawing) => drawing.id === current)) {
+        return current;
+      }
+      return preferredTaskDrawingId;
+    });
+  }, [preferredTaskDrawingId, rootDrawings]);
+
   const handleStageChange = async (stage: JobStage) => {
     if (!job) {
       return;
@@ -494,7 +588,9 @@ export function JobPage({
       const updated = await updateJob(job.id, { archived: !job.isArchived });
       setJob(updated);
       await onRefreshJobs();
-      setNoticeMessage(updated.isArchived ? `Archived ${updated.name}.` : `Restored ${updated.name}.`);
+      setNoticeMessage(
+        updated.isArchived ? `Archived ${updated.name}.` : `Restored ${updated.name}.`,
+      );
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -533,7 +629,7 @@ export function JobPage({
     try {
       const drawing = await createJobDrawing(job.id, {
         ...(sourceDrawingId ? { sourceDrawingId } : {}),
-        ...(name?.trim() ? { name: name.trim() } : {})
+        ...(name?.trim() ? { name: name.trim() } : {}),
       });
       await Promise.all([loadWorkspace(job.id), onRefreshJobs(), onRefreshDrawings()]);
       if (!sourceDrawingId) {
@@ -559,20 +655,26 @@ export function JobPage({
     if (!job || !taskTitle.trim()) {
       return;
     }
+    if (rootDrawings.length > 0 && !taskDrawingId) {
+      setErrorMessage("Choose a drawing for this task.");
+      return;
+    }
     setIsSavingTask(true);
     setErrorMessage(null);
     try {
       const createTaskInput = {
         title: taskTitle.trim(),
         assignedUserId: taskAssignee,
+        drawingId: taskDrawingId,
         dueAtIso: taskDueDate ? new Date(`${taskDueDate}T09:00:00`).toISOString() : null,
         ...(taskDescription.trim() ? { description: taskDescription.trim() } : {}),
-        ...(taskPriority !== "NORMAL" ? { priority: taskPriority } : {})
+        ...(taskPriority !== "NORMAL" ? { priority: taskPriority } : {}),
       };
       await createJobTask(job.id, createTaskInput);
       setTaskTitle("");
       setTaskDueDate("");
       setTaskAssignee(null);
+      setTaskDrawingId(preferredTaskDrawingId);
       setTaskDescription("");
       setTaskPriority("NORMAL");
       setIsTaskFormExpanded(false);
@@ -588,25 +690,36 @@ export function JobPage({
   const handleExpandTask = (task: JobTaskRecord) => {
     setTaskDrafts((current) => ({
       ...current,
-      [task.id]: current[task.id] ?? buildTaskDraft(task)
+      [task.id]: current[task.id] ?? buildTaskDraft(task),
     }));
     setExpandedTaskId((current) => (current === task.id ? null : task.id));
   };
 
-  const handleTaskDraftChange = (taskId: string, field: keyof TaskDraftState, value: string | TaskPriority | null) => {
+  const handleTaskDraftChange = <K extends keyof TaskDraftState>(
+    taskId: string,
+    field: K,
+    value: TaskDraftState[K],
+  ) => {
     setTaskDrafts((current) => ({
       ...current,
       [taskId]: {
-        ...(current[taskId] ?? { title: "", description: "", priority: "NORMAL", assignedUserId: null, dueDate: "" }),
-        [field]: value
-      } as TaskDraftState
+        ...(current[taskId] ?? {
+          title: "",
+          description: "",
+          priority: "NORMAL",
+          assignedUserId: null,
+          drawingId: null,
+          dueDate: "",
+        }),
+        [field]: value,
+      },
     }));
   };
 
   const handleResetTaskDraft = (task: JobTaskRecord) => {
     setTaskDrafts((current) => ({
       ...current,
-      [task.id]: buildTaskDraft(task)
+      [task.id]: buildTaskDraft(task),
     }));
   };
 
@@ -619,6 +732,10 @@ export function JobPage({
       setErrorMessage("Task title is required.");
       return;
     }
+    if (rootDrawings.length > 0 && !draft.drawingId) {
+      setErrorMessage("Choose a drawing for this task.");
+      return;
+    }
     setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
@@ -627,12 +744,13 @@ export function JobPage({
         description: draft.description.trim(),
         priority: draft.priority,
         assignedUserId: draft.assignedUserId,
-        dueAtIso: draft.dueDate ? new Date(`${draft.dueDate}T09:00:00`).toISOString() : null
+        drawingId: draft.drawingId,
+        dueAtIso: draft.dueDate ? new Date(`${draft.dueDate}T09:00:00`).toISOString() : null,
       });
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setTaskDrafts((current) => ({
         ...current,
-        [updated.id]: buildTaskDraft(updated)
+        [updated.id]: buildTaskDraft(updated),
       }));
       await onRefreshJobs();
       setNoticeMessage("Task details saved.");
@@ -677,7 +795,7 @@ export function JobPage({
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setTaskDrafts((current) => ({
         ...current,
-        [updated.id]: buildTaskDraft(updated)
+        [updated.id]: buildTaskDraft(updated),
       }));
       await onRefreshJobs();
       setNoticeMessage(updated.isCompleted ? "Task completed." : "Task reopened.");
@@ -717,7 +835,12 @@ export function JobPage({
     setIsSavingQuote(true);
     setErrorMessage(null);
     try {
-      const quote = await createJobQuoteSnapshot(job.id, ancillaryItems, manualEntries, selectedDrawing.id);
+      const quote = await createJobQuoteSnapshot(
+        job.id,
+        ancillaryItems,
+        manualEntries,
+        selectedDrawing.id,
+      );
       setQuotes((current) => [quote, ...current]);
       await onRefreshJobs();
 
@@ -739,21 +862,35 @@ export function JobPage({
         materialSections: materialSections.map((s) => ({
           title: s.title,
           subtotal: s.subtotal,
-          rows: s.rows.map((r) => ({ label: r.label, unit: r.unit, quantity: r.quantity, rate: r.rate, total: r.total }))
+          rows: s.rows.map((r) => ({
+            label: r.label,
+            unit: r.unit,
+            quantity: r.quantity,
+            rate: r.rate,
+            total: r.total,
+          })),
         })),
         labourSections: labourSections.map((s) => ({
           title: s.title,
           subtotal: s.subtotal,
-          rows: s.rows.map((r) => ({ label: r.label, unit: r.unit, quantity: r.quantity, rate: r.rate, total: r.total }))
+          rows: s.rows.map((r) => ({
+            label: r.label,
+            unit: r.unit,
+            quantity: r.quantity,
+            rate: r.rate,
+            total: r.total,
+          })),
         })),
         totals: pricedEstimate.totals,
         warnings: pricedEstimate.warnings,
         estimateSegments: segments,
-        segmentOrdinalById: ordinalMap
+        segmentOrdinalById: ordinalMap,
       });
 
       if (!opened) {
-        setErrorMessage("Could not open quote PDF. Please allow pop-ups for this site and try again.");
+        setErrorMessage(
+          "Could not open quote PDF. Please allow pop-ups for this site and try again.",
+        );
       } else {
         setNoticeMessage("Quote saved and PDF generated.");
       }
@@ -802,8 +939,14 @@ export function JobPage({
       <section className="portal-page">
         <div className="portal-empty-state">
           <h1>No job selected</h1>
-          <p>Open a customer workspace and choose a job to review drawings, estimates, and activity.</p>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("customers")}>
+          <p>
+            Open a customer workspace and choose a job to review drawings, estimates, and activity.
+          </p>
+          <button
+            type="button"
+            className="portal-secondary-button portal-compact-button"
+            onClick={() => onNavigate("customers")}
+          >
             Browse customers
           </button>
         </div>
@@ -827,7 +970,11 @@ export function JobPage({
         <div className="portal-empty-state">
           <h1>Job not found</h1>
           <p>The selected job could not be loaded.</p>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("customers")}>
+          <button
+            type="button"
+            className="portal-secondary-button portal-compact-button"
+            onClick={() => onNavigate("customers")}
+          >
             Back to customers
           </button>
         </div>
@@ -866,26 +1013,53 @@ export function JobPage({
           </div>
         </div>
         <div className="portal-header-actions">
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={handleOpenEditDetails}>
+          <button
+            type="button"
+            className="portal-secondary-button portal-compact-button"
+            onClick={handleOpenEditDetails}
+          >
             Edit details
           </button>
-          <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleArchiveToggle()} disabled={isSavingStage}>
+          <button
+            type="button"
+            className="portal-secondary-button portal-compact-button"
+            onClick={() => void handleArchiveToggle()}
+            disabled={isSavingStage}
+          >
             {job.isArchived ? "Restore job" : "Archive job"}
           </button>
           {canDeleteJob ? (
-            <button type="button" className="portal-danger-button portal-compact-button" onClick={() => setConfirmDeleteJob(true)} disabled={isDeletingJob}>
+            <button
+              type="button"
+              className="portal-danger-button portal-compact-button"
+              onClick={() => setConfirmDeleteJob(true)}
+              disabled={isDeletingJob}
+            >
               {isDeletingJob ? "Deleting..." : "Delete job"}
             </button>
           ) : null}
         </div>
       </header>
 
-      {errorMessage ? <div className="portal-inline-message portal-inline-error">{errorMessage}</div> : null}
-      {noticeMessage ? <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div> : null}
+      {errorMessage ? (
+        <div className="portal-inline-message portal-inline-error">{errorMessage}</div>
+      ) : null}
+      {noticeMessage ? (
+        <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div>
+      ) : null}
 
-      <div className="portal-filter-row portal-job-tab-row" role="tablist" aria-label="Job sections">
+      <div
+        className="portal-filter-row portal-job-tab-row"
+        role="tablist"
+        aria-label="Job sections"
+      >
         {(Object.keys(JOB_TAB_LABELS) as JobTab[]).map((jobTab) => (
-          <button key={jobTab} type="button" className={currentTab === jobTab ? "is-active" : undefined} onClick={() => navigateToJob(jobTab, selectedDrawing?.id ?? null)}>
+          <button
+            key={jobTab}
+            type="button"
+            className={currentTab === jobTab ? "is-active" : undefined}
+            onClick={() => navigateToJob(jobTab, selectedDrawing?.id ?? null)}
+          >
             {JOB_TAB_LABELS[jobTab]}
           </button>
         ))}
@@ -893,351 +1067,619 @@ export function JobPage({
 
       {currentTab === "overview" ? (
         <>
-        <section className="portal-surface-card portal-job-drawing-timeline-card">
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">Drawing history</span>
-              <h2>Drawing revision timeline</h2>
-            </div>
-          </div>
-          {drawingGroups.length === 0 ? <p className="portal-empty-copy">No drawings yet. Create a drawing to start this job timeline.</p> : null}
-          <div className="portal-job-drawing-timeline" role="list" aria-label="Drawing revision timeline">
-            {drawingGroups.map(({ rootDrawing, chain }) => (
-              <section key={rootDrawing.id} className="portal-job-drawing-timeline-group" role="listitem">
-                <div className="portal-job-drawing-timeline-group-header">
-                  <div>
-                    <span className="portal-section-kicker">{chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}</span>
-                    <h3>{rootDrawing.name}</h3>
-                  </div>
-                  <button type="button" className="portal-text-button" onClick={() => onNavigate("drawing", { drawingId: rootDrawing.id })}>
-                    View chain
-                  </button>
-                </div>
-                <div className="portal-job-drawing-timeline-chain">
-                  {chain.map((drawing, index) => {
-                    const isLatest = index === chain.length - 1;
-                    return (
-                      <div key={drawing.id} className="portal-job-drawing-timeline-node-wrap">
-                        <button
-                          type="button"
-                          className={`portal-job-drawing-timeline-node${isLatest ? " is-latest" : ""}${drawing.status === "QUOTED" ? " is-quoted" : ""}${drawing.isArchived ? " is-archived" : ""}`}
-                          onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
-                        >
-                          <span className="portal-job-drawing-timeline-node-label">{getRevisionLabel(drawing)}</span>
-                          <strong>{drawing.name}</strong>
-                          <span>{formatDateOnly(drawing.createdAtIso)}</span>
-                        </button>
-                        {index < chain.length - 1 ? <div className="portal-job-drawing-timeline-connector" aria-hidden="true" /> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        </section>
-
-        <div className="portal-dashboard-layout portal-job-overview-layout">
-          <section className="portal-surface-card portal-dashboard-primary">
+          <section className="portal-surface-card portal-job-drawing-timeline-card">
             <div className="portal-section-heading">
               <div>
-                <span className="portal-section-kicker">Pipeline</span>
-                <h2>Stage and tasks</h2>
+                <span className="portal-section-kicker">Drawing history</span>
+                <h2>Drawing revision timeline</h2>
               </div>
             </div>
-
-            <div className="portal-job-meta-grid">
-              <label className="portal-customer-edit-field">
-                <span>Job stage</span>
-                <select value={job.stage} onChange={(event) => void handleStageChange(event.target.value as JobStage)} disabled={isSavingStage}>
-                  {JOB_STAGES.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="portal-customer-edit-field">
-                <span>Owner</span>
-                <strong>{job.ownerDisplayName || session.user.displayName}</strong>
-              </div>
-              <div className="portal-customer-edit-field">
-                <span>Next action</span>
-                <strong>{sortedTasks.find((entry) => !entry.isCompleted)?.title ?? "No open tasks"}</strong>
-              </div>
-            </div>
-
-            <div className="portal-job-task-form">
-              <div className="portal-job-task-form-compact-row">
-                <label className="portal-customer-edit-field portal-task-input-field portal-job-task-title-field">
-                  <span>Task title</span>
-                  <input
-                    placeholder="Add follow-up task"
-                    value={taskTitle}
-                    onChange={(event) => setTaskTitle(event.target.value)}
-                    onFocus={() => {
-                      if (taskDescription || taskDueDate || taskAssignee || taskPriority !== "NORMAL") {
-                        setIsTaskFormExpanded(true);
-                      }
-                    }}
-                    onKeyDown={(event) => { if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask(); }}
-                  />
-                </label>
-                <div className="portal-job-task-form-actions">
-                  <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsTaskFormExpanded((current) => !current)}>
-                    {isTaskFormExpanded ? "Hide details" : "Details"}
-                  </button>
-                  <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleCreateTask()} disabled={isSavingTask || !taskTitle.trim()}>
-                    {isSavingTask ? "Saving..." : "Add task"}
-                  </button>
-                </div>
-              </div>
-              {isTaskFormExpanded ? (
-                <>
-                  <div className="portal-job-task-form-row">
-                    <label className="portal-customer-edit-field portal-task-input-field">
-                      <span>Due date</span>
-                      <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} />
-                    </label>
-                    <label className="portal-customer-edit-field portal-task-input-field">
-                      <span>Assignee</span>
-                      <select value={taskAssignee ?? ""} onChange={(event) => setTaskAssignee(event.target.value || null)}>
-                        <option value="">Unassigned</option>
-                        {users.map((user) => (
-                          <option key={user.id} value={user.id}>{user.displayName}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <div className="portal-job-task-form-row portal-job-task-form-row-compact-options">
-                    <label className="portal-customer-edit-field portal-task-input-field">
-                      <span>Priority</span>
-                      <select className="portal-task-priority-select" value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}>
-                        {TASK_PRIORITIES.map((p) => (
-                          <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <label className="portal-customer-edit-field portal-task-input-field">
-                    <span>Description</span>
-                    <textarea className="portal-task-description-input" placeholder="Add notes, handoff context, or next steps" rows={3} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} />
-                  </label>
-                </>
-              ) : null}
-            </div>
-
-            <div className="portal-job-task-list">
-              {sortedTasks.length === 0 ? <p className="portal-empty-copy">No tasks on this job yet.</p> : null}
-              {sortedTasks.map((task) => {
-                const isExpanded = expandedTaskId === task.id;
-                const taskDraft = taskDrafts[task.id] ?? buildTaskDraft(task);
-                const dueTone = getTaskDueTone(task);
-                const dueLabel = getTaskDueLabel(task);
-                return (
-                  <div key={task.id} className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}${dueTone === "overdue" ? " is-overdue" : ""}`}>
-                    <div className="portal-job-task-card-header">
-                      <div className="portal-job-task-card-left">
-                        <button type="button" className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`} onClick={() => void handleToggleTask(task)} aria-label={task.isCompleted ? `Reopen task ${task.title}` : `Complete task ${task.title}`} disabled={savingTaskId === task.id}>
-                          {task.isCompleted ? "✓" : ""}
-                        </button>
-                        <div className="portal-job-task-card-title">
-                          <h3 className={`portal-task-card-heading${task.isCompleted ? " portal-task-done-text" : ""}`}>{task.title}</h3>
-                          <span className="portal-job-task-card-meta">
-                            {task.assignedUserDisplayName || "Unassigned"}
-                            {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="portal-job-task-card-right">
-                        {dueLabel ? (
-                          <span className={`portal-task-due-badge is-${dueTone}`}>{dueLabel}</span>
-                        ) : null}
-                        {task.priority !== "NORMAL" ? (
-                          <span className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
-                        ) : null}
-                        <span className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}>
-                          {task.isCompleted ? "Done" : "Open"}
-                        </span>
-                        <button
-                          type="button"
-                          className="portal-task-expand-button"
-                          onClick={() => handleExpandTask(task)}
-                          aria-expanded={isExpanded}
-                          aria-label={isExpanded ? `Collapse task ${task.title}` : `Expand task ${task.title}`}
-                        >
-                          {isExpanded ? "Hide" : "Edit"}
-                        </button>
-                      </div>
-                    </div>
-                    {task.description && !isExpanded ? (
-                      <p className="portal-job-task-card-description-preview">{task.description}</p>
-                    ) : null}
-                    {isExpanded ? (
-                      <div className="portal-job-task-card-detail">
-                        <div className="portal-job-task-card-fields portal-job-task-card-fields-expanded">
-                          <label className="portal-customer-edit-field">
-                            <span>Title</span>
-                            <input value={taskDraft.title} maxLength={240} onChange={(event) => handleTaskDraftChange(task.id, "title", event.target.value)} />
-                          </label>
-                          <label className="portal-customer-edit-field portal-job-task-card-field-wide">
-                            <span>Description</span>
-                            <textarea rows={4} value={taskDraft.description} maxLength={2000} onChange={(event) => handleTaskDraftChange(task.id, "description", event.target.value)} />
-                          </label>
-                        </div>
-                        <div className="portal-job-task-card-fields">
-                          <label className="portal-customer-edit-field">
-                            <span>Priority</span>
-                            <select value={taskDraft.priority} onChange={(event) => handleTaskDraftChange(task.id, "priority", event.target.value as TaskPriority)}>
-                              {TASK_PRIORITIES.map((p) => (
-                                <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="portal-customer-edit-field">
-                            <span>Assignee</span>
-                            <select value={taskDraft.assignedUserId ?? ""} onChange={(event) => handleTaskDraftChange(task.id, "assignedUserId", event.target.value || null)}>
-                              <option value="">Unassigned</option>
-                              {users.map((user) => (
-                                <option key={user.id} value={user.id}>{user.displayName}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="portal-customer-edit-field">
-                            <span>Due date</span>
-                            <input type="date" value={taskDraft.dueDate} onChange={(event) => handleTaskDraftChange(task.id, "dueDate", event.target.value)} />
-                          </label>
-                        </div>
-                        <div className="portal-job-task-card-history">
-                          <span>Created {formatTaskTimestamp(task.createdAtIso)}</span>
-                          {task.completedAtIso ? <span>Completed {formatTaskTimestamp(task.completedAtIso)} by {task.completedByDisplayName || "Team member"}</span> : null}
-                          <span>Last updated {formatTaskTimestamp(task.updatedAtIso)}</span>
-                        </div>
-                        <div className="portal-job-task-card-actions">
-                          <button type="button" className="portal-text-button" onClick={() => void handleSaveTaskDraft(task)} disabled={savingTaskId === task.id || !taskDraft.title.trim()}>
-                            {savingTaskId === task.id ? "Saving..." : "Save changes"}
-                          </button>
-                          <button type="button" className="portal-text-button" onClick={() => handleResetTaskDraft(task)} disabled={savingTaskId === task.id}>
-                            Reset
-                          </button>
-                          <button type="button" className="portal-text-button" onClick={() => void handleToggleTask(task)}>
-                            {task.isCompleted ? "Reopen" : "Complete"}
-                          </button>
-                          <button type="button" className="portal-text-button portal-danger-text" onClick={() => void handleDeleteTask(task)}>
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {job.notes ? (
-            <div className="portal-dashboard-side">
-              <section className="portal-surface-card portal-dashboard-activity">
-                <div className="portal-section-heading">
-                  <div>
-                    <span className="portal-section-kicker">Job notes</span>
-                    <h2>Notes</h2>
-                  </div>
-                </div>
-                <p className="portal-empty-copy portal-job-notes-copy" style={{ whiteSpace: "pre-wrap" }}>{job.notes}</p>
-              </section>
-            </div>
-          ) : null}
-
-          <section className="portal-surface-card portal-job-primary-card">
-            <div className="portal-section-heading">
-              <div>
-                <span className="portal-section-kicker">Drawings</span>
-                <h2>Drawings</h2>
-              </div>
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={openCreateDrawingModal} disabled={isAddingDrawing}>
-                {isAddingDrawing ? "Adding..." : "New drawing"}
-              </button>
-            </div>
-            <div className="portal-customer-drawing-grid">
-              {sortedDrawings.length === 0 ? <p className="portal-empty-copy">No drawings yet. Create a drawing to get started.</p> : null}
-              {sortedDrawings.map((drawing) => {
-                const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
-                const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
-                return (
-                  <article key={drawing.id} className="portal-customer-drawing-card">
-                    <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => onNavigate("drawing", { drawingId: drawing.id })} onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        onNavigate("drawing", { drawingId: drawing.id });
-                      }
-                    }}>
-                      <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
-                    </div>
-                    <div className="portal-customer-drawing-card-body">
-                      <div className="portal-customer-drawing-card-head">
-                        <div className="portal-customer-drawing-card-copy">
-                          <h3>{drawing.name}</h3>
-                          <span>Latest: {getRevisionLabel(latestRevision)}</span>
-                        </div>
-                        <div className="portal-customer-drawing-card-badges">
-                          {latestRevision.status === "QUOTED" ? <span className="portal-customer-drawing-badge is-quoted">Quoted</span> : null}
-                        </div>
-                      </div>
-                      <div className="portal-customer-drawing-card-meta">
-                        <span>{drawing.segmentCount} segments | {drawing.gateCount} gates</span>
-                        <span>{revCount} revision{revCount !== 1 ? "s" : ""}</span>
-                        <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                      </div>
-                      <div className="portal-customer-drawing-card-footer">
-                        <button type="button" className="portal-text-button" onClick={() => onNavigate("drawing", { drawingId: drawing.id })}>
-                          View drawing
-                        </button>
-                        <button type="button" className="portal-text-button" onClick={() => onNavigate("editor", { drawingId: drawing.id })}>
-                          Open editor
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="portal-surface-card">
-            <div className="portal-section-heading">
-              <div>
-                <span className="portal-section-kicker">Quotes</span>
-                <h2>Revision quotes</h2>
-              </div>
-            </div>
-            <div className="estimate-ancillary-list">
-              {drawingGroups.length === 0 ? <p className="portal-empty-copy">Add a drawing to generate a quote.</p> : null}
+            {drawingGroups.length === 0 ? (
+              <p className="portal-empty-copy">
+                No drawings yet. Create a drawing to start this job timeline.
+              </p>
+            ) : null}
+            <div
+              className="portal-job-drawing-timeline"
+              role="list"
+              aria-label="Drawing revision timeline"
+            >
               {drawingGroups.map(({ rootDrawing, chain }) => (
-                <div key={rootDrawing.id} className="portal-revision-chain-group">
-                  <div className="estimate-item-copy portal-revision-chain-header">
-                    <strong>{rootDrawing.name}</strong>
-                    <span>{chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}</span>
+                <section
+                  key={rootDrawing.id}
+                  className="portal-job-drawing-timeline-group"
+                  role="listitem"
+                >
+                  <div className="portal-job-drawing-timeline-group-header">
+                    <div>
+                      <span className="portal-section-kicker">
+                        {chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}
+                      </span>
+                      <h3>{rootDrawing.name}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() => onNavigate("drawing", { drawingId: rootDrawing.id })}
+                    >
+                      View chain
+                    </button>
                   </div>
-                  {chain.map((drawing) => {
-                    const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
-                    return (
-                      <article key={drawing.id} className="estimate-ancillary-row">
-                        <div className="estimate-item-copy">
-                          <strong>{getRevisionLabel(drawing)}</strong>
-                          <span>{drawingQuote ? `${drawing.name} • ${drawing.status}` : `${drawing.name} • No quote saved`}</span>
+                  <div className="portal-job-drawing-timeline-chain">
+                    {chain.map((drawing, index) => {
+                      const isLatest = index === chain.length - 1;
+                      return (
+                        <div key={drawing.id} className="portal-job-drawing-timeline-node-wrap">
+                          <button
+                            type="button"
+                            className={`portal-job-drawing-timeline-node${isLatest ? " is-latest" : ""}${drawing.status === "QUOTED" ? " is-quoted" : ""}${drawing.isArchived ? " is-archived" : ""}`}
+                            onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                          >
+                            <span className="portal-job-drawing-timeline-node-label">
+                              {getRevisionLabel(drawing)}
+                            </span>
+                            <strong>{drawing.name}</strong>
+                            <span>{formatDateOnly(drawing.createdAtIso)}</span>
+                          </button>
+                          {index < chain.length - 1 ? (
+                            <div
+                              className="portal-job-drawing-timeline-connector"
+                              aria-hidden="true"
+                            />
+                          ) : null}
                         </div>
-                        <span>{drawingQuote ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost) : "No quote yet"}</span>
-                        <button type="button" className="portal-text-button" onClick={() => navigateToJob("estimate", drawing.id)}>
-                          {drawingQuote ? "Update" : "Generate"}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </section>
               ))}
             </div>
           </section>
-        </div>
+
+          <div className="portal-dashboard-layout portal-job-overview-layout">
+            <section className="portal-surface-card portal-dashboard-primary">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Pipeline</span>
+                  <h2>Stage and tasks</h2>
+                </div>
+              </div>
+
+              <div className="portal-job-meta-grid">
+                <label className="portal-customer-edit-field">
+                  <span>Job stage</span>
+                  <select
+                    value={job.stage}
+                    onChange={(event) => void handleStageChange(event.target.value as JobStage)}
+                    disabled={isSavingStage}
+                  >
+                    {JOB_STAGES.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {stage.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="portal-customer-edit-field">
+                  <span>Owner</span>
+                  <strong>{job.ownerDisplayName || session.user.displayName}</strong>
+                </div>
+                <div className="portal-customer-edit-field">
+                  <span>Next action</span>
+                  <strong>
+                    {sortedTasks.find((entry) => !entry.isCompleted)?.title ?? "No open tasks"}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="portal-job-task-form">
+                {rootDrawings.length === 0 ? (
+                  <p className="portal-empty-copy">
+                    Create a drawing for this job before adding drawing-specific tasks.
+                  </p>
+                ) : null}
+                <div className="portal-job-task-form-compact-row">
+                  <label className="portal-customer-edit-field portal-task-input-field portal-job-task-title-field">
+                    <span>Task title</span>
+                    <input
+                      placeholder="Add follow-up task"
+                      value={taskTitle}
+                      onChange={(event) => setTaskTitle(event.target.value)}
+                      onFocus={() => {
+                        if (
+                          taskDescription ||
+                          taskDueDate ||
+                          taskAssignee ||
+                          taskPriority !== "NORMAL"
+                        ) {
+                          setIsTaskFormExpanded(true);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask();
+                      }}
+                    />
+                  </label>
+                  <div className="portal-job-task-form-actions">
+                    <button
+                      type="button"
+                      className="portal-secondary-button portal-compact-button"
+                      onClick={() => setIsTaskFormExpanded((current) => !current)}
+                    >
+                      {isTaskFormExpanded ? "Hide details" : "Details"}
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-primary-button portal-compact-button"
+                      onClick={() => void handleCreateTask()}
+                      disabled={
+                        isSavingTask ||
+                        !taskTitle.trim() ||
+                        rootDrawings.length === 0 ||
+                        (rootDrawings.length > 0 && !taskDrawingId)
+                      }
+                    >
+                      {isSavingTask ? "Saving..." : "Add task"}
+                    </button>
+                  </div>
+                </div>
+                {isTaskFormExpanded ? (
+                  <>
+                    <div className="portal-job-task-form-row">
+                      <label className="portal-customer-edit-field portal-task-input-field">
+                        <span>Drawing</span>
+                        <select
+                          value={taskDrawingId ?? ""}
+                          onChange={(event) => setTaskDrawingId(event.target.value || null)}
+                          disabled={rootDrawings.length === 0}
+                        >
+                          <option value="">Choose drawing</option>
+                          {rootDrawings.map((drawing) => (
+                            <option key={drawing.id} value={drawing.id}>
+                              {drawing.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="portal-customer-edit-field portal-task-input-field">
+                        <span>Due date</span>
+                        <input
+                          type="date"
+                          value={taskDueDate}
+                          onChange={(event) => setTaskDueDate(event.target.value)}
+                        />
+                      </label>
+                      <label className="portal-customer-edit-field portal-task-input-field">
+                        <span>Assignee</span>
+                        <select
+                          value={taskAssignee ?? ""}
+                          onChange={(event) => setTaskAssignee(event.target.value || null)}
+                        >
+                          <option value="">Unassigned</option>
+                          {users.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="portal-job-task-form-row portal-job-task-form-row-compact-options">
+                      <label className="portal-customer-edit-field portal-task-input-field">
+                        <span>Priority</span>
+                        <select
+                          className="portal-task-priority-select"
+                          value={taskPriority}
+                          onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}
+                        >
+                          {TASK_PRIORITIES.map((p) => (
+                            <option key={p} value={p}>
+                              {p.charAt(0) + p.slice(1).toLowerCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="portal-customer-edit-field portal-task-input-field">
+                      <span>Description</span>
+                      <textarea
+                        className="portal-task-description-input"
+                        placeholder="Add notes, handoff context, or next steps"
+                        rows={3}
+                        value={taskDescription}
+                        onChange={(event) => setTaskDescription(event.target.value)}
+                      />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+
+              <div className="portal-job-task-list">
+                {sortedTasks.length === 0 ? (
+                  <p className="portal-empty-copy">No tasks on this job yet.</p>
+                ) : null}
+                {sortedTasks.map((task) => {
+                  const isExpanded = expandedTaskId === task.id;
+                  const taskDraft = taskDrafts[task.id] ?? buildTaskDraft(task);
+                  const dueTone = getTaskDueTone(task);
+                  const dueLabel = getTaskDueLabel(task);
+                  return (
+                    <div
+                      key={task.id}
+                      className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}${dueTone === "overdue" ? " is-overdue" : ""}`}
+                    >
+                      <div className="portal-job-task-card-header">
+                        <div className="portal-job-task-card-left">
+                          <button
+                            type="button"
+                            className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`}
+                            onClick={() => void handleToggleTask(task)}
+                            aria-label={
+                              task.isCompleted
+                                ? `Reopen task ${task.title}`
+                                : `Complete task ${task.title}`
+                            }
+                            disabled={savingTaskId === task.id}
+                          >
+                            {task.isCompleted ? "✓" : ""}
+                          </button>
+                          <div className="portal-job-task-card-title">
+                            <h3
+                              className={`portal-task-card-heading${task.isCompleted ? " portal-task-done-text" : ""}`}
+                            >
+                              {task.title}
+                            </h3>
+                            <span className="portal-job-task-card-meta">
+                              {task.drawingName ? `${task.drawingName} · ` : ""}
+                              {task.assignedUserDisplayName || "Unassigned"}
+                              {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="portal-job-task-card-right">
+                          {dueLabel ? (
+                            <span className={`portal-task-due-badge is-${dueTone}`}>
+                              {dueLabel}
+                            </span>
+                          ) : null}
+                          {task.priority !== "NORMAL" ? (
+                            <span
+                              className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}
+                            >
+                              {task.priority}
+                            </span>
+                          ) : null}
+                          <span
+                            className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}
+                          >
+                            {task.isCompleted ? "Done" : "Open"}
+                          </span>
+                          <button
+                            type="button"
+                            className="portal-task-expand-button"
+                            onClick={() => handleExpandTask(task)}
+                            aria-expanded={isExpanded}
+                            aria-label={
+                              isExpanded
+                                ? `Collapse task ${task.title}`
+                                : `Expand task ${task.title}`
+                            }
+                          >
+                            {isExpanded ? "Hide" : "Edit"}
+                          </button>
+                        </div>
+                      </div>
+                      {task.description && !isExpanded ? (
+                        <p className="portal-job-task-card-description-preview">
+                          {task.description}
+                        </p>
+                      ) : null}
+                      {isExpanded ? (
+                        <div className="portal-job-task-card-detail">
+                          <div className="portal-job-task-card-fields portal-job-task-card-fields-expanded">
+                            <label className="portal-customer-edit-field">
+                              <span>Title</span>
+                              <input
+                                value={taskDraft.title}
+                                maxLength={240}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(task.id, "title", event.target.value)
+                                }
+                              />
+                            </label>
+                            <label className="portal-customer-edit-field portal-job-task-card-field-wide">
+                              <span>Description</span>
+                              <textarea
+                                rows={4}
+                                value={taskDraft.description}
+                                maxLength={2000}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(task.id, "description", event.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="portal-job-task-card-fields">
+                            <label className="portal-customer-edit-field">
+                              <span>Drawing</span>
+                              <select
+                                value={taskDraft.drawingId ?? ""}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(
+                                    task.id,
+                                    "drawingId",
+                                    event.target.value || null,
+                                  )
+                                }
+                                disabled={rootDrawings.length === 0}
+                              >
+                                <option value="">Choose drawing</option>
+                                {rootDrawings.map((drawing) => (
+                                  <option key={drawing.id} value={drawing.id}>
+                                    {drawing.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="portal-customer-edit-field">
+                              <span>Priority</span>
+                              <select
+                                value={taskDraft.priority}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(
+                                    task.id,
+                                    "priority",
+                                    event.target.value as TaskPriority,
+                                  )
+                                }
+                              >
+                                {TASK_PRIORITIES.map((p) => (
+                                  <option key={p} value={p}>
+                                    {p.charAt(0) + p.slice(1).toLowerCase()}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="portal-customer-edit-field">
+                              <span>Assignee</span>
+                              <select
+                                value={taskDraft.assignedUserId ?? ""}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(
+                                    task.id,
+                                    "assignedUserId",
+                                    event.target.value || null,
+                                  )
+                                }
+                              >
+                                <option value="">Unassigned</option>
+                                {users.map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.displayName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="portal-customer-edit-field">
+                              <span>Due date</span>
+                              <input
+                                type="date"
+                                value={taskDraft.dueDate}
+                                onChange={(event) =>
+                                  handleTaskDraftChange(task.id, "dueDate", event.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="portal-job-task-card-history">
+                            <span>Created {formatTaskTimestamp(task.createdAtIso)}</span>
+                            {task.completedAtIso ? (
+                              <span>
+                                Completed {formatTaskTimestamp(task.completedAtIso)} by{" "}
+                                {task.completedByDisplayName || "Team member"}
+                              </span>
+                            ) : null}
+                            <span>Last updated {formatTaskTimestamp(task.updatedAtIso)}</span>
+                          </div>
+                          <div className="portal-job-task-card-actions">
+                            <button
+                              type="button"
+                              className="portal-text-button"
+                              onClick={() => void handleSaveTaskDraft(task)}
+                              disabled={savingTaskId === task.id || !taskDraft.title.trim()}
+                            >
+                              {savingTaskId === task.id ? "Saving..." : "Save changes"}
+                            </button>
+                            <button
+                              type="button"
+                              className="portal-text-button"
+                              onClick={() => handleResetTaskDraft(task)}
+                              disabled={savingTaskId === task.id}
+                            >
+                              Reset
+                            </button>
+                            <button
+                              type="button"
+                              className="portal-text-button"
+                              onClick={() => void handleToggleTask(task)}
+                            >
+                              {task.isCompleted ? "Reopen" : "Complete"}
+                            </button>
+                            <button
+                              type="button"
+                              className="portal-text-button portal-danger-text"
+                              onClick={() => void handleDeleteTask(task)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {job.notes ? (
+              <div className="portal-dashboard-side">
+                <section className="portal-surface-card portal-dashboard-activity">
+                  <div className="portal-section-heading">
+                    <div>
+                      <span className="portal-section-kicker">Job notes</span>
+                      <h2>Notes</h2>
+                    </div>
+                  </div>
+                  <p
+                    className="portal-empty-copy portal-job-notes-copy"
+                    style={{ whiteSpace: "pre-wrap" }}
+                  >
+                    {job.notes}
+                  </p>
+                </section>
+              </div>
+            ) : null}
+
+            <section className="portal-surface-card portal-job-primary-card">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Drawings</span>
+                  <h2>Drawings</h2>
+                </div>
+                <button
+                  type="button"
+                  className="portal-secondary-button portal-compact-button"
+                  onClick={openCreateDrawingModal}
+                  disabled={isAddingDrawing}
+                >
+                  {isAddingDrawing ? "Adding..." : "New drawing"}
+                </button>
+              </div>
+              <div className="portal-customer-drawing-grid">
+                {sortedDrawings.length === 0 ? (
+                  <p className="portal-empty-copy">
+                    No drawings yet. Create a drawing to get started.
+                  </p>
+                ) : null}
+                {sortedDrawings.map((drawing) => {
+                  const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
+                  const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
+                  return (
+                    <article key={drawing.id} className="portal-customer-drawing-card">
+                      <div
+                        className="portal-customer-drawing-card-preview"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            onNavigate("drawing", { drawingId: drawing.id });
+                          }
+                        }}
+                      >
+                        <DrawingPreview
+                          layout={drawing.previewLayout}
+                          label={drawing.name}
+                          variant="card"
+                        />
+                      </div>
+                      <div className="portal-customer-drawing-card-body">
+                        <div className="portal-customer-drawing-card-head">
+                          <div className="portal-customer-drawing-card-copy">
+                            <h3>{drawing.name}</h3>
+                            <span>Latest: {getRevisionLabel(latestRevision)}</span>
+                          </div>
+                          <div className="portal-customer-drawing-card-badges">
+                            {latestRevision.status === "QUOTED" ? (
+                              <span className="portal-customer-drawing-badge is-quoted">
+                                Quoted
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="portal-customer-drawing-card-meta">
+                          <span>
+                            {drawing.segmentCount} segments | {drawing.gateCount} gates
+                          </span>
+                          <span>
+                            {revCount} revision{revCount !== 1 ? "s" : ""}
+                          </span>
+                          <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
+                        </div>
+                        <div className="portal-customer-drawing-card-footer">
+                          <button
+                            type="button"
+                            className="portal-text-button"
+                            onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                          >
+                            View drawing
+                          </button>
+                          <button
+                            type="button"
+                            className="portal-text-button"
+                            onClick={() => onNavigate("editor", { drawingId: drawing.id })}
+                          >
+                            Open editor
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="portal-surface-card">
+              <div className="portal-section-heading">
+                <div>
+                  <span className="portal-section-kicker">Quotes</span>
+                  <h2>Revision quotes</h2>
+                </div>
+              </div>
+              <div className="estimate-ancillary-list">
+                {drawingGroups.length === 0 ? (
+                  <p className="portal-empty-copy">Add a drawing to generate a quote.</p>
+                ) : null}
+                {drawingGroups.map(({ rootDrawing, chain }) => (
+                  <div key={rootDrawing.id} className="portal-revision-chain-group">
+                    <div className="estimate-item-copy portal-revision-chain-header">
+                      <strong>{rootDrawing.name}</strong>
+                      <span>
+                        {chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    {chain.map((drawing) => {
+                      const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
+                      return (
+                        <article key={drawing.id} className="estimate-ancillary-row">
+                          <div className="estimate-item-copy">
+                            <strong>{getRevisionLabel(drawing)}</strong>
+                            <span>
+                              {drawingQuote
+                                ? `${drawing.name} • ${drawing.status}`
+                                : `${drawing.name} • No quote saved`}
+                            </span>
+                          </div>
+                          <span>
+                            {drawingQuote
+                              ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost)
+                              : "No quote yet"}
+                          </span>
+                          <button
+                            type="button"
+                            className="portal-text-button"
+                            onClick={() => navigateToJob("estimate", drawing.id)}
+                          >
+                            {drawingQuote ? "Update" : "Generate"}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
         </>
       ) : null}
 
@@ -1248,7 +1690,12 @@ export function JobPage({
               <span className="portal-section-kicker">All drawings</span>
               <h2>Drawings</h2>
             </div>
-            <button type="button" className="portal-secondary-button portal-compact-button" onClick={openCreateDrawingModal} disabled={isAddingDrawing}>
+            <button
+              type="button"
+              className="portal-secondary-button portal-compact-button"
+              onClick={openCreateDrawingModal}
+              disabled={isAddingDrawing}
+            >
               {isAddingDrawing ? "Adding..." : "New drawing"}
             </button>
           </div>
@@ -1258,13 +1705,26 @@ export function JobPage({
               const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
               const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
               return (
-                <article key={drawing.id} className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}`}>
-                  <div className="portal-customer-drawing-card-preview" role="button" tabIndex={0} onClick={() => onNavigate("drawing", { drawingId: drawing.id })} onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      onNavigate("drawing", { drawingId: drawing.id });
-                    }
-                  }}>
-                    <DrawingPreview layout={drawing.previewLayout} label={drawing.name} variant="card" />
+                <article
+                  key={drawing.id}
+                  className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}`}
+                >
+                  <div
+                    className="portal-customer-drawing-card-preview"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        onNavigate("drawing", { drawingId: drawing.id });
+                      }
+                    }}
+                  >
+                    <DrawingPreview
+                      layout={drawing.previewLayout}
+                      label={drawing.name}
+                      variant="card"
+                    />
                   </div>
                   <div className="portal-customer-drawing-card-body">
                     <div className="portal-customer-drawing-card-head">
@@ -1273,23 +1733,47 @@ export function JobPage({
                         <span>Latest: {getRevisionLabel(latestRevision)}</span>
                       </div>
                       <div className="portal-customer-drawing-card-badges">
-                        {latestRevision.status === "QUOTED" ? <span className="portal-customer-drawing-badge is-quoted">Quoted</span> : null}
-                        {drawing.isArchived ? <span className="portal-customer-drawing-badge is-archived">Archived</span> : null}
+                        {latestRevision.status === "QUOTED" ? (
+                          <span className="portal-customer-drawing-badge is-quoted">Quoted</span>
+                        ) : null}
+                        {drawing.isArchived ? (
+                          <span className="portal-customer-drawing-badge is-archived">
+                            Archived
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="portal-customer-drawing-card-meta">
-                      <span>{drawing.segmentCount} segments | {drawing.gateCount} gates</span>
-                      <span>{revCount} revision{revCount !== 1 ? "s" : ""}</span>
+                      <span>
+                        {drawing.segmentCount} segments | {drawing.gateCount} gates
+                      </span>
+                      <span>
+                        {revCount} revision{revCount !== 1 ? "s" : ""}
+                      </span>
                       <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
                     </div>
                     <div className="portal-customer-drawing-card-footer">
-                      <button type="button" className="portal-text-button" onClick={() => onNavigate("drawing", { drawingId: drawing.id })}>
+                      <button
+                        type="button"
+                        className="portal-text-button"
+                        onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                      >
                         View drawing
                       </button>
-                      <button type="button" className="portal-text-button" onClick={() => onNavigate("editor", { drawingId: drawing.id })}>
+                      <button
+                        type="button"
+                        className="portal-text-button"
+                        onClick={() => onNavigate("editor", { drawingId: drawing.id })}
+                      >
                         Open editor
                       </button>
-                      <button type="button" className="portal-text-button" onClick={() => void onToggleDrawingArchived(drawing.id, !drawing.isArchived)}>
+                      <button
+                        type="button"
+                        className="portal-text-button"
+                        onClick={() =>
+                          void onToggleDrawingArchived(drawing.id, !drawing.isArchived)
+                        }
+                      >
                         {drawing.isArchived ? "Unarchive" : "Archive"}
                       </button>
                     </div>
@@ -1310,10 +1794,20 @@ export function JobPage({
                 <h2>Job commercial inputs</h2>
               </div>
               <div className="portal-header-actions">
-                <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => void handleSaveControls()} disabled={isSavingControls || !pricedEstimate}>
+                <button
+                  type="button"
+                  className="portal-secondary-button portal-compact-button"
+                  onClick={() => void handleSaveControls()}
+                  disabled={isSavingControls || !pricedEstimate}
+                >
                   {isSavingControls ? "Saving..." : "Save controls"}
                 </button>
-                <button type="button" className="portal-primary-button portal-compact-button" onClick={() => void handleGenerateQuotePdf()} disabled={isSavingQuote || !pricedEstimate}>
+                <button
+                  type="button"
+                  className="portal-primary-button portal-compact-button"
+                  onClick={() => void handleGenerateQuotePdf()}
+                  disabled={isSavingQuote || !pricedEstimate}
+                >
                   {isSavingQuote ? "Generating..." : "Generate quote PDF"}
                 </button>
               </div>
@@ -1323,7 +1817,10 @@ export function JobPage({
               <div className="portal-job-task-form">
                 <label className="portal-customer-edit-field">
                   <span>Drawing revision</span>
-                  <select value={selectedDrawing.id} onChange={(event) => navigateToJob("estimate", event.target.value)}>
+                  <select
+                    value={selectedDrawing.id}
+                    onChange={(event) => navigateToJob("estimate", event.target.value)}
+                  >
                     {drawingGroups.map(({ rootDrawing, chain }) => (
                       <optgroup key={rootDrawing.id} label={rootDrawing.name}>
                         {chain.map((drawing) => (
@@ -1343,39 +1840,169 @@ export function JobPage({
               <div className="workbook-settings-grid estimate-control-grid">
                 <label>
                   <span>Labour overhead %</span>
-                  <input type="number" min="0" step="0.01" value={workbook.settings.labourOverheadPercent} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.settings.labourOverheadPercent}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Travel / lodge per day</span>
-                  <input type="number" min="0" step="0.01" value={workbook.settings.travelLodgePerDay} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_TRAVEL_RATE_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.settings.travelLodgePerDay}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_TRAVEL_RATE_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Travel days</span>
-                  <input type="number" min="0" step="0.01" value={workbook.commercialInputs.travelDays} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_TRAVEL_DAYS_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.commercialInputs.travelDays}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_TRAVEL_DAYS_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Markup rate</span>
-                  <input type="number" min="0" step="0.01" value={workbook.settings.markupRate} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_MARKUP_RATE_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.settings.markupRate}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_MARKUP_RATE_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Markup units</span>
-                  <input type="number" min="0" step="0.01" value={workbook.commercialInputs.markupUnits} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_MARKUP_UNITS_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.commercialInputs.markupUnits}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_MARKUP_UNITS_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Distribution charge</span>
-                  <input type="number" min="0" step="0.01" value={workbook.settings.distributionCharge} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_DISTRIBUTION_CHARGE_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.settings.distributionCharge}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_DISTRIBUTION_CHARGE_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label>
                   <span>Concrete price per cube</span>
-                  <input type="number" min="0" step="0.01" value={workbook.settings.concretePricePerCube} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE, Number(event.target.value || 0)))} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={workbook.settings.concretePricePerCube}
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE,
+                          Number(event.target.value || 0),
+                        ),
+                      )
+                    }
+                  />
                 </label>
                 <label className="workbook-toggle-field">
                   <span>Hard dig</span>
-                  <input type="checkbox" checked={getManualEntryValue(manualEntries, "LAB_HARD_DIG", workbook.settings.hardDigDefault ? 1 : 0) > 0} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, "LAB_HARD_DIG", event.target.checked ? 1 : 0))} />
+                  <input
+                    type="checkbox"
+                    checked={
+                      getManualEntryValue(
+                        manualEntries,
+                        "LAB_HARD_DIG",
+                        workbook.settings.hardDigDefault ? 1 : 0,
+                      ) > 0
+                    }
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(current, "LAB_HARD_DIG", event.target.checked ? 1 : 0),
+                      )
+                    }
+                  />
                 </label>
                 <label className="workbook-toggle-field">
                   <span>Clear spoils</span>
-                  <input type="checkbox" checked={getManualEntryValue(manualEntries, "LAB_CLEAR_SPOILS", workbook.settings.clearSpoilsDefault ? 1 : 0) > 0} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, "LAB_CLEAR_SPOILS", event.target.checked ? 1 : 0))} />
+                  <input
+                    type="checkbox"
+                    checked={
+                      getManualEntryValue(
+                        manualEntries,
+                        "LAB_CLEAR_SPOILS",
+                        workbook.settings.clearSpoilsDefault ? 1 : 0,
+                      ) > 0
+                    }
+                    onChange={(event) =>
+                      setManualEntries((current) =>
+                        upsertManualEntry(
+                          current,
+                          "LAB_CLEAR_SPOILS",
+                          event.target.checked ? 1 : 0,
+                        ),
+                      )
+                    }
+                  />
                 </label>
               </div>
             ) : null}
@@ -1390,7 +2017,11 @@ export function JobPage({
                 </article>
                 <article>
                   <span>Revision</span>
-                  <strong>{selectedDrawing ? `${selectedDrawing.name} (${getRevisionLabel(selectedDrawing)})` : "None"}</strong>
+                  <strong>
+                    {selectedDrawing
+                      ? `${selectedDrawing.name} (${getRevisionLabel(selectedDrawing)})`
+                      : "None"}
+                  </strong>
                 </article>
                 <article>
                   <span>Materials</span>
@@ -1406,7 +2037,11 @@ export function JobPage({
                 </article>
                 <article>
                   <span>Pricing</span>
-                  <strong>{pricedEstimate.pricingSnapshot.source === "DEFAULT" ? "Default pricing" : "Company pricing"}</strong>
+                  <strong>
+                    {pricedEstimate.pricingSnapshot.source === "DEFAULT"
+                      ? "Default pricing"
+                      : "Company pricing"}
+                  </strong>
                 </article>
               </section>
 
@@ -1416,19 +2051,89 @@ export function JobPage({
                     <span className="portal-section-kicker">Ancillary items</span>
                     <h2>Manual line items</h2>
                   </div>
-                  <button type="button" className="portal-secondary-button" onClick={() => setAncillaryItems((current) => [...current, buildAncillaryItem()])}>
+                  <button
+                    type="button"
+                    className="portal-secondary-button"
+                    onClick={() =>
+                      setAncillaryItems((current) => [...current, buildAncillaryItem()])
+                    }
+                  >
                     Add ancillary line
                   </button>
                 </div>
                 <div className="estimate-ancillary-list">
-                  {ancillaryItems.length === 0 ? <p className="portal-empty-copy">No ancillary items added yet.</p> : null}
+                  {ancillaryItems.length === 0 ? (
+                    <p className="portal-empty-copy">No ancillary items added yet.</p>
+                  ) : null}
                   {ancillaryItems.map((item) => (
                     <div key={item.id} className="estimate-ancillary-row">
-                      <input placeholder="Description" value={item.description} onChange={(event) => setAncillaryItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, description: event.target.value } : entry)))} />
-                      <input type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => setAncillaryItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, quantity: Number(event.target.value || 0) } : entry)))} />
-                      <input type="number" min="0" step="0.01" value={item.materialCost} onChange={(event) => setAncillaryItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, materialCost: Number(event.target.value || 0) } : entry)))} />
-                      <input type="number" min="0" step="0.01" value={item.labourCost} onChange={(event) => setAncillaryItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, labourCost: Number(event.target.value || 0) } : entry)))} />
-                      <button type="button" className="portal-text-button" onClick={() => setAncillaryItems((current) => current.filter((entry) => entry.id !== item.id))}>
+                      <input
+                        placeholder="Description"
+                        value={item.description}
+                        onChange={(event) =>
+                          setAncillaryItems((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, description: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          setAncillaryItems((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, quantity: Number(event.target.value || 0) }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.materialCost}
+                        onChange={(event) =>
+                          setAncillaryItems((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, materialCost: Number(event.target.value || 0) }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.labourCost}
+                        onChange={(event) =>
+                          setAncillaryItems((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, labourCost: Number(event.target.value || 0) }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="portal-text-button"
+                        onClick={() =>
+                          setAncillaryItems((current) =>
+                            current.filter((entry) => entry.id !== item.id),
+                          )
+                        }
+                      >
                         Remove
                       </button>
                     </div>
@@ -1438,8 +2143,18 @@ export function JobPage({
 
               <div className="workbook-sheet-stack">
                 {[
-                  { key: "materials", title: "Materials", sections: materialSections, rateLabel: "Material rate" },
-                  { key: "labour", title: "Labour", sections: labourSections, rateLabel: "Labour rate" }
+                  {
+                    key: "materials",
+                    title: "Materials",
+                    sections: materialSections,
+                    rateLabel: "Material rate",
+                  },
+                  {
+                    key: "labour",
+                    title: "Labour",
+                    sections: labourSections,
+                    rateLabel: "Labour rate",
+                  },
                 ].map((sheet) => (
                   <section key={sheet.key} className="portal-surface-card workbook-sheet-card">
                     <div className="portal-section-heading">
@@ -1448,10 +2163,17 @@ export function JobPage({
                         <h2>{sheet.title}</h2>
                       </div>
                     </div>
-                    {sheet.sections.length === 0 ? <p className="portal-empty-copy">No {sheet.title.toLowerCase()} lines are currently on this job.</p> : null}
+                    {sheet.sections.length === 0 ? (
+                      <p className="portal-empty-copy">
+                        No {sheet.title.toLowerCase()} lines are currently on this job.
+                      </p>
+                    ) : null}
                     <div className="workbook-section-grid">
                       {sheet.sections.map((section) => (
-                        <section key={section.key} className="workbook-section-card estimate-display-card">
+                        <section
+                          key={section.key}
+                          className="workbook-section-card estimate-display-card"
+                        >
                           <header className="workbook-section-head">
                             <div>
                               <h3>{section.title}</h3>
@@ -1459,21 +2181,46 @@ export function JobPage({
                             <strong>{formatMoney(section.subtotal)}</strong>
                           </header>
 
-                          <div className="workbook-table estimate-display-table" role="table" aria-label={`${section.title} ${sheet.title.toLowerCase()} rows`}>
-                            <div className="workbook-table-row workbook-table-head estimate-display-head" role="row">
+                          <div
+                            className="workbook-table estimate-display-table"
+                            role="table"
+                            aria-label={`${section.title} ${sheet.title.toLowerCase()} rows`}
+                          >
+                            <div
+                              className="workbook-table-row workbook-table-head estimate-display-head"
+                              role="row"
+                            >
                               <span>Item</span>
                               <span>Qty</span>
                               <span>{sheet.rateLabel}</span>
                               <span>Total</span>
                             </div>
                             {section.rows.map((row) => (
-                              <div key={row.key} className="workbook-table-row estimate-display-row" role="row">
+                              <div
+                                key={row.key}
+                                className="workbook-table-row estimate-display-row"
+                                role="row"
+                              >
                                 <div className="workbook-item-copy">
                                   <strong>{row.label}</strong>
                                   {row.notes ? <span>{row.notes}</span> : null}
                                 </div>
                                 {row.isEditable ? (
-                                  <input type="number" min="0" step="0.01" value={row.quantity} onChange={(event) => setManualEntries((current) => upsertManualEntry(current, row.key.split(":").at(-1) ?? row.key, Number(event.target.value || 0)))} />
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={row.quantity}
+                                    onChange={(event) =>
+                                      setManualEntries((current) =>
+                                        upsertManualEntry(
+                                          current,
+                                          row.key.split(":").at(-1) ?? row.key,
+                                          Number(event.target.value || 0),
+                                        ),
+                                      )
+                                    }
+                                  />
                                 ) : (
                                   <span>{formatQuantityForDisplay(row.quantity)}</span>
                                 )}
@@ -1509,7 +2256,9 @@ export function JobPage({
                   <strong>{entry.summary}</strong>
                   <span>{entry.entityType}</span>
                 </div>
-                <time className="portal-dashboard-activity-time">{formatTimestamp(entry.createdAtIso)}</time>
+                <time className="portal-dashboard-activity-time">
+                  {formatTimestamp(entry.createdAtIso)}
+                </time>
               </div>
             ))}
           </div>
@@ -1517,7 +2266,10 @@ export function JobPage({
       ) : null}
 
       {isCreatingDrawingModalOpen ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setIsCreatingDrawingModalOpen(false)}>
+        <div
+          className="portal-customer-edit-backdrop portal-modal-backdrop"
+          onClick={() => setIsCreatingDrawingModalOpen(false)}
+        >
           <div
             className="portal-customer-edit-modal portal-modal-card"
             role="dialog"
@@ -1526,7 +2278,13 @@ export function JobPage({
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>New drawing</h2>
-              <button type="button" className="portal-text-button" onClick={() => setIsCreatingDrawingModalOpen(false)}>Close</button>
+              <button
+                type="button"
+                className="portal-text-button"
+                onClick={() => setIsCreatingDrawingModalOpen(false)}
+              >
+                Close
+              </button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
@@ -1544,7 +2302,11 @@ export function JobPage({
               </label>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsCreatingDrawingModalOpen(false)}>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => setIsCreatingDrawingModalOpen(false)}
+              >
                 Cancel
               </button>
               <button
@@ -1561,7 +2323,10 @@ export function JobPage({
       ) : null}
 
       {isEditingJobDetails ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setIsEditingJobDetails(false)}>
+        <div
+          className="portal-customer-edit-backdrop portal-modal-backdrop"
+          onClick={() => setIsEditingJobDetails(false)}
+        >
           <div
             className="portal-customer-edit-modal portal-modal-card"
             role="dialog"
@@ -1570,32 +2335,59 @@ export function JobPage({
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Edit job details</h2>
-              <button type="button" className="portal-text-button" onClick={() => setIsEditingJobDetails(false)}>Close</button>
+              <button
+                type="button"
+                className="portal-text-button"
+                onClick={() => setIsEditingJobDetails(false)}
+              >
+                Close
+              </button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
                 <span>Job name</span>
-                <input value={editJobName} onChange={(event) => setEditJobName(event.target.value)} />
+                <input
+                  value={editJobName}
+                  onChange={(event) => setEditJobName(event.target.value)}
+                />
               </label>
               <label className="portal-customer-edit-field">
                 <span>Owner</span>
-                <select value={editJobOwner ?? ""} onChange={(event) => setEditJobOwner(event.target.value || null)}>
+                <select
+                  value={editJobOwner ?? ""}
+                  onChange={(event) => setEditJobOwner(event.target.value || null)}
+                >
                   <option value="">Unassigned</option>
                   {users.map((user) => (
-                    <option key={user.id} value={user.id}>{user.displayName}</option>
+                    <option key={user.id} value={user.id}>
+                      {user.displayName}
+                    </option>
                   ))}
                 </select>
               </label>
               <label className="portal-customer-edit-field">
                 <span>Notes</span>
-                <textarea rows={4} value={editJobNotes} onChange={(event) => setEditJobNotes(event.target.value)} />
+                <textarea
+                  rows={4}
+                  value={editJobNotes}
+                  onChange={(event) => setEditJobNotes(event.target.value)}
+                />
               </label>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsEditingJobDetails(false)}>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => setIsEditingJobDetails(false)}
+              >
                 Cancel
               </button>
-              <button type="button" className="portal-primary-button portal-compact-button" disabled={isSavingJobDetails || !editJobName.trim()} onClick={() => void handleSaveJobDetails()}>
+              <button
+                type="button"
+                className="portal-primary-button portal-compact-button"
+                disabled={isSavingJobDetails || !editJobName.trim()}
+                onClick={() => void handleSaveJobDetails()}
+              >
                 {isSavingJobDetails ? "Saving..." : "Save changes"}
               </button>
             </div>
@@ -1604,7 +2396,10 @@ export function JobPage({
       ) : null}
 
       {confirmDeleteJob ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteJob(false)}>
+        <div
+          className="portal-customer-edit-backdrop portal-modal-backdrop"
+          onClick={() => setConfirmDeleteJob(false)}
+        >
           <div
             className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
             role="dialog"
@@ -1613,16 +2408,34 @@ export function JobPage({
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
               <h2>Permanently delete job?</h2>
-              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteJob(false)}>Close</button>
+              <button
+                type="button"
+                className="portal-text-button"
+                onClick={() => setConfirmDeleteJob(false)}
+              >
+                Close
+              </button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
-              <p>This will permanently remove the job, its drawings, tasks, and quote history. This action cannot be undone.</p>
+              <p>
+                This will permanently remove the job, its drawings, tasks, and quote history. This
+                action cannot be undone.
+              </p>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteJob(false)}>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => setConfirmDeleteJob(false)}
+              >
                 Cancel
               </button>
-              <button type="button" className="portal-danger-button portal-compact-button" disabled={isDeletingJob} onClick={() => void handleDeleteJob()}>
+              <button
+                type="button"
+                className="portal-danger-button portal-compact-button"
+                disabled={isDeletingJob}
+                onClick={() => void handleDeleteJob()}
+              >
                 {isDeletingJob ? "Deleting..." : "Delete permanently"}
               </button>
             </div>

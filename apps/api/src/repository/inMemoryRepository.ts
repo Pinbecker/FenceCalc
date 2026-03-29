@@ -8,7 +8,7 @@ import type {
   JobRecord,
   JobTaskRecord,
   PricingConfigRecord,
-  QuoteRecord
+  QuoteRecord,
 } from "@fence-estimator/contracts";
 
 import { InMemoryCustomerStore } from "./inMemoryCustomerStore.js";
@@ -18,7 +18,7 @@ import { InMemoryPricingStore } from "./inMemoryPricingStore.js";
 import { InMemoryQuoteStore } from "./inMemoryQuoteStore.js";
 import {
   InMemorySupportStore,
-  type InMemoryPasswordResetTokenRecord
+  type InMemoryPasswordResetTokenRecord,
 } from "./inMemorySupportStore.js";
 import { InMemoryUserSessionStore } from "./inMemoryUserSessionStore.js";
 import type {
@@ -49,7 +49,7 @@ import type {
   UpdateJobTaskInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
-  UpdateDrawingInput
+  UpdateDrawingInput,
 } from "./types.js";
 
 export class InMemoryAppRepository implements AppRepository {
@@ -68,11 +68,11 @@ export class InMemoryAppRepository implements AppRepository {
   private readonly userSessions = new InMemoryUserSessionStore({
     companies: this.companies,
     users: this.users,
-    sessions: this.sessions
+    sessions: this.sessions,
   });
   private readonly customers = new InMemoryCustomerStore({
     customers: this.customersMap,
-    drawings: this.drawingsMap
+    drawings: this.drawingsMap,
   });
   private readonly jobs = new InMemoryJobStore({
     customers: this.customersMap,
@@ -81,7 +81,7 @@ export class InMemoryAppRepository implements AppRepository {
     jobs: this.jobsMap,
     jobTasks: this.jobTasksMap,
     quotesByJobId: this.quotesByJobId,
-    users: this.users
+    users: this.users,
   });
   private readonly drawings = new InMemoryDrawingStore({
     drawings: this.drawingsMap,
@@ -90,19 +90,19 @@ export class InMemoryAppRepository implements AppRepository {
     jobTasks: this.jobTasksMap,
     quotesByJobId: this.quotesByJobId,
     users: this.users,
-    customers: this.customersMap
+    customers: this.customersMap,
   });
   private readonly pricing = new InMemoryPricingStore({
-    pricingConfigs: this.pricingConfigs
+    pricingConfigs: this.pricingConfigs,
   });
   private readonly quotes = new InMemoryQuoteStore({
-    quotesByJobId: this.quotesByJobId
+    quotesByJobId: this.quotesByJobId,
   });
   private readonly support = new InMemorySupportStore({
     companies: this.companies,
     users: this.users,
     auditLog: this.auditLog,
-    passwordResetTokens: this.passwordResetTokens
+    passwordResetTokens: this.passwordResetTokens,
   });
   private readonly auditLogRetentionDays: number;
 
@@ -150,7 +150,12 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.userSessions.listUsers(companyId));
   }
 
-  public updateUserPassword(userId: string, companyId: string, passwordHash: string, passwordSalt: string): Promise<void> {
+  public updateUserPassword(
+    userId: string,
+    companyId: string,
+    passwordHash: string,
+    passwordSalt: string,
+  ): Promise<void> {
     this.userSessions.updateUserPassword(userId, companyId, passwordHash, passwordSalt);
     return Promise.resolve();
   }
@@ -164,7 +169,11 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
-  public revokeSessionsForUser(userId: string, companyId: string, revokedAtIso: string): Promise<void> {
+  public revokeSessionsForUser(
+    userId: string,
+    companyId: string,
+    revokedAtIso: string,
+  ): Promise<void> {
     this.userSessions.revokeSessionsForUser(userId, companyId, revokedAtIso);
     return Promise.resolve();
   }
@@ -177,7 +186,11 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.customers.createCustomer(input));
   }
 
-  public listCustomers(companyId: string, scope: CustomerScope = "ACTIVE", search = ""): Promise<CustomerSummary[]> {
+  public listCustomers(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+  ): Promise<CustomerSummary[]> {
     return Promise.resolve(this.customers.listCustomers(companyId, scope, search));
   }
 
@@ -205,7 +218,12 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.jobs.createJob(input));
   }
 
-  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string) {
+  public listJobs(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ) {
     return Promise.resolve(this.jobs.listJobs(companyId, scope, search, customerId));
   }
 
@@ -257,7 +275,11 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.drawings.createDrawing(input));
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
+  public listDrawings(
+    companyId: string,
+    scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE",
+    search = "",
+  ) {
     return Promise.resolve(this.drawings.listDrawings(companyId, scope, search));
   }
 
@@ -315,9 +337,16 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
-  public consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string) {
+  public consumePasswordResetToken(
+    tokenHash: string,
+    passwordHash: string,
+    passwordSalt: string,
+    consumedAtIso: string,
+  ) {
     this.support.pruneStaleRecords(consumedAtIso, this.auditLogRetentionDays);
-    return Promise.resolve(this.support.consumePasswordResetToken(tokenHash, passwordHash, passwordSalt, consumedAtIso));
+    return Promise.resolve(
+      this.support.consumePasswordResetToken(tokenHash, passwordHash, passwordSalt, consumedAtIso),
+    );
   }
 
   public addAuditLog(input: CreateAuditLogInput) {
@@ -325,7 +354,10 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.support.addAuditLog(input));
   }
 
-  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}) {
+  public listAuditLog(
+    companyId: string,
+    options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {},
+  ) {
     this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     return Promise.resolve(this.support.listAuditLog(companyId, options));
   }

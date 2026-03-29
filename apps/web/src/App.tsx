@@ -78,7 +78,9 @@ function PortalNav(props: {
   userName: string;
   userRole: string;
   currentRoute: string;
-  onNavigate: (route: "dashboard" | "tasks" | "customers" | "editor" | "estimate" | "pricing" | "admin") => void;
+  onNavigate: (
+    route: "dashboard" | "tasks" | "customers" | "editor" | "estimate" | "pricing" | "admin",
+  ) => void;
   onLogout: () => void;
   showAdmin: boolean;
   showPricing: boolean;
@@ -111,7 +113,10 @@ function PortalNav(props: {
           <button
             type="button"
             className={
-              props.currentRoute === "customers" || props.currentRoute === "drawings" || props.currentRoute === "customer" || props.currentRoute === "job"
+              props.currentRoute === "customers" ||
+              props.currentRoute === "drawings" ||
+              props.currentRoute === "customer" ||
+              props.currentRoute === "job"
                 ? "is-active"
                 : undefined
             }
@@ -200,7 +205,17 @@ export function getPortalRedirectTarget(input: {
 }
 
 export function shouldRefreshPortalDrawings(route: string): boolean {
-  return route === "dashboard" || route === "tasks" || route === "drawings" || route === "customers" || route === "customer" || route === "job" || route === "drawing" || route === "estimate" || route === "editor";
+  return (
+    route === "dashboard" ||
+    route === "tasks" ||
+    route === "drawings" ||
+    route === "customers" ||
+    route === "customer" ||
+    route === "job" ||
+    route === "drawing" ||
+    route === "estimate" ||
+    route === "editor"
+  );
 }
 
 export function shouldRefreshPortalAdminData(route: string, showAdmin: boolean): boolean {
@@ -212,14 +227,19 @@ export function App() {
   const portal = usePortalSession();
   const showAdmin = canManageAdmin(portal.session?.user.role);
   const showPricing = canManagePricing(portal.session?.user.role);
-  const customerModalReturnRef = useRef<{ route: PortalRoute; query?: Record<string, string> }>({ route: "dashboard" });
+  const customerModalReturnRef = useRef<{ route: PortalRoute; query?: Record<string, string> }>({
+    route: "dashboard",
+  });
   const isCustomerModalOpen = isCustomerModalRoute(route);
-  const modalBaseRouteState: { route: PortalRoute; query?: Record<string, string> } = isCustomerModalOpen
-    ? customerModalReturnRef.current
-    : Object.keys(query).length > 0
-      ? { route, query }
-      : { route };
-  const modalBaseRoute = isCustomerModalOpen ? getCustomerModalBaseRoute(modalBaseRouteState.route) : route;
+  const modalBaseRouteState: { route: PortalRoute; query?: Record<string, string> } =
+    isCustomerModalOpen
+      ? customerModalReturnRef.current
+      : Object.keys(query).length > 0
+        ? { route, query }
+        : { route };
+  const modalBaseRoute = isCustomerModalOpen
+    ? getCustomerModalBaseRoute(modalBaseRouteState.route)
+    : route;
   const modalBaseQuery = isCustomerModalOpen ? (modalBaseRouteState.query ?? {}) : query;
 
   useEffect(() => {
@@ -238,7 +258,7 @@ export function App() {
       hasSession: Boolean(portal.session),
       route,
       showAdmin,
-      showPricing
+      showPricing,
     });
     if (redirectTarget) {
       navigate(redirectTarget);
@@ -264,7 +284,15 @@ export function App() {
     if (route === "tasks" || route === "job") {
       void portal.refreshUsers();
     }
-  }, [portal.refreshAuditLog, portal.refreshDrawings, portal.refreshJobs, portal.refreshUsers, portal.session, route, showAdmin]);
+  }, [
+    portal.refreshAuditLog,
+    portal.refreshDrawings,
+    portal.refreshJobs,
+    portal.refreshUsers,
+    portal.session,
+    route,
+    showAdmin,
+  ]);
 
   if (portal.isRestoringSession) {
     return <PortalLoadingCard label="Loading workspace..." />;
@@ -350,10 +378,21 @@ export function App() {
         <Suspense fallback={<PortalLoadingCard label="Loading page..." />}>
           <ErrorBoundary>
             {modalBaseRoute === "dashboard" ? (
-              <DashboardPage session={portal.session} customers={portal.customers} jobs={portal.jobs} drawings={portal.drawings} onNavigate={navigate} />
+              <DashboardPage
+                session={portal.session}
+                customers={portal.customers}
+                jobs={portal.jobs}
+                drawings={portal.drawings}
+                onNavigate={navigate}
+              />
             ) : null}
             {modalBaseRoute === "tasks" ? (
-              <TasksPage session={portal.session} users={portal.users} onNavigate={navigate} onRefreshJobs={portal.refreshJobs} />
+              <TasksPage
+                session={portal.session}
+                users={portal.users}
+                onNavigate={navigate}
+                onRefreshJobs={portal.refreshJobs}
+              />
             ) : null}
             {modalBaseRoute === "customer" ? (
               <CustomerPage
@@ -371,7 +410,9 @@ export function App() {
                 onSetCustomerArchived={portal.setCustomerArchived}
                 onOpenJob={(jobId) => navigate("job", { jobId })}
                 onOpenDrawing={(drawingId) => navigate("editor", { drawingId })}
-                onOpenEstimate={(jobId, drawingId) => navigate("job", { jobId, tab: "estimate", ...(drawingId ? { drawingId } : {}) })}
+                onOpenEstimate={(jobId, drawingId) =>
+                  navigate("job", { jobId, tab: "estimate", ...(drawingId ? { drawingId } : {}) })
+                }
                 onDeleteCustomer={portal.deleteCustomer}
                 onSetJobArchived={portal.setJobArchived}
                 onDeleteJob={portal.deleteJob}
@@ -401,9 +442,15 @@ export function App() {
               />
             ) : null}
             {modalBaseRoute === "estimate" ? (
-              <EstimatePage session={portal.session} drawingId={modalBaseQuery.drawingId ?? null} onNavigate={navigate} />
+              <EstimatePage
+                session={portal.session}
+                drawingId={modalBaseQuery.drawingId ?? null}
+                onNavigate={navigate}
+              />
             ) : null}
-            {modalBaseRoute === "pricing" && showPricing ? <PricingPage session={portal.session} /> : null}
+            {modalBaseRoute === "pricing" && showPricing ? (
+              <PricingPage session={portal.session} />
+            ) : null}
             {modalBaseRoute === "admin" && showAdmin ? (
               <AdminPage
                 users={portal.users}

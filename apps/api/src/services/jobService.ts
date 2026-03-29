@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { buildDefaultJobCommercialInputs, type DrawingRecord, type JobRecord, type JobTaskRecord, type LayoutModel } from "@fence-estimator/contracts";
+import {
+  buildDefaultJobCommercialInputs,
+  type DrawingRecord,
+  type JobRecord,
+  type JobTaskRecord,
+  type LayoutModel,
+} from "@fence-estimator/contracts";
 
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { writeAuditLog } from "../auditLogSupport.js";
@@ -15,7 +21,7 @@ const EMPTY_LAYOUT: LayoutModel = {
   goalUnits: [],
   kickboards: [],
   pitchDividers: [],
-  sideNettings: []
+  sideNettings: [],
 };
 
 interface JobMutationSuccess {
@@ -34,11 +40,74 @@ type InvalidCustomer = { kind: "invalid_customer"; message: string };
 type InvalidUser = { kind: "invalid_user"; message: string };
 type TaskNotFound = { kind: "task_not_found" };
 
-export type JobMutationResult = JobMutationSuccess | JobNotFound | InvalidCustomer | InvalidUser | DrawingNotFound;
-export type JobTaskMutationResult = JobTaskMutationSuccess | JobNotFound | InvalidUser | TaskNotFound;
+export type JobMutationResult =
+  | JobMutationSuccess
+  | JobNotFound
+  | InvalidCustomer
+  | InvalidUser
+  | DrawingNotFound;
+export type JobTaskMutationResult =
+  | JobTaskMutationSuccess
+  | JobNotFound
+  | InvalidUser
+  | TaskNotFound
+  | DrawingNotFound;
 export type JobDeleteResult = { kind: "success" } | JobNotFound | { kind: "not_archived" };
 
-async function resolveCustomerForJob(repository: AppRepository, companyId: string, customerId: string) {
+async function resolveTaskDrawingId(
+  repository: AppRepository,
+  companyId: string,
+  job: JobRecord,
+  requestedDrawingId: string | null | undefined,
+  currentDrawingId?: string | null,
+) {
+  const normalizedRequestedDrawingId = requestedDrawingId?.trim() ?? null;
+  if (normalizedRequestedDrawingId) {
+    const drawing = await repository.getDrawingById(normalizedRequestedDrawingId, companyId);
+    if (!drawing || drawing.jobId !== job.id) {
+      return { kind: "drawing_not_found" as const };
+    }
+    return { kind: "success" as const, drawingId: drawing.parentDrawingId ?? drawing.id };
+  }
+
+  if (normalizedRequestedDrawingId === null && requestedDrawingId !== undefined) {
+    return { kind: "success" as const, drawingId: null };
+  }
+
+  if (currentDrawingId) {
+    return { kind: "success" as const, drawingId: currentDrawingId };
+  }
+
+  if (job.primaryDrawingId) {
+    const primaryDrawing = await repository.getDrawingById(job.primaryDrawingId, companyId);
+    if (primaryDrawing && primaryDrawing.jobId === job.id) {
+      return {
+        kind: "success" as const,
+        drawingId: primaryDrawing.parentDrawingId ?? primaryDrawing.id,
+      };
+    }
+  }
+
+  const drawings = await repository.listDrawingsForJob(job.id, companyId);
+  const rootDrawing = drawings
+    .filter((drawing) => !drawing.parentDrawingId)
+    .sort((left, right) => {
+      if (left.jobRole === "PRIMARY" && right.jobRole !== "PRIMARY") {
+        return -1;
+      }
+      if (right.jobRole === "PRIMARY" && left.jobRole !== "PRIMARY") {
+        return 1;
+      }
+      return left.createdAtIso.localeCompare(right.createdAtIso);
+    })[0];
+  return { kind: "success" as const, drawingId: rootDrawing?.id ?? null };
+}
+
+async function resolveCustomerForJob(
+  repository: AppRepository,
+  companyId: string,
+  customerId: string,
+) {
   const customer = await repository.getCustomerById(customerId, companyId);
   if (!customer) {
     return { kind: "invalid_customer" as const, message: "Customer not found" };
@@ -49,7 +118,11 @@ async function resolveCustomerForJob(repository: AppRepository, companyId: strin
   return { kind: "success" as const, customer };
 }
 
-async function resolveOwner(repository: AppRepository, companyId: string, ownerUserId: string | null) {
+async function resolveOwner(
+  repository: AppRepository,
+  companyId: string,
+  ownerUserId: string | null,
+) {
   if (!ownerUserId) {
     return { kind: "success" as const, ownerUserId: null };
   }
@@ -67,9 +140,13 @@ function buildNextJobDrawingName(job: JobRecord, drawingCount: number): string {
 export async function createJobForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  input: { customerId: string; name: string; notes: string }
+  input: { customerId: string; name: string; notes: string },
 ): Promise<JobMutationResult> {
-  const customerResult = await resolveCustomerForJob(repository, authenticated.company.id, input.customerId);
+  const customerResult = await resolveCustomerForJob(
+    repository,
+    authenticated.company.id,
+    input.customerId,
+  );
   if (customerResult.kind !== "success") {
     return customerResult;
   }
@@ -94,7 +171,7 @@ export async function createJobForCompany(
       createdByUserId: authenticated.user.id,
       updatedByUserId: authenticated.user.id,
       createdAtIso: nowIso,
-      updatedAtIso: nowIso
+      updatedAtIso: nowIso,
     });
     await repository.createDrawing({
       id: drawingId,
@@ -112,14 +189,14 @@ export async function createJobForCompany(
       createdByUserId: authenticated.user.id,
       updatedByUserId: authenticated.user.id,
       createdAtIso: nowIso,
-      updatedAtIso: nowIso
+      updatedAtIso: nowIso,
     });
     await repository.setJobPrimaryDrawing({
       jobId,
       companyId: authenticated.company.id,
       drawingId,
       updatedByUserId: authenticated.user.id,
-      updatedAtIso: nowIso
+      updatedAtIso: nowIso,
     });
   });
 
@@ -136,7 +213,7 @@ export async function createJobForCompany(
     action: "JOB_CREATED",
     summary: `${authenticated.user.displayName} created job ${job.name}`,
     createdAtIso: nowIso,
-    metadata: { customerId: job.customerId, primaryDrawingId: drawingId }
+    metadata: { customerId: job.customerId, primaryDrawingId: drawingId },
   });
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
@@ -146,7 +223,7 @@ export async function createJobForCompany(
     action: "DRAWING_CREATED",
     summary: `${authenticated.user.displayName} created ${input.name}`,
     createdAtIso: nowIso,
-    metadata: { versionNumber: 1, jobId: job.id }
+    metadata: { versionNumber: 1, jobId: job.id },
   });
 
   return { kind: "success", job };
@@ -163,7 +240,7 @@ export async function updateJobForCompany(
     notes?: string | undefined;
     ownerUserId?: string | null | undefined;
     archived?: boolean | undefined;
-  }
+  },
 ): Promise<JobMutationResult> {
   const existing = await repository.getJobById(jobId, authenticated.company.id);
   if (!existing) {
@@ -171,7 +248,9 @@ export async function updateJobForCompany(
   }
 
   const ownerResult =
-    input.ownerUserId !== undefined ? await resolveOwner(repository, authenticated.company.id, input.ownerUserId) : null;
+    input.ownerUserId !== undefined
+      ? await resolveOwner(repository, authenticated.company.id, input.ownerUserId)
+      : null;
   if (ownerResult && ownerResult.kind !== "success") {
     return ownerResult;
   }
@@ -191,11 +270,15 @@ export async function updateJobForCompany(
     ownerUserId: ownerResult?.ownerUserId ?? existing.ownerUserId,
     archived,
     archivedAtIso: archived ? (archiveChanged ? updatedAtIso : existing.archivedAtIso) : null,
-    archivedByUserId: archived ? (archiveChanged ? authenticated.user.id : existing.archivedByUserId) : null,
+    archivedByUserId: archived
+      ? archiveChanged
+        ? authenticated.user.id
+        : existing.archivedByUserId
+      : null,
     stageChangedAtIso: stageChanged ? updatedAtIso : existing.stageChangedAtIso,
     stageChangedByUserId: stageChanged ? authenticated.user.id : existing.stageChangedByUserId,
     updatedByUserId: authenticated.user.id,
-    updatedAtIso
+    updatedAtIso,
   });
   if (!job) {
     return { kind: "job_not_found" };
@@ -214,7 +297,7 @@ export async function updateJobForCompany(
       entityId: job.id,
       action: "JOB_UPDATED",
       summary: `${authenticated.user.displayName} updated job ${job.name}`,
-      createdAtIso: updatedAtIso
+      createdAtIso: updatedAtIso,
     });
   }
 
@@ -227,7 +310,7 @@ export async function updateJobForCompany(
       action: "JOB_STAGE_CHANGED",
       summary: `${authenticated.user.displayName} changed ${job.name} from ${existing.stage} to ${nextStage}`,
       createdAtIso: updatedAtIso,
-      metadata: { previousStage: existing.stage, newStage: nextStage }
+      metadata: { previousStage: existing.stage, newStage: nextStage },
     });
   }
 
@@ -239,7 +322,7 @@ export async function updateJobForCompany(
       entityId: job.id,
       action: archived ? "JOB_ARCHIVED" : "JOB_UNARCHIVED",
       summary: `${authenticated.user.displayName} ${archived ? "archived" : "restored"} job ${job.name}`,
-      createdAtIso: updatedAtIso
+      createdAtIso: updatedAtIso,
     });
   }
 
@@ -249,7 +332,7 @@ export async function updateJobForCompany(
 export async function deleteJobForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string
+  jobId: string,
 ): Promise<JobDeleteResult> {
   const existing = await repository.getJobById(jobId, authenticated.company.id);
   if (!existing) {
@@ -261,7 +344,7 @@ export async function deleteJobForCompany(
 
   await repository.deleteJob({
     jobId,
-    companyId: authenticated.company.id
+    companyId: authenticated.company.id,
   });
 
   await writeAuditLog(repository, {
@@ -271,7 +354,7 @@ export async function deleteJobForCompany(
     entityId: jobId,
     action: "JOB_DELETED",
     summary: `${authenticated.user.displayName} permanently deleted job ${existing.name}`,
-    createdAtIso: new Date().toISOString()
+    createdAtIso: new Date().toISOString(),
   });
 
   return { kind: "success" };
@@ -281,7 +364,7 @@ export async function createJobDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   jobId: string,
-  input: { name?: string | undefined; sourceDrawingId?: string | undefined }
+  input: { name?: string | undefined; sourceDrawingId?: string | undefined },
 ): Promise<DrawingMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -290,7 +373,10 @@ export async function createJobDrawingForCompany(
 
   let sourceDrawing: DrawingRecord | null = null;
   if (input.sourceDrawingId) {
-    sourceDrawing = await repository.getDrawingById(input.sourceDrawingId, authenticated.company.id);
+    sourceDrawing = await repository.getDrawingById(
+      input.sourceDrawingId,
+      authenticated.company.id,
+    );
     if (!sourceDrawing || sourceDrawing.jobId !== job.id) {
       return { kind: "drawing_not_found" };
     }
@@ -317,13 +403,15 @@ export async function createJobDrawingForCompany(
     : null;
 
   return createDrawingForCompany(repository, authenticated, {
-    name: input.name?.trim() || (rootDrawing ? rootDrawing.name : buildNextJobDrawingName(job, rootDrawingCount)),
+    name:
+      input.name?.trim() ||
+      (rootDrawing ? rootDrawing.name : buildNextJobDrawingName(job, rootDrawingCount)),
     customerId: job.customerId,
     jobId: job.id,
     parentDrawingId,
     revisionNumber,
     layout: sourceDrawing?.layout ?? EMPTY_LAYOUT,
-    savedViewport: sourceDrawing?.savedViewport ?? null
+    savedViewport: sourceDrawing?.savedViewport ?? null,
   });
 }
 
@@ -331,7 +419,7 @@ export async function setJobPrimaryDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   jobId: string,
-  drawingId: string
+  drawingId: string,
 ): Promise<JobMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -348,7 +436,7 @@ export async function setJobPrimaryDrawingForCompany(
     companyId: authenticated.company.id,
     drawingId,
     updatedByUserId: authenticated.user.id,
-    updatedAtIso
+    updatedAtIso,
   });
   if (!updatedJob) {
     return { kind: "job_not_found" };
@@ -362,7 +450,7 @@ export async function setJobPrimaryDrawingForCompany(
     action: "JOB_PRIMARY_DRAWING_CHANGED",
     summary: `${authenticated.user.displayName} changed the primary drawing for ${updatedJob.name}`,
     createdAtIso: updatedAtIso,
-    metadata: { drawingId }
+    metadata: { drawingId },
   });
 
   return { kind: "success", job: updatedJob };
@@ -372,16 +460,34 @@ export async function createJobTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   jobId: string,
-  input: { title: string; description?: string | undefined; priority?: string | undefined; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined }
+  input: {
+    title: string;
+    description?: string | undefined;
+    priority?: string | undefined;
+    assignedUserId?: string | null | undefined;
+    drawingId?: string | null | undefined;
+    dueAtIso?: string | null | undefined;
+  },
 ): Promise<JobTaskMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
     return { kind: "job_not_found" };
   }
   const ownerResult =
-    input.assignedUserId !== undefined ? await resolveOwner(repository, authenticated.company.id, input.assignedUserId) : null;
+    input.assignedUserId !== undefined
+      ? await resolveOwner(repository, authenticated.company.id, input.assignedUserId)
+      : null;
   if (ownerResult && ownerResult.kind !== "success") {
     return ownerResult;
+  }
+  const drawingResult = await resolveTaskDrawingId(
+    repository,
+    authenticated.company.id,
+    job,
+    input.drawingId,
+  );
+  if (drawingResult.kind !== "success") {
+    return drawingResult;
   }
 
   const nowIso = new Date().toISOString();
@@ -389,6 +495,7 @@ export async function createJobTaskForCompany(
     id: randomUUID(),
     companyId: authenticated.company.id,
     jobId,
+    drawingId: drawingResult.drawingId,
     title: input.title,
     description: input.description ?? "",
     priority: input.priority ?? "NORMAL",
@@ -396,7 +503,7 @@ export async function createJobTaskForCompany(
     dueAtIso: input.dueAtIso ?? null,
     createdByUserId: authenticated.user.id,
     createdAtIso: nowIso,
-    updatedAtIso: nowIso
+    updatedAtIso: nowIso,
   });
 
   await writeAuditLog(repository, {
@@ -407,7 +514,7 @@ export async function createJobTaskForCompany(
     action: "JOB_TASK_CREATED",
     summary: `${authenticated.user.displayName} added a task to ${job.name}`,
     createdAtIso: nowIso,
-    metadata: { taskId: task.id, title: task.title }
+    metadata: { taskId: task.id, title: task.title },
   });
 
   return { kind: "success", task };
@@ -418,7 +525,15 @@ export async function updateJobTaskForCompany(
   authenticated: AuthenticatedRequestContext,
   jobId: string,
   taskId: string,
-  input: { title?: string | undefined; description?: string | undefined; priority?: string | undefined; assignedUserId?: string | null | undefined; dueAtIso?: string | null | undefined; isCompleted?: boolean | undefined }
+  input: {
+    title?: string | undefined;
+    description?: string | undefined;
+    priority?: string | undefined;
+    assignedUserId?: string | null | undefined;
+    drawingId?: string | null | undefined;
+    dueAtIso?: string | null | undefined;
+    isCompleted?: boolean | undefined;
+  },
 ): Promise<JobTaskMutationResult> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -430,9 +545,21 @@ export async function updateJobTaskForCompany(
     return { kind: "task_not_found" };
   }
   const ownerResult =
-    input.assignedUserId !== undefined ? await resolveOwner(repository, authenticated.company.id, input.assignedUserId) : null;
+    input.assignedUserId !== undefined
+      ? await resolveOwner(repository, authenticated.company.id, input.assignedUserId)
+      : null;
   if (ownerResult && ownerResult.kind !== "success") {
     return ownerResult;
+  }
+  const drawingResult = await resolveTaskDrawingId(
+    repository,
+    authenticated.company.id,
+    job,
+    input.drawingId,
+    existing.drawingId,
+  );
+  if (drawingResult.kind !== "success") {
+    return drawingResult;
   }
 
   const updatedAtIso = new Date().toISOString();
@@ -441,15 +568,16 @@ export async function updateJobTaskForCompany(
     taskId,
     companyId: authenticated.company.id,
     jobId,
+    drawingId: drawingResult.drawingId,
     title: input.title ?? existing.title,
     description: input.description ?? existing.description,
     priority: input.priority ?? existing.priority,
     assignedUserId: ownerResult?.ownerUserId ?? existing.assignedUserId,
     dueAtIso: input.dueAtIso ?? existing.dueAtIso,
     isCompleted,
-    completedAtIso: isCompleted ? existing.completedAtIso ?? updatedAtIso : null,
-    completedByUserId: isCompleted ? existing.completedByUserId ?? authenticated.user.id : null,
-    updatedAtIso
+    completedAtIso: isCompleted ? (existing.completedAtIso ?? updatedAtIso) : null,
+    completedByUserId: isCompleted ? (existing.completedByUserId ?? authenticated.user.id) : null,
+    updatedAtIso,
   });
   if (!task) {
     return { kind: "task_not_found" };
@@ -463,7 +591,7 @@ export async function updateJobTaskForCompany(
     action: "JOB_TASK_UPDATED",
     summary: `${authenticated.user.displayName} updated a task on ${job.name}`,
     createdAtIso: updatedAtIso,
-    metadata: { taskId: task.id, isCompleted: task.isCompleted }
+    metadata: { taskId: task.id, isCompleted: task.isCompleted },
   });
 
   return { kind: "success", task };
@@ -473,7 +601,7 @@ export async function deleteJobTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   jobId: string,
-  taskId: string
+  taskId: string,
 ): Promise<{ kind: "success" } | { kind: "job_not_found" } | { kind: "task_not_found" }> {
   const job = await repository.getJobById(jobId, authenticated.company.id);
   if (!job) {
@@ -492,7 +620,7 @@ export async function deleteJobTaskForCompany(
     action: "JOB_TASK_DELETED",
     summary: `${authenticated.user.displayName} deleted a task from ${job.name}`,
     createdAtIso: new Date().toISOString(),
-    metadata: { taskId }
+    metadata: { taskId },
   });
 
   return { kind: "success" };

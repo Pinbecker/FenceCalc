@@ -1,4 +1,12 @@
-import type { CustomerRecord, DrawingRecord, DrawingVersionRecord, JobRecord, JobSummary, JobTaskRecord, QuoteRecord } from "@fence-estimator/contracts";
+import type {
+  CustomerRecord,
+  DrawingRecord,
+  DrawingVersionRecord,
+  JobRecord,
+  JobSummary,
+  JobTaskRecord,
+  QuoteRecord,
+} from "@fence-estimator/contracts";
 
 import { toDrawingSummary } from "./shared.js";
 import type {
@@ -10,7 +18,7 @@ import type {
   SetJobPrimaryDrawingInput,
   StoredUser,
   UpdateJobInput,
-  UpdateJobTaskInput
+  UpdateJobTaskInput,
 } from "./types.js";
 
 export interface InMemoryJobState {
@@ -32,7 +40,7 @@ export class InMemoryJobStore {
     }
 
     return ![...this.state.drawings.values()].some(
-      (drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id
+      (drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id,
     );
   }
 
@@ -40,8 +48,10 @@ export class InMemoryJobStore {
     return {
       ...job,
       customerName: this.state.customers.get(job.customerId)?.name ?? job.customerName,
-      ownerDisplayName: job.ownerUserId ? this.state.users.get(job.ownerUserId)?.displayName ?? "" : "",
-      updatedByDisplayName: this.state.users.get(job.updatedByUserId)?.displayName ?? ""
+      ownerDisplayName: job.ownerUserId
+        ? (this.state.users.get(job.ownerUserId)?.displayName ?? "")
+        : "",
+      updatedByDisplayName: this.state.users.get(job.updatedByUserId)?.displayName ?? "",
     };
   }
 
@@ -50,15 +60,24 @@ export class InMemoryJobStore {
     const drawings = [...this.state.drawings.values()]
       .filter((drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id)
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
-    const tasks = (this.state.jobTasks.get(job.id) ?? []).filter((task) => task.companyId === job.companyId);
-    const quotes = (this.state.quotesByJobId.get(job.id) ?? []).filter((quote) => quote.companyId === job.companyId);
-    const primaryDrawing = drawings.find((drawing) => drawing.id === job.primaryDrawingId) ?? drawings[0] ?? null;
-    const latestQuote = quotes.slice().sort((left, right) => right.createdAtIso.localeCompare(left.createdAtIso))[0] ?? null;
-    const lastActivityAtIso = [resolved.updatedAtIso]
-      .concat(drawings.map((drawing) => drawing.updatedAtIso))
-      .concat(tasks.map((task) => task.updatedAtIso))
-      .concat(quotes.map((quote) => quote.createdAtIso))
-      .sort((left, right) => right.localeCompare(left))[0] ?? null;
+    const tasks = (this.state.jobTasks.get(job.id) ?? []).filter(
+      (task) => task.companyId === job.companyId,
+    );
+    const quotes = (this.state.quotesByJobId.get(job.id) ?? []).filter(
+      (quote) => quote.companyId === job.companyId,
+    );
+    const primaryDrawing =
+      drawings.find((drawing) => drawing.id === job.primaryDrawingId) ?? drawings[0] ?? null;
+    const latestQuote =
+      quotes
+        .slice()
+        .sort((left, right) => right.createdAtIso.localeCompare(left.createdAtIso))[0] ?? null;
+    const lastActivityAtIso =
+      [resolved.updatedAtIso]
+        .concat(drawings.map((drawing) => drawing.updatedAtIso))
+        .concat(tasks.map((task) => task.updatedAtIso))
+        .concat(quotes.map((quote) => quote.createdAtIso))
+        .sort((left, right) => right.localeCompare(left))[0] ?? null;
 
     return {
       ...resolved,
@@ -72,26 +91,33 @@ export class InMemoryJobStore {
       latestEstimateTotal: null,
       primaryDrawingName: primaryDrawing?.name ?? null,
       primaryDrawingUpdatedAtIso: primaryDrawing?.updatedAtIso ?? null,
-      primaryPreviewLayout: primaryDrawing ? toDrawingSummary(primaryDrawing).previewLayout : null
+      primaryPreviewLayout: primaryDrawing ? toDrawingSummary(primaryDrawing).previewLayout : null,
     };
   }
 
   public createJob(input: CreateJobInput): JobRecord {
     const job: JobRecord = {
       ...input,
-      ownerDisplayName: input.ownerUserId ? this.state.users.get(input.ownerUserId)?.displayName ?? "" : "",
+      ownerDisplayName: input.ownerUserId
+        ? (this.state.users.get(input.ownerUserId)?.displayName ?? "")
+        : "",
       updatedByDisplayName: this.state.users.get(input.updatedByUserId)?.displayName ?? "",
       isArchived: false,
       archivedAtIso: null,
       archivedByUserId: null,
       stageChangedAtIso: null,
-      stageChangedByUserId: null
+      stageChangedByUserId: null,
     };
     this.state.jobs.set(job.id, job);
     return this.withDisplayNames(job);
   }
 
-  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string): JobSummary[] {
+  public listJobs(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ): JobSummary[] {
     const normalized = search.trim().toLowerCase();
     return [...this.state.jobs.values()]
       .filter((job) => job.companyId === companyId)
@@ -105,7 +131,10 @@ export class InMemoryJobStore {
       .filter((job) => {
         if (!normalized) return true;
         const customerName = this.state.customers.get(job.customerId)?.name ?? job.customerName;
-        return job.name.toLowerCase().includes(normalized) || customerName.toLowerCase().includes(normalized);
+        return (
+          job.name.toLowerCase().includes(normalized) ||
+          customerName.toLowerCase().includes(normalized)
+        );
       })
       .map((job) => this.buildSummary(job))
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
@@ -142,8 +171,10 @@ export class InMemoryJobStore {
       stageChangedByUserId: input.stageChangedByUserId,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso,
-      ownerDisplayName: input.ownerUserId ? this.state.users.get(input.ownerUserId)?.displayName ?? "" : "",
-      updatedByDisplayName: this.state.users.get(input.updatedByUserId)?.displayName ?? ""
+      ownerDisplayName: input.ownerUserId
+        ? (this.state.users.get(input.ownerUserId)?.displayName ?? "")
+        : "",
+      updatedByDisplayName: this.state.users.get(input.updatedByUserId)?.displayName ?? "",
     };
     this.state.jobs.set(updated.id, updated);
     return this.withDisplayNames(updated);
@@ -171,13 +202,22 @@ export class InMemoryJobStore {
   public setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): JobRecord | null {
     const job = this.state.jobs.get(input.jobId);
     const drawing = this.state.drawings.get(input.drawingId);
-    if (!job || job.companyId !== input.companyId || !drawing || drawing.companyId !== input.companyId || drawing.jobId !== input.jobId) {
+    if (
+      !job ||
+      job.companyId !== input.companyId ||
+      !drawing ||
+      drawing.companyId !== input.companyId ||
+      drawing.jobId !== input.jobId
+    ) {
       return null;
     }
 
     for (const current of this.state.drawings.values()) {
       if (current.companyId === input.companyId && current.jobId === input.jobId) {
-        this.state.drawings.set(current.id, { ...current, jobRole: current.id === input.drawingId ? "PRIMARY" : "SECONDARY" });
+        this.state.drawings.set(current.id, {
+          ...current,
+          jobRole: current.id === input.drawingId ? "PRIMARY" : "SECONDARY",
+        });
       }
     }
 
@@ -186,7 +226,7 @@ export class InMemoryJobStore {
       primaryDrawingId: input.drawingId,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso,
-      updatedByDisplayName: this.state.users.get(input.updatedByUserId)?.displayName ?? ""
+      updatedByDisplayName: this.state.users.get(input.updatedByUserId)?.displayName ?? "",
     };
     this.state.jobs.set(updated.id, updated);
     return this.withDisplayNames(updated);
@@ -196,16 +236,33 @@ export class InMemoryJobStore {
     const job = this.state.jobs.get(jobId);
     return (this.state.jobTasks.get(jobId) ?? [])
       .filter((task) => task.companyId === companyId)
-      .map((task) => ({
-        ...task,
-        jobName: job?.name ?? "",
-        assignedUserDisplayName: task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "",
-        completedByDisplayName: task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : ""
-      }))
-      .sort((left, right) => Number(left.isCompleted) - Number(right.isCompleted) || (left.dueAtIso ?? "").localeCompare(right.dueAtIso ?? ""));
+      .map((task) => {
+        const drawingName = task.drawingId
+          ? (this.state.drawings.get(task.drawingId)?.name ?? "")
+          : "";
+        return {
+          ...task,
+          jobName: job?.name ?? "",
+          drawingName,
+          assignedUserDisplayName: task.assignedUserId
+            ? (this.state.users.get(task.assignedUserId)?.displayName ?? "")
+            : "",
+          completedByDisplayName: task.completedByUserId
+            ? (this.state.users.get(task.completedByUserId)?.displayName ?? "")
+            : "",
+        };
+      })
+      .sort(
+        (left, right) =>
+          Number(left.isCompleted) - Number(right.isCompleted) ||
+          (left.dueAtIso ?? "").localeCompare(right.dueAtIso ?? ""),
+      );
   }
 
-  public listCompanyTasks(companyId: string, options: CompanyTaskListOptions = {}): JobTaskRecord[] {
+  public listCompanyTasks(
+    companyId: string,
+    options: CompanyTaskListOptions = {},
+  ): JobTaskRecord[] {
     const todayIso = new Date().toISOString().slice(0, 10);
     const includeCompleted = options.includeCompleted ?? false;
     const normalizedSearch = options.search?.trim().toLowerCase() ?? "";
@@ -251,11 +308,25 @@ export class InMemoryJobStore {
           }
         }
 
-        const assignedUserDisplayName = task.assignedUserId ? this.state.users.get(task.assignedUserId)?.displayName ?? "" : "";
-        const completedByDisplayName = task.completedByUserId ? this.state.users.get(task.completedByUserId)?.displayName ?? "" : "";
+        const assignedUserDisplayName = task.assignedUserId
+          ? (this.state.users.get(task.assignedUserId)?.displayName ?? "")
+          : "";
+        const completedByDisplayName = task.completedByUserId
+          ? (this.state.users.get(task.completedByUserId)?.displayName ?? "")
+          : "";
         const jobName = job?.name ?? "";
+        const drawingName = task.drawingId
+          ? (this.state.drawings.get(task.drawingId)?.name ?? "")
+          : "";
         if (normalizedSearch) {
-          const haystack = [task.title, task.description, jobName, assignedUserDisplayName, completedByDisplayName]
+          const haystack = [
+            task.title,
+            task.description,
+            jobName,
+            drawingName,
+            assignedUserDisplayName,
+            completedByDisplayName,
+          ]
             .join(" ")
             .toLowerCase();
           if (!haystack.includes(normalizedSearch)) {
@@ -266,8 +337,9 @@ export class InMemoryJobStore {
         allTasks.push({
           ...task,
           jobName,
+          drawingName,
           assignedUserDisplayName,
-          completedByDisplayName
+          completedByDisplayName,
         });
       }
     }
@@ -281,7 +353,9 @@ export class InMemoryJobStore {
       if (lp !== rp) {
         return lp - rp;
       }
-      const dueOrder = (left.dueAtIso ?? "9999-12-31T00:00:00.000Z").localeCompare(right.dueAtIso ?? "9999-12-31T00:00:00.000Z");
+      const dueOrder = (left.dueAtIso ?? "9999-12-31T00:00:00.000Z").localeCompare(
+        right.dueAtIso ?? "9999-12-31T00:00:00.000Z",
+      );
       if (dueOrder !== 0) {
         return dueOrder;
       }
@@ -298,19 +372,23 @@ export class InMemoryJobStore {
       companyId: input.companyId,
       jobId: input.jobId,
       jobName: job?.name ?? "",
+      drawingId: input.drawingId,
+      drawingName: input.drawingId ? (this.state.drawings.get(input.drawingId)?.name ?? "") : "",
       title: input.title,
       description: input.description,
       priority: input.priority as JobTaskRecord["priority"],
       isCompleted: false,
       assignedUserId: input.assignedUserId,
-      assignedUserDisplayName: input.assignedUserId ? this.state.users.get(input.assignedUserId)?.displayName ?? "" : "",
+      assignedUserDisplayName: input.assignedUserId
+        ? (this.state.users.get(input.assignedUserId)?.displayName ?? "")
+        : "",
       dueAtIso: input.dueAtIso,
       completedAtIso: null,
       completedByUserId: null,
       completedByDisplayName: "",
       createdByUserId: input.createdByUserId,
       createdAtIso: input.createdAtIso,
-      updatedAtIso: input.updatedAtIso
+      updatedAtIso: input.updatedAtIso,
     };
     this.state.jobTasks.set(input.jobId, [...(this.state.jobTasks.get(input.jobId) ?? []), task]);
     return task;
@@ -318,27 +396,35 @@ export class InMemoryJobStore {
 
   public updateJobTask(input: UpdateJobTaskInput): JobTaskRecord | null {
     const tasks = this.state.jobTasks.get(input.jobId) ?? [];
-    const existing = tasks.find((task) => task.id === input.taskId && task.companyId === input.companyId);
+    const existing = tasks.find(
+      (task) => task.id === input.taskId && task.companyId === input.companyId,
+    );
     if (!existing) {
       return null;
     }
     const updated: JobTaskRecord = {
       ...existing,
+      drawingId: input.drawingId,
+      drawingName: input.drawingId ? (this.state.drawings.get(input.drawingId)?.name ?? "") : "",
       title: input.title,
       description: input.description,
       priority: input.priority as JobTaskRecord["priority"],
       assignedUserId: input.assignedUserId,
-      assignedUserDisplayName: input.assignedUserId ? this.state.users.get(input.assignedUserId)?.displayName ?? "" : "",
+      assignedUserDisplayName: input.assignedUserId
+        ? (this.state.users.get(input.assignedUserId)?.displayName ?? "")
+        : "",
       dueAtIso: input.dueAtIso,
       isCompleted: input.isCompleted,
       completedAtIso: input.completedAtIso,
       completedByUserId: input.completedByUserId,
-      completedByDisplayName: input.completedByUserId ? this.state.users.get(input.completedByUserId)?.displayName ?? "" : "",
-      updatedAtIso: input.updatedAtIso
+      completedByDisplayName: input.completedByUserId
+        ? (this.state.users.get(input.completedByUserId)?.displayName ?? "")
+        : "",
+      updatedAtIso: input.updatedAtIso,
     };
     this.state.jobTasks.set(
       input.jobId,
-      tasks.map((task) => (task.id === input.taskId ? updated : task))
+      tasks.map((task) => (task.id === input.taskId ? updated : task)),
     );
     return updated;
   }

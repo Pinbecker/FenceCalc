@@ -2,7 +2,10 @@ import type { JobTaskRecord } from "@fence-estimator/contracts";
 
 export type TaskDueTone = "none" | "overdue" | "today" | "upcoming";
 
-export function getTaskDueTone(task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">, now = new Date()): TaskDueTone {
+export function getTaskDueTone(
+  task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">,
+  now = new Date(),
+): TaskDueTone {
   if (!task.dueAtIso) {
     return "none";
   }
@@ -21,7 +24,10 @@ export function getTaskDueTone(task: Pick<JobTaskRecord, "dueAtIso" | "isComplet
   return "upcoming";
 }
 
-export function getTaskDueLabel(task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">, now = new Date()): string | null {
+export function getTaskDueLabel(
+  task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">,
+  now = new Date(),
+): string | null {
   const tone = getTaskDueTone(task, now);
   if (!task.dueAtIso) {
     return null;
@@ -49,5 +55,7 @@ export function formatTaskTimestamp(value: string | null): string {
   if (!value) {
     return "No activity";
   }
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(value),
+  );
 }

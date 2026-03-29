@@ -4,14 +4,19 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
-import { DRAWING_SCHEMA_VERSION, type EstimateResult, type LayoutModel } from "@fence-estimator/contracts";
+import {
+  buildDefaultJobCommercialInputs,
+  DRAWING_SCHEMA_VERSION,
+  type EstimateResult,
+  type LayoutModel,
+} from "@fence-estimator/contracts";
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 
 import type { AppRepository } from "./repository/types.js";
 import { InMemoryAppRepository, SqliteAppRepository } from "./repository.js";
 
 const emptyLayout: LayoutModel = {
-  segments: []
+  segments: [],
 };
 const TEST_CUSTOMER_ID = "customer-1";
 const TEST_CUSTOMER_NAME = "Cleveland Land Services";
@@ -22,14 +27,14 @@ const featureRichLayout: LayoutModel = {
       id: "s1",
       start: { x: 0, y: 0 },
       end: { x: 12000, y: 0 },
-      spec: { system: "TWIN_BAR", height: "3m" }
+      spec: { system: "TWIN_BAR", height: "3m" },
     },
     {
       id: "s2",
       start: { x: 0, y: 8000 },
       end: { x: 12000, y: 8000 },
-      spec: { system: "TWIN_BAR", height: "3m" }
-    }
+      spec: { system: "TWIN_BAR", height: "3m" },
+    },
   ],
   gates: [],
   basketballFeatures: [
@@ -39,8 +44,8 @@ const featureRichLayout: LayoutModel = {
       offsetMm: 2525,
       facing: "LEFT",
       type: "MOUNTED_TO_EXISTING_POST",
-      mountingMode: "POST_MOUNTED"
-    }
+      mountingMode: "POST_MOUNTED",
+    },
   ],
   basketballPosts: [
     {
@@ -51,16 +56,16 @@ const featureRichLayout: LayoutModel = {
       type: "DEDICATED_POST",
       mountingMode: "PROJECTING_ARM",
       armLengthMm: 1800,
-      replacesIntermediatePost: true
-    }
+      replacesIntermediatePost: true,
+    },
   ],
   floodlightColumns: [
     {
       id: "fc-1",
       segmentId: "s1",
       offsetMm: 3000,
-      facing: "LEFT"
-    }
+      facing: "LEFT",
+    },
   ],
   goalUnits: [
     {
@@ -70,8 +75,8 @@ const featureRichLayout: LayoutModel = {
       side: "LEFT",
       widthMm: 3000,
       depthMm: 1200,
-      goalHeightMm: 3000
-    }
+      goalHeightMm: 3000,
+    },
   ],
   kickboards: [
     {
@@ -80,15 +85,15 @@ const featureRichLayout: LayoutModel = {
       sectionHeightMm: 225,
       thicknessMm: 50,
       profile: "CHAMFERED",
-      boardLengthMm: 2500
-    }
+      boardLengthMm: 2500,
+    },
   ],
   pitchDividers: [
     {
       id: "divider-1",
       startAnchor: { segmentId: "s1", offsetMm: 2500 },
-      endAnchor: { segmentId: "s2", offsetMm: 8500 }
-    }
+      endAnchor: { segmentId: "s2", offsetMm: 8500 },
+    },
   ],
   sideNettings: [
     {
@@ -97,9 +102,9 @@ const featureRichLayout: LayoutModel = {
       additionalHeightMm: 2000,
       startOffsetMm: 2525,
       endOffsetMm: 7575,
-      extendedPostInterval: 3
-    }
-  ]
+      extendedPostInterval: 3,
+    },
+  ],
 };
 
 const emptyEstimate: EstimateResult = {
@@ -109,13 +114,13 @@ const emptyEstimate: EstimateResult = {
     total: 0,
     cornerPosts: 0,
     byHeightAndType: {},
-    byHeightMm: {}
+    byHeightMm: {},
   },
   corners: {
     total: 0,
     internal: 0,
     external: 0,
-    unclassified: 0
+    unclassified: 0,
   },
   materials: {
     twinBarPanels: 0,
@@ -125,7 +130,7 @@ const emptyEstimate: EstimateResult = {
     roll2100: 0,
     roll900: 0,
     totalRolls: 0,
-    rollsByFenceHeight: {}
+    rollsByFenceHeight: {},
   },
   optimization: {
     strategy: "CHAINED_CUT_PLANNER",
@@ -143,10 +148,10 @@ const emptyEstimate: EstimateResult = {
       totalLeftoverMm: 0,
       reusableLeftoverMm: 0,
       utilizationRate: 0,
-      buckets: []
-    }
+      buckets: [],
+    },
   },
-  segments: []
+  segments: [],
 };
 
 async function createTestCustomer(
@@ -167,7 +172,7 @@ async function createTestCustomer(
     createdByUserId: userId,
     updatedByUserId: userId,
     createdAtIso: "2026-03-10T00:00:00.000Z",
-    updatedAtIso: "2026-03-10T00:00:00.000Z"
+    updatedAtIso: "2026-03-10T00:00:00.000Z",
   });
 }
 
@@ -180,19 +185,63 @@ async function createTestJob(repository: AppRepository, companyId: string, userI
     name: "North compound",
     stage: "FOLLOW_UP",
     primaryDrawingId: null,
-    commercialInputs: null,
+    commercialInputs: buildDefaultJobCommercialInputs(),
     notes: "",
     ownerUserId: userId,
     createdByUserId: userId,
     updatedByUserId: userId,
     createdAtIso: "2026-03-10T00:00:00.000Z",
-    updatedAtIso: "2026-03-10T00:00:00.000Z"
+    updatedAtIso: "2026-03-10T00:00:00.000Z",
   });
 }
 
+async function createTestRootDrawing(
+  repository: InMemoryAppRepository | SqliteAppRepository,
+  companyId: string,
+  userId: string,
+) {
+  const drawing = await repository.createDrawing({
+    id: "drawing-root-1",
+    companyId,
+    jobId: "job-1",
+    jobRole: "PRIMARY",
+    parentDrawingId: null,
+    revisionNumber: 0,
+    name: "North perimeter",
+    customerId: TEST_CUSTOMER_ID,
+    customerName: TEST_CUSTOMER_NAME,
+    layout: emptyLayout,
+    savedViewport: null,
+    estimate: emptyEstimate,
+    schemaVersion: DRAWING_SCHEMA_VERSION,
+    rulesVersion: RULES_ENGINE_VERSION,
+    createdByUserId: userId,
+    updatedByUserId: userId,
+    createdAtIso: "2026-03-10T00:00:00.000Z",
+    updatedAtIso: "2026-03-10T00:00:00.000Z",
+  });
+  await repository.setJobPrimaryDrawing({
+    jobId: "job-1",
+    companyId,
+    drawingId: drawing.id,
+    updatedByUserId: userId,
+    updatedAtIso: "2026-03-10T00:00:00.000Z",
+  });
+  return drawing;
+}
+
 async function seedCompanyTasks(repository: AppRepository, companyId: string, userId: string) {
-  await createTestCustomer(repository as InMemoryAppRepository | SqliteAppRepository, companyId, userId);
+  await createTestCustomer(
+    repository as InMemoryAppRepository | SqliteAppRepository,
+    companyId,
+    userId,
+  );
   await createTestJob(repository, companyId, userId);
+  await createTestRootDrawing(
+    repository as InMemoryAppRepository | SqliteAppRepository,
+    companyId,
+    userId,
+  );
   await repository.createUser({
     id: "user-2",
     companyId,
@@ -201,12 +250,13 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     role: "MEMBER",
     passwordHash: "hash-2",
     passwordSalt: "salt-2",
-    createdAtIso: "2026-03-10T00:00:00.000Z"
+    createdAtIso: "2026-03-10T00:00:00.000Z",
   });
   await repository.createJobTask({
     id: "task-open-overdue",
     companyId,
     jobId: "job-1",
+    drawingId: "drawing-root-1",
     title: "Call site contact",
     description: "Confirm site access code",
     priority: "URGENT",
@@ -214,12 +264,13 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     dueAtIso: "2026-03-01T09:00:00.000Z",
     createdByUserId: userId,
     createdAtIso: "2026-03-01T08:00:00.000Z",
-    updatedAtIso: "2026-03-01T08:00:00.000Z"
+    updatedAtIso: "2026-03-01T08:00:00.000Z",
   });
   await repository.createJobTask({
     id: "task-open-unassigned",
     companyId,
     jobId: "job-1",
+    drawingId: "drawing-root-1",
     title: "Book installer",
     description: "",
     priority: "NORMAL",
@@ -227,12 +278,13 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     dueAtIso: null,
     createdByUserId: userId,
     createdAtIso: "2026-03-02T08:00:00.000Z",
-    updatedAtIso: "2026-03-02T08:00:00.000Z"
+    updatedAtIso: "2026-03-02T08:00:00.000Z",
   });
   await repository.createJobTask({
     id: "task-complete",
     companyId,
     jobId: "job-1",
+    drawingId: "drawing-root-1",
     title: "Send quote",
     description: "Sent and acknowledged",
     priority: "HIGH",
@@ -240,12 +292,13 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     dueAtIso: "2026-03-15T09:00:00.000Z",
     createdByUserId: userId,
     createdAtIso: "2026-03-03T08:00:00.000Z",
-    updatedAtIso: "2026-03-03T08:00:00.000Z"
+    updatedAtIso: "2026-03-03T08:00:00.000Z",
   });
   await repository.updateJobTask({
     taskId: "task-complete",
     companyId,
     jobId: "job-1",
+    drawingId: "drawing-root-1",
     title: "Send quote",
     description: "Sent and acknowledged",
     priority: "HIGH",
@@ -254,7 +307,7 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     isCompleted: true,
     completedAtIso: "2026-03-15T10:00:00.000Z",
     completedByUserId: userId,
-    updatedAtIso: "2026-03-15T10:00:00.000Z"
+    updatedAtIso: "2026-03-15T10:00:00.000Z",
   });
 }
 
@@ -270,13 +323,13 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     expect(account).not.toBeNull();
 
     await expect(repository.getUserByEmail("jane@example.com")).resolves.toMatchObject({
       id: "user-1",
-      companyId: "company-1"
+      companyId: "company-1",
     });
   });
 
@@ -291,7 +344,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     const secondAccount = await repository.bootstrapOwnerAccount({
       companyId: "company-2",
@@ -301,7 +354,7 @@ describe("InMemoryAppRepository", () => {
       email: "john@example.com",
       passwordHash: "hash-2",
       passwordSalt: "salt-2",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
 
     expect(firstAccount).not.toBeNull();
@@ -319,7 +372,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     await createTestCustomer(repository, "company-1", "user-1");
 
@@ -337,7 +390,7 @@ describe("InMemoryAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     const drawings = await repository.listDrawings("company-1");
@@ -347,10 +400,10 @@ describe("InMemoryAppRepository", () => {
       gateCount: 0,
       previewLayout: { segments: [] },
       versionNumber: 1,
-      isArchived: false
+      isArchived: false,
     });
     await expect(repository.getDrawingById("drawing-1", "company-1")).resolves.toMatchObject({
-      savedViewport: { x: 120, y: 90, scale: 0.2 }
+      savedViewport: { x: 120, y: 90, scale: 0.2 },
     });
 
     const updated = await repository.updateDrawing({
@@ -366,7 +419,7 @@ describe("InMemoryAppRepository", () => {
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-11T00:00:00.000Z"
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
     });
 
     expect(updated?.name).toBe("Updated");
@@ -385,7 +438,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     await createTestCustomer(repository, "company-1", "user-1");
 
@@ -403,7 +456,7 @@ describe("InMemoryAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await repository.createQuote({
@@ -416,21 +469,21 @@ describe("InMemoryAppRepository", () => {
           drawingId: "drawing-1",
           drawingName: "Quoted drawing",
           customerId: TEST_CUSTOMER_ID,
-          customerName: TEST_CUSTOMER_NAME
+          customerName: TEST_CUSTOMER_NAME,
         },
         groups: [],
         ancillaryItems: [],
         totals: {
           materialCost: 100,
           labourCost: 20,
-          totalCost: 120
+          totalCost: 120,
         },
         warnings: [],
         pricingSnapshot: {
           updatedAtIso: new Date(0).toISOString(),
           updatedByUserId: null,
-          source: "DEFAULT"
-        }
+          source: "DEFAULT",
+        },
       },
       drawingSnapshot: {
         drawingId: "drawing-1",
@@ -441,10 +494,10 @@ describe("InMemoryAppRepository", () => {
         estimate: emptyEstimate,
         schemaVersion: DRAWING_SCHEMA_VERSION,
         rulesVersion: RULES_ENGINE_VERSION,
-        versionNumber: 1
+        versionNumber: 1,
       },
       createdByUserId: "user-1",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
 
     const quotes = await repository.listQuotesForDrawing("drawing-1", "company-1");
@@ -452,7 +505,7 @@ describe("InMemoryAppRepository", () => {
     expect(quotes[0]).toMatchObject({
       id: "quote-1",
       drawingVersionNumber: 1,
-      pricedEstimate: { totals: { totalCost: 120 } }
+      pricedEstimate: { totals: { totalCost: 120 } },
     });
   });
 
@@ -466,7 +519,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await repository.createUser({
@@ -477,7 +530,7 @@ describe("InMemoryAppRepository", () => {
       role: "ADMIN",
       passwordHash: "hash-2",
       passwordSalt: "salt-2",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
 
     await expect(repository.getUserCount()).resolves.toBe(2);
@@ -494,7 +547,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await repository.createUser({
@@ -505,7 +558,7 @@ describe("InMemoryAppRepository", () => {
       role: "ADMIN",
       passwordHash: "hash-2",
       passwordSalt: "salt-2",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
     await repository.createSession({
       id: "session-2",
@@ -513,7 +566,7 @@ describe("InMemoryAppRepository", () => {
       userId: "user-2",
       tokenHash: "token-hash-2",
       createdAtIso: "2026-03-10T02:00:00.000Z",
-      expiresAtIso: "2026-04-10T02:00:00.000Z"
+      expiresAtIso: "2026-04-10T02:00:00.000Z",
     });
 
     await repository.updateUserPassword("user-2", "company-1", "hash-3", "salt-3");
@@ -521,11 +574,11 @@ describe("InMemoryAppRepository", () => {
 
     await expect(repository.getUserById("user-2", "company-1")).resolves.toMatchObject({
       id: "user-2",
-      email: "john@example.com"
+      email: "john@example.com",
     });
     await expect(repository.getUserByEmail("john@example.com")).resolves.toMatchObject({
       passwordHash: "hash-3",
-      passwordSalt: "salt-3"
+      passwordSalt: "salt-3",
     });
     await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
   });
@@ -540,22 +593,22 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await repository.upsertPricingConfig({
       companyId: "company-1",
       items: [],
       updatedAtIso: "2026-03-10T00:00:00.000Z",
-      updatedByUserId: "user-1"
+      updatedByUserId: "user-1",
     });
 
     await expect(repository.getPricingConfig("company-1")).resolves.toMatchObject({
       workbook: {
         settings: {
-          labourOverheadPercent: 75
-        }
-      }
+          labourOverheadPercent: 75,
+        },
+      },
     });
   });
 
@@ -569,20 +622,32 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     await seedCompanyTasks(repository, "company-1", "user-1");
 
     await expect(repository.listCompanyTasks("company-1")).resolves.toHaveLength(2);
-    await expect(repository.listCompanyTasks("company-1", { includeCompleted: true })).resolves.toHaveLength(3);
-    await expect(repository.listCompanyTasks("company-1", { assignedUserId: "user-1" })).resolves.toMatchObject([
-      { id: "task-open-overdue" }
-    ]);
-    await expect(repository.listCompanyTasks("company-1", { assignedUserId: "unassigned" })).resolves.toMatchObject([
-      { id: "task-open-unassigned" }
-    ]);
-    await expect(repository.listCompanyTasks("company-1", { includeCompleted: true, search: "acknowledged" })).resolves.toMatchObject([
-      { id: "task-complete" }
+    await expect(
+      repository.listCompanyTasks("company-1", { includeCompleted: true }),
+    ).resolves.toHaveLength(3);
+    await expect(
+      repository.listCompanyTasks("company-1", { assignedUserId: "user-1" }),
+    ).resolves.toMatchObject([{ id: "task-open-overdue" }]);
+    await expect(
+      repository.listCompanyTasks("company-1", { assignedUserId: "unassigned" }),
+    ).resolves.toMatchObject([{ id: "task-open-unassigned" }]);
+    await expect(
+      repository.listCompanyTasks("company-1", { includeCompleted: true, search: "acknowledged" }),
+    ).resolves.toMatchObject([{ id: "task-complete" }]);
+    await expect(
+      repository.listCompanyTasks("company-1", { search: "north perimeter" }),
+    ).resolves.toMatchObject([
+      { id: "task-open-overdue", drawingId: "drawing-root-1", drawingName: "North perimeter" },
+      {
+        id: "task-open-unassigned",
+        drawingId: "drawing-root-1",
+        drawingName: "North perimeter",
+      },
     ]);
   });
 
@@ -596,7 +661,7 @@ describe("InMemoryAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     await createTestCustomer(repository, "company-1", "user-1");
     await repository.createDrawing({
@@ -613,7 +678,7 @@ describe("InMemoryAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
     await repository.updateDrawing({
       drawingId: "drawing-1",
@@ -628,7 +693,7 @@ describe("InMemoryAppRepository", () => {
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-11T00:00:00.000Z"
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
     });
 
     const archived = await repository.setDrawingArchivedState({
@@ -639,7 +704,7 @@ describe("InMemoryAppRepository", () => {
       archivedAtIso: "2026-03-12T00:00:00.000Z",
       archivedByUserId: "user-1",
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-12T00:00:00.000Z"
+      updatedAtIso: "2026-03-12T00:00:00.000Z",
     });
 
     expect(archived?.isArchived).toBe(true);
@@ -653,7 +718,7 @@ describe("InMemoryAppRepository", () => {
       customerId: TEST_CUSTOMER_ID,
       customerName: TEST_CUSTOMER_NAME,
       restoredByUserId: "user-1",
-      restoredAtIso: "2026-03-13T00:00:00.000Z"
+      restoredAtIso: "2026-03-13T00:00:00.000Z",
     });
 
     expect(restored?.versionNumber).toBe(4);
@@ -667,7 +732,7 @@ describe("InMemoryAppRepository", () => {
       entityId: "drawing-1",
       action: "DRAWING_UPDATED",
       summary: "Updated drawing",
-      createdAtIso: "2026-03-13T00:00:00.000Z"
+      createdAtIso: "2026-03-13T00:00:00.000Z",
     });
 
     await expect(repository.listAuditLog("company-1")).resolves.toHaveLength(1);
@@ -676,7 +741,9 @@ describe("InMemoryAppRepository", () => {
 
 describe("SqliteAppRepository", () => {
   it("persists accounts, sessions, and drawings", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -686,7 +753,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     expect(account).not.toBeNull();
     if (!account) {
@@ -699,7 +766,7 @@ describe("SqliteAppRepository", () => {
       userId: account.user.id,
       tokenHash: "token-hash",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      expiresAtIso: "2026-04-10T00:00:00.000Z"
+      expiresAtIso: "2026-04-10T00:00:00.000Z",
     });
     await repository.createDrawing({
       id: "drawing-1",
@@ -715,7 +782,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: account.user.id,
       updatedByUserId: account.user.id,
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
     await repository.addAuditLog({
       id: "audit-1",
@@ -725,23 +792,27 @@ describe("SqliteAppRepository", () => {
       entityId: account.user.id,
       action: "LOGIN_SUCCEEDED",
       summary: "Login",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await expect(repository.getCompanyById(account.company.id)).resolves.toEqual(account.company);
     await expect(repository.getAuthenticatedSession("token-hash")).resolves.toMatchObject({
       company: account.company,
-      user: account.user
+      user: account.user,
     });
     await expect(repository.listDrawings(account.company.id)).resolves.toHaveLength(1);
-    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject({
-      savedViewport: { x: 250, y: 125, scale: 0.3 }
-    });
+    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject(
+      {
+        savedViewport: { x: 250, y: 125, scale: 0.3 },
+      },
+    );
     await expect(repository.listAuditLog(account.company.id)).resolves.toHaveLength(1);
   });
 
   it("round-trips full feature layouts from sqlite storage", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -751,7 +822,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     expect(account).not.toBeNull();
     if (!account) {
@@ -773,20 +844,22 @@ describe("SqliteAppRepository", () => {
       createdByUserId: account.user.id,
       updatedByUserId: account.user.id,
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
-    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject({
-      layout: {
-        basketballFeatures: [{ id: "bf-1" }],
-        basketballPosts: [{ id: "bp-1" }],
-        floodlightColumns: [{ id: "fc-1" }],
-        goalUnits: [{ id: "goal-1" }],
-        kickboards: [{ id: "kick-1" }],
-        pitchDividers: [{ id: "divider-1" }],
-        sideNettings: [{ id: "net-1" }]
-      }
-    });
+    await expect(repository.getDrawingById("drawing-1", account.company.id)).resolves.toMatchObject(
+      {
+        layout: {
+          basketballFeatures: [{ id: "bf-1" }],
+          basketballPosts: [{ id: "bp-1" }],
+          floodlightColumns: [{ id: "fc-1" }],
+          goalUnits: [{ id: "goal-1" }],
+          kickboards: [{ id: "kick-1" }],
+          pitchDividers: [{ id: "divider-1" }],
+          sideNettings: [{ id: "net-1" }],
+        },
+      },
+    );
 
     await expect(repository.listDrawings(account.company.id)).resolves.toMatchObject([
       {
@@ -794,14 +867,16 @@ describe("SqliteAppRepository", () => {
           goalUnits: [{ id: "goal-1" }],
           kickboards: [{ id: "kick-1" }],
           pitchDividers: [{ id: "divider-1" }],
-          sideNettings: [{ id: "net-1" }]
-        }
-      }
+          sideNettings: [{ id: "net-1" }],
+        },
+      },
     ]);
   });
 
   it("persists immutable quotes in sqlite", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -811,7 +886,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     expect(account).not.toBeNull();
     if (!account) {
@@ -833,7 +908,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: account.user.id,
       updatedByUserId: account.user.id,
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     await repository.createQuote({
@@ -846,21 +921,21 @@ describe("SqliteAppRepository", () => {
           drawingId: "drawing-1",
           drawingName: "Stored quote drawing",
           customerId: TEST_CUSTOMER_ID,
-          customerName: TEST_CUSTOMER_NAME
+          customerName: TEST_CUSTOMER_NAME,
         },
         groups: [],
         ancillaryItems: [],
         totals: {
           materialCost: 90,
           labourCost: 30,
-          totalCost: 120
+          totalCost: 120,
         },
         warnings: [],
         pricingSnapshot: {
           updatedAtIso: new Date(0).toISOString(),
           updatedByUserId: null,
-          source: "DEFAULT"
-        }
+          source: "DEFAULT",
+        },
       },
       drawingSnapshot: {
         drawingId: "drawing-1",
@@ -871,10 +946,10 @@ describe("SqliteAppRepository", () => {
         estimate: emptyEstimate,
         schemaVersion: DRAWING_SCHEMA_VERSION,
         rulesVersion: RULES_ENGINE_VERSION,
-        versionNumber: 1
+        versionNumber: 1,
       },
       createdByUserId: account.user.id,
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
 
     const sqliteQuotes = await repository.listQuotesForDrawing("drawing-1", account.company.id);
@@ -885,7 +960,9 @@ describe("SqliteAppRepository", () => {
   });
 
   it("supports manager recovery primitives for persisted users", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -895,7 +972,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     expect(account).not.toBeNull();
     if (!account) {
@@ -909,7 +986,7 @@ describe("SqliteAppRepository", () => {
       role: "ADMIN",
       passwordHash: "hash-2",
       passwordSalt: "salt-2",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
     await repository.createSession({
       id: "session-2",
@@ -917,25 +994,31 @@ describe("SqliteAppRepository", () => {
       userId: "user-2",
       tokenHash: "token-hash-2",
       createdAtIso: "2026-03-10T02:00:00.000Z",
-      expiresAtIso: "2026-04-10T02:00:00.000Z"
+      expiresAtIso: "2026-04-10T02:00:00.000Z",
     });
 
     await repository.updateUserPassword("user-2", account.company.id, "hash-3", "salt-3");
-    await repository.revokeSessionsForUser("user-2", account.company.id, "2026-03-10T03:00:00.000Z");
+    await repository.revokeSessionsForUser(
+      "user-2",
+      account.company.id,
+      "2026-03-10T03:00:00.000Z",
+    );
 
     await expect(repository.getUserById("user-2", account.company.id)).resolves.toMatchObject({
       id: "user-2",
-      email: "john@example.com"
+      email: "john@example.com",
     });
     await expect(repository.getUserByEmail("john@example.com")).resolves.toMatchObject({
       passwordHash: "hash-3",
-      passwordSalt: "salt-3"
+      passwordSalt: "salt-3",
     });
     await expect(repository.getAuthenticatedSession("token-hash-2")).resolves.toBeNull();
   });
 
   it("hydrates legacy sqlite pricing configs that do not yet include a workbook", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -945,7 +1028,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) {
       throw new Error("Expected bootstrap account");
@@ -955,20 +1038,22 @@ describe("SqliteAppRepository", () => {
       companyId: account.company.id,
       items: [],
       updatedAtIso: "2026-03-10T00:00:00.000Z",
-      updatedByUserId: account.user.id
+      updatedByUserId: account.user.id,
     });
 
     await expect(repository.getPricingConfig(account.company.id)).resolves.toMatchObject({
       workbook: {
         settings: {
-          labourOverheadPercent: 75
-        }
-      }
+          labourOverheadPercent: 75,
+        },
+      },
     });
   });
 
   it("filters company tasks in sqlite storage", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -978,7 +1063,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) {
       throw new Error("Expected bootstrap account");
@@ -987,13 +1072,18 @@ describe("SqliteAppRepository", () => {
     await seedCompanyTasks(repository, account.company.id, account.user.id);
 
     await expect(repository.listCompanyTasks(account.company.id)).resolves.toHaveLength(2);
-    await expect(repository.listCompanyTasks(account.company.id, { includeCompleted: true })).resolves.toHaveLength(3);
-    await expect(repository.listCompanyTasks(account.company.id, { assignedUserId: account.user.id })).resolves.toMatchObject([
-      { id: "task-open-overdue" }
-    ]);
-    await expect(repository.listCompanyTasks(account.company.id, { includeCompleted: true, search: "acknowledged" })).resolves.toMatchObject([
-      { id: "task-complete" }
-    ]);
+    await expect(
+      repository.listCompanyTasks(account.company.id, { includeCompleted: true }),
+    ).resolves.toHaveLength(3);
+    await expect(
+      repository.listCompanyTasks(account.company.id, { assignedUserId: account.user.id }),
+    ).resolves.toMatchObject([{ id: "task-open-overdue" }]);
+    await expect(
+      repository.listCompanyTasks(account.company.id, {
+        includeCompleted: true,
+        search: "acknowledged",
+      }),
+    ).resolves.toMatchObject([{ id: "task-complete" }]);
   });
 
   it("patches legacy sqlite databases with missing newer columns", async () => {
@@ -1045,12 +1135,28 @@ describe("SqliteAppRepository", () => {
       .prepare(
         "INSERT INTO users (id, company_id, email, display_name, role, password_hash, password_salt, created_at_iso) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run("user-1", "company-1", "jane@example.com", "Jane", "OWNER", "hash", "salt", "2026-03-10T00:00:00.000Z");
+      .run(
+        "user-1",
+        "company-1",
+        "jane@example.com",
+        "Jane",
+        "OWNER",
+        "hash",
+        "salt",
+        "2026-03-10T00:00:00.000Z",
+      );
     legacyDatabase
       .prepare(
         "INSERT INTO sessions (id, company_id, user_id, token_hash, created_at_iso, expires_at_iso) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run("session-1", "company-1", "user-1", "token-hash", "2026-03-10T00:00:00.000Z", "2026-04-10T00:00:00.000Z");
+      .run(
+        "session-1",
+        "company-1",
+        "user-1",
+        "token-hash",
+        "2026-03-10T00:00:00.000Z",
+        "2026-04-10T00:00:00.000Z",
+      );
     legacyDatabase
       .prepare(
         "INSERT INTO drawings (id, company_id, name, layout_json, estimate_json, created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1072,14 +1178,16 @@ describe("SqliteAppRepository", () => {
 
     await expect(repository.getAuthenticatedSession("token-hash")).resolves.toMatchObject({
       company: { id: "company-1" },
-      user: { id: "user-1" }
+      user: { id: "user-1" },
     });
     await expect(repository.listDrawings("company-1")).resolves.toHaveLength(1);
     await expect(repository.listDrawingVersions("drawing-1", "company-1")).resolves.toHaveLength(1);
   });
 
   it("rejects a second persisted bootstrap attempt", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
 
     const firstAccount = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
@@ -1089,7 +1197,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     const secondAccount = await repository.bootstrapOwnerAccount({
       companyId: "company-2",
@@ -1099,7 +1207,7 @@ describe("SqliteAppRepository", () => {
       email: "john@example.com",
       passwordHash: "hash-2",
       passwordSalt: "salt-2",
-      createdAtIso: "2026-03-10T01:00:00.000Z"
+      createdAtIso: "2026-03-10T01:00:00.000Z",
     });
 
     expect(firstAccount).not.toBeNull();
@@ -1108,7 +1216,9 @@ describe("SqliteAppRepository", () => {
   });
 
   it("returns null when updateDrawing has a stale version number", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
@@ -1117,7 +1227,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) throw new Error("Expected bootstrap account");
     await createTestCustomer(repository, account.company.id, account.user.id);
@@ -1136,7 +1246,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     // First update succeeds with correct version
@@ -1153,7 +1263,7 @@ describe("SqliteAppRepository", () => {
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-11T00:00:00.000Z"
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
     });
     expect(updated).not.toBeNull();
     expect(updated?.versionNumber).toBe(2);
@@ -1172,7 +1282,7 @@ describe("SqliteAppRepository", () => {
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-12T00:00:00.000Z"
+      updatedAtIso: "2026-03-12T00:00:00.000Z",
     });
     expect(conflict).toBeNull();
 
@@ -1183,7 +1293,9 @@ describe("SqliteAppRepository", () => {
   });
 
   it("returns null when setDrawingArchivedState has a stale version number", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
@@ -1192,7 +1304,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) throw new Error("Expected bootstrap account");
     await createTestCustomer(repository, account.company.id, account.user.id);
@@ -1211,7 +1323,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     // Stale version number returns null
@@ -1223,7 +1335,7 @@ describe("SqliteAppRepository", () => {
       archivedAtIso: "2026-03-11T00:00:00.000Z",
       archivedByUserId: "user-1",
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-11T00:00:00.000Z"
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
     });
     expect(conflict).toBeNull();
 
@@ -1233,7 +1345,9 @@ describe("SqliteAppRepository", () => {
   });
 
   it("returns null when restoreDrawingVersion has a stale version number", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
@@ -1242,7 +1356,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) throw new Error("Expected bootstrap account");
     await createTestCustomer(repository, account.company.id, account.user.id);
@@ -1261,7 +1375,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     // Update to create version 2
@@ -1278,7 +1392,7 @@ describe("SqliteAppRepository", () => {
       schemaVersion: DRAWING_SCHEMA_VERSION,
       rulesVersion: RULES_ENGINE_VERSION,
       updatedByUserId: "user-1",
-      updatedAtIso: "2026-03-11T00:00:00.000Z"
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
     });
 
     // Restore with stale version returns null
@@ -1290,7 +1404,7 @@ describe("SqliteAppRepository", () => {
       customerId: TEST_CUSTOMER_ID,
       customerName: TEST_CUSTOMER_NAME,
       restoredByUserId: "user-1",
-      restoredAtIso: "2026-03-12T00:00:00.000Z"
+      restoredAtIso: "2026-03-12T00:00:00.000Z",
     });
     expect(conflict).toBeNull();
 
@@ -1301,7 +1415,9 @@ describe("SqliteAppRepository", () => {
   });
 
   it("rolls back all changes in a transaction on error", async () => {
-    const repository = new SqliteAppRepository(join(tmpdir(), `fence-estimator-${randomUUID()}.db`));
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
     const account = await repository.bootstrapOwnerAccount({
       companyId: "company-1",
       companyName: "Acme",
@@ -1310,7 +1426,7 @@ describe("SqliteAppRepository", () => {
       email: "jane@example.com",
       passwordHash: "hash",
       passwordSalt: "salt",
-      createdAtIso: "2026-03-10T00:00:00.000Z"
+      createdAtIso: "2026-03-10T00:00:00.000Z",
     });
     if (!account) throw new Error("Expected bootstrap account");
     await createTestCustomer(repository, account.company.id, account.user.id);
@@ -1329,7 +1445,7 @@ describe("SqliteAppRepository", () => {
       createdByUserId: "user-1",
       updatedByUserId: "user-1",
       createdAtIso: "2026-03-10T00:00:00.000Z",
-      updatedAtIso: "2026-03-10T00:00:00.000Z"
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
     });
 
     // Transaction that succeeds partially then throws
@@ -1343,7 +1459,7 @@ describe("SqliteAppRepository", () => {
           archivedAtIso: "2026-03-11T00:00:00.000Z",
           archivedByUserId: "user-1",
           updatedByUserId: "user-1",
-          updatedAtIso: "2026-03-11T00:00:00.000Z"
+          updatedAtIso: "2026-03-11T00:00:00.000Z",
         });
         throw new Error("Simulated failure");
       }),

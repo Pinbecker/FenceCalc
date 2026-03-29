@@ -37,14 +37,26 @@ import {
   ROLL_FORM_HEIGHT_OPTIONS,
   SIDE_NETTING_HEIGHT_OPTIONS_MM,
   TWIN_BAR_HEIGHT_OPTIONS,
-  useEditorKeyboardShortcuts
+  useEditorKeyboardShortcuts,
 } from "./editor";
 
 interface EditorPageProps {
   initialDrawingId?: string | null;
   onNavigate: (
-    route: "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "job" | "drawing" | "editor" | "estimate" | "pricing" | "admin" | "login",
-    query?: Record<string, string>
+    route:
+      | "dashboard"
+      | "tasks"
+      | "drawings"
+      | "customers"
+      | "customer"
+      | "job"
+      | "drawing"
+      | "editor"
+      | "estimate"
+      | "pricing"
+      | "admin"
+      | "login",
+    query?: Record<string, string>,
   ) => void;
 }
 
@@ -74,7 +86,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyFloodlightColumnPlacements,
     resetLayout,
     undoLayout,
-    redoLayout
+    redoLayout,
   } = useEditorLayoutHistory();
   const shellState = useEditorShellState();
   const selectionState = useEditorSelectionState(shellState.interactionMode);
@@ -103,14 +115,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     toWorld,
     visibleBounds,
     verticalLines,
-    horizontalLines
+    horizontalLines,
   } = useEditorCanvasViewport({
     canvasWidth,
     canvasHeight,
     minScale: MIN_SCALE,
     maxScale: MAX_SCALE,
     initialVisibleWidthMm: INITIAL_VISIBLE_WIDTH_MM,
-    chooseGridStep
+    chooseGridStep,
   });
   const workspace = useEditorWorkspaceBridge({
     getSavedViewport: () => view,
@@ -123,7 +135,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       selectionState.resetLoadedWorkspaceState();
       shellState.setSelectedPlanId(null);
     },
-    onRestoreViewport: restoreView
+    onRestoreViewport: restoreView,
   });
   const isQuotedViewOnly = workspace.currentDrawingStatus === "QUOTED";
   const interactionMode = isQuotedViewOnly ? "SELECT" : shellState.interactionMode;
@@ -167,7 +179,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     selectedPlanVisual,
     selectedSegment,
     visualPosts,
-    visibleSegmentLabelKeys
+    visibleSegmentLabelKeys,
   } = useEditorDerivedState({
     segments,
     gatePlacements,
@@ -182,7 +194,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     activeSpecSystem: shellState.activeSpec.system,
     viewScale: view.scale,
     canvasWidth,
-    freezeOptimization: isOptimizationFrozen
+    freezeOptimization: isOptimizationFrozen,
   });
   const {
     postRowsByType,
@@ -192,18 +204,29 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     floodlightColumnCountsByHeight,
     twinBarFenceRows,
     featureCounts,
-    featureRowsByKind
+    featureRowsByKind,
   } = editorSummary;
   const optimizationSummary = estimate.optimization;
-  const panelCount = estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
+  const panelCount =
+    estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
   const fenceRunCount = estimateSegments.length;
   const resolvedBasketballPostById = useMemo(
-    () => new Map(resolvedBasketballPostPlacements.map((basketballPost) => [basketballPost.id, basketballPost] as const)),
-    [resolvedBasketballPostPlacements]
+    () =>
+      new Map(
+        resolvedBasketballPostPlacements.map(
+          (basketballPost) => [basketballPost.id, basketballPost] as const,
+        ),
+      ),
+    [resolvedBasketballPostPlacements],
   );
   const resolvedFloodlightColumnById = useMemo(
-    () => new Map(resolvedFloodlightColumnPlacements.map((floodlightColumn) => [floodlightColumn.id, floodlightColumn] as const)),
-    [resolvedFloodlightColumnPlacements]
+    () =>
+      new Map(
+        resolvedFloodlightColumnPlacements.map(
+          (floodlightColumn) => [floodlightColumn.id, floodlightColumn] as const,
+        ),
+      ),
+    [resolvedFloodlightColumnPlacements],
   );
 
   useEditorSelectionEffects({
@@ -212,7 +235,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     selectedBasketballPostId: selectionState.selectedBasketballPostId,
     selectedFloodlightColumnId: selectionState.selectedFloodlightColumnId,
     selectedPlanId: shellState.selectedPlanId,
-    hasSelectedGate: selectionState.selectedGateId !== null && resolvedGateById.has(selectionState.selectedGateId),
+    hasSelectedGate:
+      selectionState.selectedGateId !== null && resolvedGateById.has(selectionState.selectedGateId),
     hasSelectedBasketballPost:
       selectionState.selectedBasketballPostId !== null &&
       resolvedBasketballPostById.has(selectionState.selectedBasketballPostId),
@@ -228,7 +252,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setActiveFloodlightColumnDrag: selectionState.setActiveFloodlightColumnDrag,
     setIsLengthEditorOpen: selectionState.setIsLengthEditorOpen,
     setSelectedLengthInputM: selectionState.setSelectedLengthInputM,
-    setSelectedPlanId: shellState.setSelectedPlanId
+    setSelectedPlanId: shellState.setSelectedPlanId,
   });
 
   const {
@@ -261,7 +285,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolveSideNettingSegmentPreview,
     sideNettingSegmentPreview,
     closeLoopPoint,
-    resolveDrawPoint
+    resolveDrawPoint,
   } = useEditorInteractionPreviews({
     segments,
     lineSnapSegments: estimateSegments,
@@ -292,7 +316,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     pendingSideNettingStart: shellState.pendingSideNettingStart,
     activeGateDragId: selectionState.activeGateDrag?.gateId ?? null,
     activeBasketballPostDragId: selectionState.activeBasketballPostDrag?.basketballPostId ?? null,
-    activeFloodlightColumnDragId: selectionState.activeFloodlightColumnDrag?.floodlightColumnId ?? null
+    activeFloodlightColumnDragId:
+      selectionState.activeFloodlightColumnDrag?.floodlightColumnId ?? null,
   });
 
   const {
@@ -320,7 +345,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     startSelectedFloodlightColumnDrag,
     startSelectedGateDrag,
     startSelectedSegmentDrag,
-    updateSegment
+    updateSegment,
   } = useEditorCommands({
     stageRef,
     applyLayout,
@@ -408,7 +433,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setCustomGateWidthMm: shellState.setCustomGateWidthMm,
     setCustomGateWidthInputM: shellState.setCustomGateWidthInputM,
     setPendingPitchDividerStart: shellState.setPendingPitchDividerStart,
-    setPendingSideNettingStart: shellState.setPendingSideNettingStart
+    setPendingSideNettingStart: shellState.setPendingSideNettingStart,
   });
 
   const keyboardShortcutOptions = useMemo(
@@ -438,7 +463,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       setIsSpacePressed,
       setDisableSnap: shellState.setDisableSnap,
       cancelActiveDrawing,
-      finishActiveInteraction: cancelActiveDrawing
+      finishActiveInteraction: cancelActiveDrawing,
     }),
     [
       cancelActiveDrawing,
@@ -451,14 +476,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       setIsSpacePressed,
       shellState.setDisableSnap,
       shellState.setInteractionMode,
-      undoSegments
+      undoSegments,
     ],
   );
   useEditorKeyboardShortcuts(keyboardShortcutOptions);
 
   const { confirmDiscardChanges, guardedNavigate } = useEditorNavigationGuards({
     isDirty: workspace.isDirty,
-    onNavigate
+    onNavigate,
   });
   const session = workspace.session;
   useEffect(() => {
@@ -483,7 +508,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     selectionState.setIsLengthEditorOpen(false);
     setIsEndpointDragActive(false);
     setDrawingModalMode((current) => (current === "saveAs" ? null : current));
-  }, [isQuotedViewOnly, selectionState.setIsLengthEditorOpen, shellState.interactionMode, shellState.setInteractionMode]);
+  }, [
+    isQuotedViewOnly,
+    selectionState.setIsLengthEditorOpen,
+    shellState.interactionMode,
+    shellState.setInteractionMode,
+  ]);
 
   const {
     canManageAdmin,
@@ -494,7 +524,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     handleExportPdf,
     handleOpenCustomers,
     handleStartNewDraft,
-    isChangingStatus
+    isChangingStatus,
   } = useEditorPageActions({
     stageRef,
     workspace,
@@ -510,7 +540,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     confirmDiscardChanges,
     resetWorkspaceCanvas,
     resetView,
-    onNavigate
+    onNavigate,
   });
   const canDeleteSelection =
     !isQuotedViewOnly &&
@@ -527,8 +557,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const canNavigateEstimate = !!workspace.currentDrawingId && !workspace.isDirty;
   const toggleItemCounts = useCallback(() => setIsItemCountsVisible((c) => !c), []);
   const togglePostKey = useCallback(() => setIsPostKeyVisible((c) => !c), []);
-  const toggleOptimization = useCallback(() =>
-    shellState.setIsOptimizationInspectorOpen((c: boolean) => !c),
+  const toggleOptimization = useCallback(
+    () => shellState.setIsOptimizationInspectorOpen((c: boolean) => !c),
     [shellState],
   );
   const menuBarProps = {
@@ -608,7 +638,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onNavigatePricing: () => guardedNavigate("pricing"),
     onNavigateAdmin: () => guardedNavigate("admin"),
     canNavigateEstimate,
-    estimateTitle
+    estimateTitle,
   };
   const workspaceShellProps = {
     toolPaletteProps: {
@@ -659,7 +689,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onSetSideNettingHeightMm: shellState.setSideNettingHeightMm,
       onCustomGateWidthInputChange,
       onNormalizeGateInputs: normalizeGateInputs,
-      onSetActiveSpec: shellState.setActiveSpec
+      onSetActiveSpec: shellState.setActiveSpec,
     },
     canvasFrameRef,
     canvasStageProps: {
@@ -747,7 +777,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         selectionState.setSelectedFloodlightColumnId(null);
         openLengthEditor(segmentId);
       },
-      onUpdateSegmentEndpoint: (segmentId: string, endpoint: "start" | "end", point: { x: number; y: number }) => {
+      onUpdateSegmentEndpoint: (
+        segmentId: string,
+        endpoint: "start" | "end",
+        point: { x: number; y: number },
+      ) => {
         updateSegment(segmentId, (current) => ({ ...current, [endpoint]: point }));
       },
       onStartSegmentEndpointDrag: () => {
@@ -806,7 +840,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         selectionState.setSelectedFloodlightColumnId(floodlightColumnId);
         selectionState.setIsLengthEditorOpen(false);
         startSelectedFloodlightColumnDrag(floodlightColumnId);
-      }
+      },
     },
     optimizationPlannerProps: {
       summary: optimizationSummary,
@@ -824,7 +858,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       segmentOrdinalById,
       onOpen: () => shellState.setIsOptimizationInspectorOpen(true),
       onClose: () => shellState.setIsOptimizationInspectorOpen(false),
-      onSelectPlan: shellState.setSelectedPlanId
+      onSelectPlan: shellState.setSelectedPlanId,
     },
     floatingPanelsProps: {
       isItemCountsVisible,
@@ -842,10 +876,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       fenceRunCount,
       formatHeightLabelFromMm,
       onToggleItemCounts: toggleItemCounts,
-      onTogglePostKey: togglePostKey
+      onTogglePostKey: togglePostKey,
     },
     isOptimizationVisible: shellState.isOptimizationInspectorOpen,
-    isReadOnly: isQuotedViewOnly
+    isReadOnly: isQuotedViewOnly,
   };
   const lengthEditorProps = {
     isOpen: !isQuotedViewOnly && selectionState.isLengthEditorOpen && selectedSegment !== null,
@@ -854,7 +888,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     inputStepM: RECESS_INPUT_STEP_M,
     onChangeLength: selectionState.setSelectedLengthInputM,
     onApply: applySelectedLengthEdit,
-    onCancel: () => selectionState.setIsLengthEditorOpen(false)
+    onCancel: () => selectionState.setIsLengthEditorOpen(false),
   };
 
   return (

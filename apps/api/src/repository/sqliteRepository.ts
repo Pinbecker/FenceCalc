@@ -36,7 +36,7 @@ import type {
   UpdateJobTaskInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
-  UpdateDrawingInput
+  UpdateDrawingInput,
 } from "./types.js";
 
 export class SqliteAppRepository implements AppRepository {
@@ -50,7 +50,10 @@ export class SqliteAppRepository implements AppRepository {
   private readonly support: SqliteSupportStore;
   private readonly auditLogRetentionDays: number;
 
-  public constructor(databasePath: string, options: { auditLogRetentionDays?: number; skipMigration?: boolean } = {}) {
+  public constructor(
+    databasePath: string,
+    options: { auditLogRetentionDays?: number; skipMigration?: boolean } = {},
+  ) {
     mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new Database(databasePath);
     this.database.pragma("journal_mode = WAL");
@@ -114,7 +117,12 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.userSessions.listUsers(companyId));
   }
 
-  public updateUserPassword(userId: string, companyId: string, passwordHash: string, passwordSalt: string): Promise<void> {
+  public updateUserPassword(
+    userId: string,
+    companyId: string,
+    passwordHash: string,
+    passwordSalt: string,
+  ): Promise<void> {
     this.userSessions.updateUserPassword(userId, companyId, passwordHash, passwordSalt);
     return Promise.resolve();
   }
@@ -132,7 +140,11 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
-  public revokeSessionsForUser(userId: string, companyId: string, revokedAtIso: string): Promise<void> {
+  public revokeSessionsForUser(
+    userId: string,
+    companyId: string,
+    revokedAtIso: string,
+  ): Promise<void> {
     this.userSessions.revokeSessionsForUser(userId, companyId, revokedAtIso);
     return Promise.resolve();
   }
@@ -173,7 +185,12 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.jobs.createJob(input));
   }
 
-  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string) {
+  public listJobs(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ) {
     return Promise.resolve(this.jobs.listJobs(companyId, scope, search, customerId));
   }
 
@@ -225,7 +242,11 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.drawings.createDrawing(input));
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
+  public listDrawings(
+    companyId: string,
+    scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE",
+    search = "",
+  ) {
     return Promise.resolve(this.drawings.listDrawings(companyId, scope, search));
   }
 
@@ -283,9 +304,16 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
-  public consumePasswordResetToken(tokenHash: string, passwordHash: string, passwordSalt: string, consumedAtIso: string) {
+  public consumePasswordResetToken(
+    tokenHash: string,
+    passwordHash: string,
+    passwordSalt: string,
+    consumedAtIso: string,
+  ) {
     this.support.pruneStaleRecords(consumedAtIso, this.auditLogRetentionDays);
-    return Promise.resolve(this.support.consumePasswordResetToken(tokenHash, passwordHash, passwordSalt, consumedAtIso));
+    return Promise.resolve(
+      this.support.consumePasswordResetToken(tokenHash, passwordHash, passwordSalt, consumedAtIso),
+    );
   }
 
   public addAuditLog(input: CreateAuditLogInput) {
@@ -293,7 +321,10 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve(this.support.addAuditLog(input));
   }
 
-  public listAuditLog(companyId: string, options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {}) {
+  public listAuditLog(
+    companyId: string,
+    options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {},
+  ) {
     this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     return Promise.resolve(this.support.listAuditLog(companyId, options));
   }

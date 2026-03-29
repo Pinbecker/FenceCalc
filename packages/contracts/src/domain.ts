@@ -4,9 +4,29 @@ export interface PointMm {
 }
 
 export type FenceSystem = "TWIN_BAR" | "ROLL_FORM";
-export const TWIN_BAR_HEIGHT_KEYS = ["1.2m", "1.8m", "2m", "2.4m", "3m", "4m", "4.5m", "5m", "6m"] as const;
+export const TWIN_BAR_HEIGHT_KEYS = [
+  "1.2m",
+  "1.8m",
+  "2m",
+  "2.4m",
+  "3m",
+  "4m",
+  "4.5m",
+  "5m",
+  "6m",
+] as const;
 export const ROLL_FORM_HEIGHT_KEYS = ["2m", "3m"] as const;
-export const FENCE_HEIGHT_KEYS = ["1.2m", "1.8m", "2m", "2.4m", "3m", "4m", "4.5m", "5m", "6m"] as const;
+export const FENCE_HEIGHT_KEYS = [
+  "1.2m",
+  "1.8m",
+  "2m",
+  "2.4m",
+  "3m",
+  "4m",
+  "4.5m",
+  "5m",
+  "6m",
+] as const;
 
 export type TwinBarHeightKey = (typeof TWIN_BAR_HEIGHT_KEYS)[number];
 export type RollFormHeightKey = (typeof ROLL_FORM_HEIGHT_KEYS)[number];
@@ -52,7 +72,10 @@ export type GoalUnitHeightMm = (typeof GOAL_UNIT_HEIGHTS_MM)[number];
 export type BasketballArmLengthMm = (typeof BASKETBALL_ARM_LENGTHS_MM)[number];
 export type KickboardSectionHeightMm = (typeof KICKBOARD_SECTION_HEIGHTS_MM)[number];
 export type KickboardProfile = "SQUARE" | "CHAMFERED";
-export type BasketballFeatureType = "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST" | "GOAL_UNIT_INTEGRATED";
+export type BasketballFeatureType =
+  | "DEDICATED_POST"
+  | "MOUNTED_TO_EXISTING_POST"
+  | "GOAL_UNIT_INTEGRATED";
 export type BasketballMountingMode = "PROJECTING_ARM" | "POST_MOUNTED" | "GOAL_UNIT_REAR_CENTER";
 
 export interface SegmentAnchor {
@@ -164,14 +187,22 @@ export interface MaterialSummary {
   twinBarPanels: number;
   twinBarPanelsSuperRebound: number;
   twinBarPanelsByStockHeightMm: Record<string, number>;
-  twinBarPanelsByFenceHeight: Record<string, { standard: number; superRebound: number; total: number }>;
+  twinBarPanelsByFenceHeight: Record<
+    string,
+    { standard: number; superRebound: number; total: number }
+  >;
   roll2100: number;
   roll900: number;
   totalRolls: number;
   rollsByFenceHeight: Record<string, { roll2100: number; roll900: number; total: number }>;
 }
 
-export type FeatureQuantityKind = "GOAL_UNIT" | "BASKETBALL" | "KICKBOARD" | "PITCH_DIVIDER" | "SIDE_NETTING";
+export type FeatureQuantityKind =
+  | "GOAL_UNIT"
+  | "BASKETBALL"
+  | "KICKBOARD"
+  | "PITCH_DIVIDER"
+  | "SIDE_NETTING";
 export type FeatureQuantityUnit = "item" | "panel" | "post" | "assembly" | "board" | "m" | "m2";
 
 export interface FeatureQuantityLine {
@@ -351,7 +382,17 @@ export interface CustomerSummary extends CustomerRecord {
   lastActivityAtIso: string | null;
 }
 
-export const JOB_STAGES = ["DRAFT", "DESIGNING", "ESTIMATING", "READY_TO_QUOTE", "QUOTED", "FOLLOW_UP", "WON", "LOST", "ON_HOLD"] as const;
+export const JOB_STAGES = [
+  "DRAFT",
+  "DESIGNING",
+  "ESTIMATING",
+  "READY_TO_QUOTE",
+  "QUOTED",
+  "FOLLOW_UP",
+  "WON",
+  "LOST",
+  "ON_HOLD",
+] as const;
 export type JobStage = (typeof JOB_STAGES)[number];
 
 export interface JobCommercialInputs {
@@ -404,13 +445,20 @@ export interface JobSummary extends JobRecord {
 }
 
 export type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
-export const TASK_PRIORITIES: readonly TaskPriority[] = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
+export const TASK_PRIORITIES: readonly TaskPriority[] = [
+  "LOW",
+  "NORMAL",
+  "HIGH",
+  "URGENT",
+] as const;
 
 export interface JobTaskRecord {
   id: string;
   companyId: string;
   jobId: string;
   jobName: string;
+  drawingId: string | null;
+  drawingName: string;
   title: string;
   description: string;
   priority: TaskPriority;

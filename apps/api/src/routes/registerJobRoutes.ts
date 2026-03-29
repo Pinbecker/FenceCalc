@@ -1,20 +1,38 @@
-import { buildDefaultPricingConfig, jobCreateRequestSchema, jobDrawingCreateRequestSchema, jobPrimaryDrawingUpdateRequestSchema, jobQuoteCreateRequestSchema, jobTaskCreateRequestSchema, jobTaskUpdateRequestSchema, jobUpdateRequestSchema } from "@fence-estimator/contracts";
+import {
+  buildDefaultPricingConfig,
+  jobCreateRequestSchema,
+  jobDrawingCreateRequestSchema,
+  jobPrimaryDrawingUpdateRequestSchema,
+  jobQuoteCreateRequestSchema,
+  jobTaskCreateRequestSchema,
+  jobTaskUpdateRequestSchema,
+  jobUpdateRequestSchema,
+} from "@fence-estimator/contracts";
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 import { z } from "zod";
 
 import { requireAuth } from "../authorization.js";
 import { mergeJobCommercialManualEntries } from "../jobEstimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
-import { createJobDrawingForCompany, createJobForCompany, createJobTaskForCompany, deleteJobForCompany, deleteJobTaskForCompany, setJobPrimaryDrawingForCompany, updateJobForCompany, updateJobTaskForCompany } from "../services/jobService.js";
+import {
+  createJobDrawingForCompany,
+  createJobForCompany,
+  createJobTaskForCompany,
+  deleteJobForCompany,
+  deleteJobTaskForCompany,
+  setJobPrimaryDrawingForCompany,
+  updateJobForCompany,
+  updateJobTaskForCompany,
+} from "../services/jobService.js";
 import { createQuoteForJob } from "../services/quoteService.js";
 
 const jobScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
 const jobRouteParamsSchema = z.object({
-  id: z.string().trim().min(1)
+  id: z.string().trim().min(1),
 });
 const jobTaskRouteParamsSchema = z.object({
   id: z.string().trim().min(1),
-  taskId: z.string().trim().min(1)
+  taskId: z.string().trim().min(1),
 });
 const companyTaskQuerySchema = z.object({
   includeCompleted: z.enum(["true", "false"]).optional(),
@@ -22,20 +40,30 @@ const companyTaskQuerySchema = z.object({
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   search: z.string().trim().optional(),
   dueBucket: z.enum(["OVERDUE", "TODAY", "UPCOMING", "NO_DATE"]).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional()
+  limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
-export function registerJobRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
+export function registerJobRoutes({
+  app,
+  config,
+  repository,
+  writeLimiter,
+}: RouteDependencies): void {
   app.get("/api/v1/jobs", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
-    const query = (request.query as { scope?: unknown; search?: unknown; customerId?: unknown } | undefined) ?? {};
+    const query =
+      (request.query as { scope?: unknown; search?: unknown; customerId?: unknown } | undefined) ??
+      {};
     const scope = jobScopeSchema.parse(query.scope);
     const search = typeof query.search === "string" ? query.search : "";
-    const customerId = typeof query.customerId === "string" && query.customerId.trim() ? query.customerId.trim() : undefined;
+    const customerId =
+      typeof query.customerId === "string" && query.customerId.trim()
+        ? query.customerId.trim()
+        : undefined;
     const jobs = await repository.listJobs(authenticated.company.id, scope, search, customerId);
     return reply.code(200).send({ jobs });
   });
@@ -53,7 +81,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid job payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
@@ -78,7 +106,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
@@ -102,7 +130,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
@@ -110,11 +138,16 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid job payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
-    const result = await updateJobForCompany(repository, authenticated, params.data.id, parsed.data);
+    const result = await updateJobForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      parsed.data,
+    );
     if (result.kind !== "success") {
       if (result.kind === "job_not_found") {
         return reply.code(404).send({ error: "Job not found" });
@@ -147,7 +180,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
@@ -172,7 +205,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
@@ -198,18 +231,23 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const parsed = jobDrawingCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid job drawing payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
-    const result = await createJobDrawingForCompany(repository, authenticated, params.data.id, parsed.data);
+    const result = await createJobDrawingForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      parsed.data,
+    );
     if (result.kind === "drawing_not_found") {
       return reply.code(404).send({ error: "Drawing or job not found" });
     }
@@ -236,18 +274,23 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const parsed = jobPrimaryDrawingUpdateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid primary drawing payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
-    const result = await setJobPrimaryDrawingForCompany(repository, authenticated, params.data.id, parsed.data.drawingId);
+    const result = await setJobPrimaryDrawingForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      parsed.data.drawingId,
+    );
     if (result.kind !== "success") {
       if (result.kind === "job_not_found") {
         return reply.code(404).send({ error: "Job not found" });
@@ -268,11 +311,12 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const query = (request.query as { drawingId?: unknown } | undefined) ?? {};
-    const requestedDrawingId = typeof query.drawingId === "string" && query.drawingId.trim() ? query.drawingId.trim() : null;
+    const requestedDrawingId =
+      typeof query.drawingId === "string" && query.drawingId.trim() ? query.drawingId.trim() : null;
 
     const job = await repository.getJobById(params.data.id, authenticated.company.id);
     if (!job) {
@@ -294,7 +338,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
       drawing,
       pricingConfig,
       [],
-      mergeJobCommercialManualEntries(job.commercialInputs)
+      mergeJobCommercialManualEntries(job.commercialInputs),
     );
     return reply.code(200).send({ pricedEstimate });
   });
@@ -309,7 +353,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
@@ -334,14 +378,14 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const parsed = jobQuoteCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid job quote payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
@@ -351,7 +395,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
       params.data.id,
       parsed.data.drawingId ?? null,
       parsed.data.ancillaryItems,
-      parsed.data.manualEntries
+      parsed.data.manualEntries,
     );
     if (result.kind === "job_not_found") {
       return reply.code(404).send({ error: "Job not found" });
@@ -372,7 +416,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const job = await repository.getJobById(params.data.id, authenticated.company.id);
@@ -395,21 +439,29 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const parsed = jobTaskCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid task payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
-    const result = await createJobTaskForCompany(repository, authenticated, params.data.id, parsed.data);
+    const result = await createJobTaskForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      parsed.data,
+    );
     if (result.kind !== "success") {
       if (result.kind === "job_not_found") {
         return reply.code(404).send({ error: "Job not found" });
+      }
+      if (result.kind === "drawing_not_found") {
+        return reply.code(404).send({ error: "Drawing not found" });
       }
       if (result.kind === "invalid_user") {
         return reply.code(400).send({ error: result.message });
@@ -431,21 +483,30 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid task route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const parsed = jobTaskUpdateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid task payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
-    const result = await updateJobTaskForCompany(repository, authenticated, params.data.id, params.data.taskId, parsed.data);
+    const result = await updateJobTaskForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      params.data.taskId,
+      parsed.data,
+    );
     if (result.kind !== "success") {
       if (result.kind === "job_not_found") {
         return reply.code(404).send({ error: "Job not found" });
+      }
+      if (result.kind === "drawing_not_found") {
+        return reply.code(404).send({ error: "Drawing not found" });
       }
       if (result.kind === "task_not_found") {
         return reply.code(404).send({ error: "Task not found" });
@@ -467,11 +528,16 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid task route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
 
-    const result = await deleteJobTaskForCompany(repository, authenticated, params.data.id, params.data.taskId);
+    const result = await deleteJobTaskForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+      params.data.taskId,
+    );
     if (result.kind !== "success") {
       if (result.kind === "job_not_found") {
         return reply.code(404).send({ error: "Job not found" });
@@ -493,16 +559,16 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!query.success) {
       return reply.code(400).send({
         error: "Invalid task query parameters",
-        details: query.error.flatten()
+        details: query.error.flatten(),
       });
     }
     const tasks = await repository.listCompanyTasks(authenticated.company.id, {
       includeCompleted: query.data.includeCompleted === "true",
-      assignedUserId: query.data.assignedUserId,
-      priority: query.data.priority,
-      search: query.data.search,
-      dueBucket: query.data.dueBucket,
-      limit: query.data.limit
+      ...(query.data.assignedUserId ? { assignedUserId: query.data.assignedUserId } : {}),
+      ...(query.data.priority ? { priority: query.data.priority } : {}),
+      ...(query.data.search ? { search: query.data.search } : {}),
+      ...(query.data.dueBucket ? { dueBucket: query.data.dueBucket } : {}),
+      ...(query.data.limit !== undefined ? { limit: query.data.limit } : {}),
     });
     return reply.code(200).send({ tasks });
   });
@@ -516,7 +582,7 @@ export function registerJobRoutes({ app, config, repository, writeLimiter }: Rou
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid job route parameters",
-        details: params.error.flatten()
+        details: params.error.flatten(),
       });
     }
     const job = await repository.getJobById(params.data.id, authenticated.company.id);

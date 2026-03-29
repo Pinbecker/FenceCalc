@@ -12,7 +12,9 @@ export function migrateSqliteDatabase(database: Database.Database): void {
 
   const applied = new Set(
     (
-      database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all() as Array<{ name: string }>
+      database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all() as Array<{
+        name: string;
+      }>
     ).map((row) => row.name),
   );
 
@@ -75,7 +77,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
 
         CREATE INDEX IF NOT EXISTS idx_drawings_company_updated_at
         ON drawings(company_id, updated_at_iso DESC);
-      `
+      `,
     },
     {
       name: "002_drawing_versions_and_audit",
@@ -118,7 +120,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
 
         CREATE INDEX IF NOT EXISTS idx_audit_log_company_created
         ON audit_log(company_id, created_at_iso DESC);
-      `
+      `,
     },
     {
       name: "003_password_reset_tokens",
@@ -132,20 +134,20 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           consumed_at_iso TEXT,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
-      `
+      `,
     },
     {
       name: "004_drawing_viewports",
       sql: `
         ALTER TABLE drawings ADD COLUMN viewport_json TEXT;
         ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT;
-      `
+      `,
     },
     {
       name: "005_drawing_customers",
       sql: `
         SELECT 1;
-      `
+      `,
     },
     {
       name: "006_pricing_configs",
@@ -158,7 +160,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
           FOREIGN KEY (company_id) REFERENCES companies(id),
           FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
         );
-      `
+      `,
     },
     {
       name: "007_quotes",
@@ -178,7 +180,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
 
         CREATE INDEX IF NOT EXISTS idx_quotes_drawing_created
         ON quotes(company_id, drawing_id, created_at_iso DESC);
-      `
+      `,
     },
     {
       name: "008_customers",
@@ -209,13 +211,13 @@ export function migrateSqliteDatabase(database: Database.Database): void {
 
         ALTER TABLE drawings ADD COLUMN customer_id TEXT;
         ALTER TABLE drawing_versions ADD COLUMN customer_id TEXT;
-      `
+      `,
     },
     {
       name: "009_customer_contacts",
       sql: `
         ALTER TABLE customers ADD COLUMN additional_contacts_json TEXT NOT NULL DEFAULT '[]';
-      `
+      `,
     },
     {
       name: "010_drawing_status",
@@ -223,7 +225,7 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE drawings ADD COLUMN status TEXT NOT NULL DEFAULT 'DRAFT';
         ALTER TABLE drawings ADD COLUMN status_changed_at_iso TEXT;
         ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT;
-      `
+      `,
     },
     {
       name: "011_jobs",
@@ -288,30 +290,38 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE quotes ADD COLUMN job_id TEXT;
         ALTER TABLE quotes ADD COLUMN source_drawing_id TEXT;
         ALTER TABLE quotes ADD COLUMN source_drawing_version_number INTEGER;
-      `
+      `,
     },
     {
       name: "012_task_enhancements",
       sql: `
         ALTER TABLE job_tasks ADD COLUMN description TEXT NOT NULL DEFAULT '';
         ALTER TABLE job_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'NORMAL';
-      `
+      `,
     },
     {
       name: "013_parent_drawing",
       sql: `
         ALTER TABLE drawings ADD COLUMN parent_drawing_id TEXT;
-      `
+      `,
     },
     {
       name: "014_revision_number",
       sql: `
         ALTER TABLE drawings ADD COLUMN revision_number INTEGER NOT NULL DEFAULT 0;
-      `
-    }
+      `,
+    },
+    {
+      name: "015_task_drawings",
+      sql: `
+        ALTER TABLE job_tasks ADD COLUMN drawing_id TEXT;
+      `,
+    },
   ] as const;
 
-  const insertMigration = database.prepare("INSERT INTO schema_migrations (name, applied_at_iso) VALUES (?, ?)");
+  const insertMigration = database.prepare(
+    "INSERT INTO schema_migrations (name, applied_at_iso) VALUES (?, ?)",
+  );
 
   for (const migration of migrations) {
     if (applied.has(migration.name)) {
@@ -335,7 +345,9 @@ function hasColumn(database: Database.Database, tableName: string, columnName: s
   if (!tableExists(database, tableName)) {
     return false;
   }
-  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>;
   return columns.some((column) => column.name === columnName);
 }
 
@@ -354,26 +366,44 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "archived_at_iso")) {
     database.exec("ALTER TABLE drawings ADD COLUMN archived_at_iso TEXT");
   }
-  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "archived_by_user_id")) {
+  if (
+    tableExists(database, "drawings") &&
+    !hasColumn(database, "drawings", "archived_by_user_id")
+  ) {
     database.exec("ALTER TABLE drawings ADD COLUMN archived_by_user_id TEXT");
   }
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "schema_version")) {
     database.exec("ALTER TABLE drawings ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1");
   }
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "rules_version")) {
-    database.exec("ALTER TABLE drawings ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'");
+    database.exec(
+      "ALTER TABLE drawings ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'",
+    );
   }
 
-  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "schema_version")) {
-    database.exec("ALTER TABLE drawing_versions ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1");
+  if (
+    tableExists(database, "drawing_versions") &&
+    !hasColumn(database, "drawing_versions", "schema_version")
+  ) {
+    database.exec(
+      "ALTER TABLE drawing_versions ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1",
+    );
   }
-  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "rules_version")) {
-    database.exec("ALTER TABLE drawing_versions ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'");
+  if (
+    tableExists(database, "drawing_versions") &&
+    !hasColumn(database, "drawing_versions", "rules_version")
+  ) {
+    database.exec(
+      "ALTER TABLE drawing_versions ADD COLUMN rules_version TEXT NOT NULL DEFAULT '2026-03-11'",
+    );
   }
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "viewport_json")) {
     database.exec("ALTER TABLE drawings ADD COLUMN viewport_json TEXT");
   }
-  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "viewport_json")) {
+  if (
+    tableExists(database, "drawing_versions") &&
+    !hasColumn(database, "drawing_versions", "viewport_json")
+  ) {
     database.exec("ALTER TABLE drawing_versions ADD COLUMN viewport_json TEXT");
   }
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "customer_name")) {
@@ -386,7 +416,10 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
       WHERE TRIM(COALESCE(customer_name, '')) = ''
     `);
   }
-  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "customer_name")) {
+  if (
+    tableExists(database, "drawing_versions") &&
+    !hasColumn(database, "drawing_versions", "customer_name")
+  ) {
     database.exec("ALTER TABLE drawing_versions ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''");
   }
   if (tableExists(database, "drawing_versions")) {
@@ -427,7 +460,10 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "customer_id")) {
     database.exec("ALTER TABLE drawings ADD COLUMN customer_id TEXT");
   }
-  if (tableExists(database, "drawing_versions") && !hasColumn(database, "drawing_versions", "customer_id")) {
+  if (
+    tableExists(database, "drawing_versions") &&
+    !hasColumn(database, "drawing_versions", "customer_id")
+  ) {
     database.exec("ALTER TABLE drawing_versions ADD COLUMN customer_id TEXT");
   }
 
@@ -563,10 +599,16 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status")) {
     database.exec("ALTER TABLE drawings ADD COLUMN status TEXT NOT NULL DEFAULT 'DRAFT'");
   }
-  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status_changed_at_iso")) {
+  if (
+    tableExists(database, "drawings") &&
+    !hasColumn(database, "drawings", "status_changed_at_iso")
+  ) {
     database.exec("ALTER TABLE drawings ADD COLUMN status_changed_at_iso TEXT");
   }
-  if (tableExists(database, "drawings") && !hasColumn(database, "drawings", "status_changed_by_user_id")) {
+  if (
+    tableExists(database, "drawings") &&
+    !hasColumn(database, "drawings", "status_changed_by_user_id")
+  ) {
     database.exec("ALTER TABLE drawings ADD COLUMN status_changed_by_user_id TEXT");
   }
 
@@ -612,7 +654,9 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
     database.exec("ALTER TABLE jobs ADD COLUMN primary_drawing_id TEXT");
   }
   if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "commercial_inputs_json")) {
-    database.exec(`ALTER TABLE jobs ADD COLUMN commercial_inputs_json TEXT NOT NULL DEFAULT '${defaultCommercialInputsJson.replace(/'/g, "''")}'`);
+    database.exec(
+      `ALTER TABLE jobs ADD COLUMN commercial_inputs_json TEXT NOT NULL DEFAULT '${defaultCommercialInputsJson.replace(/'/g, "''")}'`,
+    );
   }
   if (tableExists(database, "jobs") && !hasColumn(database, "jobs", "notes")) {
     database.exec("ALTER TABLE jobs ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
@@ -677,7 +721,11 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         ELSE 'DRAFT'
       END
     `);
-    database.prepare("UPDATE jobs SET commercial_inputs_json = ? WHERE TRIM(COALESCE(commercial_inputs_json, '')) = ''").run(defaultCommercialInputsJson);
+    database
+      .prepare(
+        "UPDATE jobs SET commercial_inputs_json = ? WHERE TRIM(COALESCE(commercial_inputs_json, '')) = ''",
+      )
+      .run(defaultCommercialInputsJson);
     database.exec(`
       UPDATE jobs
       SET primary_drawing_id = (
@@ -779,8 +827,12 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
     `);
     database.exec("UPDATE jobs SET notes = '' WHERE notes IS NULL");
     database.exec("UPDATE jobs SET is_archived = 0 WHERE is_archived IS NULL");
-    database.exec("UPDATE jobs SET stage_changed_at_iso = NULLIF(TRIM(stage_changed_at_iso), '') WHERE stage_changed_at_iso IS NOT NULL");
-    database.exec("UPDATE jobs SET stage_changed_by_user_id = NULLIF(TRIM(stage_changed_by_user_id), '') WHERE stage_changed_by_user_id IS NOT NULL");
+    database.exec(
+      "UPDATE jobs SET stage_changed_at_iso = NULLIF(TRIM(stage_changed_at_iso), '') WHERE stage_changed_at_iso IS NOT NULL",
+    );
+    database.exec(
+      "UPDATE jobs SET stage_changed_by_user_id = NULLIF(TRIM(stage_changed_by_user_id), '') WHERE stage_changed_by_user_id IS NOT NULL",
+    );
   }
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_jobs_company_customer_updated
@@ -792,6 +844,7 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         id TEXT PRIMARY KEY,
         company_id TEXT NOT NULL,
         job_id TEXT NOT NULL,
+        drawing_id TEXT,
         title TEXT NOT NULL,
         is_completed INTEGER NOT NULL DEFAULT 0,
         assigned_user_id TEXT,
@@ -803,11 +856,15 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
         updated_at_iso TEXT NOT NULL,
         FOREIGN KEY (company_id) REFERENCES companies(id),
         FOREIGN KEY (job_id) REFERENCES jobs(id),
+        FOREIGN KEY (drawing_id) REFERENCES drawings(id),
         FOREIGN KEY (assigned_user_id) REFERENCES users(id),
         FOREIGN KEY (completed_by_user_id) REFERENCES users(id),
         FOREIGN KEY (created_by_user_id) REFERENCES users(id)
       )
     `);
+  }
+  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "drawing_id")) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN drawing_id TEXT");
   }
   if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "assigned_user_id")) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN assigned_user_id TEXT");
@@ -818,10 +875,16 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "completed_at_iso")) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN completed_at_iso TEXT");
   }
-  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "completed_by_user_id")) {
+  if (
+    tableExists(database, "job_tasks") &&
+    !hasColumn(database, "job_tasks", "completed_by_user_id")
+  ) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN completed_by_user_id TEXT");
   }
-  if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "created_by_user_id")) {
+  if (
+    tableExists(database, "job_tasks") &&
+    !hasColumn(database, "job_tasks", "created_by_user_id")
+  ) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN created_by_user_id TEXT NOT NULL DEFAULT ''");
   }
   if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "created_at_iso")) {
@@ -831,6 +894,41 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
     database.exec("ALTER TABLE job_tasks ADD COLUMN updated_at_iso TEXT NOT NULL DEFAULT ''");
   }
   if (tableExists(database, "job_tasks")) {
+    database.exec(`
+      UPDATE job_tasks
+      SET drawing_id = (
+        SELECT COALESCE(d.parent_drawing_id, d.id)
+        FROM drawings d
+        WHERE d.id = job_tasks.drawing_id AND d.company_id = job_tasks.company_id
+        LIMIT 1
+      )
+      WHERE drawing_id IS NOT NULL
+    `);
+    database.exec(`
+      UPDATE job_tasks
+      SET drawing_id = COALESCE(
+        NULLIF(TRIM(drawing_id), ''),
+        (
+          SELECT COALESCE(primary_drawing.parent_drawing_id, primary_drawing.id)
+          FROM jobs j
+          LEFT JOIN drawings primary_drawing
+            ON primary_drawing.id = j.primary_drawing_id
+           AND primary_drawing.company_id = j.company_id
+          WHERE j.id = job_tasks.job_id AND j.company_id = job_tasks.company_id
+          LIMIT 1
+        ),
+        (
+          SELECT d.id
+          FROM drawings d
+          WHERE d.company_id = job_tasks.company_id
+            AND d.job_id = job_tasks.job_id
+            AND d.parent_drawing_id IS NULL
+          ORDER BY CASE WHEN d.job_role = 'PRIMARY' THEN 0 ELSE 1 END, d.created_at_iso ASC
+          LIMIT 1
+        )
+      )
+      WHERE TRIM(COALESCE(drawing_id, '')) = ''
+    `);
     database.exec(`
       UPDATE job_tasks
       SET created_by_user_id = COALESCE(
@@ -882,9 +980,18 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
       )
       WHERE TRIM(COALESCE(updated_at_iso, '')) = ''
     `);
-    database.exec("UPDATE job_tasks SET due_at_iso = NULLIF(TRIM(due_at_iso), '') WHERE due_at_iso IS NOT NULL");
-    database.exec("UPDATE job_tasks SET completed_at_iso = NULLIF(TRIM(completed_at_iso), '') WHERE completed_at_iso IS NOT NULL");
-    database.exec("UPDATE job_tasks SET completed_by_user_id = NULLIF(TRIM(completed_by_user_id), '') WHERE completed_by_user_id IS NOT NULL");
+    database.exec(
+      "UPDATE job_tasks SET due_at_iso = NULLIF(TRIM(due_at_iso), '') WHERE due_at_iso IS NOT NULL",
+    );
+    database.exec(
+      "UPDATE job_tasks SET completed_at_iso = NULLIF(TRIM(completed_at_iso), '') WHERE completed_at_iso IS NOT NULL",
+    );
+    database.exec(
+      "UPDATE job_tasks SET completed_by_user_id = NULLIF(TRIM(completed_by_user_id), '') WHERE completed_by_user_id IS NOT NULL",
+    );
+    database.exec(
+      "UPDATE job_tasks SET drawing_id = NULLIF(TRIM(drawing_id), '') WHERE drawing_id IS NOT NULL",
+    );
   }
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_job_tasks_job_updated
@@ -902,13 +1009,17 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "quotes") && !hasColumn(database, "quotes", "source_drawing_id")) {
     database.exec("ALTER TABLE quotes ADD COLUMN source_drawing_id TEXT");
   }
-  if (tableExists(database, "quotes") && !hasColumn(database, "quotes", "source_drawing_version_number")) {
+  if (
+    tableExists(database, "quotes") &&
+    !hasColumn(database, "quotes", "source_drawing_version_number")
+  ) {
     database.exec("ALTER TABLE quotes ADD COLUMN source_drawing_version_number INTEGER");
   }
 
   if (tableExists(database, "drawings") && tableExists(database, "jobs")) {
     database
-      .prepare(`
+      .prepare(
+        `
         INSERT INTO jobs (
           id,
           company_id,
@@ -961,7 +1072,8 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
             FROM jobs j
             WHERE j.id = 'job:' || d.id
           )
-      `)
+      `,
+      )
       .run(defaultCommercialInputsJson);
 
     database.exec(`

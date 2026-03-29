@@ -1,7 +1,14 @@
 import Database from "better-sqlite3";
 import type { JobRecord, JobSummary, JobTaskRecord } from "@fence-estimator/contracts";
 
-import { type JobRow, type JobSummaryRow, type JobTaskRow, toJob, toJobSummary, toJobTask } from "./shared.js";
+import {
+  type JobRow,
+  type JobSummaryRow,
+  type JobTaskRow,
+  toJob,
+  toJobSummary,
+  toJobTask,
+} from "./shared.js";
 import type {
   CompanyTaskListOptions,
   DeleteJobInput,
@@ -10,7 +17,7 @@ import type {
   CustomerScope,
   SetJobPrimaryDrawingInput,
   UpdateJobInput,
-  UpdateJobTaskInput
+  UpdateJobTaskInput,
 } from "./types.js";
 
 export class SqliteJobStore {
@@ -31,7 +38,11 @@ export class SqliteJobStore {
 
   private buildJobWhereClause(scope: CustomerScope, customerId?: string, search = "") {
     const archivedClause =
-      scope === "ACTIVE" ? "AND j.is_archived = 0" : scope === "ARCHIVED" ? "AND j.is_archived = 1" : "";
+      scope === "ACTIVE"
+        ? "AND j.is_archived = 0"
+        : scope === "ARCHIVED"
+          ? "AND j.is_archived = 1"
+          : "";
     const searchClause = search.trim()
       ? "AND (lower(j.name) LIKE ? OR lower(COALESCE(c.name, j.customer_name)) LIKE ?)"
       : "";
@@ -54,7 +65,8 @@ export class SqliteJobStore {
 
   private getJobRow(jobId: string, companyId: string): JobRow | undefined {
     return this.database
-      .prepare(`
+      .prepare(
+        `
         SELECT
           j.*,
           c.name AS resolved_customer_name,
@@ -65,30 +77,36 @@ export class SqliteJobStore {
         LEFT JOIN users owner ON owner.id = j.owner_user_id AND owner.company_id = j.company_id
         LEFT JOIN users updater ON updater.id = j.updated_by_user_id AND updater.company_id = j.company_id
         WHERE j.id = ? AND j.company_id = ?
-      `)
+      `,
+      )
       .get(jobId, companyId) as JobRow | undefined;
   }
 
   private getTaskRow(taskId: string, jobId: string, companyId: string): JobTaskRow | undefined {
     return this.database
-      .prepare(`
+      .prepare(
+        `
         SELECT
           t.*,
           j.name AS job_name,
+          drawing_root.name AS drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
+        LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.id = ? AND t.job_id = ? AND t.company_id = ?
-      `)
+      `,
+      )
       .get(taskId, jobId, companyId) as JobTaskRow | undefined;
   }
 
   public createJob(input: CreateJobInput): JobRecord {
     this.database
-      .prepare(`
+      .prepare(
+        `
         INSERT INTO jobs (
           id,
           company_id,
@@ -110,7 +128,8 @@ export class SqliteJobStore {
           created_at_iso,
           updated_at_iso
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
-      `)
+      `,
+      )
       .run(
         input.id,
         input.companyId,
@@ -125,7 +144,7 @@ export class SqliteJobStore {
         input.createdByUserId,
         input.updatedByUserId,
         input.createdAtIso,
-        input.updatedAtIso
+        input.updatedAtIso,
       );
 
     const row = this.getJobRow(input.id, input.companyId);
@@ -135,14 +154,24 @@ export class SqliteJobStore {
     return toJob(row);
   }
 
-  public listJobs(companyId: string, scope: CustomerScope = "ACTIVE", search = "", customerId?: string): JobSummary[] {
-    const { archivedClause, searchClause, customerClause } = this.buildJobWhereClause(scope, customerId, search);
+  public listJobs(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ): JobSummary[] {
+    const { archivedClause, searchClause, customerClause } = this.buildJobWhereClause(
+      scope,
+      customerId,
+      search,
+    );
     const placeholderExclusionClause = this.buildPlaceholderJobExclusionClause();
     const params = this.buildJobListParams(companyId, customerId, search);
 
     try {
       const rows = this.database
-        .prepare(`
+        .prepare(
+          `
           SELECT
             j.*,
             c.name AS resolved_customer_name,
@@ -194,13 +223,15 @@ export class SqliteJobStore {
           LEFT JOIN drawings d ON d.id = j.primary_drawing_id AND d.company_id = j.company_id
           WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause} ${placeholderExclusionClause}
           ORDER BY COALESCE(j.updated_at_iso, j.created_at_iso) DESC
-        `)
+        `,
+        )
         .all(...params) as JobSummaryRow[];
 
       return rows.map((row) => toJobSummary(row));
     } catch {
       const fallbackRows = this.database
-        .prepare(`
+        .prepare(
+          `
           SELECT
             j.*,
             c.name AS resolved_customer_name,
@@ -225,7 +256,8 @@ export class SqliteJobStore {
           LEFT JOIN users updater ON updater.id = j.updated_by_user_id AND updater.company_id = j.company_id
           WHERE j.company_id = ? ${customerClause} ${archivedClause} ${searchClause} ${placeholderExclusionClause}
           ORDER BY COALESCE(j.updated_at_iso, j.created_at_iso) DESC
-        `)
+        `,
+        )
         .all(...params) as JobSummaryRow[];
 
       return fallbackRows.flatMap((row) => {
@@ -249,7 +281,8 @@ export class SqliteJobStore {
 
   public updateJob(input: UpdateJobInput): JobRecord | null {
     const result = this.database
-      .prepare(`
+      .prepare(
+        `
         UPDATE jobs
         SET
           name = ?,
@@ -265,7 +298,8 @@ export class SqliteJobStore {
           updated_by_user_id = ?,
           updated_at_iso = ?
         WHERE id = ? AND company_id = ?
-      `)
+      `,
+      )
       .run(
         input.name,
         input.stage,
@@ -280,7 +314,7 @@ export class SqliteJobStore {
         input.updatedByUserId,
         input.updatedAtIso,
         input.jobId,
-        input.companyId
+        input.companyId,
       );
     if (result.changes === 0) {
       return null;
@@ -299,19 +333,29 @@ export class SqliteJobStore {
 
     const doDelete = this.database.transaction(() => {
       this.database
-        .prepare(`
+        .prepare(
+          `
           DELETE FROM drawing_versions
           WHERE company_id = ? AND drawing_id IN (
             SELECT id
             FROM drawings
             WHERE company_id = ? AND job_id = ?
           )
-        `)
+        `,
+        )
         .run(input.companyId, input.companyId, input.jobId);
-      this.database.prepare("DELETE FROM drawings WHERE job_id = ? AND company_id = ?").run(input.jobId, input.companyId);
-      this.database.prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?").run(input.jobId, input.companyId);
-      this.database.prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?").run(input.jobId, input.companyId);
-      this.database.prepare("DELETE FROM jobs WHERE id = ? AND company_id = ?").run(input.jobId, input.companyId);
+      this.database
+        .prepare("DELETE FROM drawings WHERE job_id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
+      this.database
+        .prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
+      this.database
+        .prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
+      this.database
+        .prepare("DELETE FROM jobs WHERE id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
     });
 
     doDelete();
@@ -321,11 +365,13 @@ export class SqliteJobStore {
   public setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): JobRecord | null {
     const transact = this.database.transaction(() => {
       const drawing = this.database
-        .prepare(`
+        .prepare(
+          `
           SELECT id
           FROM drawings
           WHERE id = ? AND job_id = ? AND company_id = ?
-        `)
+        `,
+        )
         .get(input.drawingId, input.jobId, input.companyId) as { id: string } | undefined;
       if (!drawing) {
         return null;
@@ -335,15 +381,25 @@ export class SqliteJobStore {
         .prepare(`UPDATE drawings SET job_role = 'SECONDARY' WHERE job_id = ? AND company_id = ?`)
         .run(input.jobId, input.companyId);
       this.database
-        .prepare(`UPDATE drawings SET job_role = 'PRIMARY' WHERE id = ? AND job_id = ? AND company_id = ?`)
+        .prepare(
+          `UPDATE drawings SET job_role = 'PRIMARY' WHERE id = ? AND job_id = ? AND company_id = ?`,
+        )
         .run(input.drawingId, input.jobId, input.companyId);
       this.database
-        .prepare(`
+        .prepare(
+          `
           UPDATE jobs
           SET primary_drawing_id = ?, updated_by_user_id = ?, updated_at_iso = ?
           WHERE id = ? AND company_id = ?
-        `)
-        .run(input.drawingId, input.updatedByUserId, input.updatedAtIso, input.jobId, input.companyId);
+        `,
+        )
+        .run(
+          input.drawingId,
+          input.updatedByUserId,
+          input.updatedAtIso,
+          input.jobId,
+          input.companyId,
+        );
 
       const row = this.getJobRow(input.jobId, input.companyId);
       return row ? toJob(row) : null;
@@ -354,24 +410,31 @@ export class SqliteJobStore {
 
   public listJobTasks(jobId: string, companyId: string): JobTaskRecord[] {
     const rows = this.database
-      .prepare(`
+      .prepare(
+        `
         SELECT
           t.*,
           j.name AS job_name,
+          drawing_root.name AS drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
+        LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.job_id = ? AND t.company_id = ?
         ORDER BY t.is_completed ASC, COALESCE(t.due_at_iso, '9999-12-31T00:00:00.000Z') ASC, t.created_at_iso ASC
-      `)
+      `,
+      )
       .all(jobId, companyId) as JobTaskRow[];
     return rows.map((row) => toJobTask(row));
   }
 
-  public listCompanyTasks(companyId: string, options: CompanyTaskListOptions = {}): JobTaskRecord[] {
+  public listCompanyTasks(
+    companyId: string,
+    options: CompanyTaskListOptions = {},
+  ): JobTaskRecord[] {
     const clauses = ["t.company_id = ?"];
     const params: unknown[] = [companyId];
     if (!(options.includeCompleted ?? false)) {
@@ -390,9 +453,11 @@ export class SqliteJobStore {
       params.push(options.priority.trim());
     }
     if (options.search?.trim()) {
-      clauses.push("(lower(t.title) LIKE ? OR lower(COALESCE(t.description, '')) LIKE ? OR lower(COALESCE(j.name, '')) LIKE ? OR lower(COALESCE(assigned.display_name, '')) LIKE ? OR lower(COALESCE(completed.display_name, '')) LIKE ?)");
+      clauses.push(
+        "(lower(t.title) LIKE ? OR lower(COALESCE(t.description, '')) LIKE ? OR lower(COALESCE(j.name, '')) LIKE ? OR lower(COALESCE(drawing_root.name, '')) LIKE ? OR lower(COALESCE(assigned.display_name, '')) LIKE ? OR lower(COALESCE(completed.display_name, '')) LIKE ?)",
+      );
       const normalized = `%${options.search.trim().toLowerCase()}%`;
-      params.push(normalized, normalized, normalized, normalized, normalized);
+      params.push(normalized, normalized, normalized, normalized, normalized, normalized);
     }
     if (options.dueBucket === "NO_DATE") {
       clauses.push("t.due_at_iso IS NULL");
@@ -409,14 +474,17 @@ export class SqliteJobStore {
     }
 
     const rows = this.database
-      .prepare(`
+      .prepare(
+        `
         SELECT
           t.*,
           j.name AS job_name,
+          drawing_root.name AS drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
+        LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE ${clauses.join(" AND ")}
@@ -426,18 +494,21 @@ export class SqliteJobStore {
           COALESCE(t.due_at_iso, '9999-12-31T00:00:00.000Z') ASC,
           t.created_at_iso DESC
         LIMIT ?
-      `)
+      `,
+      )
       .all(...params, Math.max(1, options.limit ?? 50)) as JobTaskRow[];
     return rows.map((row) => toJobTask(row));
   }
 
   public createJobTask(input: CreateJobTaskInput): JobTaskRecord {
     this.database
-      .prepare(`
+      .prepare(
+        `
         INSERT INTO job_tasks (
           id,
           company_id,
           job_id,
+          drawing_id,
           title,
           description,
           priority,
@@ -449,12 +520,14 @@ export class SqliteJobStore {
           created_by_user_id,
           created_at_iso,
           updated_at_iso
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
-      `)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
+      `,
+      )
       .run(
         input.id,
         input.companyId,
         input.jobId,
+        input.drawingId,
         input.title,
         input.description,
         input.priority,
@@ -462,7 +535,7 @@ export class SqliteJobStore {
         input.dueAtIso,
         input.createdByUserId,
         input.createdAtIso,
-        input.updatedAtIso
+        input.updatedAtIso,
       );
     const row = this.getTaskRow(input.id, input.jobId, input.companyId);
     if (!row) {
@@ -473,9 +546,11 @@ export class SqliteJobStore {
 
   public updateJobTask(input: UpdateJobTaskInput): JobTaskRecord | null {
     const result = this.database
-      .prepare(`
+      .prepare(
+        `
         UPDATE job_tasks
         SET
+          drawing_id = ?,
           title = ?,
           description = ?,
           priority = ?,
@@ -486,8 +561,10 @@ export class SqliteJobStore {
           completed_by_user_id = ?,
           updated_at_iso = ?
         WHERE id = ? AND job_id = ? AND company_id = ?
-      `)
+      `,
+      )
       .run(
+        input.drawingId,
         input.title,
         input.description,
         input.priority,
@@ -499,7 +576,7 @@ export class SqliteJobStore {
         input.updatedAtIso,
         input.taskId,
         input.jobId,
-        input.companyId
+        input.companyId,
       );
     if (result.changes === 0) {
       return null;

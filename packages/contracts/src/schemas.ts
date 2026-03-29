@@ -11,39 +11,43 @@ import {
   ROLL_FORM_HEIGHT_KEYS,
   SIDE_NETTING_EXTENDED_POST_INTERVAL,
   SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM,
-  TWIN_BAR_HEIGHT_KEYS
+  TWIN_BAR_HEIGHT_KEYS,
 } from "./domain.js";
 import { PRICING_ITEM_CATEGORIES } from "./estimating.js";
-import { INSTALL_LIFT_LEVELS, PRICING_WORKBOOK_RATE_MODES, PRICING_WORKBOOK_SHEETS } from "./pricingWorkbook.js";
+import {
+  INSTALL_LIFT_LEVELS,
+  PRICING_WORKBOOK_RATE_MODES,
+  PRICING_WORKBOOK_SHEETS,
+} from "./pricingWorkbook.js";
 
 const goalUnitWidthMmSchema = z.union([
   z.literal(GOAL_UNIT_WIDTHS_MM[0]),
   z.literal(GOAL_UNIT_WIDTHS_MM[1]),
-  z.literal(GOAL_UNIT_WIDTHS_MM[2])
+  z.literal(GOAL_UNIT_WIDTHS_MM[2]),
 ]);
 const goalUnitHeightMmSchema = z.union([
   z.literal(GOAL_UNIT_HEIGHTS_MM[0]),
-  z.literal(GOAL_UNIT_HEIGHTS_MM[1])
+  z.literal(GOAL_UNIT_HEIGHTS_MM[1]),
 ]);
 const basketballArmLengthMmSchema = z.union([
   z.literal(BASKETBALL_ARM_LENGTHS_MM[0]),
-  z.literal(BASKETBALL_ARM_LENGTHS_MM[1])
+  z.literal(BASKETBALL_ARM_LENGTHS_MM[1]),
 ]);
 const kickboardSectionHeightMmSchema = z.union([
   z.literal(KICKBOARD_SECTION_HEIGHTS_MM[0]),
   z.literal(KICKBOARD_SECTION_HEIGHTS_MM[1]),
-  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[2])
+  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[2]),
 ]);
 
 export const pointMmSchema = z.object({
   x: z.number().finite(),
-  y: z.number().finite()
+  y: z.number().finite(),
 });
 
 export const drawingCanvasViewportSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
-  scale: z.number().finite().positive()
+  scale: z.number().finite().positive(),
 });
 
 export const fenceSystemSchema = z.enum(["TWIN_BAR", "ROLL_FORM"]);
@@ -52,47 +56,51 @@ export const twinBarVariantSchema = z.enum(["STANDARD", "SUPER_REBOUND"]);
 const twinBarHeights = new Set<string>(TWIN_BAR_HEIGHT_KEYS);
 const rollFormHeights = new Set<string>(ROLL_FORM_HEIGHT_KEYS);
 
-export const fenceSpecSchema = z.object({
-  system: fenceSystemSchema,
-  height: fenceHeightKeySchema,
-  twinBarVariant: twinBarVariantSchema.optional()
-}).superRefine((spec, context) => {
-  if (spec.system === "ROLL_FORM" && !rollFormHeights.has(spec.height)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Unsupported roll form height: ${spec.height}`
-    });
-  }
-  if (spec.system === "TWIN_BAR" && !twinBarHeights.has(spec.height)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Unsupported twin bar height: ${spec.height}`
-    });
-  }
-});
+export const fenceSpecSchema = z
+  .object({
+    system: fenceSystemSchema,
+    height: fenceHeightKeySchema,
+    twinBarVariant: twinBarVariantSchema.optional(),
+  })
+  .superRefine((spec, context) => {
+    if (spec.system === "ROLL_FORM" && !rollFormHeights.has(spec.height)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Unsupported roll form height: ${spec.height}`,
+      });
+    }
+    if (spec.system === "TWIN_BAR" && !twinBarHeights.has(spec.height)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Unsupported twin bar height: ${spec.height}`,
+      });
+    }
+  });
 
 export const layoutSegmentSchema = z.object({
   id: z.string().min(1),
   start: pointMmSchema,
   end: pointMmSchema,
-  spec: fenceSpecSchema
+  spec: fenceSpecSchema,
 });
 
 export const gateTypeSchema = z.enum(["SINGLE_LEAF", "DOUBLE_LEAF", "CUSTOM"]);
-export const gatePlacementSchema = z.object({
-  id: z.string().min(1),
-  segmentId: z.string().min(1),
-  startOffsetMm: z.number().finite().nonnegative(),
-  endOffsetMm: z.number().finite().positive(),
-  gateType: gateTypeSchema
-}).superRefine((gate, context) => {
-  if (gate.endOffsetMm <= gate.startOffsetMm) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Gate end offset must be greater than the start offset"
-    });
-  }
-});
+export const gatePlacementSchema = z
+  .object({
+    id: z.string().min(1),
+    segmentId: z.string().min(1),
+    startOffsetMm: z.number().finite().nonnegative(),
+    endOffsetMm: z.number().finite().positive(),
+    gateType: gateTypeSchema,
+  })
+  .superRefine((gate, context) => {
+    if (gate.endOffsetMm <= gate.startOffsetMm) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Gate end offset must be greater than the start offset",
+      });
+    }
+  });
 
 export const inlineFeatureFacingSchema = z.enum(["LEFT", "RIGHT"]);
 export const goalUnitPlacementSchema = z.object({
@@ -102,68 +110,75 @@ export const goalUnitPlacementSchema = z.object({
   side: inlineFeatureFacingSchema,
   widthMm: goalUnitWidthMmSchema,
   depthMm: z.number().finite().positive(),
-  goalHeightMm: goalUnitHeightMmSchema
+  goalHeightMm: goalUnitHeightMmSchema,
 });
-export const basketballFeaturePlacementSchema = z.object({
-  id: z.string().min(1),
-  segmentId: z.string().min(1),
-  offsetMm: z.number().finite().nonnegative(),
-  facing: inlineFeatureFacingSchema,
-  type: z.enum(["DEDICATED_POST", "MOUNTED_TO_EXISTING_POST", "GOAL_UNIT_INTEGRATED"]).default("DEDICATED_POST"),
-  mountingMode: z.enum(["PROJECTING_ARM", "POST_MOUNTED", "GOAL_UNIT_REAR_CENTER"]).default("PROJECTING_ARM"),
-  armLengthMm: basketballArmLengthMmSchema.optional(),
-  pairedFeatureId: z.string().min(1).nullable().optional(),
-  replacesIntermediatePost: z.boolean().default(true),
-  goalUnitId: z.string().min(1).nullable().optional()
-}).superRefine((feature, context) => {
-  if (feature.type === "DEDICATED_POST") {
-    if (feature.armLengthMm === undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Dedicated basketball posts require an arm length"
-      });
+export const basketballFeaturePlacementSchema = z
+  .object({
+    id: z.string().min(1),
+    segmentId: z.string().min(1),
+    offsetMm: z.number().finite().nonnegative(),
+    facing: inlineFeatureFacingSchema,
+    type: z
+      .enum(["DEDICATED_POST", "MOUNTED_TO_EXISTING_POST", "GOAL_UNIT_INTEGRATED"])
+      .default("DEDICATED_POST"),
+    mountingMode: z
+      .enum(["PROJECTING_ARM", "POST_MOUNTED", "GOAL_UNIT_REAR_CENTER"])
+      .default("PROJECTING_ARM"),
+    armLengthMm: basketballArmLengthMmSchema.optional(),
+    pairedFeatureId: z.string().min(1).nullable().optional(),
+    replacesIntermediatePost: z.boolean().default(true),
+    goalUnitId: z.string().min(1).nullable().optional(),
+  })
+  .superRefine((feature, context) => {
+    if (feature.type === "DEDICATED_POST") {
+      if (feature.armLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Dedicated basketball posts require an arm length",
+        });
+      }
+      if (feature.mountingMode !== "PROJECTING_ARM") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Dedicated basketball posts must use projecting-arm mounting",
+        });
+      }
     }
-    if (feature.mountingMode !== "PROJECTING_ARM") {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Dedicated basketball posts must use projecting-arm mounting"
-      });
+    if (feature.type === "MOUNTED_TO_EXISTING_POST") {
+      if (feature.armLengthMm !== undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Mounted basketball assemblies cannot define an arm length",
+        });
+      }
+      if (feature.mountingMode !== "POST_MOUNTED") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Mounted basketball assemblies must use post-mounted mode",
+        });
+      }
     }
-  }
-  if (feature.type === "MOUNTED_TO_EXISTING_POST") {
-    if (feature.armLengthMm !== undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Mounted basketball assemblies cannot define an arm length"
-      });
+    if (feature.type === "GOAL_UNIT_INTEGRATED") {
+      if (!feature.goalUnitId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Goal-unit integrated basketball assemblies must reference a goal unit",
+        });
+      }
+      if (feature.mountingMode !== "GOAL_UNIT_REAR_CENTER") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Goal-unit integrated basketball assemblies must use goal-unit rear-centre mounting",
+        });
+      }
     }
-    if (feature.mountingMode !== "POST_MOUNTED") {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Mounted basketball assemblies must use post-mounted mode"
-      });
-    }
-  }
-  if (feature.type === "GOAL_UNIT_INTEGRATED") {
-    if (!feature.goalUnitId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Goal-unit integrated basketball assemblies must reference a goal unit"
-      });
-    }
-    if (feature.mountingMode !== "GOAL_UNIT_REAR_CENTER") {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Goal-unit integrated basketball assemblies must use goal-unit rear-centre mounting"
-      });
-    }
-  }
-});
+  });
 export const floodlightColumnPlacementSchema = z.object({
   id: z.string().min(1),
   segmentId: z.string().min(1),
   offsetMm: z.number().finite().nonnegative(),
-  facing: inlineFeatureFacingSchema
+  facing: inlineFeatureFacingSchema,
 });
 export const kickboardAttachmentSchema = z.object({
   id: z.string().min(1),
@@ -171,16 +186,16 @@ export const kickboardAttachmentSchema = z.object({
   sectionHeightMm: kickboardSectionHeightMmSchema,
   thicknessMm: z.literal(50),
   profile: z.enum(["SQUARE", "CHAMFERED"]),
-  boardLengthMm: z.literal(2500)
+  boardLengthMm: z.literal(2500),
 });
 export const segmentAnchorSchema = z.object({
   segmentId: z.string().min(1),
-  offsetMm: z.number().finite().nonnegative()
+  offsetMm: z.number().finite().nonnegative(),
 });
 export const pitchDividerPlacementSchema = z.object({
   id: z.string().min(1),
   startAnchor: segmentAnchorSchema,
-  endAnchor: segmentAnchorSchema
+  endAnchor: segmentAnchorSchema,
 });
 export const sideNettingAttachmentSchema = z.object({
   id: z.string().min(1),
@@ -188,7 +203,7 @@ export const sideNettingAttachmentSchema = z.object({
   additionalHeightMm: z.number().finite().positive().max(SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM),
   startOffsetMm: z.number().finite().nonnegative().optional(),
   endOffsetMm: z.number().finite().nonnegative().optional(),
-  extendedPostInterval: z.literal(SIDE_NETTING_EXTENDED_POST_INTERVAL)
+  extendedPostInterval: z.literal(SIDE_NETTING_EXTENDED_POST_INTERVAL),
 });
 
 const MAX_LAYOUT_SEGMENTS = 2_000;
@@ -208,7 +223,7 @@ function interpolatePoint(
   start: { x: number; y: number },
   end: { x: number; y: number },
   offsetMm: number,
-  lengthMm: number
+  lengthMm: number,
 ) {
   if (lengthMm <= 0) {
     return start;
@@ -216,7 +231,7 @@ function interpolatePoint(
   const ratio = Math.max(0, Math.min(1, offsetMm / lengthMm));
   return {
     x: start.x + (end.x - start.x) * ratio,
-    y: start.y + (end.y - start.y) * ratio
+    y: start.y + (end.y - start.y) * ratio,
   };
 }
 
@@ -224,16 +239,28 @@ export const layoutModelSchema = z
   .object({
     segments: z.array(layoutSegmentSchema).max(MAX_LAYOUT_SEGMENTS),
     gates: z.array(gatePlacementSchema).max(MAX_LAYOUT_GATES).default([]),
-    basketballFeatures: z.array(basketballFeaturePlacementSchema).max(MAX_LAYOUT_BASKETBALL_FEATURES).default([]),
-    basketballPosts: z.array(basketballFeaturePlacementSchema).max(MAX_LAYOUT_BASKETBALL_FEATURES).default([]),
-    floodlightColumns: z.array(floodlightColumnPlacementSchema).max(MAX_LAYOUT_FLOODLIGHT_COLUMNS).default([]),
+    basketballFeatures: z
+      .array(basketballFeaturePlacementSchema)
+      .max(MAX_LAYOUT_BASKETBALL_FEATURES)
+      .default([]),
+    basketballPosts: z
+      .array(basketballFeaturePlacementSchema)
+      .max(MAX_LAYOUT_BASKETBALL_FEATURES)
+      .default([]),
+    floodlightColumns: z
+      .array(floodlightColumnPlacementSchema)
+      .max(MAX_LAYOUT_FLOODLIGHT_COLUMNS)
+      .default([]),
     goalUnits: z.array(goalUnitPlacementSchema).max(MAX_LAYOUT_GOAL_UNITS).default([]),
     kickboards: z.array(kickboardAttachmentSchema).max(MAX_LAYOUT_KICKBOARDS).default([]),
     pitchDividers: z.array(pitchDividerPlacementSchema).max(MAX_LAYOUT_PITCH_DIVIDERS).default([]),
-    sideNettings: z.array(sideNettingAttachmentSchema).max(MAX_LAYOUT_SIDE_NETTINGS).default([])
+    sideNettings: z.array(sideNettingAttachmentSchema).max(MAX_LAYOUT_SIDE_NETTINGS).default([]),
   })
   .superRefine((layout, context) => {
-    const basketballFeatures = [...(layout.basketballFeatures ?? []), ...(layout.basketballPosts ?? [])];
+    const basketballFeatures = [
+      ...(layout.basketballFeatures ?? []),
+      ...(layout.basketballPosts ?? []),
+    ];
     const seenSegmentIds = new Set<string>();
     const segmentLengthById = new Map<string, number>();
     const segmentsById = new Map<string, z.infer<typeof layoutSegmentSchema>>();
@@ -242,7 +269,7 @@ export const layoutModelSchema = z
       if (seenSegmentIds.has(segment.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate segment id: ${segment.id}`
+          message: `Duplicate segment id: ${segment.id}`,
         });
       }
       seenSegmentIds.add(segment.id);
@@ -253,19 +280,22 @@ export const layoutModelSchema = z
       if (lengthMm <= 0) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Segment ${segment.id} must have a non-zero length`
+          message: `Segment ${segment.id} must have a non-zero length`,
         });
       }
     }
 
     const seenGateIds = new Set<string>();
-    const gatesBySegmentId = new Map<string, Array<{ id: string; startOffsetMm: number; endOffsetMm: number }>>();
+    const gatesBySegmentId = new Map<
+      string,
+      Array<{ id: string; startOffsetMm: number; endOffsetMm: number }>
+    >();
 
     for (const gate of layout.gates ?? []) {
       if (seenGateIds.has(gate.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate gate id: ${gate.id}`
+          message: `Duplicate gate id: ${gate.id}`,
         });
       }
       seenGateIds.add(gate.id);
@@ -274,7 +304,7 @@ export const layoutModelSchema = z
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Gate ${gate.id} references missing segment ${gate.segmentId}`
+          message: `Gate ${gate.id} references missing segment ${gate.segmentId}`,
         });
         continue;
       }
@@ -282,7 +312,7 @@ export const layoutModelSchema = z
       if (gate.endOffsetMm > segmentLengthMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Gate ${gate.id} exceeds segment ${gate.segmentId} length`
+          message: `Gate ${gate.id} exceeds segment ${gate.segmentId} length`,
         });
       }
 
@@ -301,7 +331,7 @@ export const layoutModelSchema = z
         if (gate.startOffsetMm < previousEndMm) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: `Gates on segment ${segmentId} must not overlap`
+            message: `Gates on segment ${segmentId} must not overlap`,
           });
         }
         previousEndMm = Math.max(previousEndMm, gate.endOffsetMm);
@@ -313,7 +343,7 @@ export const layoutModelSchema = z
       if (seenGoalUnitIds.has(goalUnit.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate goal unit id: ${goalUnit.id}`
+          message: `Duplicate goal unit id: ${goalUnit.id}`,
         });
       }
       seenGoalUnitIds.add(goalUnit.id);
@@ -322,16 +352,19 @@ export const layoutModelSchema = z
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Goal unit ${goalUnit.id} references missing segment ${goalUnit.segmentId}`
+          message: `Goal unit ${goalUnit.id} references missing segment ${goalUnit.segmentId}`,
         });
         continue;
       }
 
       const halfWidthMm = goalUnit.widthMm / 2;
-      if (goalUnit.centerOffsetMm - halfWidthMm < 0 || goalUnit.centerOffsetMm + halfWidthMm > segmentLengthMm) {
+      if (
+        goalUnit.centerOffsetMm - halfWidthMm < 0 ||
+        goalUnit.centerOffsetMm + halfWidthMm > segmentLengthMm
+      ) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Goal unit ${goalUnit.id} exceeds segment ${goalUnit.segmentId} length`
+          message: `Goal unit ${goalUnit.id} exceeds segment ${goalUnit.segmentId} length`,
         });
       }
     }
@@ -341,7 +374,7 @@ export const layoutModelSchema = z
       if (seenBasketballFeatureIds.has(basketballFeature.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate basketball feature id: ${basketballFeature.id}`
+          message: `Duplicate basketball feature id: ${basketballFeature.id}`,
         });
       }
       seenBasketballFeatureIds.add(basketballFeature.id);
@@ -351,7 +384,7 @@ export const layoutModelSchema = z
       if (segmentLengthMm === undefined || !segment) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Basketball feature ${basketballFeature.id} references missing segment ${basketballFeature.segmentId}`
+          message: `Basketball feature ${basketballFeature.id} references missing segment ${basketballFeature.segmentId}`,
         });
         continue;
       }
@@ -359,21 +392,25 @@ export const layoutModelSchema = z
       if (basketballFeature.offsetMm > segmentLengthMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Basketball feature ${basketballFeature.id} exceeds segment ${basketballFeature.segmentId} length`
+          message: `Basketball feature ${basketballFeature.id} exceeds segment ${basketballFeature.segmentId} length`,
         });
       }
 
       const fenceHeightMm = fenceHeightToMm(segment.spec.height);
-      if (basketballFeature.type === "DEDICATED_POST" && fenceHeightMm !== 3000 && fenceHeightMm !== 4000) {
+      if (
+        basketballFeature.type === "DEDICATED_POST" &&
+        fenceHeightMm !== 3000 &&
+        fenceHeightMm !== 4000
+      ) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Dedicated basketball feature ${basketballFeature.id} requires a 3.0m or 4.0m fence line`
+          message: `Dedicated basketball feature ${basketballFeature.id} requires a 3.0m or 4.0m fence line`,
         });
       }
       if (basketballFeature.type === "MOUNTED_TO_EXISTING_POST" && fenceHeightMm < 3000) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Mounted basketball feature ${basketballFeature.id} requires a fence line at least 3.0m high`
+          message: `Mounted basketball feature ${basketballFeature.id} requires a fence line at least 3.0m high`,
         });
       }
     }
@@ -383,7 +420,7 @@ export const layoutModelSchema = z
       if (seenFloodlightColumnIds.has(floodlightColumn.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate floodlight column id: ${floodlightColumn.id}`
+          message: `Duplicate floodlight column id: ${floodlightColumn.id}`,
         });
       }
       seenFloodlightColumnIds.add(floodlightColumn.id);
@@ -392,7 +429,7 @@ export const layoutModelSchema = z
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Floodlight column ${floodlightColumn.id} references missing segment ${floodlightColumn.segmentId}`
+          message: `Floodlight column ${floodlightColumn.id} references missing segment ${floodlightColumn.segmentId}`,
         });
         continue;
       }
@@ -400,7 +437,7 @@ export const layoutModelSchema = z
       if (floodlightColumn.offsetMm > segmentLengthMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Floodlight column ${floodlightColumn.id} exceeds segment ${floodlightColumn.segmentId} length`
+          message: `Floodlight column ${floodlightColumn.id} exceeds segment ${floodlightColumn.segmentId} length`,
         });
       }
     }
@@ -411,7 +448,7 @@ export const layoutModelSchema = z
       if (seenKickboardIds.has(kickboard.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate kickboard id: ${kickboard.id}`
+          message: `Duplicate kickboard id: ${kickboard.id}`,
         });
       }
       seenKickboardIds.add(kickboard.id);
@@ -419,7 +456,7 @@ export const layoutModelSchema = z
       if (kickboardSegmentIds.has(kickboard.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Kickboard segment ${kickboard.segmentId} can only have one kickboard attachment`
+          message: `Kickboard segment ${kickboard.segmentId} can only have one kickboard attachment`,
         });
       }
       kickboardSegmentIds.add(kickboard.segmentId);
@@ -427,7 +464,7 @@ export const layoutModelSchema = z
       if (!segmentLengthById.has(kickboard.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Kickboard ${kickboard.id} references missing segment ${kickboard.segmentId}`
+          message: `Kickboard ${kickboard.id} references missing segment ${kickboard.segmentId}`,
         });
       }
     }
@@ -438,7 +475,7 @@ export const layoutModelSchema = z
       if (seenSideNettingIds.has(sideNetting.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate side netting id: ${sideNetting.id}`
+          message: `Duplicate side netting id: ${sideNetting.id}`,
         });
       }
       seenSideNettingIds.add(sideNetting.id);
@@ -446,7 +483,7 @@ export const layoutModelSchema = z
       if (sideNettingSegmentIds.has(sideNetting.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Side netting segment ${sideNetting.segmentId} can only have one side-netting attachment`
+          message: `Side netting segment ${sideNetting.segmentId} can only have one side-netting attachment`,
         });
       }
       sideNettingSegmentIds.add(sideNetting.segmentId);
@@ -454,7 +491,7 @@ export const layoutModelSchema = z
       if (!segmentLengthById.has(sideNetting.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Side netting ${sideNetting.id} references missing segment ${sideNetting.segmentId}`
+          message: `Side netting ${sideNetting.id} references missing segment ${sideNetting.segmentId}`,
         });
         continue;
       }
@@ -466,14 +503,14 @@ export const layoutModelSchema = z
       if (startOffsetMm >= endOffsetMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Side netting ${sideNetting.id} must have a positive covered range`
+          message: `Side netting ${sideNetting.id} must have a positive covered range`,
         });
       }
 
       if (endOffsetMm > segmentLengthMm) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Side netting ${sideNetting.id} exceeds segment ${sideNetting.segmentId} length`
+          message: `Side netting ${sideNetting.id} exceeds segment ${sideNetting.segmentId} length`,
         });
       }
     }
@@ -483,7 +520,7 @@ export const layoutModelSchema = z
       if (seenPitchDividerIds.has(pitchDivider.id)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate pitch divider id: ${pitchDivider.id}`
+          message: `Duplicate pitch divider id: ${pitchDivider.id}`,
         });
       }
       seenPitchDividerIds.add(pitchDivider.id);
@@ -492,18 +529,26 @@ export const layoutModelSchema = z
       const endSegment = segmentsById.get(pitchDivider.endAnchor.segmentId);
       const startLengthMm = segmentLengthById.get(pitchDivider.startAnchor.segmentId);
       const endLengthMm = segmentLengthById.get(pitchDivider.endAnchor.segmentId);
-      if (!startSegment || !endSegment || startLengthMm === undefined || endLengthMm === undefined) {
+      if (
+        !startSegment ||
+        !endSegment ||
+        startLengthMm === undefined ||
+        endLengthMm === undefined
+      ) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Pitch divider ${pitchDivider.id} references missing fence-line anchors`
+          message: `Pitch divider ${pitchDivider.id} references missing fence-line anchors`,
         });
         continue;
       }
 
-      if (pitchDivider.startAnchor.offsetMm > startLengthMm || pitchDivider.endAnchor.offsetMm > endLengthMm) {
+      if (
+        pitchDivider.startAnchor.offsetMm > startLengthMm ||
+        pitchDivider.endAnchor.offsetMm > endLengthMm
+      ) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Pitch divider ${pitchDivider.id} exceeds one of its host fence-line lengths`
+          message: `Pitch divider ${pitchDivider.id} exceeds one of its host fence-line lengths`,
         });
         continue;
       }
@@ -512,14 +557,19 @@ export const layoutModelSchema = z
         startSegment.start,
         startSegment.end,
         pitchDivider.startAnchor.offsetMm,
-        startLengthMm
+        startLengthMm,
       );
-      const endPoint = interpolatePoint(endSegment.start, endSegment.end, pitchDivider.endAnchor.offsetMm, endLengthMm);
+      const endPoint = interpolatePoint(
+        endSegment.start,
+        endSegment.end,
+        pitchDivider.endAnchor.offsetMm,
+        endLengthMm,
+      );
       const spanMm = Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
       if (spanMm > PITCH_DIVIDER_MAX_SPAN_MM) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Pitch divider ${pitchDivider.id} exceeds the maximum 70m span`
+          message: `Pitch divider ${pitchDivider.id} exceeds the maximum 70m span`,
         });
       }
     }
@@ -532,17 +582,17 @@ const postBreakdownSchema = z.object({
   corner: nonNegativeIntegerSchema,
   junction: nonNegativeIntegerSchema,
   inlineJoin: nonNegativeIntegerSchema,
-  total: nonNegativeIntegerSchema
+  total: nonNegativeIntegerSchema,
 });
 const twinBarFenceBreakdownSchema = z.object({
   standard: nonNegativeIntegerSchema,
   superRebound: nonNegativeIntegerSchema,
-  total: nonNegativeIntegerSchema
+  total: nonNegativeIntegerSchema,
 });
 const rollFenceBreakdownSchema = z.object({
   roll2100: nonNegativeIntegerSchema,
   roll900: nonNegativeIntegerSchema,
-  total: nonNegativeIntegerSchema
+  total: nonNegativeIntegerSchema,
 });
 const featureQuantityLineSchema = z.object({
   key: z.string().trim().min(1).max(160),
@@ -551,13 +601,13 @@ const featureQuantityLineSchema = z.object({
   description: z.string().trim().min(1).max(240),
   quantity: z.number().finite().min(0),
   unit: z.enum(["item", "panel", "post", "assembly", "board", "m", "m2"]),
-  relatedIds: z.array(z.string().trim().min(1).max(160)).max(20).optional()
+  relatedIds: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
 });
 const twinBarCutSectionSchema = z.object({
   segmentId: z.string().min(1),
   startOffsetMm: z.number().finite().nonnegative(),
   endOffsetMm: z.number().finite().nonnegative(),
-  lengthMm: z.number().finite().nonnegative()
+  lengthMm: z.number().finite().nonnegative(),
 });
 const twinBarOptimizationCutSchema = z.object({
   id: z.string().min(1),
@@ -567,7 +617,7 @@ const twinBarOptimizationCutSchema = z.object({
   lengthMm: z.number().finite().nonnegative(),
   effectiveLengthMm: z.number().finite().nonnegative(),
   offcutBeforeMm: z.number().finite().nonnegative(),
-  offcutAfterMm: z.number().finite().nonnegative()
+  offcutAfterMm: z.number().finite().nonnegative(),
 });
 const twinBarOptimizationPlanSchema = z.object({
   id: z.string().min(1),
@@ -579,7 +629,7 @@ const twinBarOptimizationPlanSchema = z.object({
   leftoverMm: z.number().finite().nonnegative(),
   reusableLeftoverMm: z.number().finite().nonnegative(),
   reusedCuts: nonNegativeIntegerSchema,
-  panelsSaved: nonNegativeIntegerSchema
+  panelsSaved: nonNegativeIntegerSchema,
 });
 const twinBarOptimizationBucketSchema = z.object({
   variant: twinBarVariantSchema,
@@ -596,7 +646,7 @@ const twinBarOptimizationBucketSchema = z.object({
   totalLeftoverMm: z.number().finite().nonnegative(),
   reusableLeftoverMm: z.number().finite().nonnegative(),
   utilizationRate: z.number().finite().min(0),
-  plans: z.array(twinBarOptimizationPlanSchema)
+  plans: z.array(twinBarOptimizationPlanSchema),
 });
 
 export const estimateResultSchema = z.object({
@@ -606,7 +656,7 @@ export const estimateResultSchema = z.object({
     total: nonNegativeIntegerSchema,
     cornerPosts: nonNegativeIntegerSchema,
     byHeightAndType: z.record(z.string(), postBreakdownSchema),
-    byHeightMm: z.record(z.string(), nonNegativeIntegerSchema)
+    byHeightMm: z.record(z.string(), nonNegativeIntegerSchema),
   }),
   corners: z.object({
     total: nonNegativeIntegerSchema,
@@ -620,10 +670,10 @@ export const estimateResultSchema = z.object({
           total: nonNegativeIntegerSchema,
           internal: nonNegativeIntegerSchema,
           external: nonNegativeIntegerSchema,
-          unclassified: nonNegativeIntegerSchema
-        })
+          unclassified: nonNegativeIntegerSchema,
+        }),
       )
-      .default({})
+      .default({}),
   }),
   materials: z.object({
     twinBarPanels: nonNegativeIntegerSchema,
@@ -633,7 +683,7 @@ export const estimateResultSchema = z.object({
     roll2100: nonNegativeIntegerSchema,
     roll900: nonNegativeIntegerSchema,
     totalRolls: nonNegativeIntegerSchema,
-    rollsByFenceHeight: z.record(z.string(), rollFenceBreakdownSchema)
+    rollsByFenceHeight: z.record(z.string(), rollFenceBreakdownSchema),
   }),
   featureQuantities: z.array(featureQuantityLineSchema).max(2_000).default([]),
   optimization: z.object({
@@ -652,8 +702,8 @@ export const estimateResultSchema = z.object({
       totalLeftoverMm: z.number().finite().nonnegative(),
       reusableLeftoverMm: z.number().finite().nonnegative(),
       utilizationRate: z.number().finite().min(0),
-      buckets: z.array(twinBarOptimizationBucketSchema)
-    })
+      buckets: z.array(twinBarOptimizationBucketSchema),
+    }),
   }),
   segments: z.array(
     z.object({
@@ -663,13 +713,13 @@ export const estimateResultSchema = z.object({
       intermediatePosts: nonNegativeIntegerSchema,
       panels: nonNegativeIntegerSchema,
       roll2100: nonNegativeIntegerSchema,
-      roll900: nonNegativeIntegerSchema
-    })
-  )
+      roll900: nonNegativeIntegerSchema,
+    }),
+  ),
 });
 
 export const estimateSnapshotRequestSchema = z.object({
-  layout: layoutModelSchema
+  layout: layoutModelSchema,
 });
 
 export const pricingItemCategorySchema = z.enum(PRICING_ITEM_CATEGORIES);
@@ -683,7 +733,7 @@ export const pricingItemSchema = z.object({
   labourCost: z.number().finite().min(0),
   isActive: z.boolean(),
   notes: z.string().trim().max(600).optional(),
-  sortOrder: z.number().finite().optional()
+  sortOrder: z.number().finite().optional(),
 });
 
 export const pricingWorkbookSheetSchema = z.enum(PRICING_WORKBOOK_SHEETS);
@@ -693,59 +743,59 @@ export const installLiftLevelSchema = z.enum(INSTALL_LIFT_LEVELS);
 const pricingWorkbookQuantityRuleSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("MANUAL_ENTRY"),
-    defaultQuantity: z.number().finite().min(0).optional()
+    defaultQuantity: z.number().finite().min(0).optional(),
   }),
   z.object({
     kind: z.literal("PANEL_COUNT"),
     heightKey: fenceHeightKeySchema,
-    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"])
+    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"]),
   }),
   z.object({
     kind: z.literal("PANEL_LAYER_COUNT"),
     panelHeightMm: z.number().finite().positive(),
     variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"]),
-    lift: installLiftLevelSchema.optional()
+    lift: installLiftLevelSchema.optional(),
   }),
   z.object({
     kind: z.literal("POST_COUNT"),
     heightMm: z.number().finite().nonnegative(),
-    postType: z.enum(["end", "intermediate", "corner", "junction", "inlineJoin", "total"])
+    postType: z.enum(["end", "intermediate", "corner", "junction", "inlineJoin", "total"]),
   }),
   z.object({
     kind: z.literal("CORNER_COUNT"),
     heightMm: z.number().finite().nonnegative(),
-    cornerType: z.enum(["internal", "external", "unclassified", "total"])
+    cornerType: z.enum(["internal", "external", "unclassified", "total"]),
   }),
   z.object({
     kind: z.literal("TOP_RAIL_COUNT"),
-    heightKey: fenceHeightKeySchema
+    heightKey: fenceHeightKeySchema,
   }),
   z.object({
     kind: z.literal("GATE_COUNT"),
     heightKey: fenceHeightKeySchema,
     gateType: gateTypeSchema,
-    output: z.enum(["gate", "leaf", "post_set"])
+    output: z.enum(["gate", "leaf", "post_set"]),
   }),
   z.object({
     kind: z.literal("GATE_COUNT_BUCKET"),
     heightBucket: z.enum(["UP_TO_4M", "AT_LEAST_4_5M"]),
-    gateType: z.enum(["SINGLE_LEAF", "DOUBLE_LEAF"])
+    gateType: z.enum(["SINGLE_LEAF", "DOUBLE_LEAF"]),
   }),
   z.object({
     kind: z.literal("FEATURE_QUANTITY"),
     featureKind: z.enum(["GOAL_UNIT", "BASKETBALL", "KICKBOARD", "PITCH_DIVIDER", "SIDE_NETTING"]),
-    component: z.string().trim().min(1).max(120)
+    component: z.string().trim().min(1).max(120),
   }),
   z.object({
-    kind: z.literal("FLOODLIGHT_COLUMN_COUNT")
+    kind: z.literal("FLOODLIGHT_COLUMN_COUNT"),
   }),
   z.object({
     kind: z.literal("TOTAL_POSTS_BY_HEIGHT"),
-    heightMm: z.number().finite().nonnegative()
+    heightMm: z.number().finite().nonnegative(),
   }),
   z.object({
-    kind: z.literal("TOTAL_POSTS")
-  })
+    kind: z.literal("TOTAL_POSTS"),
+  }),
 ]);
 
 export const pricingWorkbookRowSchema = z.object({
@@ -756,7 +806,7 @@ export const pricingWorkbookRowSchema = z.object({
   rateMode: pricingWorkbookRateModeSchema.optional(),
   quantityRule: pricingWorkbookQuantityRuleSchema,
   notes: z.string().trim().max(600).optional(),
-  tone: z.enum(["default", "highlight", "manual", "warning"]).optional()
+  tone: z.enum(["default", "highlight", "manual", "warning"]).optional(),
 });
 
 export const pricingWorkbookSectionSchema = z.object({
@@ -764,7 +814,7 @@ export const pricingWorkbookSectionSchema = z.object({
   sheet: pricingWorkbookSheetSchema,
   title: z.string().trim().min(1).max(160),
   caption: z.string().trim().max(240).optional(),
-  rows: z.array(pricingWorkbookRowSchema).max(400)
+  rows: z.array(pricingWorkbookRowSchema).max(400),
 });
 
 export const pricingWorkbookSettingsSchema = z.object({
@@ -775,22 +825,22 @@ export const pricingWorkbookSettingsSchema = z.object({
   concretePricePerCube: z.number().finite().min(0),
   hardDigDefault: z.boolean(),
   clearSpoilsDefault: z.boolean(),
-  colourOption: z.string().trim().min(1).max(120)
+  colourOption: z.string().trim().min(1).max(120),
 });
 
 export const pricingWorkbookConfigSchema = z.object({
   settings: pricingWorkbookSettingsSchema,
-  sections: z.array(pricingWorkbookSectionSchema).max(80)
+  sections: z.array(pricingWorkbookSectionSchema).max(80),
 });
 
 export const estimateWorkbookManualEntrySchema = z.object({
   code: z.string().trim().min(1).max(160),
-  quantity: z.number().finite().min(0)
+  quantity: z.number().finite().min(0),
 });
 
 export const estimateWorkbookCommercialInputsSchema = z.object({
   travelDays: z.number().finite().min(0),
-  markupUnits: z.number().finite().min(0)
+  markupUnits: z.number().finite().min(0),
 });
 
 export const estimateWorkbookRowSchema = z.object({
@@ -803,7 +853,7 @@ export const estimateWorkbookRowSchema = z.object({
   total: z.number().finite().min(0),
   isEditable: z.boolean(),
   notes: z.string().trim().max(600).optional(),
-  tone: z.enum(["default", "highlight", "manual", "warning"]).optional()
+  tone: z.enum(["default", "highlight", "manual", "warning"]).optional(),
 });
 
 export const estimateWorkbookSectionSchema = z.object({
@@ -812,7 +862,7 @@ export const estimateWorkbookSectionSchema = z.object({
   title: z.string().trim().min(1).max(160),
   caption: z.string().trim().max(240).optional(),
   subtotal: z.number().finite().min(0),
-  rows: z.array(estimateWorkbookRowSchema).max(400)
+  rows: z.array(estimateWorkbookRowSchema).max(400),
 });
 
 export const estimateWorkbookTotalsSchema = z.object({
@@ -827,7 +877,7 @@ export const estimateWorkbookTotalsSchema = z.object({
   markupUnits: z.number().finite().min(0),
   markupRate: z.number().finite().min(0),
   markupTotal: z.number().finite().min(0),
-  grandTotal: z.number().finite().min(0)
+  grandTotal: z.number().finite().min(0),
 });
 
 export const estimateWorkbookSchema = z.object({
@@ -835,7 +885,7 @@ export const estimateWorkbookSchema = z.object({
   sections: z.array(estimateWorkbookSectionSchema).max(80),
   manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
   commercialInputs: estimateWorkbookCommercialInputsSchema,
-  totals: estimateWorkbookTotalsSchema
+  totals: estimateWorkbookTotalsSchema,
 });
 
 export const pricingConfigRecordSchema = z.object({
@@ -843,19 +893,19 @@ export const pricingConfigRecordSchema = z.object({
   items: z.array(pricingItemSchema).max(500),
   workbook: pricingWorkbookConfigSchema.optional(),
   updatedAtIso: z.string().datetime(),
-  updatedByUserId: z.string().trim().min(1).max(120).nullable()
+  updatedByUserId: z.string().trim().min(1).max(120).nullable(),
 });
 
 export const pricingConfigUpdateRequestSchema = z
   .object({
     items: z.array(pricingItemSchema).max(500).optional(),
-    workbook: pricingWorkbookConfigSchema.optional()
+    workbook: pricingWorkbookConfigSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.items === undefined && value.workbook === undefined) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one pricing payload field must be provided"
+        message: "At least one pricing payload field must be provided",
       });
     }
   });
@@ -865,7 +915,7 @@ export const ancillaryEstimateItemSchema = z.object({
   description: z.string().trim().min(1).max(240),
   quantity: z.number().finite().min(0),
   materialCost: z.number().finite().min(0),
-  labourCost: z.number().finite().min(0)
+  labourCost: z.number().finite().min(0),
 });
 
 export const estimateWarningSchema = z.object({
@@ -874,15 +924,15 @@ export const estimateWarningSchema = z.object({
     "INLINE_JOIN_OR_JUNCTION_POSTS",
     "UNCLASSIFIED_CORNERS",
     "CUSTOM_GATES",
-    "FIXINGS_EXCLUDED"
+    "FIXINGS_EXCLUDED",
   ]),
-  message: z.string().trim().min(1).max(600)
+  message: z.string().trim().min(1).max(600),
 });
 
 export const estimatePricingSnapshotSchema = z.object({
   updatedAtIso: z.string().datetime(),
   updatedByUserId: z.string().trim().min(1).max(120).nullable(),
-  source: z.enum(["DEFAULT", "COMPANY_CONFIG"])
+  source: z.enum(["DEFAULT", "COMPANY_CONFIG"]),
 });
 
 export const estimateRowSchema = z.object({
@@ -897,7 +947,7 @@ export const estimateRowSchema = z.object({
   totalMaterialCost: z.number().finite().min(0),
   totalLabourCost: z.number().finite().min(0),
   totalCost: z.number().finite().min(0),
-  notes: z.string().trim().max(600).optional()
+  notes: z.string().trim().max(600).optional(),
 });
 
 export const estimateGroupSchema = z.object({
@@ -906,7 +956,7 @@ export const estimateGroupSchema = z.object({
   rows: z.array(estimateRowSchema).max(500),
   subtotalMaterialCost: z.number().finite().min(0),
   subtotalLabourCost: z.number().finite().min(0),
-  subtotalCost: z.number().finite().min(0)
+  subtotalCost: z.number().finite().min(0),
 });
 
 export const pricedEstimateResultSchema = z.object({
@@ -914,7 +964,7 @@ export const pricedEstimateResultSchema = z.object({
     drawingId: z.string().trim().min(1).max(120),
     drawingName: z.string().trim().min(1).max(160),
     customerId: z.string().trim().min(1).max(120).nullable(),
-    customerName: z.string().trim().min(1).max(160)
+    customerName: z.string().trim().min(1).max(160),
   }),
   groups: z.array(estimateGroupSchema).max(200),
   ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200),
@@ -923,10 +973,10 @@ export const pricedEstimateResultSchema = z.object({
   totals: z.object({
     materialCost: z.number().finite().min(0),
     labourCost: z.number().finite().min(0),
-    totalCost: z.number().finite().min(0)
+    totalCost: z.number().finite().min(0),
   }),
   warnings: z.array(estimateWarningSchema).max(50),
-  pricingSnapshot: estimatePricingSnapshotSchema
+  pricingSnapshot: estimatePricingSnapshotSchema,
 });
 
 export const quoteDrawingSnapshotSchema = z.object({
@@ -940,7 +990,7 @@ export const quoteDrawingSnapshotSchema = z.object({
   schemaVersion: z.coerce.number().int().min(1),
   rulesVersion: z.string().trim().min(1).max(120),
   versionNumber: z.coerce.number().int().min(1),
-  revisionNumber: z.coerce.number().int().min(0).optional()
+  revisionNumber: z.coerce.number().int().min(0).optional(),
 });
 
 export const quoteRecordSchema = z.object({
@@ -954,15 +1004,20 @@ export const quoteRecordSchema = z.object({
   pricedEstimate: pricedEstimateResultSchema,
   drawingSnapshot: quoteDrawingSnapshotSchema,
   createdByUserId: z.string().trim().min(1).max(120),
-  createdAtIso: z.string().datetime()
+  createdAtIso: z.string().datetime(),
 });
 
 export const quoteCreateRequestSchema = z.object({
   ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([]),
-  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([])
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
 });
 
-export const emailSchema = z.string().trim().email().max(320).transform((value) => value.toLowerCase());
+export const emailSchema = z
+  .string()
+  .trim()
+  .email()
+  .max(320)
+  .transform((value) => value.toLowerCase());
 export const passwordSchema = z.string().min(10).max(128);
 export const companyNameSchema = z.string().trim().min(2).max(120);
 export const displayNameSchema = z.string().trim().min(2).max(120);
@@ -985,7 +1040,7 @@ export const jobCommercialInputsSchema = z.object({
   distributionCharge: z.number().finite().min(0),
   concretePricePerCube: z.number().finite().min(0),
   hardDig: z.boolean(),
-  clearSpoils: z.boolean()
+  clearSpoils: z.boolean(),
 });
 
 export const taskPrioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
@@ -995,6 +1050,8 @@ export const jobTaskRecordSchema = z.object({
   companyId: z.string().trim().min(1).max(120),
   jobId: z.string().trim().min(1).max(120),
   jobName: z.string().trim().max(200),
+  drawingId: z.string().trim().min(1).max(120).nullable(),
+  drawingName: z.string().trim().max(200),
   title: jobTaskTitleSchema,
   description: z.string().trim().max(2_000),
   priority: taskPrioritySchema,
@@ -1007,7 +1064,7 @@ export const jobTaskRecordSchema = z.object({
   completedByDisplayName: z.string().trim().max(120),
   createdByUserId: z.string().trim().min(1).max(120),
   createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime()
+  updatedAtIso: z.string().datetime(),
 });
 
 export const jobRecordSchema = z.object({
@@ -1031,7 +1088,7 @@ export const jobRecordSchema = z.object({
   updatedByUserId: z.string().trim().min(1).max(120),
   updatedByDisplayName: z.string().trim().max(120),
   createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime()
+  updatedAtIso: z.string().datetime(),
 });
 
 export const jobSummarySchema = jobRecordSchema.extend({
@@ -1044,13 +1101,13 @@ export const jobSummarySchema = jobRecordSchema.extend({
   latestEstimateTotal: z.number().finite().min(0).nullable(),
   primaryDrawingName: z.string().trim().min(1).max(160).nullable(),
   primaryDrawingUpdatedAtIso: z.string().datetime().nullable(),
-  primaryPreviewLayout: layoutModelSchema.nullable()
+  primaryPreviewLayout: layoutModelSchema.nullable(),
 });
 
 export const jobCreateRequestSchema = z.object({
   customerId: customerIdSchema,
   name: jobNameSchema,
-  notes: z.string().trim().max(2_000).default("")
+  notes: z.string().trim().max(2_000).default(""),
 });
 
 export const jobUpdateRequestSchema = z
@@ -1060,7 +1117,7 @@ export const jobUpdateRequestSchema = z
     commercialInputs: jobCommercialInputsSchema.optional(),
     notes: z.string().trim().max(2_000).optional(),
     ownerUserId: z.string().trim().min(1).max(120).nullable().optional(),
-    archived: z.boolean().optional()
+    archived: z.boolean().optional(),
   })
   .superRefine((value, context) => {
     if (
@@ -1073,7 +1130,7 @@ export const jobUpdateRequestSchema = z
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one job field must be provided"
+        message: "At least one job field must be provided",
       });
     }
   });
@@ -1083,7 +1140,8 @@ export const jobTaskCreateRequestSchema = z.object({
   description: z.string().trim().max(2_000).optional(),
   priority: taskPrioritySchema.optional(),
   assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
-  dueAtIso: z.string().datetime().nullable().optional()
+  drawingId: z.string().trim().min(1).max(120).nullable().optional(),
+  dueAtIso: z.string().datetime().nullable().optional(),
 });
 
 export const jobTaskUpdateRequestSchema = z
@@ -1092,8 +1150,9 @@ export const jobTaskUpdateRequestSchema = z
     description: z.string().trim().max(2_000).optional(),
     priority: taskPrioritySchema.optional(),
     assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
+    drawingId: z.string().trim().min(1).max(120).nullable().optional(),
     dueAtIso: z.string().datetime().nullable().optional(),
-    isCompleted: z.boolean().optional()
+    isCompleted: z.boolean().optional(),
   })
   .superRefine((value, context) => {
     if (
@@ -1101,33 +1160,34 @@ export const jobTaskUpdateRequestSchema = z
       value.description === undefined &&
       value.priority === undefined &&
       value.assignedUserId === undefined &&
+      value.drawingId === undefined &&
       value.dueAtIso === undefined &&
       value.isCompleted === undefined
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one task field must be provided"
+        message: "At least one task field must be provided",
       });
     }
   });
 
 export const jobPrimaryDrawingUpdateRequestSchema = z.object({
-  drawingId: z.string().trim().min(1).max(120)
+  drawingId: z.string().trim().min(1).max(120),
 });
 
 export const jobDrawingCreateRequestSchema = z.object({
   name: drawingNameSchema.optional(),
-  sourceDrawingId: z.string().trim().min(1).max(120).optional()
+  sourceDrawingId: z.string().trim().min(1).max(120).optional(),
 });
 
 export const jobQuoteCreateRequestSchema = quoteCreateRequestSchema.extend({
-  drawingId: z.string().trim().min(1).max(120).optional()
+  drawingId: z.string().trim().min(1).max(120).optional(),
 });
 
 export const customerContactSchema = z.object({
   name: z.string().trim().max(240).default(""),
   phone: z.string().trim().max(40).default(""),
-  email: z.string().trim().email().max(320).or(z.literal("")).default("")
+  email: z.string().trim().email().max(320).or(z.literal("")).default(""),
 });
 
 export const customerAdditionalContactsSchema = z.array(customerContactSchema).max(20).default([]);
@@ -1136,7 +1196,7 @@ export const registerRequestSchema = z.object({
   companyName: companyNameSchema,
   displayName: displayNameSchema,
   email: emailSchema,
-  password: passwordSchema
+  password: passwordSchema,
 });
 
 export const bootstrapOwnerRequestSchema = registerRequestSchema;
@@ -1147,16 +1207,16 @@ export const userCreateRequestSchema = z.object({
   displayName: displayNameSchema,
   email: emailSchema,
   password: passwordSchema,
-  role: z.enum(["ADMIN", "MEMBER"])
+  role: z.enum(["ADMIN", "MEMBER"]),
 });
 
 export const userPasswordSetRequestSchema = z.object({
-  password: passwordSchema
+  password: passwordSchema,
 });
 
 export const loginRequestSchema = z.object({
   email: emailSchema,
-  password: passwordSchema
+  password: passwordSchema,
 });
 
 export const drawingCreateRequestSchema = z.object({
@@ -1164,7 +1224,7 @@ export const drawingCreateRequestSchema = z.object({
   customerId: customerIdSchema,
   jobId: z.string().trim().min(1).max(120).optional(),
   layout: layoutModelSchema,
-  savedViewport: drawingCanvasViewportSchema.nullable().optional()
+  savedViewport: drawingCanvasViewportSchema.nullable().optional(),
 });
 
 export const drawingUpdateRequestSchema = z
@@ -1174,7 +1234,7 @@ export const drawingUpdateRequestSchema = z
     customerId: customerIdSchema.optional(),
     jobId: z.string().trim().min(1).max(120).nullable().optional(),
     layout: layoutModelSchema.optional(),
-    savedViewport: drawingCanvasViewportSchema.nullable().optional()
+    savedViewport: drawingCanvasViewportSchema.nullable().optional(),
   })
   .superRefine((value, context) => {
     if (
@@ -1186,21 +1246,21 @@ export const drawingUpdateRequestSchema = z
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one drawing field must be provided"
+        message: "At least one drawing field must be provided",
       });
     }
   });
 
 export const drawingArchiveRequestSchema = z.object({
   archived: z.boolean(),
-  expectedVersionNumber: z.coerce.number().int().min(1)
+  expectedVersionNumber: z.coerce.number().int().min(1),
 });
 
 export const drawingStatusSchema = z.enum(DRAWING_STATUSES);
 
 export const drawingStatusUpdateRequestSchema = z.object({
   status: drawingStatusSchema,
-  expectedVersionNumber: z.coerce.number().int().min(1)
+  expectedVersionNumber: z.coerce.number().int().min(1),
 });
 
 export const customerRecordSchema = z.object({
@@ -1217,13 +1277,13 @@ export const customerRecordSchema = z.object({
   createdByUserId: z.string().trim().min(1).max(120),
   updatedByUserId: z.string().trim().min(1).max(120),
   createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime()
+  updatedAtIso: z.string().datetime(),
 });
 
 export const customerSummarySchema = customerRecordSchema.extend({
   activeDrawingCount: z.coerce.number().int().min(0),
   archivedDrawingCount: z.coerce.number().int().min(0),
-  lastActivityAtIso: z.string().datetime().nullable()
+  lastActivityAtIso: z.string().datetime().nullable(),
 });
 
 export const customerCreateRequestSchema = z.object({
@@ -1233,7 +1293,7 @@ export const customerCreateRequestSchema = z.object({
   primaryPhone: z.string().trim().max(40).default(""),
   additionalContacts: customerAdditionalContactsSchema,
   siteAddress: z.string().trim().max(400).default(""),
-  notes: customerNotesSchema.default("")
+  notes: customerNotesSchema.default(""),
 });
 
 export const customerUpdateRequestSchema = z
@@ -1244,7 +1304,7 @@ export const customerUpdateRequestSchema = z
     primaryPhone: z.string().trim().max(40).optional(),
     additionalContacts: customerAdditionalContactsSchema.optional(),
     siteAddress: z.string().trim().max(400).optional(),
-    notes: customerNotesSchema.optional()
+    notes: customerNotesSchema.optional(),
   })
   .superRefine((value, context) => {
     if (
@@ -1258,21 +1318,21 @@ export const customerUpdateRequestSchema = z
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one customer field must be provided"
+        message: "At least one customer field must be provided",
       });
     }
   });
 
 export const customerArchiveRequestSchema = z.object({
   archived: z.boolean(),
-  cascadeDrawings: z.boolean().default(false)
+  cascadeDrawings: z.boolean().default(false),
 });
 
 export const passwordResetRequestSchema = z.object({
-  email: emailSchema
+  email: emailSchema,
 });
 
 export const passwordResetConfirmSchema = z.object({
   token: z.string().trim().min(32).max(128),
-  password: passwordSchema
+  password: passwordSchema,
 });

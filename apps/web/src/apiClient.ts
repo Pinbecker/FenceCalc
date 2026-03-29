@@ -113,6 +113,7 @@ export interface UpdateJobInput {
 export interface CreateJobTaskInput {
   title: string;
   assignedUserId?: string | null;
+  drawingId?: string | null;
   dueAtIso?: string | null;
   description?: string;
   priority?: TaskPriority;
@@ -121,6 +122,7 @@ export interface CreateJobTaskInput {
 export interface UpdateJobTaskInput {
   title?: string;
   assignedUserId?: string | null;
+  drawingId?: string | null;
   dueAtIso?: string | null;
   isCompleted?: boolean;
   description?: string;
@@ -257,14 +259,17 @@ function mergeSignals(signals: Array<AbortSignal | undefined>): AbortSignal | un
 
 async function executeRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const timeoutController = new AbortController();
-  const timeoutId = globalThis.setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  const timeoutId = globalThis.setTimeout(
+    () => timeoutController.abort(),
+    DEFAULT_REQUEST_TIMEOUT_MS,
+  );
 
   try {
     const headers: Record<string, string> = { ...(options.headers ?? {}) };
     const requestInit: RequestInit = {
       method: options.method ?? "GET",
       credentials: "include",
-      headers
+      headers,
     };
     const signal = mergeSignals([options.signal, timeoutController.signal]);
     if (signal) {
@@ -277,13 +282,20 @@ async function executeRequest<T>(path: string, options: RequestOptions = {}): Pr
 
     const response = await fetch(buildUrl(path), requestInit);
 
-    const payload = (await response.json().catch(() => null)) as T | { error?: string; details?: unknown } | null;
+    const payload = (await response.json().catch(() => null)) as
+      | T
+      | { error?: string; details?: unknown }
+      | null;
     if (!response.ok) {
       const message =
-        payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+        payload &&
+        typeof payload === "object" &&
+        "error" in payload &&
+        typeof payload.error === "string"
           ? payload.error
           : `Request failed with status ${response.status}`;
-      const details = payload && typeof payload === "object" && "details" in payload ? payload.details : null;
+      const details =
+        payload && typeof payload === "object" && "details" in payload ? payload.details : null;
       throw new ApiClientError(message, response.status, details);
     }
 
@@ -345,8 +357,8 @@ export async function bootstrapOwner(input: RegisterAccountInput): Promise<AuthS
       companyName: input.companyName,
       displayName: input.displayName,
       email: input.email,
-      password: input.password
-    }
+      password: input.password,
+    },
   });
 }
 
@@ -357,13 +369,13 @@ export async function registerAccount(input: RegisterAccountInput): Promise<Auth
 export async function login(input: LoginInput): Promise<AuthSessionEnvelope> {
   return requestJson<AuthSessionEnvelope>("/api/v1/auth/login", {
     method: "POST",
-    body: input
+    body: input,
   });
 }
 
 export async function logout(): Promise<void> {
   await requestJson<{ ok: boolean }>("/api/v1/auth/logout", {
-    method: "POST"
+    method: "POST",
   });
 }
 
@@ -379,74 +391,101 @@ export async function listUsers(): Promise<CompanyUserRecord[]> {
 export async function createUser(input: CreateCompanyUserInput): Promise<CompanyUserRecord> {
   const response = await requestJson<{ user: CompanyUserRecord }>("/api/v1/users", {
     method: "POST",
-    body: input
+    body: input,
   });
   return response.user;
 }
 
-export async function setUserPassword(userId: string, input: SetCompanyUserPasswordInput): Promise<void> {
+export async function setUserPassword(
+  userId: string,
+  input: SetCompanyUserPasswordInput,
+): Promise<void> {
   await requestJson<{ ok: boolean }>(`/api/v1/users/${userId}/password`, {
     method: "PUT",
-    body: input
+    body: input,
   });
 }
 
-export async function listCustomers(scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ALL", search = ""): Promise<CustomerSummary[]> {
+export async function listCustomers(
+  scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ALL",
+  search = "",
+): Promise<CustomerSummary[]> {
   const params = new URLSearchParams({ scope });
   if (search.trim()) {
     params.set("search", search.trim());
   }
-  const response = await requestJson<{ customers: CustomerSummary[] }>(`/api/v1/customers?${params.toString()}`);
+  const response = await requestJson<{ customers: CustomerSummary[] }>(
+    `/api/v1/customers?${params.toString()}`,
+  );
   return response.customers;
 }
 
 export async function getCustomer(customerId: string): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}`);
+  const response = await requestJson<{ customer: CustomerRecord }>(
+    `/api/v1/customers/${customerId}`,
+  );
   return response.customer;
 }
 
 export async function createCustomer(input: CreateCustomerInput): Promise<CustomerRecord> {
   const response = await requestJson<{ customer: CustomerRecord }>("/api/v1/customers", {
     method: "POST",
-    body: input
+    body: input,
   });
   return response.customer;
 }
 
-export async function updateCustomer(customerId: string, input: UpdateCustomerInput): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}`, {
-    method: "PUT",
-    body: input
-  });
+export async function updateCustomer(
+  customerId: string,
+  input: UpdateCustomerInput,
+): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>(
+    `/api/v1/customers/${customerId}`,
+    {
+      method: "PUT",
+      body: input,
+    },
+  );
   return response.customer;
 }
 
-export async function setCustomerArchivedState(customerId: string, archived: boolean, cascadeDrawings = false): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(`/api/v1/customers/${customerId}/archive`, {
-    method: "PUT",
-    body: { archived, cascadeDrawings }
-  });
+export async function setCustomerArchivedState(
+  customerId: string,
+  archived: boolean,
+  cascadeDrawings = false,
+): Promise<CustomerRecord> {
+  const response = await requestJson<{ customer: CustomerRecord }>(
+    `/api/v1/customers/${customerId}/archive`,
+    {
+      method: "PUT",
+      body: { archived, cascadeDrawings },
+    },
+  );
   return response.customer;
 }
 
 export async function deleteCustomer(customerId: string): Promise<void> {
   await requestJson<{ deleted: boolean }>(`/api/v1/customers/${customerId}`, {
-    method: "DELETE"
+    method: "DELETE",
   });
 }
 
 export async function listDrawings(search = ""): Promise<DrawingSummary[]> {
   const params = new URLSearchParams({ scope: "ALL" });
   if (search.trim()) params.set("search", search.trim());
-  const response = await requestJson<{ drawings: DrawingSummary[] }>(`/api/v1/drawings?${params.toString()}`);
+  const response = await requestJson<{ drawings: DrawingSummary[] }>(
+    `/api/v1/drawings?${params.toString()}`,
+  );
   return response.drawings;
 }
 
-export async function listJobs(options: {
-  scope?: "ALL" | "ACTIVE" | "ARCHIVED";
-  search?: string;
-  customerId?: string;
-} = {}): Promise<JobSummary[]> {
+export async function listJobs(
+  options: {
+    scope?: "ALL" | "ACTIVE" | "ARCHIVED";
+    search?: string;
+    customerId?: string;
+  } = {},
+): Promise<JobSummary[]> {
   const params = new URLSearchParams({ scope: options.scope ?? "ACTIVE" });
   if (options.search?.trim()) {
     params.set("search", options.search.trim());
@@ -461,67 +500,85 @@ export async function listJobs(options: {
 export async function createJob(input: CreateJobInput): Promise<JobRecord> {
   const response = await requestJson<{ job: JobRecord }>("/api/v1/jobs", {
     method: "POST",
-    body: input
+    body: input,
   });
   return response.job;
 }
 
 export async function getJob(jobId: string): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}`);
+  const response = await requestJson<{ job: JobRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}`,
+  );
   return response.job;
 }
 
 export async function updateJob(jobId: string, input: UpdateJobInput): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}`, {
-    method: "PUT",
-    body: input
-  });
+  const response = await requestJson<{ job: JobRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}`,
+    {
+      method: "PUT",
+      body: input,
+    },
+  );
   return response.job;
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
   await requestJson<{ deleted: boolean }>(`/api/v1/jobs/${encodePathSegment(jobId)}`, {
-    method: "DELETE"
+    method: "DELETE",
   });
 }
 
 export async function listJobDrawings(jobId: string): Promise<DrawingSummary[]> {
-  const response = await requestJson<{ drawings: DrawingSummary[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/drawings`);
+  const response = await requestJson<{ drawings: DrawingSummary[] }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/drawings`,
+  );
   return response.drawings;
 }
 
 export async function createJobDrawing(
   jobId: string,
-  input: { name?: string; sourceDrawingId?: string }
+  input: { name?: string; sourceDrawingId?: string },
 ): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/drawings`, {
-    method: "POST",
-    body: input
-  });
+  const response = await requestJson<{ drawing: DrawingRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/drawings`,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
   return response.drawing;
 }
 
 export async function setJobPrimaryDrawing(jobId: string, drawingId: string): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/primary-drawing`, {
-    method: "PUT",
-    body: { drawingId }
-  });
+  const response = await requestJson<{ job: JobRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/primary-drawing`,
+    {
+      method: "PUT",
+      body: { drawingId },
+    },
+  );
   return response.job;
 }
 
-export async function getJobEstimate(jobId: string, drawingId?: string | null): Promise<PricedEstimateResult> {
+export async function getJobEstimate(
+  jobId: string,
+  drawingId?: string | null,
+): Promise<PricedEstimateResult> {
   const params = new URLSearchParams();
   if (drawingId?.trim()) {
     params.set("drawingId", drawingId.trim());
   }
   const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`
+    `/api/v1/jobs/${encodePathSegment(jobId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`,
   );
   return response.pricedEstimate;
 }
 
 export async function listJobQuotes(jobId: string): Promise<QuoteRecord[]> {
-  const response = await requestJson<{ quotes: QuoteRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/quotes`);
+  const response = await requestJson<{ quotes: QuoteRecord[] }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/quotes`,
+  );
   return response.quotes;
 }
 
@@ -529,39 +586,54 @@ export async function createJobQuoteSnapshot(
   jobId: string,
   ancillaryItems: AncillaryEstimateItem[] = [],
   manualEntries: EstimateWorkbookManualEntry[] = [],
-  drawingId?: string | null
+  drawingId?: string | null,
 ): Promise<QuoteRecord> {
-  const response = await requestJson<{ quote: QuoteRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/quotes`, {
-    method: "POST",
-    body: {
-      ...(drawingId ? { drawingId } : {}),
-      ancillaryItems,
-      manualEntries
-    }
-  });
+  const response = await requestJson<{ quote: QuoteRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/quotes`,
+    {
+      method: "POST",
+      body: {
+        ...(drawingId ? { drawingId } : {}),
+        ancillaryItems,
+        manualEntries,
+      },
+    },
+  );
   return response.quote;
 }
 
 export async function listJobTasks(jobId: string): Promise<JobTaskRecord[]> {
-  const response = await requestJson<{ tasks: JobTaskRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/tasks`);
+  const response = await requestJson<{ tasks: JobTaskRecord[] }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks`,
+  );
   return response.tasks;
 }
 
-export async function createJobTask(jobId: string, input: CreateJobTaskInput): Promise<JobTaskRecord> {
-  const response = await requestJson<{ task: JobTaskRecord }>(`/api/v1/jobs/${encodePathSegment(jobId)}/tasks`, {
-    method: "POST",
-    body: input
-  });
+export async function createJobTask(
+  jobId: string,
+  input: CreateJobTaskInput,
+): Promise<JobTaskRecord> {
+  const response = await requestJson<{ task: JobTaskRecord }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks`,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
   return response.task;
 }
 
-export async function updateJobTask(jobId: string, taskId: string, input: UpdateJobTaskInput): Promise<JobTaskRecord> {
+export async function updateJobTask(
+  jobId: string,
+  taskId: string,
+  input: UpdateJobTaskInput,
+): Promise<JobTaskRecord> {
   const response = await requestJson<{ task: JobTaskRecord }>(
     `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
     {
       method: "PUT",
-      body: input
-    }
+      body: input,
+    },
   );
   return response.task;
 }
@@ -569,30 +641,39 @@ export async function updateJobTask(jobId: string, taskId: string, input: Update
 export async function deleteJobTask(jobId: string, taskId: string): Promise<void> {
   await requestJson<{ success: boolean }>(
     `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 }
 
-export async function listCompanyTasks(options: CompanyTaskQueryOptions = {}): Promise<JobTaskRecord[]> {
-  const response = await requestJson<{ tasks: JobTaskRecord[] }>(`/api/v1/tasks${buildCompanyTaskQuery(options)}`);
+export async function listCompanyTasks(
+  options: CompanyTaskQueryOptions = {},
+): Promise<JobTaskRecord[]> {
+  const response = await requestJson<{ tasks: JobTaskRecord[] }>(
+    `/api/v1/tasks${buildCompanyTaskQuery(options)}`,
+  );
   return response.tasks;
 }
 
 export async function listJobActivity(jobId: string): Promise<AuditLogRecord[]> {
-  const response = await requestJson<{ entries: AuditLogRecord[] }>(`/api/v1/jobs/${encodePathSegment(jobId)}/activity`);
+  const response = await requestJson<{ entries: AuditLogRecord[] }>(
+    `/api/v1/jobs/${encodePathSegment(jobId)}/activity`,
+  );
   return response.entries;
 }
 
 export async function deleteDrawing(drawingId: string): Promise<void> {
   await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${encodePathSegment(drawingId)}`, {
-    method: "DELETE"
+    method: "DELETE",
   });
 }
 
 export async function deleteRevision(drawingId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${encodePathSegment(drawingId)}/revision`, {
-    method: "DELETE"
-  });
+  await requestJson<{ deleted: boolean }>(
+    `/api/v1/drawings/${encodePathSegment(drawingId)}/revision`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
@@ -601,24 +682,31 @@ export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
 }
 
 export async function getPricedEstimate(drawingId: string): Promise<PricedEstimateResult> {
-  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(`/api/v1/drawings/${drawingId}/priced-estimate`);
+  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
+    `/api/v1/drawings/${drawingId}/priced-estimate`,
+  );
   return response.pricedEstimate;
 }
 
 export async function listQuotes(drawingId: string): Promise<QuoteRecord[]> {
-  const response = await requestJson<{ quotes: QuoteRecord[] }>(`/api/v1/drawings/${drawingId}/quotes`);
+  const response = await requestJson<{ quotes: QuoteRecord[] }>(
+    `/api/v1/drawings/${drawingId}/quotes`,
+  );
   return response.quotes;
 }
 
 export async function createQuoteSnapshot(
   drawingId: string,
   ancillaryItems: AncillaryEstimateItem[],
-  manualEntries: EstimateWorkbookManualEntry[] = []
+  manualEntries: EstimateWorkbookManualEntry[] = [],
 ): Promise<QuoteRecord> {
-  const response = await requestJson<{ quote: QuoteRecord }>(`/api/v1/drawings/${drawingId}/quotes`, {
-    method: "POST",
-    body: { ancillaryItems, manualEntries }
-  });
+  const response = await requestJson<{ quote: QuoteRecord }>(
+    `/api/v1/drawings/${drawingId}/quotes`,
+    {
+      method: "POST",
+      body: { ancillaryItems, manualEntries },
+    },
+  );
   return response.quote;
 }
 
@@ -631,7 +719,7 @@ export async function createDrawing(input: {
 }): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
     method: "POST",
-    body: input
+    body: input,
   });
   return response.drawing;
 }
@@ -648,7 +736,7 @@ export async function updateDrawing(
 ): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`, {
     method: "PUT",
-    body: input
+    body: input,
   });
   return response.drawing;
 }
@@ -658,10 +746,13 @@ export async function setDrawingArchivedState(
   archived: boolean,
   expectedVersionNumber: number,
 ): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/archive`, {
-    method: "PUT",
-    body: { archived, expectedVersionNumber }
-  });
+  const response = await requestJson<{ drawing: DrawingRecord }>(
+    `/api/v1/drawings/${drawingId}/archive`,
+    {
+      method: "PUT",
+      body: { archived, expectedVersionNumber },
+    },
+  );
   return response.drawing;
 }
 
@@ -670,15 +761,20 @@ export async function setDrawingStatus(
   status: DrawingStatus,
   expectedVersionNumber: number,
 ): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/status`, {
-    method: "PUT",
-    body: { status, expectedVersionNumber }
-  });
+  const response = await requestJson<{ drawing: DrawingRecord }>(
+    `/api/v1/drawings/${drawingId}/status`,
+    {
+      method: "PUT",
+      body: { status, expectedVersionNumber },
+    },
+  );
   return response.drawing;
 }
 
 export async function listDrawingVersions(drawingId: string): Promise<DrawingVersionRecord[]> {
-  const response = await requestJson<{ versions: DrawingVersionRecord[] }>(`/api/v1/drawings/${drawingId}/versions`);
+  const response = await requestJson<{ versions: DrawingVersionRecord[] }>(
+    `/api/v1/drawings/${drawingId}/versions`,
+  );
   return response.versions;
 }
 
@@ -687,33 +783,46 @@ export async function restoreDrawingVersion(
   versionNumber: number,
   expectedVersionNumber: number,
 ): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}/restore`, {
-    method: "POST",
-    body: { versionNumber, expectedVersionNumber }
-  });
+  const response = await requestJson<{ drawing: DrawingRecord }>(
+    `/api/v1/drawings/${drawingId}/restore`,
+    {
+      method: "POST",
+      body: { versionNumber, expectedVersionNumber },
+    },
+  );
   return response.drawing;
 }
 
-export async function listAuditLog(options: number | AuditLogQueryOptions = 50): Promise<AuditLogRecord[]> {
+export async function listAuditLog(
+  options: number | AuditLogQueryOptions = 50,
+): Promise<AuditLogRecord[]> {
   const queryOptions = typeof options === "number" ? { limit: options } : options;
-  const response = await requestJson<AuditLogResponse>(`/api/v1/audit-log${buildAuditLogQuery(queryOptions)}`);
+  const response = await requestJson<AuditLogResponse>(
+    `/api/v1/audit-log${buildAuditLogQuery(queryOptions)}`,
+  );
   return response.entries;
 }
 
 export async function exportAuditLogCsv(options: AuditLogQueryOptions = {}): Promise<string> {
   const response = await fetch(buildUrl(`/api/v1/audit-log/export${buildAuditLogQuery(options)}`), {
     method: "GET",
-    credentials: "include"
+    credentials: "include",
   });
   if (!response.ok) {
-    throw new ApiClientError(`Request failed with status ${response.status}`, response.status, null);
+    throw new ApiClientError(
+      `Request failed with status ${response.status}`,
+      response.status,
+      null,
+    );
   }
 
   return response.text();
 }
 
 export async function getPricingConfig(): Promise<PricingConfigRecord> {
-  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>("/api/v1/pricing-config");
+  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>(
+    "/api/v1/pricing-config",
+  );
   return response.pricingConfig;
 }
 
@@ -721,23 +830,26 @@ export async function updatePricingConfig(input: {
   items?: PricingConfigRecord["items"];
   workbook?: PricingConfigRecord["workbook"];
 }): Promise<PricingConfigRecord> {
-  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>("/api/v1/pricing-config", {
-    method: "PUT",
-    body: input
-  });
+  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>(
+    "/api/v1/pricing-config",
+    {
+      method: "PUT",
+      body: input,
+    },
+  );
   return response.pricingConfig;
 }
 
 export async function requestPasswordReset(input: PasswordResetRequestInput): Promise<void> {
   await requestJson<{ ok: boolean }>("/api/v1/auth/request-password-reset", {
     method: "POST",
-    body: input
+    body: input,
   });
 }
 
 export async function resetPassword(input: PasswordResetConfirmInput): Promise<void> {
   await requestJson<{ ok: boolean }>("/api/v1/auth/reset-password", {
     method: "POST",
-    body: input
+    body: input,
   });
 }
