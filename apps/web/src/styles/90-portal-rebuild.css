@@ -2022,6 +2022,11 @@ svg.drawing-preview {
   align-items: start;
 }
 
+.portal-job-overview-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .portal-job-summary-strip {
   margin-top: 10px;
 }
@@ -2548,10 +2553,23 @@ svg.drawing-preview {
   color: var(--portal-text);
 }
 
-.portal-job-drawing-timeline-node span:last-child {
+.portal-job-drawing-timeline-node-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  white-space: nowrap;
+}
+
+.portal-job-drawing-timeline-node-meta > span:first-child {
   font-size: 0.79rem;
   line-height: 1.5;
   color: var(--portal-text-muted);
+}
+
+.portal-job-drawing-timeline-node-meta .portal-customer-drawing-badge {
+  padding: 4px 7px;
+  font-size: 0.6rem;
 }
 
 .portal-job-drawing-timeline-node:hover,

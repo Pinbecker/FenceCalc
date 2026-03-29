@@ -348,7 +348,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       onClick={() =>
                         onNavigate("job", {
                           jobId: task.jobId,
-                          tab: "overview",
+                          tab: "tasks",
                           focusTaskId: task.id,
                           ...(task.drawingId ? { drawingId: task.drawingId } : {}),
                         })
@@ -362,7 +362,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       onClick={() =>
                         onNavigate("job", {
                           jobId: task.jobId,
-                          tab: "overview",
+                          tab: "tasks",
                           focusTaskId: task.id,
                           ...(task.drawingId ? { drawingId: task.drawingId } : {}),
                         })

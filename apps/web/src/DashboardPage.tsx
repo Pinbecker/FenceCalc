@@ -250,7 +250,7 @@ export function DashboardPage({
                     onClick={() =>
                       onNavigate("job", {
                         jobId: task.jobId,
-                        tab: "overview",
+                        tab: "tasks",
                         focusTaskId: task.id,
                         ...(task.drawingId ? { drawingId: task.drawingId } : {}),
                       })

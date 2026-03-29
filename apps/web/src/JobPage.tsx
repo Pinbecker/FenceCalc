@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   JOB_STAGES,
@@ -57,10 +57,13 @@ import {
 import type { PortalRoute } from "./useHashRoute";
 import { buildEstimateDisplaySections, formatQuantityForDisplay } from "./workbookPresentation";
 
-type JobTab = "overview" | "drawings" | "estimate" | "activity";
+type JobTab = "overview" | "tasks" | "drawings" | "estimate" | "activity";
+
+const JOB_TABS: JobTab[] = ["overview", "tasks", "drawings", "estimate", "activity"];
 
 const JOB_TAB_LABELS: Record<JobTab, string> = {
   overview: "Overview",
+  tasks: "Tasks",
   drawings: "Drawings",
   estimate: "Estimate",
   activity: "Activity",
@@ -246,9 +249,8 @@ export function JobPage({
   const requestedDrawingId = query?.drawingId ?? null;
   const focusTaskId = query?.focusTaskId ?? null;
   const tabValue = (query?.tab as JobTab | undefined) ?? "overview";
-  const currentTab: JobTab = ["overview", "drawings", "estimate", "activity"].includes(tabValue)
-    ? tabValue
-    : "overview";
+  const normalizedTab: JobTab = JOB_TABS.includes(tabValue) ? tabValue : "overview";
+  const currentTab: JobTab = focusTaskId && normalizedTab === "overview" ? "tasks" : normalizedTab;
 
   const [job, setJob] = useState<JobRecord | null>(null);
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
@@ -288,6 +290,11 @@ export function JobPage({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const canDeleteJob = session.user.role === "OWNER" || session.user.role === "ADMIN";
+  const currentTabRef = useRef<JobTab>(currentTab);
+
+  useEffect(() => {
+    currentTabRef.current = currentTab;
+  }, [currentTab]);
 
   useEffect(() => {
     if (!noticeMessage) return;
@@ -464,7 +471,7 @@ export function JobPage({
           if (drawing.jobId && drawing.jobId !== targetJobId) {
             onNavigate("job", {
               jobId: drawing.jobId,
-              tab: currentTab,
+              tab: currentTabRef.current,
               drawingId: requestedDrawingId ?? drawing.id,
             });
             return;
@@ -483,7 +490,7 @@ export function JobPage({
         setIsLoading(false);
       }
     },
-    [currentTab, onNavigate, requestedDrawingId],
+    [onNavigate, requestedDrawingId],
   );
 
   useEffect(() => {
@@ -982,6 +989,347 @@ export function JobPage({
     );
   }
 
+  const taskPanel = (
+    <section className="portal-surface-card portal-job-tasks-panel">
+      <div className="portal-section-heading">
+        <div>
+          <span className="portal-section-kicker">Tasks</span>
+        </div>
+      </div>
+
+      <div className="portal-job-task-form">
+        {rootDrawings.length === 0 ? (
+          <p className="portal-empty-copy">
+            Create a drawing for this job before adding drawing-specific tasks.
+          </p>
+        ) : null}
+        <div className="portal-job-task-form-compact-row">
+          <label className="portal-customer-edit-field portal-task-input-field portal-job-task-title-field">
+            <span>Task title</span>
+            <input
+              placeholder="Add follow-up task"
+              value={taskTitle}
+              onChange={(event) => setTaskTitle(event.target.value)}
+              onFocus={() => {
+                if (taskDescription || taskDueDate || taskAssignee || taskPriority !== "NORMAL") {
+                  setIsTaskFormExpanded(true);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask();
+              }}
+            />
+          </label>
+          <div className="portal-job-task-form-actions">
+            <button
+              type="button"
+              className="portal-secondary-button portal-compact-button"
+              onClick={() => setIsTaskFormExpanded((current) => !current)}
+            >
+              {isTaskFormExpanded ? "Hide details" : "Details"}
+            </button>
+            <button
+              type="button"
+              className="portal-primary-button portal-compact-button"
+              onClick={() => void handleCreateTask()}
+              disabled={
+                isSavingTask ||
+                !taskTitle.trim() ||
+                rootDrawings.length === 0 ||
+                (rootDrawings.length > 0 && !taskDrawingId)
+              }
+            >
+              {isSavingTask ? "Saving..." : "Add task"}
+            </button>
+          </div>
+        </div>
+        {isTaskFormExpanded ? (
+          <>
+            <div className="portal-job-task-form-row">
+              <label className="portal-customer-edit-field portal-task-input-field">
+                <span>Drawing</span>
+                <select
+                  value={taskDrawingId ?? ""}
+                  onChange={(event) => setTaskDrawingId(event.target.value || null)}
+                  disabled={rootDrawings.length === 0}
+                >
+                  <option value="">Choose drawing</option>
+                  {rootDrawings.map((drawing) => (
+                    <option key={drawing.id} value={drawing.id}>
+                      {drawing.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="portal-customer-edit-field portal-task-input-field">
+                <span>Due date</span>
+                <input
+                  type="date"
+                  value={taskDueDate}
+                  onChange={(event) => setTaskDueDate(event.target.value)}
+                />
+              </label>
+              <label className="portal-customer-edit-field portal-task-input-field">
+                <span>Assignee</span>
+                <select
+                  value={taskAssignee ?? ""}
+                  onChange={(event) => setTaskAssignee(event.target.value || null)}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="portal-job-task-form-row portal-job-task-form-row-compact-options">
+              <label className="portal-customer-edit-field portal-task-input-field">
+                <span>Priority</span>
+                <select
+                  className="portal-task-priority-select"
+                  value={taskPriority}
+                  onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}
+                >
+                  {TASK_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p.charAt(0) + p.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="portal-customer-edit-field portal-task-input-field">
+              <span>Description</span>
+              <textarea
+                className="portal-task-description-input"
+                placeholder="Add notes, handoff context, or next steps"
+                rows={3}
+                value={taskDescription}
+                onChange={(event) => setTaskDescription(event.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
+      </div>
+
+      <div className="portal-job-task-list">
+        {sortedTasks.length === 0 ? (
+          <p className="portal-empty-copy">No tasks on this job yet.</p>
+        ) : null}
+        {sortedTasks.map((task) => {
+          const isExpanded = expandedTaskId === task.id;
+          const taskDraft = taskDrafts[task.id] ?? buildTaskDraft(task);
+          const dueTone = getTaskDueTone(task);
+          const dueLabel = getTaskDueLabel(task);
+          return (
+            <div
+              key={task.id}
+              className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}${dueTone === "overdue" ? " is-overdue" : ""}`}
+            >
+              <div className="portal-job-task-card-header">
+                <div className="portal-job-task-card-left">
+                  <button
+                    type="button"
+                    className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`}
+                    onClick={() => void handleToggleTask(task)}
+                    aria-label={
+                      task.isCompleted ? `Reopen task ${task.title}` : `Complete task ${task.title}`
+                    }
+                    disabled={savingTaskId === task.id}
+                  >
+                    {task.isCompleted ? "✓" : ""}
+                  </button>
+                  <div className="portal-job-task-card-title">
+                    <h3
+                      className={`portal-task-card-heading${task.isCompleted ? " portal-task-done-text" : ""}`}
+                    >
+                      {task.title}
+                    </h3>
+                    <span className="portal-job-task-card-meta">
+                      {task.drawingName ? `${task.drawingName} · ` : ""}
+                      {task.assignedUserDisplayName || "Unassigned"}
+                      {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
+                    </span>
+                  </div>
+                </div>
+                <div className="portal-job-task-card-right">
+                  {dueLabel ? (
+                    <span className={`portal-task-due-badge is-${dueTone}`}>{dueLabel}</span>
+                  ) : null}
+                  {task.priority !== "NORMAL" ? (
+                    <span
+                      className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}
+                    >
+                      {task.priority}
+                    </span>
+                  ) : null}
+                  <span
+                    className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}
+                  >
+                    {task.isCompleted ? "Done" : "Open"}
+                  </span>
+                  <button
+                    type="button"
+                    className="portal-task-expand-button"
+                    onClick={() => handleExpandTask(task)}
+                    aria-expanded={isExpanded}
+                    aria-label={
+                      isExpanded ? `Collapse task ${task.title}` : `Expand task ${task.title}`
+                    }
+                  >
+                    {isExpanded ? "Hide" : "Edit"}
+                  </button>
+                </div>
+              </div>
+              {task.description && !isExpanded ? (
+                <p className="portal-job-task-card-description-preview">{task.description}</p>
+              ) : null}
+              {isExpanded ? (
+                <div className="portal-job-task-card-detail">
+                  <div className="portal-job-task-card-fields portal-job-task-card-fields-expanded">
+                    <label className="portal-customer-edit-field">
+                      <span>Title</span>
+                      <input
+                        value={taskDraft.title}
+                        maxLength={240}
+                        onChange={(event) =>
+                          handleTaskDraftChange(task.id, "title", event.target.value)
+                        }
+                      />
+                    </label>
+                    <label className="portal-customer-edit-field portal-job-task-card-field-wide">
+                      <span>Description</span>
+                      <textarea
+                        rows={4}
+                        value={taskDraft.description}
+                        maxLength={2000}
+                        onChange={(event) =>
+                          handleTaskDraftChange(task.id, "description", event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="portal-job-task-card-fields">
+                    <label className="portal-customer-edit-field">
+                      <span>Drawing</span>
+                      <select
+                        value={taskDraft.drawingId ?? ""}
+                        onChange={(event) =>
+                          handleTaskDraftChange(task.id, "drawingId", event.target.value || null)
+                        }
+                        disabled={rootDrawings.length === 0}
+                      >
+                        <option value="">Choose drawing</option>
+                        {rootDrawings.map((drawing) => (
+                          <option key={drawing.id} value={drawing.id}>
+                            {drawing.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="portal-customer-edit-field">
+                      <span>Priority</span>
+                      <select
+                        value={taskDraft.priority}
+                        onChange={(event) =>
+                          handleTaskDraftChange(
+                            task.id,
+                            "priority",
+                            event.target.value as TaskPriority,
+                          )
+                        }
+                      >
+                        {TASK_PRIORITIES.map((p) => (
+                          <option key={p} value={p}>
+                            {p.charAt(0) + p.slice(1).toLowerCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="portal-customer-edit-field">
+                      <span>Assignee</span>
+                      <select
+                        value={taskDraft.assignedUserId ?? ""}
+                        onChange={(event) =>
+                          handleTaskDraftChange(
+                            task.id,
+                            "assignedUserId",
+                            event.target.value || null,
+                          )
+                        }
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="portal-customer-edit-field">
+                      <span>Due date</span>
+                      <input
+                        type="date"
+                        value={taskDraft.dueDate}
+                        onChange={(event) =>
+                          handleTaskDraftChange(task.id, "dueDate", event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="portal-job-task-card-history">
+                    <span>Created {formatTaskTimestamp(task.createdAtIso)}</span>
+                    {task.completedAtIso ? (
+                      <span>
+                        Completed {formatTaskTimestamp(task.completedAtIso)} by{" "}
+                        {task.completedByDisplayName || "Team member"}
+                      </span>
+                    ) : null}
+                    <span>Last updated {formatTaskTimestamp(task.updatedAtIso)}</span>
+                  </div>
+                  <div className="portal-job-task-card-actions">
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() => void handleSaveTaskDraft(task)}
+                      disabled={savingTaskId === task.id || !taskDraft.title.trim()}
+                    >
+                      {savingTaskId === task.id ? "Saving..." : "Save changes"}
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() => handleResetTaskDraft(task)}
+                      disabled={savingTaskId === task.id}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() => void handleToggleTask(task)}
+                    >
+                      {task.isCompleted ? "Reopen" : "Complete"}
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-text-button portal-danger-text"
+                      onClick={() => void handleDeleteTask(task)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+
   return (
     <section className="portal-page portal-customer-page portal-job-page">
       <header className="portal-page-header">
@@ -1053,11 +1401,15 @@ export function JobPage({
         role="tablist"
         aria-label="Job sections"
       >
-        {(Object.keys(JOB_TAB_LABELS) as JobTab[]).map((jobTab) => (
+        {JOB_TABS.map((jobTab) => (
           <button
             key={jobTab}
             type="button"
             className={currentTab === jobTab ? "is-active" : undefined}
+            role="tab"
+            id={`job-tab-${jobTab}`}
+            aria-selected={currentTab === jobTab}
+            aria-controls={`job-tab-panel-${jobTab}`}
             onClick={() => navigateToJob(jobTab, selectedDrawing?.id ?? null)}
           >
             {JOB_TAB_LABELS[jobTab]}
@@ -1066,12 +1418,11 @@ export function JobPage({
       </div>
 
       {currentTab === "overview" ? (
-        <>
+        <div role="tabpanel" id="job-tab-panel-overview" aria-labelledby="job-tab-overview">
           <section className="portal-surface-card portal-job-drawing-timeline-card">
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Drawing history</span>
-                <h2>Drawing revision timeline</h2>
               </div>
             </div>
             {drawingGroups.length === 0 ? (
@@ -1119,7 +1470,14 @@ export function JobPage({
                               {getRevisionLabel(drawing)}
                             </span>
                             <strong>{drawing.name}</strong>
-                            <span>{formatDateOnly(drawing.createdAtIso)}</span>
+                            <span className="portal-job-drawing-timeline-node-meta">
+                              <span>{formatDateOnly(drawing.createdAtIso)}</span>
+                              {drawing.status === "QUOTED" ? (
+                                <span className="portal-customer-drawing-badge is-quoted">
+                                  Quoted
+                                </span>
+                              ) : null}
+                            </span>
                           </button>
                           {index < chain.length - 1 ? (
                             <div
@@ -1136,415 +1494,29 @@ export function JobPage({
             </div>
           </section>
 
-          <div className="portal-dashboard-layout portal-job-overview-layout">
-            <section className="portal-surface-card portal-dashboard-primary">
-              <div className="portal-section-heading">
-                <div>
-                  <span className="portal-section-kicker">Pipeline</span>
-                  <h2>Stage and tasks</h2>
-                </div>
-              </div>
-
-              <div className="portal-job-meta-grid">
-                <label className="portal-customer-edit-field">
-                  <span>Job stage</span>
-                  <select
-                    value={job.stage}
-                    onChange={(event) => void handleStageChange(event.target.value as JobStage)}
-                    disabled={isSavingStage}
-                  >
-                    {JOB_STAGES.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {stage.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="portal-customer-edit-field">
-                  <span>Owner</span>
-                  <strong>{job.ownerDisplayName || session.user.displayName}</strong>
-                </div>
-                <div className="portal-customer-edit-field">
-                  <span>Next action</span>
-                  <strong>
-                    {sortedTasks.find((entry) => !entry.isCompleted)?.title ?? "No open tasks"}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="portal-job-task-form">
-                {rootDrawings.length === 0 ? (
-                  <p className="portal-empty-copy">
-                    Create a drawing for this job before adding drawing-specific tasks.
-                  </p>
-                ) : null}
-                <div className="portal-job-task-form-compact-row">
-                  <label className="portal-customer-edit-field portal-task-input-field portal-job-task-title-field">
-                    <span>Task title</span>
-                    <input
-                      placeholder="Add follow-up task"
-                      value={taskTitle}
-                      onChange={(event) => setTaskTitle(event.target.value)}
-                      onFocus={() => {
-                        if (
-                          taskDescription ||
-                          taskDueDate ||
-                          taskAssignee ||
-                          taskPriority !== "NORMAL"
-                        ) {
-                          setIsTaskFormExpanded(true);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && taskTitle.trim()) void handleCreateTask();
-                      }}
-                    />
-                  </label>
-                  <div className="portal-job-task-form-actions">
-                    <button
-                      type="button"
-                      className="portal-secondary-button portal-compact-button"
-                      onClick={() => setIsTaskFormExpanded((current) => !current)}
-                    >
-                      {isTaskFormExpanded ? "Hide details" : "Details"}
-                    </button>
-                    <button
-                      type="button"
-                      className="portal-primary-button portal-compact-button"
-                      onClick={() => void handleCreateTask()}
-                      disabled={
-                        isSavingTask ||
-                        !taskTitle.trim() ||
-                        rootDrawings.length === 0 ||
-                        (rootDrawings.length > 0 && !taskDrawingId)
-                      }
-                    >
-                      {isSavingTask ? "Saving..." : "Add task"}
-                    </button>
-                  </div>
-                </div>
-                {isTaskFormExpanded ? (
-                  <>
-                    <div className="portal-job-task-form-row">
-                      <label className="portal-customer-edit-field portal-task-input-field">
-                        <span>Drawing</span>
-                        <select
-                          value={taskDrawingId ?? ""}
-                          onChange={(event) => setTaskDrawingId(event.target.value || null)}
-                          disabled={rootDrawings.length === 0}
-                        >
-                          <option value="">Choose drawing</option>
-                          {rootDrawings.map((drawing) => (
-                            <option key={drawing.id} value={drawing.id}>
-                              {drawing.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="portal-customer-edit-field portal-task-input-field">
-                        <span>Due date</span>
-                        <input
-                          type="date"
-                          value={taskDueDate}
-                          onChange={(event) => setTaskDueDate(event.target.value)}
-                        />
-                      </label>
-                      <label className="portal-customer-edit-field portal-task-input-field">
-                        <span>Assignee</span>
-                        <select
-                          value={taskAssignee ?? ""}
-                          onChange={(event) => setTaskAssignee(event.target.value || null)}
-                        >
-                          <option value="">Unassigned</option>
-                          {users.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.displayName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="portal-job-task-form-row portal-job-task-form-row-compact-options">
-                      <label className="portal-customer-edit-field portal-task-input-field">
-                        <span>Priority</span>
-                        <select
-                          className="portal-task-priority-select"
-                          value={taskPriority}
-                          onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}
-                        >
-                          {TASK_PRIORITIES.map((p) => (
-                            <option key={p} value={p}>
-                              {p.charAt(0) + p.slice(1).toLowerCase()}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <label className="portal-customer-edit-field portal-task-input-field">
-                      <span>Description</span>
-                      <textarea
-                        className="portal-task-description-input"
-                        placeholder="Add notes, handoff context, or next steps"
-                        rows={3}
-                        value={taskDescription}
-                        onChange={(event) => setTaskDescription(event.target.value)}
-                      />
-                    </label>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="portal-job-task-list">
-                {sortedTasks.length === 0 ? (
-                  <p className="portal-empty-copy">No tasks on this job yet.</p>
-                ) : null}
-                {sortedTasks.map((task) => {
-                  const isExpanded = expandedTaskId === task.id;
-                  const taskDraft = taskDrafts[task.id] ?? buildTaskDraft(task);
-                  const dueTone = getTaskDueTone(task);
-                  const dueLabel = getTaskDueLabel(task);
-                  return (
-                    <div
-                      key={task.id}
-                      className={`portal-job-task-card${task.isCompleted ? " is-complete" : ""}${isExpanded ? " is-expanded" : ""}${dueTone === "overdue" ? " is-overdue" : ""}`}
-                    >
-                      <div className="portal-job-task-card-header">
-                        <div className="portal-job-task-card-left">
-                          <button
-                            type="button"
-                            className={`portal-task-check${task.isCompleted ? " is-checked" : ""}`}
-                            onClick={() => void handleToggleTask(task)}
-                            aria-label={
-                              task.isCompleted
-                                ? `Reopen task ${task.title}`
-                                : `Complete task ${task.title}`
-                            }
-                            disabled={savingTaskId === task.id}
-                          >
-                            {task.isCompleted ? "✓" : ""}
-                          </button>
-                          <div className="portal-job-task-card-title">
-                            <h3
-                              className={`portal-task-card-heading${task.isCompleted ? " portal-task-done-text" : ""}`}
-                            >
-                              {task.title}
-                            </h3>
-                            <span className="portal-job-task-card-meta">
-                              {task.drawingName ? `${task.drawingName} · ` : ""}
-                              {task.assignedUserDisplayName || "Unassigned"}
-                              {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="portal-job-task-card-right">
-                          {dueLabel ? (
-                            <span className={`portal-task-due-badge is-${dueTone}`}>
-                              {dueLabel}
-                            </span>
-                          ) : null}
-                          {task.priority !== "NORMAL" ? (
-                            <span
-                              className={`portal-task-priority-badge priority-${task.priority.toLowerCase()}`}
-                            >
-                              {task.priority}
-                            </span>
-                          ) : null}
-                          <span
-                            className={`portal-task-status-badge ${task.isCompleted ? "status-done" : "status-open"}`}
-                          >
-                            {task.isCompleted ? "Done" : "Open"}
-                          </span>
-                          <button
-                            type="button"
-                            className="portal-task-expand-button"
-                            onClick={() => handleExpandTask(task)}
-                            aria-expanded={isExpanded}
-                            aria-label={
-                              isExpanded
-                                ? `Collapse task ${task.title}`
-                                : `Expand task ${task.title}`
-                            }
-                          >
-                            {isExpanded ? "Hide" : "Edit"}
-                          </button>
-                        </div>
-                      </div>
-                      {task.description && !isExpanded ? (
-                        <p className="portal-job-task-card-description-preview">
-                          {task.description}
-                        </p>
-                      ) : null}
-                      {isExpanded ? (
-                        <div className="portal-job-task-card-detail">
-                          <div className="portal-job-task-card-fields portal-job-task-card-fields-expanded">
-                            <label className="portal-customer-edit-field">
-                              <span>Title</span>
-                              <input
-                                value={taskDraft.title}
-                                maxLength={240}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(task.id, "title", event.target.value)
-                                }
-                              />
-                            </label>
-                            <label className="portal-customer-edit-field portal-job-task-card-field-wide">
-                              <span>Description</span>
-                              <textarea
-                                rows={4}
-                                value={taskDraft.description}
-                                maxLength={2000}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(task.id, "description", event.target.value)
-                                }
-                              />
-                            </label>
-                          </div>
-                          <div className="portal-job-task-card-fields">
-                            <label className="portal-customer-edit-field">
-                              <span>Drawing</span>
-                              <select
-                                value={taskDraft.drawingId ?? ""}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(
-                                    task.id,
-                                    "drawingId",
-                                    event.target.value || null,
-                                  )
-                                }
-                                disabled={rootDrawings.length === 0}
-                              >
-                                <option value="">Choose drawing</option>
-                                {rootDrawings.map((drawing) => (
-                                  <option key={drawing.id} value={drawing.id}>
-                                    {drawing.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="portal-customer-edit-field">
-                              <span>Priority</span>
-                              <select
-                                value={taskDraft.priority}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(
-                                    task.id,
-                                    "priority",
-                                    event.target.value as TaskPriority,
-                                  )
-                                }
-                              >
-                                {TASK_PRIORITIES.map((p) => (
-                                  <option key={p} value={p}>
-                                    {p.charAt(0) + p.slice(1).toLowerCase()}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="portal-customer-edit-field">
-                              <span>Assignee</span>
-                              <select
-                                value={taskDraft.assignedUserId ?? ""}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(
-                                    task.id,
-                                    "assignedUserId",
-                                    event.target.value || null,
-                                  )
-                                }
-                              >
-                                <option value="">Unassigned</option>
-                                {users.map((user) => (
-                                  <option key={user.id} value={user.id}>
-                                    {user.displayName}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="portal-customer-edit-field">
-                              <span>Due date</span>
-                              <input
-                                type="date"
-                                value={taskDraft.dueDate}
-                                onChange={(event) =>
-                                  handleTaskDraftChange(task.id, "dueDate", event.target.value)
-                                }
-                              />
-                            </label>
-                          </div>
-                          <div className="portal-job-task-card-history">
-                            <span>Created {formatTaskTimestamp(task.createdAtIso)}</span>
-                            {task.completedAtIso ? (
-                              <span>
-                                Completed {formatTaskTimestamp(task.completedAtIso)} by{" "}
-                                {task.completedByDisplayName || "Team member"}
-                              </span>
-                            ) : null}
-                            <span>Last updated {formatTaskTimestamp(task.updatedAtIso)}</span>
-                          </div>
-                          <div className="portal-job-task-card-actions">
-                            <button
-                              type="button"
-                              className="portal-text-button"
-                              onClick={() => void handleSaveTaskDraft(task)}
-                              disabled={savingTaskId === task.id || !taskDraft.title.trim()}
-                            >
-                              {savingTaskId === task.id ? "Saving..." : "Save changes"}
-                            </button>
-                            <button
-                              type="button"
-                              className="portal-text-button"
-                              onClick={() => handleResetTaskDraft(task)}
-                              disabled={savingTaskId === task.id}
-                            >
-                              Reset
-                            </button>
-                            <button
-                              type="button"
-                              className="portal-text-button"
-                              onClick={() => void handleToggleTask(task)}
-                            >
-                              {task.isCompleted ? "Reopen" : "Complete"}
-                            </button>
-                            <button
-                              type="button"
-                              className="portal-text-button portal-danger-text"
-                              onClick={() => void handleDeleteTask(task)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+          <div className="portal-job-overview-stack">
+            {taskPanel}
 
             {job.notes ? (
-              <div className="portal-dashboard-side">
-                <section className="portal-surface-card portal-dashboard-activity">
-                  <div className="portal-section-heading">
-                    <div>
-                      <span className="portal-section-kicker">Job notes</span>
-                      <h2>Notes</h2>
-                    </div>
+              <section className="portal-surface-card portal-dashboard-activity">
+                <div className="portal-section-heading">
+                  <div>
+                    <span className="portal-section-kicker">Job notes</span>
                   </div>
-                  <p
-                    className="portal-empty-copy portal-job-notes-copy"
-                    style={{ whiteSpace: "pre-wrap" }}
-                  >
-                    {job.notes}
-                  </p>
-                </section>
-              </div>
+                </div>
+                <p
+                  className="portal-empty-copy portal-job-notes-copy"
+                  style={{ whiteSpace: "pre-wrap" }}
+                >
+                  {job.notes}
+                </p>
+              </section>
             ) : null}
 
             <section className="portal-surface-card portal-job-primary-card">
               <div className="portal-section-heading">
                 <div>
                   <span className="portal-section-kicker">Drawings</span>
-                  <h2>Drawings</h2>
                 </div>
                 <button
                   type="button"
@@ -1633,7 +1605,6 @@ export function JobPage({
               <div className="portal-section-heading">
                 <div>
                   <span className="portal-section-kicker">Quotes</span>
-                  <h2>Revision quotes</h2>
                 </div>
               </div>
               <div className="estimate-ancillary-list">
@@ -1680,15 +1651,25 @@ export function JobPage({
               </div>
             </section>
           </div>
-        </>
+        </div>
+      ) : null}
+
+      {currentTab === "tasks" ? (
+        <div role="tabpanel" id="job-tab-panel-tasks" aria-labelledby="job-tab-tasks">
+          {taskPanel}
+        </div>
       ) : null}
 
       {currentTab === "drawings" ? (
-        <section className="portal-surface-card portal-customer-drawings-panel">
+        <section
+          className="portal-surface-card portal-customer-drawings-panel"
+          role="tabpanel"
+          id="job-tab-panel-drawings"
+          aria-labelledby="job-tab-drawings"
+        >
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">All drawings</span>
-              <h2>Drawings</h2>
             </div>
             <button
               type="button"
@@ -1786,12 +1767,11 @@ export function JobPage({
       ) : null}
 
       {currentTab === "estimate" ? (
-        <>
+        <div role="tabpanel" id="job-tab-panel-estimate" aria-labelledby="job-tab-estimate">
           <section className="portal-surface-card workbook-commercial-card estimate-control-card">
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Estimate controls</span>
-                <h2>Job commercial inputs</h2>
               </div>
               <div className="portal-header-actions">
                 <button
@@ -2049,7 +2029,6 @@ export function JobPage({
                 <div className="portal-section-heading">
                   <div>
                     <span className="portal-section-kicker">Ancillary items</span>
-                    <h2>Manual line items</h2>
                   </div>
                   <button
                     type="button"
@@ -2160,7 +2139,6 @@ export function JobPage({
                     <div className="portal-section-heading">
                       <div>
                         <span className="portal-section-kicker">Estimate sheet</span>
-                        <h2>{sheet.title}</h2>
                       </div>
                     </div>
                     {sheet.sections.length === 0 ? (
@@ -2237,15 +2215,19 @@ export function JobPage({
               </div>
             </>
           ) : null}
-        </>
+        </div>
       ) : null}
 
       {currentTab === "activity" ? (
-        <section className="portal-surface-card portal-dashboard-activity">
+        <section
+          className="portal-surface-card portal-dashboard-activity"
+          role="tabpanel"
+          id="job-tab-panel-activity"
+          aria-labelledby="job-tab-activity"
+        >
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Job activity</span>
-              <h2>Timeline</h2>
             </div>
           </div>
           <div className="portal-dashboard-activity-list">
