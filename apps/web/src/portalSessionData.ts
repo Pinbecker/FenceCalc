@@ -5,15 +5,21 @@ import type {
   CustomerSummary,
   DrawingRecord,
   DrawingSummary,
-  JobSummary
+  DrawingWorkspaceSummary,
 } from "@fence-estimator/contracts";
 
-import { listAuditLog, listCustomers, listDrawings, listJobs, listUsers } from "./apiClient";
+import {
+  listAuditLog,
+  listCustomers,
+  listDrawings,
+  listDrawingWorkspaces,
+  listUsers,
+} from "./apiClient";
 
 export interface PortalCompanyData {
   customers: CustomerSummary[];
   drawings: DrawingSummary[];
-  jobs: JobSummary[];
+  workspaces: DrawingWorkspaceSummary[];
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
 }
@@ -21,7 +27,7 @@ export interface PortalCompanyData {
 export const EMPTY_PORTAL_COMPANY_DATA: PortalCompanyData = {
   customers: [],
   drawings: [],
-  jobs: [],
+  workspaces: [],
   users: [],
   auditLog: []
 };
@@ -32,10 +38,10 @@ export function sessionCanManageCompanyData(session: AuthSessionEnvelope): boole
 
 export async function loadPortalCompanyData(session: AuthSessionEnvelope): Promise<PortalCompanyData> {
   const canManage = sessionCanManageCompanyData(session);
-  const [customers, drawings, jobs, users, auditLog] = await Promise.all([
+  const [customers, drawings, workspaces, users, auditLog] = await Promise.all([
     listCustomers(),
     listDrawings(),
-    listJobs({ scope: "ALL" }),
+    listDrawingWorkspaces({ scope: "ALL" }),
     canManage ? listUsers() : Promise.resolve([]),
     canManage ? listAuditLog() : Promise.resolve([])
   ]);
@@ -43,7 +49,7 @@ export async function loadPortalCompanyData(session: AuthSessionEnvelope): Promi
   return {
     customers,
     drawings,
-    jobs,
+    workspaces,
     users,
     auditLog
   };
@@ -54,8 +60,8 @@ export function updateDrawingSummaryFromRecord(drawing: DrawingRecord, current?:
   return {
     id: drawing.id,
     companyId: drawing.companyId,
-    ...(drawing.jobId !== undefined ? { jobId: drawing.jobId } : {}),
-    ...(drawing.jobRole !== undefined ? { jobRole: drawing.jobRole } : {}),
+    workspaceId: drawing.workspaceId ?? null,
+    jobRole: drawing.jobRole ?? null,
     name: drawing.name,
     customerId: drawing.customerId,
     customerName: drawing.customerName,

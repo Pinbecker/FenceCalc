@@ -8,6 +8,10 @@ import type {
   CustomerContact,
   CustomerRecord,
   CustomerSummary,
+  DrawingTaskRecord,
+  DrawingWorkspaceCommercialInputs,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
   DrawingCanvasViewport,
   DrawingJobRole,
   DrawingRecord,
@@ -75,6 +79,7 @@ export interface CreateUserInput {
 export interface CreateDrawingInput {
   id: string;
   companyId: string;
+  workspaceId?: string | null;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   parentDrawingId?: string | null;
@@ -97,6 +102,7 @@ export interface UpdateDrawingInput {
   drawingId: string;
   companyId: string;
   expectedVersionNumber: number;
+  workspaceId?: string | null;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   name: string;
@@ -226,6 +232,10 @@ export interface DeleteJobInput {
   jobId: string;
   companyId: string;
 }
+export interface DeleteDrawingWorkspaceInput {
+  workspaceId: string;
+  companyId: string;
+}
 
 export interface CreateJobInput {
   id: string;
@@ -243,6 +253,9 @@ export interface CreateJobInput {
   createdAtIso: string;
   updatedAtIso: string;
 }
+export type CreateDrawingWorkspaceInput = Omit<CreateJobInput, "commercialInputs"> & {
+  commercialInputs: DrawingWorkspaceCommercialInputs;
+};
 
 export interface UpdateJobInput {
   jobId: string;
@@ -260,9 +273,20 @@ export interface UpdateJobInput {
   updatedByUserId: string;
   updatedAtIso: string;
 }
+export type UpdateDrawingWorkspaceInput = Omit<UpdateJobInput, "commercialInputs" | "jobId"> & {
+  workspaceId: string;
+  commercialInputs: DrawingWorkspaceCommercialInputs;
+};
 
 export interface SetJobPrimaryDrawingInput {
   jobId: string;
+  companyId: string;
+  drawingId: string;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+export interface SetDrawingWorkspacePrimaryDrawingInput {
+  workspaceId: string;
   companyId: string;
   drawingId: string;
   updatedByUserId: string;
@@ -274,6 +298,7 @@ export interface CreateJobTaskInput {
   companyId: string;
   jobId: string;
   drawingId: string | null;
+  revisionDrawingId?: string | null;
   title: string;
   description: string;
   priority: string;
@@ -289,6 +314,39 @@ export interface UpdateJobTaskInput {
   companyId: string;
   jobId: string;
   drawingId: string | null;
+  revisionDrawingId?: string | null;
+  title: string;
+  description: string;
+  priority: string;
+  assignedUserId: string | null;
+  dueAtIso: string | null;
+  isCompleted: boolean;
+  completedAtIso: string | null;
+  completedByUserId: string | null;
+  updatedAtIso: string;
+}
+export interface CreateDrawingTaskInput {
+  id: string;
+  companyId: string;
+  workspaceId: string;
+  rootDrawingId: string | null;
+  revisionDrawingId?: string | null;
+  title: string;
+  description: string;
+  priority: string;
+  assignedUserId: string | null;
+  dueAtIso: string | null;
+  createdByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateDrawingTaskInput {
+  taskId: string;
+  companyId: string;
+  workspaceId: string;
+  rootDrawingId: string | null;
+  revisionDrawingId?: string | null;
   title: string;
   description: string;
   priority: string;
@@ -361,25 +419,41 @@ export interface AppRepository {
   updateCustomer(input: UpdateCustomerInput): Promise<CustomerRecord | null>;
   setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
   deleteCustomer(input: DeleteCustomerInput): Promise<boolean>;
-  deleteJob(input: DeleteJobInput): Promise<boolean>;
-  createJob(input: CreateJobInput): Promise<JobRecord>;
-  listJobs(
+  createDrawingWorkspace(input: CreateDrawingWorkspaceInput): Promise<DrawingWorkspaceRecord>;
+  listDrawingWorkspaces(
     companyId: string,
     scope?: CustomerScope,
     search?: string,
     customerId?: string,
-  ): Promise<JobSummary[]>;
-  listJobsForCustomer(customerId: string, companyId: string): Promise<JobSummary[]>;
-  getJobById(jobId: string, companyId: string): Promise<JobRecord | null>;
-  updateJob(input: UpdateJobInput): Promise<JobRecord | null>;
-  setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput): Promise<JobRecord | null>;
-  listJobTasks(jobId: string, companyId: string): Promise<JobTaskRecord[]>;
-  listCompanyTasks(companyId: string, options?: CompanyTaskListOptions): Promise<JobTaskRecord[]>;
-  createJobTask(input: CreateJobTaskInput): Promise<JobTaskRecord>;
-  updateJobTask(input: UpdateJobTaskInput): Promise<JobTaskRecord | null>;
-  deleteJobTask(taskId: string, jobId: string, companyId: string): Promise<boolean>;
+  ): Promise<DrawingWorkspaceSummary[]>;
+  listDrawingWorkspacesForCustomer(
+    customerId: string,
+    companyId: string,
+  ): Promise<DrawingWorkspaceSummary[]>;
+  getDrawingWorkspaceById(
+    workspaceId: string,
+    companyId: string,
+  ): Promise<DrawingWorkspaceRecord | null>;
+  deleteDrawingWorkspace(input: DeleteDrawingWorkspaceInput): Promise<boolean>;
+  updateDrawingWorkspace(
+    input: UpdateDrawingWorkspaceInput,
+  ): Promise<DrawingWorkspaceRecord | null>;
+  setDrawingWorkspacePrimaryDrawing(
+    input: SetDrawingWorkspacePrimaryDrawingInput,
+  ): Promise<DrawingWorkspaceRecord | null>;
+  listDrawingWorkspaceTasks(
+    workspaceId: string,
+    companyId: string,
+  ): Promise<DrawingTaskRecord[]>;
+  listCompanyDrawingTasks(
+    companyId: string,
+    options?: CompanyTaskListOptions,
+  ): Promise<DrawingTaskRecord[]>;
+  createDrawingTask(input: CreateDrawingTaskInput): Promise<DrawingTaskRecord>;
+  updateDrawingTask(input: UpdateDrawingTaskInput): Promise<DrawingTaskRecord | null>;
+  deleteDrawingTask(taskId: string, workspaceId: string, companyId: string): Promise<boolean>;
   listDrawingsForCustomer(customerId: string, companyId: string): Promise<DrawingSummary[]>;
-  listDrawingsForJob(jobId: string, companyId: string): Promise<DrawingSummary[]>;
+  listDrawingsForWorkspace(workspaceId: string, companyId: string): Promise<DrawingSummary[]>;
   createDrawing(input: CreateDrawingInput): Promise<DrawingRecord>;
   listDrawings(
     companyId: string,
@@ -394,7 +468,7 @@ export interface AppRepository {
   listDrawingVersions(drawingId: string, companyId: string): Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion(input: RestoreDrawingVersionInput): Promise<DrawingRecord | null>;
   createQuote(input: CreateQuoteInput): Promise<QuoteRecord>;
-  listQuotesForJob(jobId: string, companyId: string): Promise<QuoteRecord[]>;
+  listQuotesForDrawingWorkspace(workspaceId: string, companyId: string): Promise<QuoteRecord[]>;
   listQuotesForDrawing(drawingId: string, companyId: string): Promise<QuoteRecord[]>;
   getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
   upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;

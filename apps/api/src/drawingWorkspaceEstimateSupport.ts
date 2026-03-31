@@ -1,4 +1,7 @@
-import type { EstimateWorkbookManualEntry, JobCommercialInputs } from "@fence-estimator/contracts";
+import type {
+  DrawingWorkspaceCommercialInputs,
+  EstimateWorkbookManualEntry,
+} from "@fence-estimator/contracts";
 
 const COMMERCIAL_TRAVEL_DAYS_CODE = "COMMERCIAL_TRAVEL_DAYS";
 const COMMERCIAL_MARKUP_UNITS_CODE = "COMMERCIAL_MARKUP_UNITS";
@@ -18,7 +21,9 @@ function upsert(entries: EstimateWorkbookManualEntry[], code: string, quantity: 
   return [...entries, { code, quantity }];
 }
 
-export function buildJobCommercialManualEntries(inputs: JobCommercialInputs): EstimateWorkbookManualEntry[] {
+export function buildDrawingWorkspaceCommercialManualEntries(
+  inputs: DrawingWorkspaceCommercialInputs,
+): EstimateWorkbookManualEntry[] {
   let entries: EstimateWorkbookManualEntry[] = [];
   entries = upsert(entries, COMMERCIAL_LABOUR_OVERHEAD_PERCENT_CODE, inputs.labourOverheadPercent);
   entries = upsert(entries, COMMERCIAL_TRAVEL_RATE_CODE, inputs.travelLodgePerDay);
@@ -32,9 +37,9 @@ export function buildJobCommercialManualEntries(inputs: JobCommercialInputs): Es
   return entries;
 }
 
-export function mergeJobCommercialManualEntries(
-  inputs: JobCommercialInputs,
-  manualEntries: EstimateWorkbookManualEntry[] = []
+export function mergeDrawingWorkspaceCommercialManualEntries(
+  inputs: DrawingWorkspaceCommercialInputs,
+  manualEntries: EstimateWorkbookManualEntry[] = [],
 ): EstimateWorkbookManualEntry[] {
   const nonCommercialEntries = manualEntries.filter((entry) =>
     ![
@@ -49,5 +54,8 @@ export function mergeJobCommercialManualEntries(
       LAB_CLEAR_SPOILS_CODE
     ].includes(entry.code)
   );
-  return [...nonCommercialEntries, ...buildJobCommercialManualEntries(inputs)];
+  return [...nonCommercialEntries, ...buildDrawingWorkspaceCommercialManualEntries(inputs)];
 }
+
+export const buildJobCommercialManualEntries = buildDrawingWorkspaceCommercialManualEntries;
+export const mergeJobCommercialManualEntries = mergeDrawingWorkspaceCommercialManualEntries;

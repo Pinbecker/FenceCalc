@@ -1,27 +1,63 @@
 import Database from "better-sqlite3";
-import type { JobRecord, JobSummary, JobTaskRecord } from "@fence-estimator/contracts";
+import type {
+  DrawingTaskRecord,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
+  JobRecord,
+  JobSummary,
+  JobTaskRecord,
+} from "@fence-estimator/contracts";
 
 import {
   type JobRow,
   type JobSummaryRow,
   type JobTaskRow,
+  toDrawingTask,
   toJob,
   toJobSummary,
   toJobTask,
 } from "./shared.js";
 import type {
+  CreateDrawingWorkspaceInput,
   CompanyTaskListOptions,
   DeleteJobInput,
   CreateJobInput,
   CreateJobTaskInput,
   CustomerScope,
   SetJobPrimaryDrawingInput,
+  UpdateDrawingWorkspaceInput,
   UpdateJobInput,
   UpdateJobTaskInput,
 } from "./types.js";
 
 export class SqliteJobStore {
   public constructor(private readonly database: Database.Database) {}
+
+  private toDrawingTaskRecord(task: JobTaskRecord): DrawingTaskRecord {
+    return {
+      id: task.id,
+      companyId: task.companyId,
+      workspaceId: task.jobId,
+      workspaceName: task.jobName,
+      rootDrawingId: task.drawingId,
+      rootDrawingName: task.drawingName,
+      revisionDrawingId: task.revisionDrawingId ?? null,
+      revisionDrawingName: task.revisionDrawingName ?? "",
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      isCompleted: task.isCompleted,
+      assignedUserId: task.assignedUserId,
+      assignedUserDisplayName: task.assignedUserDisplayName,
+      dueAtIso: task.dueAtIso,
+      completedAtIso: task.completedAtIso,
+      completedByUserId: task.completedByUserId,
+      completedByDisplayName: task.completedByDisplayName,
+      createdByUserId: task.createdByUserId,
+      createdAtIso: task.createdAtIso,
+      updatedAtIso: task.updatedAtIso,
+    };
+  }
 
   private buildPlaceholderJobExclusionClause(): string {
     return `
@@ -90,11 +126,13 @@ export class SqliteJobStore {
           t.*,
           j.name AS job_name,
           drawing_root.name AS drawing_name,
+          revision_drawing.name AS revision_drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
+        LEFT JOIN drawings revision_drawing ON revision_drawing.id = t.revision_drawing_id AND revision_drawing.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.id = ? AND t.job_id = ? AND t.company_id = ?
@@ -152,6 +190,10 @@ export class SqliteJobStore {
       throw new Error(`Created job ${input.id} could not be reloaded`);
     }
     return toJob(row);
+  }
+
+  public createDrawingWorkspace(input: CreateDrawingWorkspaceInput): DrawingWorkspaceRecord {
+    return this.createJob(input);
   }
 
   public listJobs(
@@ -270,13 +312,36 @@ export class SqliteJobStore {
     }
   }
 
+  public listDrawingWorkspaces(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ): DrawingWorkspaceSummary[] {
+    return this.listJobs(companyId, scope, search, customerId);
+  }
+
   public listJobsForCustomer(customerId: string, companyId: string): JobSummary[] {
     return this.listJobs(companyId, "ALL", "", customerId);
+  }
+
+  public listDrawingWorkspacesForCustomer(
+    customerId: string,
+    companyId: string,
+  ): DrawingWorkspaceSummary[] {
+    return this.listDrawingWorkspaces(companyId, "ALL", "", customerId);
   }
 
   public getJobById(jobId: string, companyId: string): JobRecord | null {
     const row = this.getJobRow(jobId, companyId);
     return row ? toJob(row) : null;
+  }
+
+  public getDrawingWorkspaceById(
+    workspaceId: string,
+    companyId: string,
+  ): DrawingWorkspaceRecord | null {
+    return this.getJobById(workspaceId, companyId);
   }
 
   public updateJob(input: UpdateJobInput): JobRecord | null {
@@ -323,6 +388,12 @@ export class SqliteJobStore {
     return row ? toJob(row) : null;
   }
 
+  public updateDrawingWorkspace(
+    input: UpdateDrawingWorkspaceInput,
+  ): DrawingWorkspaceRecord | null {
+    return this.updateJob({ ...input, jobId: input.workspaceId });
+  }
+
   public deleteJob(input: DeleteJobInput): boolean {
     const existing = this.database
       .prepare("SELECT id FROM jobs WHERE id = ? AND company_id = ?")
@@ -332,6 +403,12 @@ export class SqliteJobStore {
     }
 
     const doDelete = this.database.transaction(() => {
+      this.database
+        .prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
+      this.database
+        .prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?")
+        .run(input.jobId, input.companyId);
       this.database
         .prepare(
           `
@@ -346,12 +423,6 @@ export class SqliteJobStore {
         .run(input.companyId, input.companyId, input.jobId);
       this.database
         .prepare("DELETE FROM drawings WHERE job_id = ? AND company_id = ?")
-        .run(input.jobId, input.companyId);
-      this.database
-        .prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?")
-        .run(input.jobId, input.companyId);
-      this.database
-        .prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?")
         .run(input.jobId, input.companyId);
       this.database
         .prepare("DELETE FROM jobs WHERE id = ? AND company_id = ?")
@@ -408,6 +479,12 @@ export class SqliteJobStore {
     return transact();
   }
 
+  public setDrawingWorkspacePrimaryDrawing(
+    input: SetJobPrimaryDrawingInput,
+  ): DrawingWorkspaceRecord | null {
+    return this.setJobPrimaryDrawing(input);
+  }
+
   public listJobTasks(jobId: string, companyId: string): JobTaskRecord[] {
     const rows = this.database
       .prepare(
@@ -416,11 +493,13 @@ export class SqliteJobStore {
           t.*,
           j.name AS job_name,
           drawing_root.name AS drawing_name,
+          revision_drawing.name AS revision_drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
+        LEFT JOIN drawings revision_drawing ON revision_drawing.id = t.revision_drawing_id AND revision_drawing.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE t.job_id = ? AND t.company_id = ?
@@ -429,6 +508,15 @@ export class SqliteJobStore {
       )
       .all(jobId, companyId) as JobTaskRow[];
     return rows.map((row) => toJobTask(row));
+  }
+
+  public listDrawingWorkspaceTasks(
+    workspaceId: string,
+    companyId: string,
+  ): DrawingTaskRecord[] {
+    return this.listJobTasks(workspaceId, companyId).map((task) =>
+      this.toDrawingTaskRecord(task),
+    );
   }
 
   public listCompanyTasks(
@@ -480,11 +568,13 @@ export class SqliteJobStore {
           t.*,
           j.name AS job_name,
           drawing_root.name AS drawing_name,
+          revision_drawing.name AS revision_drawing_name,
           assigned.display_name AS assigned_user_display_name,
           completed.display_name AS completed_by_display_name
         FROM job_tasks t
         LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
         LEFT JOIN drawings drawing_root ON drawing_root.id = t.drawing_id AND drawing_root.company_id = t.company_id
+        LEFT JOIN drawings revision_drawing ON revision_drawing.id = t.revision_drawing_id AND revision_drawing.company_id = t.company_id
         LEFT JOIN users assigned ON assigned.id = t.assigned_user_id AND assigned.company_id = t.company_id
         LEFT JOIN users completed ON completed.id = t.completed_by_user_id AND completed.company_id = t.company_id
         WHERE ${clauses.join(" AND ")}
@@ -500,6 +590,15 @@ export class SqliteJobStore {
     return rows.map((row) => toJobTask(row));
   }
 
+  public listCompanyDrawingTasks(
+    companyId: string,
+    options: CompanyTaskListOptions = {},
+  ): DrawingTaskRecord[] {
+    return this.listCompanyTasks(companyId, options).map((task) =>
+      this.toDrawingTaskRecord(task),
+    );
+  }
+
   public createJobTask(input: CreateJobTaskInput): JobTaskRecord {
     this.database
       .prepare(
@@ -509,6 +608,7 @@ export class SqliteJobStore {
           company_id,
           job_id,
           drawing_id,
+          revision_drawing_id,
           title,
           description,
           priority,
@@ -520,7 +620,7 @@ export class SqliteJobStore {
           created_by_user_id,
           created_at_iso,
           updated_at_iso
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, NULL, ?, ?, ?)
       `,
       )
       .run(
@@ -528,6 +628,7 @@ export class SqliteJobStore {
         input.companyId,
         input.jobId,
         input.drawingId,
+        input.revisionDrawingId ?? null,
         input.title,
         input.description,
         input.priority,
@@ -544,6 +645,10 @@ export class SqliteJobStore {
     return toJobTask(row);
   }
 
+  public createDrawingTask(input: CreateJobTaskInput): DrawingTaskRecord {
+    return this.toDrawingTaskRecord(this.createJobTask(input));
+  }
+
   public updateJobTask(input: UpdateJobTaskInput): JobTaskRecord | null {
     const result = this.database
       .prepare(
@@ -551,6 +656,7 @@ export class SqliteJobStore {
         UPDATE job_tasks
         SET
           drawing_id = ?,
+          revision_drawing_id = ?,
           title = ?,
           description = ?,
           priority = ?,
@@ -565,6 +671,7 @@ export class SqliteJobStore {
       )
       .run(
         input.drawingId,
+        input.revisionDrawingId ?? null,
         input.title,
         input.description,
         input.priority,
@@ -585,10 +692,22 @@ export class SqliteJobStore {
     return row ? toJobTask(row) : null;
   }
 
+  public updateDrawingTask(input: UpdateJobTaskInput): DrawingTaskRecord | null {
+    const updated = this.updateJobTask(input);
+    if (!updated) {
+      return null;
+    }
+    return this.toDrawingTaskRecord(updated);
+  }
+
   public deleteJobTask(taskId: string, jobId: string, companyId: string): boolean {
     const result = this.database
       .prepare("DELETE FROM job_tasks WHERE id = ? AND job_id = ? AND company_id = ?")
       .run(taskId, jobId, companyId);
     return result.changes > 0;
+  }
+
+  public deleteDrawingTask(taskId: string, workspaceId: string, companyId: string): boolean {
+    return this.deleteJobTask(taskId, workspaceId, companyId);
   }
 }

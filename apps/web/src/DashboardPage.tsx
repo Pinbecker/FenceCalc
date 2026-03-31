@@ -3,23 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   AuthSessionEnvelope,
   CustomerSummary,
+  DrawingTaskRecord,
+  DrawingWorkspaceStage,
+  DrawingWorkspaceSummary,
   DrawingSummary,
-  JobStage,
-  JobSummary,
-  JobTaskRecord,
 } from "@fence-estimator/contracts";
 
 import { DrawingPreview } from "./DrawingPreview";
-import { listCompanyTasks } from "./apiClient";
+import { listCompanyDrawingTasks } from "./apiClient";
 import {
-  buildFallbackJobSummaries,
-  hasLegacyJoblessDrawings,
-  resolveJobWorkspaceTarget,
-} from "./jobFallbacks";
+  buildTaskWorkspaceNavigationQuery,
+  buildWorkspaceNavigationQuery,
+} from "./drawingWorkspace";
 import { formatTaskDate, getTaskDueLabel, getTaskDueTone } from "./taskPresentation";
 import type { PortalRoute } from "./useHashRoute";
 
-const JOB_STATUS_LABELS: Record<JobStage, string> = {
+const WORKSPACE_STATUS_LABELS: Record<DrawingWorkspaceStage, string> = {
   DRAFT: "Draft",
   DESIGNING: "Designing",
   ESTIMATING: "Estimating",
@@ -45,7 +44,7 @@ const EMPTY_LAYOUT = {
 interface DashboardPageProps {
   session: AuthSessionEnvelope;
   customers: CustomerSummary[];
-  jobs?: JobSummary[];
+  workspaces: DrawingWorkspaceSummary[];
   drawings?: DrawingSummary[];
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
@@ -70,23 +69,26 @@ function formatMoney(value: number | null): string {
 export function DashboardPage({
   session,
   customers,
-  jobs = [],
+  workspaces,
   drawings = [],
   onNavigate,
 }: DashboardPageProps) {
-  const [companyTasks, setCompanyTasks] = useState<JobTaskRecord[]>([]);
+  const [companyTasks, setCompanyTasks] = useState<DrawingTaskRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    listCompanyTasks({ limit: 6 })
+    listCompanyDrawingTasks({ limit: 6 })
       .then((tasks) => {
-        if (!cancelled) setCompanyTasks(tasks);
+        if (!cancelled) {
+          setCompanyTasks(tasks);
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+
   const overdueTaskCount = useMemo(
     () => companyTasks.filter((task) => getTaskDueTone(task) === "overdue").length,
     [companyTasks],
@@ -94,31 +96,27 @@ export function DashboardPage({
   const archivedCustomerIds = new Set(
     customers.filter((customer) => customer.isArchived).map((customer) => customer.id),
   );
-  const activeDrawings = drawings
+  const visibleDrawings = drawings
     .filter((drawing) => !drawing.isArchived)
     .filter((drawing) => !drawing.customerId || !archivedCustomerIds.has(drawing.customerId));
-  const effectiveJobs =
-    jobs.length > 0
-      ? jobs
-      : hasLegacyJoblessDrawings(activeDrawings)
-        ? buildFallbackJobSummaries(activeDrawings)
-        : [];
-  const activeJobs = effectiveJobs.filter((job) => !job.isArchived);
-  const myJobs = activeJobs.filter((job) => job.ownerUserId === session.user.id);
-  const recent = (myJobs.length > 0 ? myJobs : activeJobs).slice(0, 4);
+  const activeWorkspaces = workspaces.filter((workspace) => !workspace.isArchived);
+  const myWorkspaces = activeWorkspaces.filter(
+    (workspace) => workspace.ownerUserId === session.user.id,
+  );
+  const recent = (myWorkspaces.length > 0 ? myWorkspaces : activeWorkspaces).slice(0, 4);
   const activeCustomers = customers.filter(
     (customer) => !customer.isArchived && customer.activeDrawingCount > 0,
   );
-  const recentActivity = [...activeJobs]
+  const recentActivity = [...activeWorkspaces]
     .sort((left, right) =>
       (right.lastActivityAtIso ?? right.updatedAtIso).localeCompare(
         left.lastActivityAtIso ?? left.updatedAtIso,
       ),
     )
     .slice(0, 8);
-  const openWorkspace = (job: JobSummary) => {
-    const target = resolveJobWorkspaceTarget(job, drawings);
-    onNavigate(target.route, target.query);
+
+  const openWorkspace = (workspace: DrawingWorkspaceSummary) => {
+    onNavigate("drawing", buildWorkspaceNavigationQuery(workspace, visibleDrawings));
   };
 
   return (
@@ -128,17 +126,17 @@ export function DashboardPage({
           <span className="portal-eyebrow">Workspace overview</span>
           <h1>Welcome, {session.user.displayName}</h1>
           <p>
-            Review the live job pipeline, jump into the current workspace for each customer, and
-            open drawings in the editor only when design work is needed.
+            Review active workspace progress, jump into the right customer workspace, and open the
+            editor only when geometry changes are needed.
           </p>
           <div className="portal-dashboard-stat-bar" role="group" aria-label="Workspace summary">
             <div className="portal-dashboard-stat">
-              <span>Active jobs</span>
-              <strong>{activeJobs.length}</strong>
+              <span>Active workspaces</span>
+              <strong>{activeWorkspaces.length}</strong>
             </div>
             <div className="portal-dashboard-stat">
-              <span>My jobs</span>
-              <strong>{myJobs.length}</strong>
+              <span>My active work</span>
+              <strong>{myWorkspaces.length}</strong>
             </div>
             <div className="portal-dashboard-stat">
               <span>Customers</span>
@@ -169,7 +167,11 @@ export function DashboardPage({
           <div className="portal-section-heading">
             <div>
               <span className="portal-section-kicker">Work queue</span>
-              <h2>{myJobs.length > 0 ? "My recent jobs" : "Latest company jobs"}</h2>
+              <h2>
+                {myWorkspaces.length > 0
+                  ? "My recent workspace activity"
+                  : "Latest company workspace activity"}
+              </h2>
             </div>
             <button
               type="button"
@@ -179,41 +181,45 @@ export function DashboardPage({
               Browse customers
             </button>
           </div>
-          {recent.length === 0 ? <p className="portal-empty-copy">No jobs saved yet.</p> : null}
+          {recent.length === 0 ? (
+            <p className="portal-empty-copy">No drawing work saved yet.</p>
+          ) : null}
           <div className="portal-dashboard-list">
-            {recent.map((job) => (
+            {recent.map((workspace) => (
               <button
                 type="button"
-                key={job.id}
+                key={workspace.id}
                 className="portal-dashboard-row"
-                onClick={() => openWorkspace(job)}
+                onClick={() => openWorkspace(workspace)}
               >
                 <div className="portal-dashboard-preview">
                   <DrawingPreview
-                    layout={job.primaryPreviewLayout ?? EMPTY_LAYOUT}
-                    label={job.name}
+                    layout={workspace.primaryPreviewLayout ?? EMPTY_LAYOUT}
+                    label={workspace.name}
                     variant="inline"
                   />
                 </div>
                 <div className="portal-dashboard-row-copy">
                   <div className="portal-dashboard-row-title">
-                    <strong>{job.name}</strong>
-                    <p>{job.customerName}</p>
+                    <strong>{workspace.name}</strong>
+                    <p>{workspace.customerName}</p>
                   </div>
                   <div className="portal-dashboard-row-meta">
                     <span>
-                      Updated {formatTimestamp(job.lastActivityAtIso ?? job.updatedAtIso)}
+                      Updated {formatTimestamp(workspace.lastActivityAtIso ?? workspace.updatedAtIso)}
                     </span>
-                    <span>{job.ownerDisplayName || session.user.displayName}</span>
+                    <span>{workspace.ownerDisplayName || session.user.displayName}</span>
                   </div>
                 </div>
                 <div className="portal-dashboard-row-trail">
                   <span
-                    className={`portal-dashboard-row-status drawing-status-${job.stage.toLowerCase()}`}
+                    className={`portal-dashboard-row-status drawing-status-${workspace.stage.toLowerCase()}`}
                   >
-                    {JOB_STATUS_LABELS[job.stage]}
+                    {WORKSPACE_STATUS_LABELS[workspace.stage]}
                   </span>
-                  <span className="portal-dashboard-row-version">{job.drawingCount} drawings</span>
+                  <span className="portal-dashboard-row-version">
+                    {workspace.drawingCount} revision{workspace.drawingCount === 1 ? "" : "s"}
+                  </span>
                   <span className="portal-dashboard-row-cta">Open</span>
                 </div>
               </button>
@@ -237,7 +243,11 @@ export function DashboardPage({
                   View all tasks
                 </button>
               </div>
-              <div className="portal-dashboard-task-summary" role="group" aria-label="Task summary">
+              <div
+                className="portal-dashboard-task-summary"
+                role="group"
+                aria-label="Task summary"
+              >
                 <span>{companyTasks.length} shown</span>
                 <span>{overdueTaskCount} overdue</span>
               </div>
@@ -248,12 +258,10 @@ export function DashboardPage({
                     key={task.id}
                     className="portal-dashboard-activity-row portal-dashboard-task-row"
                     onClick={() =>
-                      onNavigate("job", {
-                        jobId: task.jobId,
-                        tab: "tasks",
-                        focusTaskId: task.id,
-                        ...(task.drawingId ? { drawingId: task.drawingId } : {}),
-                      })
+                      onNavigate(
+                        "drawing",
+                        buildTaskWorkspaceNavigationQuery(task, workspaces, visibleDrawings),
+                      )
                     }
                   >
                     <div className="portal-dashboard-activity-copy">
@@ -273,10 +281,14 @@ export function DashboardPage({
                         ) : null}
                       </div>
                       <span>
-                        {task.jobName || "Job"}
-                        {task.drawingName ? ` · ${task.drawingName}` : ""}
-                        {task.assignedUserDisplayName ? ` · ${task.assignedUserDisplayName}` : ""}
-                        {task.dueAtIso ? ` · Due ${formatTaskDate(task.dueAtIso)}` : ""}
+                        {task.workspaceName || "Workspace"}
+                        {task.revisionDrawingName || task.rootDrawingName
+                          ? ` | ${task.revisionDrawingName || task.rootDrawingName}`
+                          : ""}
+                        {task.assignedUserDisplayName
+                          ? ` | ${task.assignedUserDisplayName}`
+                          : ""}
+                        {task.dueAtIso ? ` | Due ${formatTaskDate(task.dueAtIso)}` : ""}
                       </span>
                     </div>
                   </button>
@@ -305,31 +317,31 @@ export function DashboardPage({
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Pipeline</span>
-                <h2>Recent job movement</h2>
+                <h2>Recent workspace movement</h2>
               </div>
             </div>
             {recentActivity.length === 0 ? (
               <p className="portal-empty-copy">No activity yet.</p>
             ) : null}
             <div className="portal-dashboard-activity-list">
-              {recentActivity.map((job) => (
+              {recentActivity.map((workspace) => (
                 <button
                   type="button"
-                  key={`${job.id}-${job.updatedAtIso}`}
+                  key={`${workspace.id}-${workspace.updatedAtIso}`}
                   className="portal-dashboard-activity-row"
-                  onClick={() => openWorkspace(job)}
+                  onClick={() => openWorkspace(workspace)}
                 >
                   <div className="portal-dashboard-activity-copy">
-                    <strong>{job.name}</strong>
+                    <strong>{workspace.name}</strong>
                     <span>
-                      {JOB_STATUS_LABELS[job.stage]} for {job.customerName}
-                      {job.latestQuoteTotal !== null
-                        ? ` | ${formatMoney(job.latestQuoteTotal)}`
-                        : ""}
+                      {WORKSPACE_STATUS_LABELS[workspace.stage]} for {workspace.customerName}
+                      {workspace.latestQuoteTotal !== null
+                        ? ` | ${formatMoney(workspace.latestQuoteTotal)}`
+                        : " | No quote yet"}
                     </span>
                   </div>
                   <time className="portal-dashboard-activity-time">
-                    {formatTimestamp(job.lastActivityAtIso ?? job.updatedAtIso)}
+                    {formatTimestamp(workspace.lastActivityAtIso ?? workspace.updatedAtIso)}
                   </time>
                 </button>
               ))}

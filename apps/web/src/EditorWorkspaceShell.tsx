@@ -31,7 +31,7 @@ export function EditorWorkspaceShell({
         {isReadOnly ? (
           <div className="editor-read-only-banner" role="status" aria-live="polite">
             <strong>Quoted revision</strong>
-            <span>View only. Create the next revision from the job page to keep this quote unchanged.</span>
+            <span>View only. Create the next revision from the drawing workspace to keep this quote unchanged.</span>
           </div>
         ) : null}
         <EditorToolPalette {...toolPaletteProps} />

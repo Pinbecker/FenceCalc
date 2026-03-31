@@ -29,6 +29,8 @@ const sampleDrawings: DrawingSummary[] = [
   {
     id: "drawing-1",
     companyId: "company-1",
+    workspaceId: "workspace-1",
+    jobRole: "PRIMARY",
     name: "Front boundary",
     customerId: "customer-1",
     customerName: "Cleveland Land Services",

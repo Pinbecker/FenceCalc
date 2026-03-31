@@ -1169,6 +1169,8 @@ export function buildDefaultJobCommercialInputs(): JobCommercialInputs {
   };
 }
 
+export const buildDefaultDrawingWorkspaceCommercialInputs = buildDefaultJobCommercialInputs;
+
 export function isManualWorkbookRow(row: PricingWorkbookRow): boolean {
   return row.quantityRule.kind === "MANUAL_ENTRY";
 }

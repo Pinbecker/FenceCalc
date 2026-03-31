@@ -434,8 +434,11 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       }
     });
 
-    expect(quotedUpdate.statusCode).toBe(409);
-    expect(quotedUpdate.json<{ error: string }>().error).toBe("Quoted drawing is locked");
+    expect(quotedUpdate.statusCode).toBe(200);
+    expect(quotedUpdate.json<{ drawing: { name: string; versionNumber: number } }>().drawing).toMatchObject({
+      name: "Quoted yard revised",
+      versionNumber: 3
+    });
 
     const quoteList = await app.inject({
       method: "GET",
@@ -556,7 +559,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const createJob = await app.inject({
       method: "POST",
-      url: "/api/v1/jobs",
+      url: "/api/v1/drawing-workspaces",
       headers: cookieHeader,
       payload: {
         customerId,
@@ -566,11 +569,11 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
 
     expect(createJob.statusCode).toBe(201);
-    const jobId = createJob.json<{ job: { id: string } }>().job.id;
+    const jobId = createJob.json<{ workspace: { id: string } }>().workspace.id;
 
     const removeJob = await app.inject({
       method: "DELETE",
-      url: `/api/v1/jobs/${jobId}`,
+      url: `/api/v1/drawing-workspaces/${jobId}`,
       headers: cookieHeader
     });
 
@@ -578,7 +581,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const archiveJob = await app.inject({
       method: "PUT",
-      url: `/api/v1/jobs/${jobId}`,
+      url: `/api/v1/drawing-workspaces/${jobId}`,
       headers: cookieHeader,
       payload: {
         archived: true
@@ -589,7 +592,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const removeArchivedJob = await app.inject({
       method: "DELETE",
-      url: `/api/v1/jobs/${jobId}`,
+      url: `/api/v1/drawing-workspaces/${jobId}`,
       headers: cookieHeader
     });
 
@@ -598,20 +601,24 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const loadDeletedJob = await app.inject({
       method: "GET",
-      url: `/api/v1/jobs/${jobId}`,
+      url: `/api/v1/drawing-workspaces/${jobId}`,
       headers: cookieHeader
     });
 
     expect(loadDeletedJob.statusCode).toBe(404);
 
-    const listJobs = await app.inject({
+    const listWorkspaces = await app.inject({
       method: "GET",
-      url: "/api/v1/jobs?scope=ALL",
+      url: "/api/v1/drawing-workspaces?scope=ALL",
       headers: cookieHeader
     });
 
-    expect(listJobs.statusCode).toBe(200);
-    expect(listJobs.json<{ jobs: Array<{ id: string }> }>().jobs.some((job) => job.id === jobId)).toBe(false);
+    expect(listWorkspaces.statusCode).toBe(200);
+    expect(
+      listWorkspaces
+        .json<{ workspaces: Array<{ id: string }> }>()
+        .workspaces.some((workspace) => workspace.id === jobId),
+    ).toBe(false);
 
     await app.close();
   });
@@ -636,7 +643,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const createJob = await app.inject({
       method: "POST",
-      url: "/api/v1/jobs",
+      url: "/api/v1/drawing-workspaces",
       headers: cookieHeader,
       payload: {
         customerId,
@@ -646,7 +653,14 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
 
     expect(createJob.statusCode).toBe(201);
-    const createdJob = createJob.json<{ job: Record<string, unknown> & { id: string; primaryDrawingId: string | null; name: string } }>().job;
+    const createdJobResponse = createJob.json<{
+      workspace: Record<string, unknown> & {
+        id: string;
+        primaryDrawingId: string | null;
+        name: string;
+      };
+    }>();
+    const createdJob = createdJobResponse.workspace;
     expect(createdJob.primaryDrawingId).not.toBeNull();
     const primaryDrawingId = createdJob.primaryDrawingId!;
 
@@ -663,27 +677,17 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const createRevision = await app.inject({
       method: "POST",
-      url: `/api/v1/jobs/${createdJob.id}/drawings`,
+      url: `/api/v1/drawing-workspaces/${createdJob.id}/drawings`,
       headers: cookieHeader,
       payload: { sourceDrawingId: primaryDrawingId }
     });
     expect(createRevision.statusCode).toBe(201);
     const revisionDrawing = createRevision.json<{ drawing: { id: string; name: string } }>().drawing;
 
-    const createSecondDrawing = await app.inject({
-      method: "POST",
-      url: `/api/v1/jobs/${createdJob.id}/drawings`,
-      headers: cookieHeader,
-      payload: { name: "Tennis courts" }
-    });
-    expect(createSecondDrawing.statusCode).toBe(201);
-    const secondDrawing = createSecondDrawing.json<{ drawing: { id: string; name: string } }>().drawing;
-
     const jobsMap = (repository as unknown as { jobsMap: Map<string, Record<string, unknown>> }).jobsMap;
     const placeholderRows = [
       { drawingId: primaryDrawingId, name: "Football pitch", updatedAtIso: "2026-03-28T16:03:50.523Z" },
-      { drawingId: revisionDrawing.id, name: revisionDrawing.name, updatedAtIso: "2026-03-28T14:00:43.396Z" },
-      { drawingId: secondDrawing.id, name: secondDrawing.name, updatedAtIso: "2026-03-28T14:01:17.663Z" }
+      { drawingId: revisionDrawing.id, name: revisionDrawing.name, updatedAtIso: "2026-03-28T14:00:43.396Z" }
     ];
 
     for (const placeholder of placeholderRows) {
@@ -697,17 +701,121 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     }
 
     const params = new URLSearchParams({ scope: "ALL", customerId });
-    const listJobs = await app.inject({
+    const listWorkspaces = await app.inject({
       method: "GET",
-      url: `/api/v1/jobs?${params.toString()}`,
+      url: `/api/v1/drawing-workspaces?${params.toString()}`,
       headers: cookieHeader
     });
 
-    expect(listJobs.statusCode).toBe(200);
-    const jobs = listJobs.json<{ jobs: Array<{ id: string; name: string }> }>().jobs;
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({ id: createdJob.id, name: "PSG Home ground" });
-    expect(jobs.some((job) => job.id.startsWith("job:"))).toBe(false);
+    expect(listWorkspaces.statusCode).toBe(200);
+    const workspaces = listWorkspaces
+      .json<{ workspaces: Array<{ id: string; name: string }> }>()
+      .workspaces;
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0]).toMatchObject({ id: createdJob.id, name: "Football pitch" });
+    expect(workspaces.some((workspace) => workspace.id.startsWith("job:"))).toBe(false);
+
+    await app.close();
+  });
+
+  it("requires a source drawing when creating a revision inside an existing workspace", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const createJob = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawing-workspaces",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "North boundary",
+        notes: ""
+      }
+    });
+
+    expect(createJob.statusCode).toBe(201);
+    const createdJob = createJob.json<{ workspace: { id: string } }>().workspace;
+
+    const createRevisionWithoutSource = await app.inject({
+      method: "POST",
+      url: `/api/v1/drawing-workspaces/${createdJob.id}/drawings`,
+      headers: cookieHeader,
+      payload: {}
+    });
+
+    expect(createRevisionWithoutSource.statusCode).toBe(400);
+    expect(createRevisionWithoutSource.json<{ error: string }>().error).toBe(
+      "A source drawing is required when creating a revision.",
+    );
+
+    await app.close();
+  });
+
+  it("keeps the workspace name tied to the drawing chain name", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const createJob = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawing-workspaces",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "North boundary",
+        notes: ""
+      }
+    });
+
+    expect(createJob.statusCode).toBe(201);
+    const createdJob = createJob
+      .json<{ workspace: { id: string; primaryDrawingId: string } }>()
+      .workspace;
+
+    const createRevision = await app.inject({
+      method: "POST",
+      url: `/api/v1/drawing-workspaces/${createdJob.id}/drawings`,
+      headers: cookieHeader,
+      payload: { sourceDrawingId: createdJob.primaryDrawingId }
+    });
+    expect(createRevision.statusCode).toBe(201);
+    const revision = createRevision.json<{ drawing: { id: string; versionNumber: number } }>().drawing;
+
+    const renameRevision = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawings/${revision.id}`,
+      headers: cookieHeader,
+      payload: {
+        expectedVersionNumber: revision.versionNumber,
+        name: "Training ground"
+      }
+    });
+
+    expect(renameRevision.statusCode).toBe(200);
+
+    const loadJob = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawing-workspaces/${createdJob.id}`,
+      headers: cookieHeader
+    });
+    expect(loadJob.statusCode).toBe(200);
+    expect(loadJob.json<{ workspace: { name: string } }>().workspace.name).toBe(
+      "Training ground",
+    );
+
+    const loadDrawings = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawing-workspaces/${createdJob.id}/drawings`,
+      headers: cookieHeader
+    });
+    expect(loadDrawings.statusCode).toBe(200);
+    expect(loadDrawings.json<{ drawings: Array<{ name: string }> }>().drawings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Training ground" }),
+      ]),
+    );
+    expect(
+      loadDrawings.json<{ drawings: Array<{ name: string }> }>().drawings.every((drawing) => drawing.name === "Training ground"),
+    ).toBe(true);
 
     await app.close();
   });
@@ -718,7 +826,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const createJob = await app.inject({
       method: "POST",
-      url: "/api/v1/jobs",
+      url: "/api/v1/drawing-workspaces",
       headers: cookieHeader,
       payload: {
         customerId,
@@ -728,21 +836,15 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
 
     expect(createJob.statusCode).toBe(201);
-    const jobId = createJob.json<{ job: { id: string } }>().job.id;
-
-    const rootCreate = await app.inject({
-      method: "POST",
-      url: `/api/v1/jobs/${jobId}/drawings`,
-      headers: cookieHeader,
-      payload: {}
-    });
-    expect(rootCreate.statusCode).toBe(201);
-    const rootDrawingId = rootCreate.json<{ drawing: { id: string; revisionNumber: number } }>().drawing.id;
-    expect(rootCreate.json<{ drawing: { revisionNumber: number } }>().drawing.revisionNumber).toBe(0);
+    const createdJob = createJob
+      .json<{ workspace: { id: string; primaryDrawingId: string } }>()
+      .workspace;
+    const jobId = createdJob.id;
+    const rootDrawingId = createdJob.primaryDrawingId;
 
     const revisionOneCreate = await app.inject({
       method: "POST",
-      url: `/api/v1/jobs/${jobId}/drawings`,
+      url: `/api/v1/drawing-workspaces/${jobId}/drawings`,
       headers: cookieHeader,
       payload: { sourceDrawingId: rootDrawingId }
     });
@@ -752,7 +854,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const revisionTwoCreate = await app.inject({
       method: "POST",
-      url: `/api/v1/jobs/${jobId}/drawings`,
+      url: `/api/v1/drawing-workspaces/${jobId}/drawings`,
       headers: cookieHeader,
       payload: { sourceDrawingId: revisionOneId }
     });
@@ -762,7 +864,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     const jobDrawings = await app.inject({
       method: "GET",
-      url: `/api/v1/jobs/${jobId}/drawings`,
+      url: `/api/v1/drawing-workspaces/${jobId}/drawings`,
       headers: cookieHeader
     });
 

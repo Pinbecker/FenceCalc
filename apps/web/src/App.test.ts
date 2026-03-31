@@ -58,13 +58,17 @@ describe("App route helpers", () => {
 
   it("refreshes the right datasets for each portal route", () => {
     expect(shouldRefreshPortalDrawings("dashboard")).toBe(true);
-    expect(shouldRefreshPortalDrawings("drawings")).toBe(true);
+    expect(shouldRefreshPortalDrawings("tasks")).toBe(true);
+    expect(shouldRefreshPortalDrawings("drawings")).toBe(false);
     expect(shouldRefreshPortalDrawings("customer")).toBe(true);
-    expect(shouldRefreshPortalDrawings("estimate")).toBe(true);
+    expect(shouldRefreshPortalDrawings("drawing")).toBe(true);
+    expect(shouldRefreshPortalDrawings("editor")).toBe(true);
+    expect(shouldRefreshPortalDrawings("estimate")).toBe(false);
     expect(shouldRefreshPortalDrawings("pricing")).toBe(false);
 
     expect(shouldRefreshPortalAdminData("dashboard", true)).toBe(true);
     expect(shouldRefreshPortalAdminData("admin", true)).toBe(true);
+    expect(shouldRefreshPortalAdminData("tasks", true)).toBe(true);
     expect(shouldRefreshPortalAdminData("drawings", true)).toBe(false);
     expect(shouldRefreshPortalAdminData("admin", false)).toBe(false);
   });

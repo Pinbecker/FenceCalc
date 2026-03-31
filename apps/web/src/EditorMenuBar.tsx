@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthSessionEnvelope, DrawingStatus } from "@fence-estimator/contracts";
 import { DRAWING_STATUSES } from "@fence-estimator/contracts";
 
-const JOB_STATUS_LABELS: Record<DrawingStatus, string> = {
+const DRAWING_STATUS_LABELS: Record<DrawingStatus, string> = {
   DRAFT: "Draft",
   QUOTED: "Quoted",
   WON: "Won",
@@ -15,7 +15,7 @@ interface EditorMenuBarProps {
   session: AuthSessionEnvelope | null;
   drawingTitle: string;
   currentDrawingId: string | null;
-  currentJobId: string | null;
+  currentWorkspaceId: string | null;
   currentCustomerId: string | null;
   currentDrawingName: string;
   currentCustomerName: string;
@@ -47,7 +47,7 @@ interface EditorMenuBarProps {
   onToggleOptimization: () => void;
   onGoToLogin: () => void;
   onNavigateDashboard: () => void;
-  onNavigateJob: () => void;
+  onNavigateWorkspace: () => void;
   onNavigateCurrentCustomer: () => void;
   onNavigateCustomers: () => void;
   onNavigateEstimate: () => void;
@@ -74,7 +74,7 @@ export function EditorMenuBar({
   session,
   drawingTitle,
   currentDrawingId,
-  currentJobId,
+  currentWorkspaceId,
   currentCustomerId,
   currentDrawingName,
   currentCustomerName,
@@ -106,7 +106,7 @@ export function EditorMenuBar({
   onToggleOptimization,
   onGoToLogin,
   onNavigateDashboard,
-  onNavigateJob,
+  onNavigateWorkspace,
   onNavigateCurrentCustomer,
   onNavigateCustomers,
   onNavigateEstimate,
@@ -119,7 +119,7 @@ export function EditorMenuBar({
   const [isEditingName, setIsEditingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
-  const readOnlyTitle = "Quoted drawings open in view-only mode. Create a new revision from the job page to continue.";
+  const readOnlyTitle = "Quoted drawings open in view-only mode. Create a new revision from the drawing workspace to continue.";
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
@@ -298,14 +298,14 @@ export function EditorMenuBar({
 
         {session ? (
           <div className="menu-bar-customer-wrap">
-            {currentJobId ? (
+            {currentWorkspaceId ? (
               <button
                 type="button"
                 className="menu-bar-customer-label menu-bar-customer-link"
-                onClick={onNavigateJob}
-                title="Back to job"
+                onClick={onNavigateWorkspace}
+                title="Back to drawing workspace"
               >
-                ← Back to job
+                Back to workspace
               </button>
             ) : null}
             {currentCustomerId ? (
@@ -328,7 +328,7 @@ export function EditorMenuBar({
         {currentDrawingId && currentDrawingStatus && session ? (
           isReadOnly ? (
             <span className="menu-bar-status-badge is-read-only" title={readOnlyTitle}>
-              {JOB_STATUS_LABELS[currentDrawingStatus]} · View only
+              {DRAWING_STATUS_LABELS[currentDrawingStatus]} · View only
             </span>
           ) : (
             <select
@@ -339,7 +339,7 @@ export function EditorMenuBar({
             >
               {DRAWING_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {JOB_STATUS_LABELS[status]}
+                  {DRAWING_STATUS_LABELS[status]}
                 </option>
               ))}
             </select>

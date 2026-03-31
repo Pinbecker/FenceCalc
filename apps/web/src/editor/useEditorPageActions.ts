@@ -143,7 +143,7 @@ export function useEditorPageActions({
   }, [confirmDiscardChanges, resetView, resetWorkspaceCanvas, workspace]);
 
   const handleOpenCustomers = useCallback(() => {
-    if (!confirmDiscardChanges("Discard unsaved changes and leave the editor?")) {
+    if (!confirmDiscardChanges("Discard unsaved changes before opening the customer directory?")) {
       return;
     }
 

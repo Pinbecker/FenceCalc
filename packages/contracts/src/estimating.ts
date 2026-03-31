@@ -141,6 +141,7 @@ export interface QuoteDrawingSnapshot {
 export interface QuoteRecord {
   id: string;
   companyId: string;
+  workspaceId?: string | undefined;
   jobId?: string | undefined;
   sourceDrawingId?: string | undefined;
   sourceDrawingVersionNumber?: number | undefined;

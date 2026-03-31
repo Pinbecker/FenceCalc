@@ -18,6 +18,7 @@ export class InMemoryQuoteStore {
     const quotes = this.state.quotesByJobId.get(jobId) ?? [];
     const record: QuoteRecord = {
       ...input,
+      workspaceId: input.workspaceId ?? jobId,
       ...(input.jobId ? { jobId: input.jobId } : { jobId }),
       ...(input.sourceDrawingId ? {} : input.drawingId ? { sourceDrawingId: input.drawingId } : {}),
       ...(input.sourceDrawingVersionNumber !== undefined

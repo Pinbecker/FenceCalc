@@ -8,15 +8,15 @@ import type {
   CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
+  DrawingTaskRecord,
+  DrawingWorkspaceCommercialInputs,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceStage,
+  DrawingWorkspaceSummary,
   DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
   EstimateWorkbookManualEntry,
-  JobCommercialInputs,
-  JobRecord,
-  JobStage,
-  JobSummary,
-  JobTaskRecord,
   LayoutModel,
   TaskPriority,
   PricingConfigRecord,
@@ -95,34 +95,36 @@ export interface UpdateCustomerInput {
   notes?: string;
 }
 
-export interface CreateJobInput {
+export interface CreateDrawingWorkspaceInput {
   customerId: string;
   name: string;
   notes: string;
 }
 
-export interface UpdateJobInput {
+export interface UpdateDrawingWorkspaceInput {
   name?: string;
-  stage?: JobStage;
-  commercialInputs?: JobCommercialInputs;
+  stage?: DrawingWorkspaceStage;
+  commercialInputs?: DrawingWorkspaceCommercialInputs;
   notes?: string;
   ownerUserId?: string | null;
   archived?: boolean;
 }
 
-export interface CreateJobTaskInput {
+export interface CreateDrawingTaskInput {
   title: string;
   assignedUserId?: string | null;
-  drawingId?: string | null;
+  rootDrawingId?: string | null;
+  revisionDrawingId?: string | null;
   dueAtIso?: string | null;
   description?: string;
   priority?: TaskPriority;
 }
 
-export interface UpdateJobTaskInput {
+export interface UpdateDrawingTaskInput {
   title?: string;
   assignedUserId?: string | null;
-  drawingId?: string | null;
+  rootDrawingId?: string | null;
+  revisionDrawingId?: string | null;
   dueAtIso?: string | null;
   isCompleted?: boolean;
   description?: string;
@@ -479,13 +481,13 @@ export async function listDrawings(search = ""): Promise<DrawingSummary[]> {
   return response.drawings;
 }
 
-export async function listJobs(
+export async function listDrawingWorkspaces(
   options: {
     scope?: "ALL" | "ACTIVE" | "ARCHIVED";
     search?: string;
     customerId?: string;
   } = {},
-): Promise<JobSummary[]> {
+): Promise<DrawingWorkspaceSummary[]> {
   const params = new URLSearchParams({ scope: options.scope ?? "ACTIVE" });
   if (options.search?.trim()) {
     params.set("search", options.search.trim());
@@ -493,55 +495,68 @@ export async function listJobs(
   if (options.customerId?.trim()) {
     params.set("customerId", options.customerId.trim());
   }
-  const response = await requestJson<{ jobs: JobSummary[] }>(`/api/v1/jobs?${params.toString()}`);
-  return response.jobs;
-}
-
-export async function createJob(input: CreateJobInput): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>("/api/v1/jobs", {
-    method: "POST",
-    body: input,
-  });
-  return response.job;
-}
-
-export async function getJob(jobId: string): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}`,
+  const response = await requestJson<{ workspaces: DrawingWorkspaceSummary[] }>(
+    `/api/v1/drawing-workspaces?${params.toString()}`,
   );
-  return response.job;
+  return response.workspaces;
 }
 
-export async function updateJob(jobId: string, input: UpdateJobInput): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}`,
+export async function createDrawingWorkspace(
+  input: CreateDrawingWorkspaceInput,
+): Promise<DrawingWorkspaceRecord> {
+  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
+    "/api/v1/drawing-workspaces",
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+  return response.workspace;
+}
+
+export async function getDrawingWorkspace(workspaceId: string): Promise<DrawingWorkspaceRecord> {
+  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
+  );
+  return response.workspace;
+}
+
+export async function updateDrawingWorkspace(
+  workspaceId: string,
+  input: UpdateDrawingWorkspaceInput,
+): Promise<DrawingWorkspaceRecord> {
+  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
     {
       method: "PUT",
       body: input,
     },
   );
-  return response.job;
+  return response.workspace;
 }
 
-export async function deleteJob(jobId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(`/api/v1/jobs/${encodePathSegment(jobId)}`, {
-    method: "DELETE",
-  });
+export async function deleteDrawingWorkspace(workspaceId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
-export async function listJobDrawings(jobId: string): Promise<DrawingSummary[]> {
+export async function listDrawingWorkspaceDrawings(workspaceId: string): Promise<DrawingSummary[]> {
   const response = await requestJson<{ drawings: DrawingSummary[] }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/drawings`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/drawings`,
   );
   return response.drawings;
 }
 
-export async function createJobDrawing(
-  jobId: string,
+export async function createDrawingWorkspaceDrawing(
+  workspaceId: string,
   input: { name?: string; sourceDrawingId?: string },
 ): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/drawings`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/drawings`,
     {
       method: "POST",
       body: input,
@@ -550,19 +565,22 @@ export async function createJobDrawing(
   return response.drawing;
 }
 
-export async function setJobPrimaryDrawing(jobId: string, drawingId: string): Promise<JobRecord> {
-  const response = await requestJson<{ job: JobRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/primary-drawing`,
+export async function setDrawingWorkspacePrimaryDrawing(
+  workspaceId: string,
+  drawingId: string,
+): Promise<DrawingWorkspaceRecord> {
+  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/primary-drawing`,
     {
       method: "PUT",
       body: { drawingId },
     },
   );
-  return response.job;
+  return response.workspace;
 }
 
-export async function getJobEstimate(
-  jobId: string,
+export async function getDrawingWorkspaceEstimate(
+  workspaceId: string,
   drawingId?: string | null,
 ): Promise<PricedEstimateResult> {
   const params = new URLSearchParams();
@@ -570,26 +588,26 @@ export async function getJobEstimate(
     params.set("drawingId", drawingId.trim());
   }
   const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`,
   );
   return response.pricedEstimate;
 }
 
-export async function listJobQuotes(jobId: string): Promise<QuoteRecord[]> {
+export async function listDrawingWorkspaceQuotes(workspaceId: string): Promise<QuoteRecord[]> {
   const response = await requestJson<{ quotes: QuoteRecord[] }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/quotes`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/quotes`,
   );
   return response.quotes;
 }
 
-export async function createJobQuoteSnapshot(
-  jobId: string,
+export async function createDrawingWorkspaceQuoteSnapshot(
+  workspaceId: string,
   ancillaryItems: AncillaryEstimateItem[] = [],
   manualEntries: EstimateWorkbookManualEntry[] = [],
   drawingId?: string | null,
 ): Promise<QuoteRecord> {
   const response = await requestJson<{ quote: QuoteRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/quotes`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/quotes`,
     {
       method: "POST",
       body: {
@@ -602,19 +620,21 @@ export async function createJobQuoteSnapshot(
   return response.quote;
 }
 
-export async function listJobTasks(jobId: string): Promise<JobTaskRecord[]> {
-  const response = await requestJson<{ tasks: JobTaskRecord[] }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks`,
+export async function listDrawingWorkspaceTasks(
+  workspaceId: string,
+): Promise<DrawingTaskRecord[]> {
+  const response = await requestJson<{ tasks: DrawingTaskRecord[] }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks`,
   );
   return response.tasks;
 }
 
-export async function createJobTask(
-  jobId: string,
-  input: CreateJobTaskInput,
-): Promise<JobTaskRecord> {
-  const response = await requestJson<{ task: JobTaskRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks`,
+export async function createDrawingWorkspaceTask(
+  workspaceId: string,
+  input: CreateDrawingTaskInput,
+): Promise<DrawingTaskRecord> {
+  const response = await requestJson<{ task: DrawingTaskRecord }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks`,
     {
       method: "POST",
       body: input,
@@ -623,13 +643,13 @@ export async function createJobTask(
   return response.task;
 }
 
-export async function updateJobTask(
-  jobId: string,
+export async function updateDrawingWorkspaceTask(
+  workspaceId: string,
   taskId: string,
-  input: UpdateJobTaskInput,
-): Promise<JobTaskRecord> {
-  const response = await requestJson<{ task: JobTaskRecord }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
+  input: UpdateDrawingTaskInput,
+): Promise<DrawingTaskRecord> {
+  const response = await requestJson<{ task: DrawingTaskRecord }>(
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks/${encodePathSegment(taskId)}`,
     {
       method: "PUT",
       body: input,
@@ -638,25 +658,36 @@ export async function updateJobTask(
   return response.task;
 }
 
-export async function deleteJobTask(jobId: string, taskId: string): Promise<void> {
+export async function deleteDrawingWorkspaceTask(
+  workspaceId: string,
+  taskId: string,
+): Promise<void> {
   await requestJson<{ success: boolean }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/tasks/${encodePathSegment(taskId)}`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks/${encodePathSegment(taskId)}`,
     { method: "DELETE" },
   );
 }
 
 export async function listCompanyTasks(
   options: CompanyTaskQueryOptions = {},
-): Promise<JobTaskRecord[]> {
-  const response = await requestJson<{ tasks: JobTaskRecord[] }>(
+): Promise<DrawingTaskRecord[]> {
+  const response = await requestJson<{ tasks: DrawingTaskRecord[] }>(
     `/api/v1/tasks${buildCompanyTaskQuery(options)}`,
   );
   return response.tasks;
 }
 
-export async function listJobActivity(jobId: string): Promise<AuditLogRecord[]> {
+export async function listCompanyDrawingTasks(
+  options: CompanyTaskQueryOptions = {},
+): Promise<DrawingTaskRecord[]> {
+  return listCompanyTasks(options);
+}
+
+export async function listDrawingWorkspaceActivity(
+  workspaceId: string,
+): Promise<AuditLogRecord[]> {
   const response = await requestJson<{ entries: AuditLogRecord[] }>(
-    `/api/v1/jobs/${encodePathSegment(jobId)}/activity`,
+    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/activity`,
   );
   return response.entries;
 }
@@ -715,7 +746,7 @@ export async function createDrawing(input: {
   customerId: string;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
-  jobId?: string;
+  workspaceId?: string;
 }): Promise<DrawingRecord> {
   const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
     method: "POST",
@@ -730,6 +761,7 @@ export async function updateDrawing(
     expectedVersionNumber: number;
     name?: string;
     customerId?: string;
+    workspaceId?: string | null;
     layout?: LayoutModel;
     savedViewport?: DrawingCanvasViewport | null;
   },

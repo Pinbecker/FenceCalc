@@ -58,8 +58,11 @@ export class InMemoryDrawingStore {
   }
 
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
+    const workspaceId = input.workspaceId ?? input.jobId ?? null;
     const drawing: DrawingRecord = {
       ...input,
+      workspaceId,
+      jobId: workspaceId,
       revisionNumber: input.revisionNumber ?? 0,
       versionNumber: 1,
       status: "DRAFT",
@@ -182,8 +185,11 @@ export class InMemoryDrawingStore {
     if (existing.versionNumber !== input.expectedVersionNumber) {
       return null;
     }
+    const workspaceId = input.workspaceId ?? input.jobId ?? existing.jobId ?? null;
     const updated: DrawingRecord = {
       ...existing,
+      workspaceId,
+      jobId: workspaceId,
       name: input.name,
       customerId: input.customerId,
       customerName: input.customerName,

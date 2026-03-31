@@ -1,6 +1,12 @@
 ﻿import { useMemo, useState, type FormEvent } from "react";
 
-import type { AuditEntityType, AuditLogRecord, CompanyUserRecord, CustomerSummary } from "@fence-estimator/contracts";
+import type {
+  AuditEntityType,
+  AuditLogRecord,
+  CompanyUserRecord,
+  CustomerSummary,
+  DrawingWorkspaceSummary,
+} from "@fence-estimator/contracts";
 import type { AuditLogQueryOptions } from "./apiClient";
 
 type AuditCategoryFilter = "ALL" | AuditEntityType;
@@ -9,6 +15,7 @@ interface AdminPageProps {
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
   customers: CustomerSummary[];
+  workspaces: DrawingWorkspaceSummary[];
   currentUserId: string;
   currentUserRole: CompanyUserRecord["role"];
   isLoadingUsers: boolean;
@@ -28,6 +35,8 @@ interface AdminPageProps {
   ): Promise<boolean>;
   onResetUserPassword(this: void, userId: string, password: string): Promise<boolean>;
   onRestoreCustomer(this: void, customerId: string): Promise<void>;
+  onRestoreWorkspace(this: void, workspaceId: string): Promise<boolean>;
+  onDeleteWorkspace(this: void, workspaceId: string): Promise<boolean>;
 }
 
 function formatTimestamp(value: string): string {
@@ -41,6 +50,7 @@ const AUDIT_CATEGORIES: { key: AuditCategoryFilter; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "AUTH", label: "Auth" },
   { key: "USER", label: "Users" },
+  { key: "JOB", label: "Workspaces" },
   { key: "DRAWING", label: "Drawings" },
   { key: "QUOTE", label: "Quotes" },
   { key: "CUSTOMER", label: "Customers" }
@@ -50,6 +60,7 @@ export function AdminPage({
   users,
   auditLog,
   customers,
+  workspaces,
   currentUserId,
   currentUserRole,
   isLoadingUsers,
@@ -65,7 +76,9 @@ export function AdminPage({
   onExportAudit,
   onCreateUser,
   onResetUserPassword,
-  onRestoreCustomer
+  onRestoreCustomer,
+  onRestoreWorkspace,
+  onDeleteWorkspace
 }: AdminPageProps) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -77,12 +90,21 @@ export function AdminPage({
   const [auditFrom, setAuditFrom] = useState("");
   const [auditTo, setAuditTo] = useState("");
   const [isExportingAudit, setIsExportingAudit] = useState(false);
+  const [restoringWorkspaceId, setRestoringWorkspaceId] = useState<string | null>(null);
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
 
   const canManageUsers = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
 
   const archivedCustomers = useMemo(
     () => customers.filter((customer) => customer.isArchived).sort((a, b) => a.name.localeCompare(b.name, "en-GB")),
     [customers]
+  );
+  const archivedWorkspaces = useMemo(
+    () =>
+      workspaces
+        .filter((workspace) => workspace.isArchived)
+        .sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso)),
+    [workspaces]
   );
 
   const filteredAuditLog = auditLog;
@@ -112,6 +134,24 @@ export function AdminPage({
     }
     if (await onResetUserPassword(userId, nextPassword)) {
       setResetPasswordsByUserId((current) => ({ ...current, [userId]: "" }));
+    }
+  };
+
+  const handleRestoreWorkspace = async (workspaceId: string) => {
+    setRestoringWorkspaceId(workspaceId);
+    try {
+      await onRestoreWorkspace(workspaceId);
+    } finally {
+      setRestoringWorkspaceId(null);
+    }
+  };
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    setDeletingWorkspaceId(workspaceId);
+    try {
+      await onDeleteWorkspace(workspaceId);
+    } finally {
+      setDeletingWorkspaceId(null);
     }
   };
 
@@ -320,6 +360,58 @@ export function AdminPage({
                 >
                   {isArchivingCustomerId === customer.id ? "Restoring..." : "Restore customer"}
                 </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {archivedWorkspaces.length > 0 ? (
+        <section className="portal-surface-card">
+          <div className="portal-section-heading">
+            <div>
+              <span className="portal-section-kicker">Recovery</span>
+              <h2>Archived workspaces</h2>
+            </div>
+          </div>
+          <p className="portal-empty-copy" style={{ marginBottom: 12 }}>
+            Archived workspaces are hidden from the active customer workflow. Restore one to
+            bring it back into the workspace list, or delete it permanently when it is no
+            longer needed.
+          </p>
+          <div className="audit-log-list">
+            {archivedWorkspaces.map((workspace) => (
+              <article key={workspace.id} className="audit-log-card">
+                <div>
+                  <strong>{workspace.name}</strong>
+                  <span>
+                    {workspace.customerName} · {workspace.drawingCount} revision
+                    {workspace.drawingCount !== 1 ? "s" : ""} · Updated{" "}
+                    {formatTimestamp(workspace.updatedAtIso)}
+                  </span>
+                </div>
+                <div className="portal-header-actions">
+                  <button
+                    type="button"
+                    className="portal-secondary-button portal-compact-button"
+                    disabled={
+                      restoringWorkspaceId === workspace.id || deletingWorkspaceId === workspace.id
+                    }
+                    onClick={() => void handleRestoreWorkspace(workspace.id)}
+                  >
+                    {restoringWorkspaceId === workspace.id ? "Restoring..." : "Restore workspace"}
+                  </button>
+                  <button
+                    type="button"
+                    className="portal-danger-button portal-compact-button"
+                    disabled={
+                      deletingWorkspaceId === workspace.id || restoringWorkspaceId === workspace.id
+                    }
+                    onClick={() => void handleDeleteWorkspace(workspace.id)}
+                  >
+                    {deletingWorkspaceId === workspace.id ? "Deleting..." : "Delete permanently"}
+                  </button>
+                </div>
               </article>
             ))}
           </div>

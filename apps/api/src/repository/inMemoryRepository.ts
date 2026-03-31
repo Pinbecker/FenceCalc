@@ -4,6 +4,9 @@ import type {
   CustomerRecord,
   CustomerSummary,
   DrawingRecord,
+  DrawingTaskRecord,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
   DrawingVersionRecord,
   JobRecord,
   JobTaskRecord,
@@ -28,25 +31,25 @@ import type {
   CreateAuditLogInput,
   CreateCustomerInput,
   CreateDrawingInput,
-  CreateJobInput,
-  CreateJobTaskInput,
+  CreateDrawingTaskInput,
+  CreateDrawingWorkspaceInput,
   CreatePasswordResetTokenInput,
   CreateQuoteInput,
   CreateSessionInput,
   CreateUserInput,
   DeleteCustomerInput,
-  DeleteJobInput,
+  DeleteDrawingWorkspaceInput,
   DeleteDrawingInput,
   RestoreDrawingVersionInput,
   CustomerScope,
   SessionRecord,
-  SetJobPrimaryDrawingInput,
+  SetDrawingWorkspacePrimaryDrawingInput,
   SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
   SetDrawingStatusInput,
+  UpdateDrawingTaskInput,
   StoredUser,
-  UpdateJobInput,
-  UpdateJobTaskInput,
+  UpdateDrawingWorkspaceInput,
   UpsertPricingConfigInput,
   UpdateCustomerInput,
   UpdateDrawingInput,
@@ -210,65 +213,93 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.customers.deleteCustomer(input));
   }
 
-  public deleteJob(input: DeleteJobInput) {
-    return Promise.resolve(this.jobs.deleteJob(input));
+  public createDrawingWorkspace(input: CreateDrawingWorkspaceInput) {
+    return Promise.resolve(this.jobs.createDrawingWorkspace(input));
   }
 
-  public createJob(input: CreateJobInput) {
-    return Promise.resolve(this.jobs.createJob(input));
-  }
-
-  public listJobs(
+  public listDrawingWorkspaces(
     companyId: string,
     scope: CustomerScope = "ACTIVE",
     search = "",
     customerId?: string,
-  ) {
-    return Promise.resolve(this.jobs.listJobs(companyId, scope, search, customerId));
+  ): Promise<DrawingWorkspaceSummary[]> {
+    return Promise.resolve(this.jobs.listDrawingWorkspaces(companyId, scope, search, customerId));
   }
 
-  public listJobsForCustomer(customerId: string, companyId: string) {
-    return Promise.resolve(this.jobs.listJobsForCustomer(customerId, companyId));
+  public listDrawingWorkspacesForCustomer(
+    customerId: string,
+    companyId: string,
+  ): Promise<DrawingWorkspaceSummary[]> {
+    return Promise.resolve(this.jobs.listDrawingWorkspacesForCustomer(customerId, companyId));
   }
 
-  public getJobById(jobId: string, companyId: string) {
-    return Promise.resolve(this.jobs.getJobById(jobId, companyId));
+  public getDrawingWorkspaceById(
+    workspaceId: string,
+    companyId: string,
+  ): Promise<DrawingWorkspaceRecord | null> {
+    return Promise.resolve(this.jobs.getDrawingWorkspaceById(workspaceId, companyId));
   }
 
-  public updateJob(input: UpdateJobInput) {
-    return Promise.resolve(this.jobs.updateJob(input));
+  public deleteDrawingWorkspace(input: DeleteDrawingWorkspaceInput) {
+    return Promise.resolve(
+      this.jobs.deleteJob({ jobId: input.workspaceId, companyId: input.companyId }),
+    );
   }
 
-  public setJobPrimaryDrawing(input: SetJobPrimaryDrawingInput) {
-    return Promise.resolve(this.jobs.setJobPrimaryDrawing(input));
+  public updateDrawingWorkspace(input: UpdateDrawingWorkspaceInput) {
+    return Promise.resolve(this.jobs.updateDrawingWorkspace(input));
   }
 
-  public listJobTasks(jobId: string, companyId: string) {
-    return Promise.resolve(this.jobs.listJobTasks(jobId, companyId));
+  public setDrawingWorkspacePrimaryDrawing(input: SetDrawingWorkspacePrimaryDrawingInput) {
+    return Promise.resolve(
+      this.jobs.setDrawingWorkspacePrimaryDrawing({ ...input, jobId: input.workspaceId }),
+    );
   }
 
-  public listCompanyTasks(companyId: string, options?: CompanyTaskListOptions) {
-    return Promise.resolve(this.jobs.listCompanyTasks(companyId, options));
+  public listDrawingWorkspaceTasks(
+    workspaceId: string,
+    companyId: string,
+  ): Promise<DrawingTaskRecord[]> {
+    return Promise.resolve(this.jobs.listDrawingWorkspaceTasks(workspaceId, companyId));
   }
 
-  public createJobTask(input: CreateJobTaskInput) {
-    return Promise.resolve(this.jobs.createJobTask(input));
+  public listCompanyDrawingTasks(
+    companyId: string,
+    options?: CompanyTaskListOptions,
+  ): Promise<DrawingTaskRecord[]> {
+    return Promise.resolve(this.jobs.listCompanyDrawingTasks(companyId, options));
   }
 
-  public updateJobTask(input: UpdateJobTaskInput) {
-    return Promise.resolve(this.jobs.updateJobTask(input));
+  public createDrawingTask(input: CreateDrawingTaskInput) {
+    return Promise.resolve(
+      this.jobs.createDrawingTask({
+        ...input,
+        jobId: input.workspaceId,
+        drawingId: input.rootDrawingId,
+      }),
+    );
   }
 
-  public deleteJobTask(taskId: string, jobId: string, companyId: string) {
-    return Promise.resolve(this.jobs.deleteJobTask(taskId, jobId, companyId));
+  public updateDrawingTask(input: UpdateDrawingTaskInput) {
+    return Promise.resolve(
+      this.jobs.updateDrawingTask({
+        ...input,
+        jobId: input.workspaceId,
+        drawingId: input.rootDrawingId,
+      }),
+    );
+  }
+
+  public deleteDrawingTask(taskId: string, workspaceId: string, companyId: string) {
+    return Promise.resolve(this.jobs.deleteDrawingTask(taskId, workspaceId, companyId));
   }
 
   public listDrawingsForCustomer(customerId: string, companyId: string) {
     return Promise.resolve(this.drawings.listDrawingsForCustomer(customerId, companyId));
   }
 
-  public listDrawingsForJob(jobId: string, companyId: string) {
-    return Promise.resolve(this.drawings.listDrawingsForJob(jobId, companyId));
+  public listDrawingsForWorkspace(workspaceId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listDrawingsForJob(workspaceId, companyId));
   }
 
   public createDrawing(input: CreateDrawingInput) {
@@ -315,8 +346,8 @@ export class InMemoryAppRepository implements AppRepository {
     return Promise.resolve(this.quotes.createQuote(input));
   }
 
-  public listQuotesForJob(jobId: string, companyId: string) {
-    return Promise.resolve(this.quotes.listQuotesForJob(jobId, companyId));
+  public listQuotesForDrawingWorkspace(workspaceId: string, companyId: string) {
+    return Promise.resolve(this.quotes.listQuotesForJob(workspaceId, companyId));
   }
 
   public listQuotesForDrawing(drawingId: string, companyId: string) {

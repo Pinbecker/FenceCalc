@@ -31,6 +31,8 @@ describe("portalSessionData", () => {
     const summary = updateDrawingSummaryFromRecord({
       id: "drawing-1",
       companyId: "company-1",
+      workspaceId: "workspace-1",
+      jobRole: "PRIMARY",
       name: "Perimeter",
       customerId: "customer-1",
       customerName: "Cleveland Land Services",

@@ -317,6 +317,12 @@ export function migrateSqliteDatabase(database: Database.Database): void {
         ALTER TABLE job_tasks ADD COLUMN drawing_id TEXT;
       `,
     },
+    {
+      name: "016_task_revision_drawings",
+      sql: `
+        ALTER TABLE job_tasks ADD COLUMN revision_drawing_id TEXT;
+      `,
+    },
   ] as const;
 
   const insertMigration = database.prepare(
@@ -866,6 +872,12 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
   if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "drawing_id")) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN drawing_id TEXT");
   }
+  if (
+    tableExists(database, "job_tasks") &&
+    !hasColumn(database, "job_tasks", "revision_drawing_id")
+  ) {
+    database.exec("ALTER TABLE job_tasks ADD COLUMN revision_drawing_id TEXT");
+  }
   if (tableExists(database, "job_tasks") && !hasColumn(database, "job_tasks", "assigned_user_id")) {
     database.exec("ALTER TABLE job_tasks ADD COLUMN assigned_user_id TEXT");
   }
@@ -991,6 +1003,9 @@ function ensureLegacySchemaPatched(database: Database.Database): void {
     );
     database.exec(
       "UPDATE job_tasks SET drawing_id = NULLIF(TRIM(drawing_id), '') WHERE drawing_id IS NOT NULL",
+    );
+    database.exec(
+      "UPDATE job_tasks SET revision_drawing_id = NULLIF(TRIM(revision_drawing_id), '') WHERE revision_drawing_id IS NOT NULL",
     );
   }
   database.exec(`

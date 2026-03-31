@@ -1,9 +1,9 @@
-import type { JobTaskRecord } from "@fence-estimator/contracts";
+import type { DrawingTaskRecord } from "@fence-estimator/contracts";
 
 export type TaskDueTone = "none" | "overdue" | "today" | "upcoming";
 
 export function getTaskDueTone(
-  task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">,
+  task: Pick<DrawingTaskRecord, "dueAtIso" | "isCompleted">,
   now = new Date(),
 ): TaskDueTone {
   if (!task.dueAtIso) {
@@ -25,7 +25,7 @@ export function getTaskDueTone(
 }
 
 export function getTaskDueLabel(
-  task: Pick<JobTaskRecord, "dueAtIso" | "isCompleted">,
+  task: Pick<DrawingTaskRecord, "dueAtIso" | "isCompleted">,
   now = new Date(),
 ): string | null {
   const tone = getTaskDueTone(task, now);

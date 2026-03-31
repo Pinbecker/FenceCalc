@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { customerUpdateRequestSchema, type CustomerContact, type CustomerSummary, type DrawingSummary, type JobRecord, type JobStage, type JobSummary } from "@fence-estimator/contracts";
+import {
+  customerUpdateRequestSchema,
+  type CustomerContact,
+  type CustomerSummary,
+  type DrawingRecord,
+  type DrawingSummary,
+  type DrawingWorkspaceSummary,
+} from "@fence-estimator/contracts";
 import type { ZodIssue } from "zod";
 
 import { DrawingPreview } from "./DrawingPreview";
-import { buildFallbackJobSummaries, hasLegacyJoblessDrawings, resolveJobWorkspaceTarget } from "./jobFallbacks";
+import {
+  buildCustomerWorkspaceCards,
+  buildWorkspaceNavigationQuery,
+  getRevisionLabel,
+} from "./drawingWorkspace";
 import type { PortalRoute } from "./useHashRoute";
 
-type CustomerJobFilter = "ACTIVE" | "ARCHIVED" | "ALL";
+type CustomerDrawingFilter = "ACTIVE" | "ARCHIVED" | "ALL";
 
-const JOB_STATUS_LABELS: Record<JobStage, string> = {
+const DRAWING_STATUS_LABELS: Record<DrawingSummary["status"], string> = {
   DRAFT: "Draft",
-  DESIGNING: "Designing",
-  ESTIMATING: "Estimating",
-  READY_TO_QUOTE: "Ready to quote",
   QUOTED: "Quoted",
-  FOLLOW_UP: "Follow up",
   WON: "Won",
   LOST: "Lost",
   ON_HOLD: "On hold"
@@ -63,7 +70,7 @@ type SaveCustomerProfileResult = SaveCustomerProfileSuccess | SaveCustomerProfil
 interface CustomerPageProps {
   query?: Record<string, string>;
   customers: CustomerSummary[];
-  jobs?: JobSummary[];
+  workspaces: DrawingWorkspaceSummary[];
   drawings?: DrawingSummary[];
   userRole: string;
   isSavingCustomer: boolean;
@@ -74,17 +81,10 @@ interface CustomerPageProps {
     this: void,
     input: { mode: "update"; customerId: string; customer: Partial<CustomerDraft> & { additionalContacts?: CustomerContact[] } },
   ): Promise<{ id: string } | null>;
-  onCreateJob?(this: void, input: { customerId: string; name: string; notes: string }): Promise<JobRecord | null>;
+  onCreateDrawing(this: void, input: { customerId: string; name: string }): Promise<DrawingRecord | null>;
   onSetCustomerArchived(this: void, customerId: string, archived: boolean, cascadeDrawings?: boolean): Promise<boolean>;
-  onOpenJob?(this: void, jobId: string): void;
-  onOpenDrawing(this: void, drawingId: string): void;
-  onOpenEstimate(this: void, jobId: string, drawingId?: string | null): void;
-  onCreateDrawing?(this: void): void;
-  onToggleDrawingArchived?(this: void, drawingId: string, archived: boolean): Promise<boolean>;
-  onChangeDrawingStatus?(this: void, drawingId: string, status: string): Promise<boolean>;
-  onDeleteDrawing?(this: void, drawingId: string): Promise<boolean>;
-  onSetJobArchived?(this: void, jobId: string, archived: boolean): Promise<boolean>;
-  onDeleteJob?(this: void, jobId: string): Promise<boolean>;
+  onSetWorkspaceArchived(this: void, workspaceId: string, archived: boolean): Promise<boolean>;
+  onDeleteWorkspace(this: void, workspaceId: string): Promise<boolean>;
   onDeleteCustomer(this: void, customerId: string): Promise<boolean>;
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
@@ -99,8 +99,8 @@ function buildDraft(customer: CustomerSummary): CustomerDraft {
   };
 }
 
-function buildNextJobName(customer: CustomerSummary, count: number): string {
-  return `${customer.name} Job ${count + 1}`;
+function buildNextDrawingName(customer: CustomerSummary, count: number): string {
+  return `${customer.name} Drawing ${count + 1}`;
 }
 
 function formatTimestamp(value: string | null): string {
@@ -196,7 +196,7 @@ export async function saveCustomerProfile(
 export function CustomerPage({
   query,
   customers,
-  jobs = [],
+  workspaces,
   drawings = [],
   userRole,
   isSavingCustomer,
@@ -204,96 +204,59 @@ export function CustomerPage({
   errorMessage,
   noticeMessage,
   onSaveCustomer,
-  onCreateJob,
-  onSetCustomerArchived,
-  onOpenJob,
-  onOpenDrawing,
-  onOpenEstimate,
   onCreateDrawing,
-  onSetJobArchived,
-  onDeleteJob,
+  onSetCustomerArchived,
+  onSetWorkspaceArchived,
+  onDeleteWorkspace,
   onDeleteCustomer,
   onNavigate,
 }: CustomerPageProps) {
   const customerId = query?.customerId ?? null;
   const isAdmin = userRole === "OWNER" || userRole === "ADMIN";
-  const [jobFilter, setJobFilter] = useState<CustomerJobFilter>("ACTIVE");
+  const [drawingFilter, setDrawingFilter] = useState<CustomerDrawingFilter>("ACTIVE");
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft | null>(null);
   const [contactsDraft, setContactsDraft] = useState<CustomerContact[]>([]);
   const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
-  const [cascadeOnArchive, setCascadeOnArchive] = useState(false);
   const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
-  const [isCreatingJob, setIsCreatingJob] = useState(false);
-  const [isNewJobOpen, setIsNewJobOpen] = useState(false);
-  const [newJobName, setNewJobName] = useState("");
-  const [newJobNotes, setNewJobNotes] = useState("");
-  const [confirmDeleteJobId, setConfirmDeleteJobId] = useState<string | null>(null);
-  const [isDeletingJob, setIsDeletingJob] = useState(false);
-  const [archivingJobId, setArchivingJobId] = useState<string | null>(null);
+  const [isCreatingDrawing, setIsCreatingDrawing] = useState(false);
+  const [isNewDrawingOpen, setIsNewDrawingOpen] = useState(false);
+  const [newDrawingName, setNewDrawingName] = useState("");
 
   const customer = useMemo(
     () => customers.find((entry) => entry.id === customerId) ?? null,
     [customerId, customers],
   );
 
-  const customerJobs = useMemo(() => {
-    if (!customer) {
-      return [];
-    }
-    const shouldUseFallbackJobs = jobs.length === 0 && hasLegacyJoblessDrawings(drawings, customer.id);
-    if (shouldUseFallbackJobs) {
-      return buildFallbackJobSummaries(drawings, customer.id)
-        .filter((job) => {
-          if (jobFilter === "ACTIVE") {
-            return !job.isArchived;
-          }
-          if (jobFilter === "ARCHIVED") {
-            return job.isArchived;
-          }
-          return true;
-        });
-    }
-    return jobs
-      .filter((job) => job.customerId === customer.id)
-      .filter((job) => {
-        if (jobFilter === "ACTIVE") {
-          return !job.isArchived;
+  const workspaceCards = useMemo(
+    () => (customer ? buildCustomerWorkspaceCards(customer.id, workspaces, drawings) : []),
+    [customer, drawings, workspaces],
+  );
+
+  const visibleWorkspaceCards = useMemo(
+    () =>
+      workspaceCards.filter((card) => {
+        if (drawingFilter === "ACTIVE") {
+          return !card.workspace.isArchived;
         }
-        if (jobFilter === "ARCHIVED") {
-          return job.isArchived;
+        if (drawingFilter === "ARCHIVED") {
+          return card.workspace.isArchived;
         }
         return true;
-      })
-      .sort((left, right) => (right.lastActivityAtIso ?? right.updatedAtIso).localeCompare(left.lastActivityAtIso ?? left.updatedAtIso));
-  }, [customer, drawings, jobFilter, jobs]);
-
-  const fallbackJobs = useMemo(
-    () => (customer && hasLegacyJoblessDrawings(drawings, customer.id) ? buildFallbackJobSummaries(drawings, customer.id) : []),
-    [customer, drawings],
+      }),
+    [drawingFilter, workspaceCards],
   );
 
-  const activeJobCount = useMemo(
-    () =>
-      jobs.length > 0
-        ? jobs.filter((job) => job.customerId === customer?.id && !job.isArchived).length
-        : fallbackJobs.filter((job) => !job.isArchived).length,
-    [customer?.id, fallbackJobs, jobs],
+  const activeWorkspaceCount = useMemo(
+    () => workspaceCards.filter((card) => !card.workspace.isArchived).length,
+    [workspaceCards],
   );
 
-  const totalDrawingCount = useMemo(
-    () =>
-      jobs.length > 0
-        ? jobs.filter((job) => job.customerId === customer?.id).reduce((sum, job) => sum + job.drawingCount, 0)
-        : drawings.filter((drawing) => drawing.customerId === customer?.id).length,
-    [customer?.id, drawings, jobs],
-  );
-
-  const existingJobCount = useMemo(
-    () => (jobs.length > 0 ? jobs.filter((job) => job.customerId === customer?.id).length : fallbackJobs.length),
-    [customer?.id, fallbackJobs.length, jobs],
+  const totalRevisionCount = useMemo(
+    () => workspaceCards.reduce((count, card) => count + card.revisionCount, 0),
+    [workspaceCards],
   );
 
   useEffect(() => {
@@ -345,59 +308,32 @@ export function CustomerPage({
     closeEditModal();
   };
 
-  const openNewJobModal = () => {
+  const openNewDrawingModal = () => {
     if (!customer) return;
-    setNewJobName(buildNextJobName(customer, existingJobCount));
-    setNewJobNotes("");
-    setIsNewJobOpen(true);
+    setNewDrawingName(buildNextDrawingName(customer, workspaceCards.length));
+    setIsNewDrawingOpen(true);
   };
 
-  const handleCreateJob = async () => {
+  const handleCreateDrawing = async () => {
     if (!customer) return;
-    if (!onCreateJob) {
-      onCreateDrawing?.();
-      return;
-    }
-    const name = newJobName.trim() || buildNextJobName(customer, existingJobCount);
-    setIsCreatingJob(true);
-    const job = await onCreateJob({
+    const name = newDrawingName.trim() || buildNextDrawingName(customer, workspaceCards.length);
+    setIsCreatingDrawing(true);
+    const drawing = await onCreateDrawing({
       customerId: customer.id,
       name,
-      notes: newJobNotes.trim()
     });
-    setIsCreatingJob(false);
-    setIsNewJobOpen(false);
-    if (job) {
-      if (onOpenJob) {
-        onOpenJob(job.id);
-      } else {
-        onNavigate("job", { jobId: job.id });
-      }
+    setIsCreatingDrawing(false);
+    setIsNewDrawingOpen(false);
+    if (drawing?.workspaceId) {
+      onNavigate("drawing", { workspaceId: drawing.workspaceId, drawingId: drawing.id });
     }
   };
 
-  const openJobWorkspace = (job: JobSummary) => {
-    const target = resolveJobWorkspaceTarget(job, drawings);
-    if (target.route === "job") {
-      if (onOpenJob) {
-        onOpenJob(target.query.jobId);
-      } else {
-        onNavigate("job", target.query);
-      }
-      return;
-    }
-    onOpenDrawing(target.query.drawingId);
-  };
-
-  const openJobEstimate = (job: JobSummary) => {
-    const target = resolveJobWorkspaceTarget(job, drawings);
-    if (target.route === "job") {
-      onOpenEstimate(target.query.jobId, job.primaryDrawingId);
-      return;
-    }
-    if (job.primaryDrawingId) {
-      onNavigate("estimate", { drawingId: job.primaryDrawingId });
-    }
+  const openDrawingWorkspace = (
+    workspace: DrawingWorkspaceSummary,
+    options?: { drawingId?: string; tab?: "workspace" | "estimate" | "history" },
+  ) => {
+    onNavigate("drawing", buildWorkspaceNavigationQuery(workspace, drawings, options));
   };
 
   if (!customerId || !customer) {
@@ -405,7 +341,7 @@ export function CustomerPage({
       <section className="portal-page portal-customer-page">
         <div className="portal-empty-state">
           <h1>Customer not found</h1>
-          <p>Select a customer from the directory to view their details and jobs.</p>
+          <p>Select a customer from the directory to view their drawings and revisions.</p>
           <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => onNavigate("customers")}>
             Browse customers
           </button>
@@ -437,12 +373,12 @@ export function CustomerPage({
             ) : null}
             <div className="portal-dashboard-stat-bar" role="group" aria-label="Customer summary">
               <div className="portal-dashboard-stat">
-                <span>Active jobs</span>
-                <strong>{activeJobCount}</strong>
+                <span>Active workspaces</span>
+                <strong>{activeWorkspaceCount}</strong>
               </div>
               <div className="portal-dashboard-stat">
-                <span>Total drawings</span>
-                <strong>{totalDrawingCount}</strong>
+                <span>Total revisions</span>
+                <strong>{totalRevisionCount}</strong>
               </div>
               <div className="portal-dashboard-stat">
                 <span>Last activity</span>
@@ -465,11 +401,10 @@ export function CustomerPage({
             type="button"
             className="portal-secondary-button portal-compact-button"
             onClick={() => {
-              if (!customer.isArchived && activeJobCount > 0) {
-                setCascadeOnArchive(false);
+              if (!customer.isArchived && activeWorkspaceCount > 0) {
                 setConfirmArchive(true);
               } else {
-                void onSetCustomerArchived(customer.id, !customer.isArchived, false);
+                void onSetCustomerArchived(customer.id, !customer.isArchived, !customer.isArchived);
               }
             }}
             disabled={isArchivingCustomerId === customer.id}
@@ -486,8 +421,8 @@ export function CustomerPage({
               {isDeletingCustomer ? "Deleting..." : "Delete customer"}
             </button>
           ) : null}
-          <button type="button" className="portal-primary-button portal-compact-button" onClick={openNewJobModal} disabled={isCreatingJob}>
-            {isCreatingJob ? "Creating..." : "New job"}
+          <button type="button" className="portal-primary-button portal-compact-button" onClick={openNewDrawingModal} disabled={isCreatingDrawing}>
+            {isCreatingDrawing ? "Creating..." : "New drawing"}
           </button>
         </div>
       </header>
@@ -532,16 +467,16 @@ export function CustomerPage({
       <section className="portal-surface-card portal-customer-drawings-panel">
         <div className="portal-section-heading">
           <div>
-            <span className="portal-section-kicker">Customer jobs</span>
-            <h2>Jobs</h2>
+            <span className="portal-section-kicker">Customer workspaces</span>
+            <h2>Drawing workspaces</h2>
           </div>
-          <div className="portal-filter-row" role="tablist" aria-label="Job filter">
-            {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerJobFilter[]).map((option) => (
+          <div className="portal-filter-row" role="tablist" aria-label="Drawing filter">
+            {(["ACTIVE", "ARCHIVED", "ALL"] as CustomerDrawingFilter[]).map((option) => (
               <button
                 type="button"
                 key={option}
-                className={jobFilter === option ? "is-active" : undefined}
-                onClick={() => setJobFilter(option)}
+                className={drawingFilter === option ? "is-active" : undefined}
+                onClick={() => setDrawingFilter(option)}
               >
                 {option === "ACTIVE" ? "Active" : option === "ARCHIVED" ? "Archived" : "All"}
               </button>
@@ -549,122 +484,159 @@ export function CustomerPage({
           </div>
         </div>
 
-        {customerJobs.length === 0 ? (
+        {visibleWorkspaceCards.length === 0 ? (
           <div className="portal-empty-state portal-customer-drawings-empty">
-            <h2>No jobs in this view</h2>
-            <p>Create the first job for this customer or switch filters to review archived work.</p>
+            <h2>No workspaces in this view</h2>
+            <p>Create the first drawing workspace for this customer or switch filters to review archived work.</p>
           </div>
         ) : (
           <div className="portal-customer-drawing-grid">
-            {customerJobs.map((job) => (
-              <article key={job.id} className={`portal-customer-drawing-card${job.isArchived ? " is-archived" : ""}`}>
+            {visibleWorkspaceCards.map((card) => {
+              const latestRevision = card.latestRevision ?? card.rootDrawing;
+              if (!latestRevision || !card.rootDrawing) {
+                return null;
+              }
+              return (
+              <article
+                key={card.workspace.id}
+                className={`portal-customer-drawing-card${card.workspace.isArchived ? " is-archived" : ""}`}
+              >
                 <div
                   className="portal-customer-drawing-card-preview"
                   role="button"
                   tabIndex={0}
-                  onClick={() => openJobWorkspace(job)}
+                  onClick={() => openDrawingWorkspace(card.workspace)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
-                      openJobWorkspace(job);
+                      openDrawingWorkspace(card.workspace);
                     }
                   }}
                 >
-                  <DrawingPreview layout={job.primaryPreviewLayout ?? EMPTY_LAYOUT} label={job.name} variant="card" />
+                  <DrawingPreview
+                    layout={latestRevision.previewLayout ?? EMPTY_LAYOUT}
+                    label={card.workspace.name}
+                    variant="card"
+                  />
                 </div>
 
                 <div className="portal-customer-drawing-card-body">
                   <div className="portal-customer-drawing-card-head">
                     <div className="portal-customer-drawing-card-copy">
-                      <h3>{job.name}</h3>
+                      <h3>{card.workspace.name}</h3>
+                      <span>Latest revision: {getRevisionLabel(latestRevision)}</span>
                     </div>
                     <div className="portal-customer-drawing-card-badges">
-                      {drawings.find((drawing) => drawing.id === job.primaryDrawingId)?.versionNumber ? (
-                        <span className="portal-customer-drawing-badge">v{drawings.find((drawing) => drawing.id === job.primaryDrawingId)?.versionNumber}</span>
+                      <span className="portal-customer-drawing-badge">
+                        {card.revisionCount} revision{card.revisionCount === 1 ? "" : "s"}
+                      </span>
+                      {card.workspace.isArchived ? (
+                        <span className="portal-customer-drawing-badge is-archived">Archived</span>
                       ) : null}
-                      <span className="portal-customer-drawing-badge">{job.drawingCount} drawings</span>
-                      {job.isArchived ? <span className="portal-customer-drawing-badge is-archived">Archived</span> : null}
-                      <span className={`portal-customer-drawing-badge drawing-status-${job.stage.toLowerCase()}`}>
-                        {JOB_STATUS_LABELS[job.stage]}
+                      <span className={`portal-customer-drawing-badge drawing-status-${latestRevision.status.toLowerCase()}`}>
+                        {DRAWING_STATUS_LABELS[latestRevision.status]}
                       </span>
                     </div>
                   </div>
 
                   <div className="portal-customer-drawing-card-meta">
-                    <span>{formatMoney(job.latestQuoteTotal)}</span>
-                    <span>Updated {formatTimestamp(job.lastActivityAtIso ?? job.updatedAtIso)}</span>
+                    <span>{formatMoney(card.workspace.latestQuoteTotal ?? null)}</span>
+                    <span>{card.workspace.openTaskCount} open tasks</span>
+                    <span>Updated {formatTimestamp(card.lastActivityAtIso)}</span>
+                  </div>
+
+                  <div className="portal-customer-drawing-card-meta">
+                    {card.drawings.map((drawing) => (
+                      <button
+                        type="button"
+                        key={drawing.id}
+                        className="portal-text-button"
+                        onClick={() =>
+                          openDrawingWorkspace(card.workspace, { drawingId: drawing.id })
+                        }
+                      >
+                        {getRevisionLabel(drawing)}
+                      </button>
+                    ))}
                   </div>
 
                   <div className="portal-customer-drawing-card-footer">
-                    <button type="button" className="portal-text-button" onClick={() => openJobWorkspace(job)}>
-                      Open
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() => openDrawingWorkspace(card.workspace)}
+                    >
+                      Open workspace
                     </button>
-                    {onSetJobArchived ? (
+                    <button
+                      type="button"
+                      className="portal-text-button"
+                      onClick={() =>
+                        void onSetWorkspaceArchived(card.workspace.id, !card.workspace.isArchived)
+                      }
+                    >
+                      {card.workspace.isArchived ? "Restore workspace" : "Archive workspace"}
+                    </button>
+                    {isAdmin && card.workspace.isArchived ? (
                       <button
                         type="button"
-                        className="portal-text-button"
-                        disabled={archivingJobId === job.id}
+                        className="portal-text-button portal-danger-text"
                         onClick={() => {
-                          setArchivingJobId(job.id);
-                          void onSetJobArchived(job.id, !job.isArchived).finally(() => setArchivingJobId(null));
+                          if (!window.confirm(`Delete workspace "${card.workspace.name}" permanently?`)) {
+                            return;
+                          }
+                          void onDeleteWorkspace(card.workspace.id);
                         }}
                       >
-                        {archivingJobId === job.id ? "Updating..." : job.isArchived ? "Restore" : "Archive"}
+                        Delete workspace
                       </button>
                     ) : null}
                   </div>
                 </div>
               </article>
-            ))}
+            );
+            })}
           </div>
         )}
       </section>
 
-      {isNewJobOpen ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setIsNewJobOpen(false)}>
+      {isNewDrawingOpen ? (
+        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setIsNewDrawingOpen(false)}>
           <div
             className="portal-customer-edit-modal portal-modal-card"
             role="dialog"
-            aria-label="New job"
+            aria-label="New drawing"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
-              <h2>New job</h2>
-              <button type="button" className="portal-text-button" onClick={() => setIsNewJobOpen(false)}>Close</button>
+              <h2>New drawing</h2>
+              <button type="button" className="portal-text-button" onClick={() => setIsNewDrawingOpen(false)}>Close</button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
-                <span>Job name</span>
+                <span>Drawing name</span>
                 <input
-                  value={newJobName}
-                  onChange={(event) => setNewJobName(event.target.value)}
+                  value={newDrawingName}
+                  onChange={(event) => setNewDrawingName(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && newJobName.trim()) {
-                      void handleCreateJob();
+                    if (event.key === "Enter" && newDrawingName.trim()) {
+                      void handleCreateDrawing();
                     }
                   }}
                   autoFocus
                 />
               </label>
-              <label className="portal-customer-edit-field">
-                <span>Notes (optional)</span>
-                <textarea
-                  value={newJobNotes}
-                  onChange={(event) => setNewJobNotes(event.target.value)}
-                  rows={3}
-                />
-              </label>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsNewJobOpen(false)}>
+              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setIsNewDrawingOpen(false)}>
                 Cancel
               </button>
               <button
                 type="button"
                 className="portal-primary-button portal-compact-button"
-                disabled={isCreatingJob || !newJobName.trim()}
-                onClick={() => void handleCreateJob()}
+                disabled={isCreatingDrawing || !newDrawingName.trim()}
+                onClick={() => void handleCreateDrawing()}
               >
-                {isCreatingJob ? "Creating..." : "Create job"}
+                {isCreatingDrawing ? "Creating..." : "Create drawing"}
               </button>
             </div>
           </div>
@@ -684,7 +656,7 @@ export function CustomerPage({
               <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteCustomer(false)}>Close</button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
-              <p>This will permanently remove the customer and all their archived jobs and drawings. This action cannot be undone.</p>
+              <p>This will permanently remove the customer and all their archived drawing work. This action cannot be undone.</p>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteCustomer(false)}>
@@ -713,45 +685,6 @@ export function CustomerPage({
         </div>
       ) : null}
 
-      {confirmDeleteJobId && onDeleteJob ? (
-        <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmDeleteJobId(null)}>
-          <div
-            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
-            role="dialog"
-            aria-label="Confirm delete job"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="portal-customer-edit-modal-header portal-modal-header">
-              <h2>Permanently delete job?</h2>
-              <button type="button" className="portal-text-button" onClick={() => setConfirmDeleteJobId(null)}>Close</button>
-            </div>
-            <div className="portal-customer-edit-modal-body portal-modal-body">
-              <p>This will permanently remove the job and all its drawings, estimates, and history. This action cannot be undone.</p>
-            </div>
-            <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmDeleteJobId(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="portal-danger-button portal-compact-button"
-                disabled={isDeletingJob}
-                onClick={() => {
-                  void (async () => {
-                    setIsDeletingJob(true);
-                    await onDeleteJob(confirmDeleteJobId);
-                    setIsDeletingJob(false);
-                    setConfirmDeleteJobId(null);
-                  })();
-                }}
-              >
-                {isDeletingJob ? "Deleting..." : "Delete permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {confirmArchive && customer ? (
         <div className="portal-customer-edit-backdrop portal-modal-backdrop" onClick={() => setConfirmArchive(false)}>
           <div
@@ -765,11 +698,11 @@ export function CustomerPage({
               <button type="button" className="portal-text-button" onClick={() => setConfirmArchive(false)}>Close</button>
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
-              <p>This customer has <strong>{activeJobCount}</strong> active {activeJobCount === 1 ? "job" : "jobs"}.</p>
-              <label className="portal-checkbox-label">
-                <input type="checkbox" checked={cascadeOnArchive} onChange={(event) => setCascadeOnArchive(event.target.checked)} />
-                Also archive all active drawings under this customer
-              </label>
+              <p>
+                This customer has <strong>{activeWorkspaceCount}</strong> active workspace
+                {activeWorkspaceCount === 1 ? "" : "s"}.
+              </p>
+              <p>Archiving the customer will archive every active workspace under this customer.</p>
             </div>
             <div className="portal-customer-edit-modal-footer portal-modal-footer">
               <button type="button" className="portal-secondary-button portal-compact-button" onClick={() => setConfirmArchive(false)}>
@@ -781,7 +714,7 @@ export function CustomerPage({
                 disabled={isArchivingCustomerId === customer.id}
                 onClick={() => {
                   setConfirmArchive(false);
-                  void onSetCustomerArchived(customer.id, true, cascadeOnArchive);
+                  void onSetCustomerArchived(customer.id, true, true);
                 }}
               >
                 Archive customer

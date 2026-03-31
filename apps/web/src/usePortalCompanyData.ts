@@ -6,33 +6,35 @@ import type {
   CustomerContact,
   CustomerRecord,
   CustomerSummary,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
   DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
-  JobRecord,
-  JobSummary
 } from "@fence-estimator/contracts";
 
 import {
-  createJob,
+  createDrawingWorkspace,
+  createDrawing as createDrawingRecord,
   createCustomer,
   createUser,
   deleteCustomer,
   deleteDrawing,
-  deleteJob,
+  deleteDrawingWorkspace,
   exportAuditLogCsv,
   listCustomers,
   listAuditLog,
   listDrawingVersions,
   listDrawings,
-  listJobs,
+  listDrawingWorkspaceDrawings,
+  listDrawingWorkspaces,
   listUsers,
   restoreDrawingVersion,
-  updateJob,
   setCustomerArchivedState,
   setDrawingArchivedState,
   setDrawingStatus,
   setUserPassword,
+  updateDrawingWorkspace,
   updateCustomer,
   type AuditLogQueryOptions,
   type CreateCompanyUserInput
@@ -64,9 +66,9 @@ export function usePortalCompanyData({
   setErrorMessage,
   setNoticeMessage
 }: UsePortalCompanyDataOptions) {
-  const jobListScope = "ALL" as const;
+  const workspaceListScope = "ALL" as const;
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
-  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [workspaces, setWorkspaces] = useState<DrawingWorkspaceSummary[]>([]);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [users, setUsers] = useState<CompanyUserRecord[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogRecord[]>([]);
@@ -93,7 +95,7 @@ export function usePortalCompanyData({
   const clearCompanyData = useCallback(() => {
     setCustomers(EMPTY_PORTAL_COMPANY_DATA.customers);
     setDrawings(EMPTY_PORTAL_COMPANY_DATA.drawings);
-    setJobs(EMPTY_PORTAL_COMPANY_DATA.jobs);
+    setWorkspaces(EMPTY_PORTAL_COMPANY_DATA.workspaces);
     setUsers(EMPTY_PORTAL_COMPANY_DATA.users);
     setAuditLog(EMPTY_PORTAL_COMPANY_DATA.auditLog);
   }, []);
@@ -102,7 +104,7 @@ export function usePortalCompanyData({
     const nextData = await loadPortalCompanyData(nextSession);
     setCustomers(nextData.customers);
     setDrawings(nextData.drawings);
-    setJobs(nextData.jobs);
+    setWorkspaces(nextData.workspaces);
     setUsers(nextData.users);
     setAuditLog(nextData.auditLog);
   }, []);
@@ -139,18 +141,19 @@ export function usePortalCompanyData({
     }
   }, [session, setErrorMessage]);
 
-  const refreshJobs = useCallback(async () => {
+  const refreshWorkspaces = useCallback(async () => {
     if (!session) {
-      setJobs([]);
+      setWorkspaces([]);
       return;
     }
 
     try {
-      setJobs(await listJobs({ scope: jobListScope }));
+      const nextWorkspaces = await listDrawingWorkspaces({ scope: workspaceListScope });
+      setWorkspaces(nextWorkspaces);
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     }
-  }, [jobListScope, session, setErrorMessage]);
+  }, [session, setErrorMessage, workspaceListScope]);
 
   const refreshUsers = useCallback(async () => {
     if (!session) {
@@ -243,30 +246,72 @@ export function usePortalCompanyData({
     [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage],
   );
 
-  const createCompanyJob = useCallback(
-    async (input: { customerId: string; name: string; notes: string }): Promise<JobRecord | null> => {
+  const createCompanyWorkspace = useCallback(
+    async (input: { customerId: string; name: string; notes: string }): Promise<DrawingWorkspaceRecord | null> => {
       if (!session) {
         return null;
       }
 
       clearMessages();
       try {
-        const job = await createJob(input);
-        const [nextJobs, nextDrawings] = await Promise.all([
-          listJobs({ scope: jobListScope }),
+        const workspace = await createDrawingWorkspace(input);
+        const [nextWorkspaces, nextDrawings] = await Promise.all([
+          listDrawingWorkspaces({ scope: workspaceListScope }),
           listDrawings(),
           loadAuditLog(auditLogQuery)
         ]);
-        setJobs(nextJobs);
+        setWorkspaces(nextWorkspaces);
         setDrawings(nextDrawings);
-        setNoticeMessage(`Created job ${job.name}`);
-        return job;
+        setNoticeMessage(`Created workspace ${workspace.name}`);
+        return workspace;
       } catch (error) {
         setErrorMessage(extractApiErrorMessage(error));
         return null;
       }
     },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
+  );
+
+  const createCompanyDrawing = useCallback(
+    async (input: { customerId: string; name: string }) => {
+      if (!session) {
+        return null;
+      }
+
+      clearMessages();
+      try {
+        const drawing = await createDrawingRecord({
+          name: input.name,
+          customerId: input.customerId,
+          layout: {
+            segments: [],
+            gates: [],
+            basketballPosts: [],
+            floodlightColumns: [],
+            goalUnits: [],
+            kickboards: [],
+            pitchDividers: [],
+            sideNettings: [],
+          },
+          savedViewport: null,
+        });
+        const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
+          listCustomers(),
+          listDrawings(),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
+          loadAuditLog(auditLogQuery),
+        ]);
+        setCustomers(nextCustomers);
+        setDrawings(nextDrawings);
+        setWorkspaces(nextWorkspaces);
+        setNoticeMessage(`Created drawing ${drawing.name}`);
+        return drawing;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return null;
+      }
+    },
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const resetCompanyUserPassword = useCallback(
@@ -318,8 +363,11 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        const [nextJobs] = await Promise.all([listJobs({ scope: jobListScope }), loadAuditLog(auditLogQuery)]);
-        setJobs(nextJobs);
+        const [nextWorkspaces] = await Promise.all([
+          listDrawingWorkspaces({ scope: workspaceListScope }),
+          loadAuditLog(auditLogQuery),
+        ]);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage(archived ? `Archived "${drawing.name}"` : `Restored "${drawing.name}"`);
         return true;
       } catch (error) {
@@ -335,7 +383,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [auditLogQuery, clearMessages, drawings, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const changeDrawingStatus = useCallback(
@@ -358,8 +406,11 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        const [nextJobs] = await Promise.all([listJobs({ scope: jobListScope }), loadAuditLog(auditLogQuery)]);
-        setJobs(nextJobs);
+        const [nextWorkspaces] = await Promise.all([
+          listDrawingWorkspaces({ scope: workspaceListScope }),
+          loadAuditLog(auditLogQuery),
+        ]);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage(`Updated "${drawing.name}" status to ${status.charAt(0) + status.slice(1).toLowerCase()}`);
         return true;
       } catch (error) {
@@ -375,7 +426,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [auditLogQuery, clearMessages, drawings, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const loadDrawingVersions = useCallback(
@@ -414,8 +465,11 @@ export function usePortalCompanyData({
         setDrawings((current) =>
           current.map((entry) => (entry.id === drawing.id ? mergeDrawingSummary(entry, nextSummary) : entry)),
         );
-        const [nextJobs] = await Promise.all([listJobs({ scope: jobListScope }), loadAuditLog(auditLogQuery)]);
-        setJobs(nextJobs);
+        const [nextWorkspaces] = await Promise.all([
+          listDrawingWorkspaces({ scope: workspaceListScope }),
+          loadAuditLog(auditLogQuery),
+        ]);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage(`Restored drawing version ${versionNumber}`);
         return true;
       } catch (error) {
@@ -431,7 +485,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [auditLogQuery, clearMessages, drawings, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, drawings, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const createOrUpdateCustomer = useCallback(
@@ -477,15 +531,15 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         const customer = await setCustomerArchivedState(customerId, archived, cascadeDrawings);
-        const [nextCustomers, nextDrawings, nextJobs] = await Promise.all([
+        const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
           listCustomers(),
           listDrawings(),
-          listJobs({ scope: jobListScope }),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
           loadAuditLog(auditLogQuery)
         ]);
         setCustomers(nextCustomers);
         setDrawings(nextDrawings);
-        setJobs(nextJobs);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage(archived ? `Archived customer ${customer.name}` : `Restored customer ${customer.name}`);
         return true;
       } catch (error) {
@@ -495,7 +549,7 @@ export function usePortalCompanyData({
         setIsArchivingCustomerId(null);
       }
     },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const deleteDrawingPermanently = useCallback(
@@ -504,13 +558,13 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         await deleteDrawing(drawingId);
-        const [nextDrawings, nextJobs] = await Promise.all([
+        const [nextDrawings, nextWorkspaces] = await Promise.all([
           listDrawings(),
-          listJobs({ scope: jobListScope }),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
           loadAuditLog(auditLogQuery)
         ]);
         setDrawings(nextDrawings);
-        setJobs(nextJobs);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage("Drawing permanently deleted");
         return true;
       } catch (error) {
@@ -518,7 +572,7 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   const deleteCustomerPermanently = useCallback(
@@ -527,15 +581,15 @@ export function usePortalCompanyData({
       clearMessages();
       try {
         await deleteCustomer(customerId);
-        const [nextCustomers, nextDrawings, nextJobs] = await Promise.all([
+        const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
           listCustomers(),
           listDrawings(),
-          listJobs({ scope: jobListScope }),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
           loadAuditLog(auditLogQuery)
         ]);
         setCustomers(nextCustomers);
         setDrawings(nextDrawings);
-        setJobs(nextJobs);
+        setWorkspaces(nextWorkspaces);
         setNoticeMessage("Customer permanently deleted");
         return true;
       } catch (error) {
@@ -543,55 +597,71 @@ export function usePortalCompanyData({
         return false;
       }
     },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
-  const setJobArchived = useCallback(
-    async (jobId: string, archived: boolean) => {
+  const setWorkspaceArchived = useCallback(
+    async (workspaceId: string, archived: boolean) => {
       if (!session) return false;
       clearMessages();
       try {
-        await updateJob(jobId, { archived });
-        const nextJobs = await listJobs({ scope: jobListScope });
-        setJobs(nextJobs);
-        await loadAuditLog(auditLogQuery);
-        setNoticeMessage(archived ? "Job archived" : "Job restored");
-        return true;
-      } catch (error) {
-        setErrorMessage(extractApiErrorMessage(error));
-        return false;
-      }
-    },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
-  );
-
-  const deleteJobPermanently = useCallback(
-    async (jobId: string) => {
-      if (!session) return false;
-      clearMessages();
-      try {
-        await deleteJob(jobId);
-        const [nextDrawings, nextJobs] = await Promise.all([
+        const workspaceDrawings = await listDrawingWorkspaceDrawings(workspaceId);
+        await updateDrawingWorkspace(workspaceId, { archived });
+        await Promise.all(
+          workspaceDrawings
+            .filter((drawing) => drawing.isArchived !== archived)
+            .map((drawing) =>
+              setDrawingArchivedState(drawing.id, archived, drawing.versionNumber),
+            ),
+        );
+        const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
+          listCustomers(),
           listDrawings(),
-          listJobs({ scope: jobListScope }),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
           loadAuditLog(auditLogQuery)
         ]);
+        setCustomers(nextCustomers);
         setDrawings(nextDrawings);
-        setJobs(nextJobs);
-        setNoticeMessage("Job permanently deleted");
+        setWorkspaces(nextWorkspaces);
+        setNoticeMessage(archived ? "Workspace archived" : "Workspace restored");
         return true;
       } catch (error) {
         setErrorMessage(extractApiErrorMessage(error));
         return false;
       }
     },
-    [auditLogQuery, clearMessages, jobListScope, loadAuditLog, session, setErrorMessage, setNoticeMessage],
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
+  );
+
+  const deleteWorkspacePermanently = useCallback(
+    async (workspaceId: string) => {
+      if (!session) return false;
+      clearMessages();
+      try {
+        await deleteDrawingWorkspace(workspaceId);
+        const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
+          listCustomers(),
+          listDrawings(),
+          listDrawingWorkspaces({ scope: workspaceListScope }),
+          loadAuditLog(auditLogQuery)
+        ]);
+        setCustomers(nextCustomers);
+        setDrawings(nextDrawings);
+        setWorkspaces(nextWorkspaces);
+        setNoticeMessage("Workspace permanently deleted");
+        return true;
+      } catch (error) {
+        setErrorMessage(extractApiErrorMessage(error));
+        return false;
+      }
+    },
+    [auditLogQuery, clearMessages, loadAuditLog, session, setErrorMessage, setNoticeMessage, workspaceListScope],
   );
 
   return {
     customers,
     drawings,
-    jobs,
+    workspaces,
     users,
     auditLog,
     isLoadingCustomers,
@@ -606,13 +676,14 @@ export function usePortalCompanyData({
     loadCompanyData,
     refreshCustomers,
     refreshDrawings,
-    refreshJobs,
+    refreshWorkspaces,
     refreshUsers,
     refreshAuditLog,
     refreshFilteredAuditLog,
     exportAuditLog: exportFilteredAuditLog,
     saveCustomer: createOrUpdateCustomer,
-    createJob: createCompanyJob,
+    createDrawing: createCompanyDrawing,
+    createWorkspace: createCompanyWorkspace,
     setCustomerArchived: archiveCustomer,
     createUser: createCompanyUser,
     resetUserPassword: resetCompanyUserPassword,
@@ -622,7 +693,7 @@ export function usePortalCompanyData({
     restoreDrawingVersion: restoreVersion,
     deleteDrawing: deleteDrawingPermanently,
     deleteCustomer: deleteCustomerPermanently,
-    setJobArchived,
-    deleteJob: deleteJobPermanently
+    setWorkspaceArchived,
+    deleteWorkspace: deleteWorkspacePermanently
   };
 }

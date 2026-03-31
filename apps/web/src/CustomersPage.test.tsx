@@ -31,9 +31,11 @@ const drawings: DrawingSummary[] = [
   {
     id: "drawing-1",
     companyId: "company-1",
+    workspaceId: "workspace-1",
+    jobRole: "PRIMARY",
     name: "Legacy yard layout",
-    customerId: null,
-    customerName: "",
+    customerId: "customer-1",
+    customerName: "Cleveland Land Services",
     previewLayout: { segments: [], gates: [] },
     segmentCount: 2,
     gateCount: 0,
@@ -68,19 +70,16 @@ describe("CustomersPage", () => {
         isSavingCustomer={false}
         onRefresh={() => Promise.resolve()}
         onSaveCustomer={() => Promise.resolve(null)}
-        onOpenDrawing={() => undefined}
         onNavigate={() => undefined}
       />
     );
 
     expect(html).toContain("Customer directory");
-    expect(html).toContain("Customer workspaces");
+    expect(html).toContain("Customers");
     expect(html).toContain("Cleveland Land Services");
-    expect(html).toContain("Open workspace");
+    expect(html).toContain("Open customer");
     expect(html).toContain("Only customers with active drawings");
-    expect(html).toContain("No drawing yet");
-    expect(html).toContain("Unassigned drawings");
-    expect(html).toContain("Show list");
+    expect(html).not.toContain("Unassigned drawings");
   });
 
   it("renders the empty directory state when there are no customers", () => {
@@ -92,7 +91,6 @@ describe("CustomersPage", () => {
         isSavingCustomer={false}
         onRefresh={() => Promise.resolve()}
         onSaveCustomer={() => Promise.resolve(null)}
-        onOpenDrawing={() => undefined}
         onNavigate={() => undefined}
       />
     );

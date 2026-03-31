@@ -565,7 +565,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     session,
     drawingTitle,
     currentDrawingId: workspace.currentDrawingId,
-    currentJobId: workspace.currentJobId,
+    currentWorkspaceId: workspace.currentWorkspaceId,
     currentCustomerId: workspace.currentCustomerId,
     currentDrawingName: workspace.currentDrawingName,
     currentCustomerName: workspace.currentCustomerName,
@@ -616,11 +616,14 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onToggleOptimization: toggleOptimization,
     onGoToLogin: () => guardedNavigate("login"),
     onNavigateDashboard: () => guardedNavigate("dashboard"),
-    onNavigateJob: () => {
-      if (!workspace.currentJobId) {
+    onNavigateWorkspace: () => {
+      if (!workspace.currentDrawingId && !workspace.currentWorkspaceId) {
         return;
       }
-      guardedNavigate("job", { jobId: workspace.currentJobId });
+      guardedNavigate("drawing", {
+        ...(workspace.currentWorkspaceId ? { workspaceId: workspace.currentWorkspaceId } : {}),
+        ...(workspace.currentDrawingId ? { drawingId: workspace.currentDrawingId } : {}),
+      });
     },
     onNavigateCurrentCustomer: () => {
       if (!workspace.currentCustomerId) {
@@ -633,7 +636,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       if (!workspace.currentDrawingId || workspace.isDirty) {
         return;
       }
-      guardedNavigate("estimate", { drawingId: workspace.currentDrawingId });
+      guardedNavigate("drawing", {
+        ...(workspace.currentWorkspaceId ? { workspaceId: workspace.currentWorkspaceId } : {}),
+        drawingId: workspace.currentDrawingId,
+        tab: "estimate",
+      });
     },
     onNavigatePricing: () => guardedNavigate("pricing"),
     onNavigateAdmin: () => guardedNavigate("admin"),

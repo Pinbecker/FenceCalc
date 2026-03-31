@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CustomerSummary, DrawingSummary } from "@fence-estimator/contracts";
+import type {
+  CustomerSummary,
+  DrawingSummary,
+  DrawingWorkspaceSummary,
+} from "@fence-estimator/contracts";
 
 import { CustomerPage, saveCustomerProfile, validateCustomerProfileInput } from "./CustomerPage.js";
 
@@ -31,6 +35,8 @@ const drawings: DrawingSummary[] = [
   {
     id: "drawing-1",
     companyId: "company-1",
+    workspaceId: "workspace-1",
+    jobRole: "PRIMARY",
     name: "Front perimeter",
     customerId: "customer-1",
     customerName: "Cleveland Land Services",
@@ -58,6 +64,52 @@ const drawings: DrawingSummary[] = [
   }
 ];
 
+const workspaces: DrawingWorkspaceSummary[] = [
+  {
+    id: "workspace-1",
+    companyId: "company-1",
+    customerId: "customer-1",
+    customerName: "Cleveland Land Services",
+    name: "Front perimeter",
+    stage: "DRAFT",
+    primaryDrawingId: "drawing-1",
+    commercialInputs: {
+      labourOverheadPercent: 75,
+      travelLodgePerDay: 90,
+      travelDays: 1,
+      markupRate: 225,
+      markupUnits: 1,
+      distributionCharge: 215,
+      concretePricePerCube: 150,
+      hardDig: false,
+      clearSpoils: false,
+    },
+    notes: "",
+    ownerUserId: "user-1",
+    ownerDisplayName: "Jane Doe",
+    isArchived: false,
+    archivedAtIso: null,
+    archivedByUserId: null,
+    stageChangedAtIso: null,
+    stageChangedByUserId: null,
+    createdByUserId: "user-1",
+    updatedByUserId: "user-1",
+    updatedByDisplayName: "Jane Doe",
+    createdAtIso: "2026-03-10T10:00:00.000Z",
+    updatedAtIso: "2026-03-10T12:00:00.000Z",
+    drawingCount: 1,
+    openTaskCount: 0,
+    completedTaskCount: 0,
+    lastActivityAtIso: "2026-03-10T12:00:00.000Z",
+    latestQuoteTotal: null,
+    latestQuoteCreatedAtIso: null,
+    latestEstimateTotal: null,
+    primaryDrawingName: "Front perimeter",
+    primaryDrawingUpdatedAtIso: "2026-03-10T12:00:00.000Z",
+    primaryPreviewLayout: { segments: [], gates: [] },
+  },
+];
+
 
 
 describe("CustomerPage", () => {
@@ -66,6 +118,7 @@ describe("CustomerPage", () => {
       <CustomerPage
         query={{ customerId: "customer-1" }}
         customers={[customer]}
+        workspaces={workspaces}
         drawings={drawings}
         userRole="OWNER"
         isSavingCustomer={false}
@@ -73,13 +126,10 @@ describe("CustomerPage", () => {
         errorMessage={null}
         noticeMessage={null}
         onSaveCustomer={() => Promise.resolve({ id: "customer-1" })}
+        onCreateDrawing={() => Promise.resolve(null)}
         onSetCustomerArchived={() => Promise.resolve(true)}
-        onOpenDrawing={() => undefined}
-        onOpenEstimate={() => undefined}
-        onCreateDrawing={() => undefined}
-        onToggleDrawingArchived={() => Promise.resolve(true)}
-        onChangeDrawingStatus={() => Promise.resolve(true)}
-        onDeleteDrawing={() => Promise.resolve(true)}
+        onSetWorkspaceArchived={() => Promise.resolve(true)}
+        onDeleteWorkspace={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />
@@ -92,9 +142,10 @@ describe("CustomerPage", () => {
     expect(html).toContain("01234 567890");
     expect(html).toContain("1 Yard Road");
     expect(html).toContain("Front perimeter");
-    expect(html).toContain("Archive");
+    expect(html).toContain("Drawing workspaces");
     expect(html).toContain("Edit profile");
-    expect(html).toContain("v3");
+    expect(html).toContain("Open workspace");
+    expect(html).toContain("Original");
     expect(html).toContain("Additional contacts");
     expect(html).toContain("Bob Smith");
     expect(html).toContain("bob@example.com");
@@ -102,7 +153,7 @@ describe("CustomerPage", () => {
     expect(html).toContain("portal-customer-drawing-card-footer");
     expect(html).not.toContain("Back to customers");
     expect(html).not.toContain("Refresh");
-    expect(html).not.toContain("Notes");
+    expect(html).not.toContain("New job");
   });
 
   it("renders a safe empty state when the customer is missing", () => {
@@ -110,6 +161,7 @@ describe("CustomerPage", () => {
       <CustomerPage
         query={{ customerId: "missing-customer" }}
         customers={[customer]}
+        workspaces={workspaces}
         drawings={drawings}
         userRole="OWNER"
         isSavingCustomer={false}
@@ -117,13 +169,10 @@ describe("CustomerPage", () => {
         errorMessage={null}
         noticeMessage={null}
         onSaveCustomer={() => Promise.resolve({ id: "customer-1" })}
+        onCreateDrawing={() => Promise.resolve(null)}
         onSetCustomerArchived={() => Promise.resolve(true)}
-        onOpenDrawing={() => undefined}
-        onOpenEstimate={() => undefined}
-        onCreateDrawing={() => undefined}
-        onToggleDrawingArchived={() => Promise.resolve(true)}
-        onChangeDrawingStatus={() => Promise.resolve(true)}
-        onDeleteDrawing={() => Promise.resolve(true)}
+        onSetWorkspaceArchived={() => Promise.resolve(true)}
+        onDeleteWorkspace={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />
@@ -138,7 +187,7 @@ describe("CustomerPage", () => {
       <CustomerPage
         query={{ customerId: "customer-1" }}
         customers={[customer]}
-        jobs={[]}
+        workspaces={workspaces}
         drawings={drawings}
         userRole="OWNER"
         isSavingCustomer={false}
@@ -146,13 +195,10 @@ describe("CustomerPage", () => {
         errorMessage="Customer name already exists"
         noticeMessage="Updated customer Cleveland Land Services"
         onSaveCustomer={() => Promise.resolve({ id: "customer-1" })}
+        onCreateDrawing={() => Promise.resolve(null)}
         onSetCustomerArchived={() => Promise.resolve(true)}
-        onOpenDrawing={() => undefined}
-        onOpenEstimate={() => undefined}
-        onCreateDrawing={() => undefined}
-        onToggleDrawingArchived={() => Promise.resolve(true)}
-        onChangeDrawingStatus={() => Promise.resolve(true)}
-        onDeleteDrawing={() => Promise.resolve(true)}
+        onSetWorkspaceArchived={() => Promise.resolve(true)}
+        onDeleteWorkspace={() => Promise.resolve(true)}
         onDeleteCustomer={() => Promise.resolve(true)}
         onNavigate={() => undefined}
       />

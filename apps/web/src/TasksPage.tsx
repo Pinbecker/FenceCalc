@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   AuthSessionEnvelope,
   CompanyUserRecord,
-  JobTaskRecord,
+  DrawingTaskRecord,
+  DrawingWorkspaceSummary,
   TaskPriority,
 } from "@fence-estimator/contracts";
 
-import { listCompanyTasks, updateJobTask } from "./apiClient";
+import { listCompanyDrawingTasks, updateDrawingWorkspaceTask } from "./apiClient";
+import { buildTaskWorkspaceNavigationQuery } from "./drawingWorkspace";
 import {
   formatTaskDate,
   formatTaskTimestamp,
@@ -23,8 +25,9 @@ type TaskAssigneeFilter = "ALL" | "MINE" | "UNASSIGNED" | "SPECIFIC";
 interface TasksPageProps {
   session: AuthSessionEnvelope;
   users: CompanyUserRecord[];
+  workspaces: DrawingWorkspaceSummary[];
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
-  onRefreshJobs(this: void): Promise<void>;
+  onRefreshWorkspaces(this: void): Promise<void>;
 }
 
 const PRIORITY_OPTIONS: Array<{ value: "ALL" | TaskPriority; label: string }> = [
@@ -52,8 +55,14 @@ function buildAssignedUserId(
   return undefined;
 }
 
-export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPageProps) {
-  const [tasks, setTasks] = useState<JobTaskRecord[]>([]);
+export function TasksPage({
+  session,
+  users,
+  workspaces,
+  onNavigate,
+  onRefreshWorkspaces,
+}: TasksPageProps) {
+  const [tasks, setTasks] = useState<DrawingTaskRecord[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TaskStatusFilter>("OPEN");
   const [dueFilter, setDueFilter] = useState<TaskDueFilter>("ALL");
@@ -69,7 +78,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
     setIsLoading(true);
     setErrorMessage(null);
 
-    const taskQueryOptions: Parameters<typeof listCompanyTasks>[0] = {
+    const taskQueryOptions: Parameters<typeof listCompanyDrawingTasks>[0] = {
       includeCompleted: status !== "OPEN",
       limit: 200,
     };
@@ -87,7 +96,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
       taskQueryOptions.dueBucket = dueFilter;
     }
 
-    void listCompanyTasks(taskQueryOptions)
+    void listCompanyDrawingTasks(taskQueryOptions)
       .then((nextTasks) => {
         if (!cancelled) {
           setTasks(
@@ -126,16 +135,18 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
     };
   }, [tasks]);
 
-  const handleToggleComplete = async (task: JobTaskRecord) => {
+  const handleToggleComplete = async (task: DrawingTaskRecord) => {
     setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
-      const updated = await updateJobTask(task.jobId, task.id, { isCompleted: !task.isCompleted });
+      const updated = await updateDrawingWorkspaceTask(task.workspaceId, task.id, {
+        isCompleted: !task.isCompleted,
+      });
       setTasks((current) => {
         const next = current.map((entry) => (entry.id === updated.id ? updated : entry));
         return status === "COMPLETED" ? next.filter((entry) => entry.isCompleted) : next;
       });
-      await onRefreshJobs();
+      await onRefreshWorkspaces();
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -147,11 +158,11 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
     <section className="portal-page portal-tasks-page">
       <header className="portal-page-header">
         <div>
-          <span className="portal-eyebrow">Task workspace</span>
+          <span className="portal-eyebrow">Workspace tasks</span>
           <h1>Company tasks</h1>
           <p>
-            Track follow-ups, overdue work, and ownership across all jobs without bouncing between
-            customer records.
+            Track follow-ups, overdue work, and ownership across all drawing work without bouncing
+            between customer records.
           </p>
         </div>
         <div className="portal-header-actions">
@@ -187,7 +198,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title, job, assignee, or notes"
+              placeholder="Search title, workspace, assignee, or notes"
             />
           </label>
           <label className="drawing-library-customer-filter">
@@ -261,11 +272,11 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
       {errorMessage ? <p className="portal-inline-error">{errorMessage}</p> : null}
 
       <section className="portal-surface-card portal-tasks-list-card">
-        {isLoading ? <p className="portal-empty-copy">Loading tasks…</p> : null}
+        {isLoading ? <p className="portal-empty-copy">Loading tasks...</p> : null}
         {!isLoading && tasks.length === 0 ? (
           <div className="portal-empty-state portal-tasks-empty-state">
             <h2>No tasks in this view</h2>
-            <p>Adjust the filters or create follow-up work from a job page.</p>
+            <p>Adjust the filters or create follow-up work from a drawing workspace.</p>
           </div>
         ) : null}
         <div className="portal-job-task-list">
@@ -290,7 +301,7 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       }
                       disabled={savingTaskId === task.id}
                     >
-                      {task.isCompleted ? "✓" : ""}
+                      {task.isCompleted ? "x" : ""}
                     </button>
                     <div className="portal-job-task-card-title">
                       <h2
@@ -300,11 +311,11 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       </h2>
                       <div className="portal-job-task-card-context">
                         <span className="portal-job-task-context-pill is-job">
-                          {task.jobName || "Job"}
+                          {task.workspaceName || "Workspace"}
                         </span>
-                        {task.drawingName ? (
+                        {task.revisionDrawingName || task.rootDrawingName ? (
                           <span className="portal-job-task-context-pill is-drawing">
-                            Drawing: {task.drawingName}
+                            Drawing: {task.revisionDrawingName || task.rootDrawingName}
                           </span>
                         ) : null}
                         <span className="portal-job-task-context-pill">
@@ -356,29 +367,13 @@ export function TasksPage({ session, users, onNavigate, onRefreshJobs }: TasksPa
                       type="button"
                       className="portal-text-button"
                       onClick={() =>
-                        onNavigate("job", {
-                          jobId: task.jobId,
-                          tab: "tasks",
-                          focusTaskId: task.id,
-                          ...(task.drawingId ? { drawingId: task.drawingId } : {}),
-                        })
+                        onNavigate(
+                          "drawing",
+                          buildTaskWorkspaceNavigationQuery(task, workspaces, [], "workspace"),
+                        )
                       }
                     >
-                      Open job
-                    </button>
-                    <button
-                      type="button"
-                      className="portal-text-button"
-                      onClick={() =>
-                        onNavigate("job", {
-                          jobId: task.jobId,
-                          tab: "tasks",
-                          focusTaskId: task.id,
-                          ...(task.drawingId ? { drawingId: task.drawingId } : {}),
-                        })
-                      }
-                    >
-                      Edit task
+                      Open workspace
                     </button>
                   </div>
                 </div>

@@ -1,36 +1,36 @@
 import {
   buildDefaultPricingConfig,
-  jobCreateRequestSchema,
-  jobDrawingCreateRequestSchema,
-  jobPrimaryDrawingUpdateRequestSchema,
-  jobQuoteCreateRequestSchema,
-  jobTaskCreateRequestSchema,
-  jobTaskUpdateRequestSchema,
-  jobUpdateRequestSchema,
+  drawingTaskCreateRequestSchema,
+  drawingTaskUpdateRequestSchema,
+  drawingWorkspaceDrawingCreateRequestSchema,
+  drawingWorkspaceCreateRequestSchema,
+  drawingWorkspacePrimaryDrawingUpdateRequestSchema,
+  drawingWorkspaceQuoteCreateRequestSchema,
+  drawingWorkspaceUpdateRequestSchema,
 } from "@fence-estimator/contracts";
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 import { z } from "zod";
 
 import { requireAuth } from "../authorization.js";
-import { mergeJobCommercialManualEntries } from "../jobEstimateSupport.js";
+import { mergeDrawingWorkspaceCommercialManualEntries } from "../drawingWorkspaceEstimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
-  createJobDrawingForCompany,
-  createJobForCompany,
-  createJobTaskForCompany,
-  deleteJobForCompany,
-  deleteJobTaskForCompany,
-  setJobPrimaryDrawingForCompany,
-  updateJobForCompany,
-  updateJobTaskForCompany,
-} from "../services/jobService.js";
-import { createQuoteForJob } from "../services/quoteService.js";
+  createDrawingWorkspaceForCompany,
+  createDrawingWorkspaceDrawingForCompany,
+  createDrawingWorkspaceTaskForCompany,
+  deleteDrawingWorkspaceForCompany,
+  deleteDrawingWorkspaceTaskForCompany,
+  setDrawingWorkspacePrimaryDrawingForCompany,
+  updateDrawingWorkspaceForCompany,
+  updateDrawingWorkspaceTaskForCompany,
+} from "../services/drawingWorkspaceService.js";
+import { createQuoteForDrawingWorkspace } from "../services/quoteService.js";
 
-const jobScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
-const jobRouteParamsSchema = z.object({
+const workspaceScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
+const workspaceRouteParamsSchema = z.object({
   id: z.string().trim().min(1),
 });
-const jobTaskRouteParamsSchema = z.object({
+const workspaceTaskRouteParamsSchema = z.object({
   id: z.string().trim().min(1),
   taskId: z.string().trim().min(1),
 });
@@ -43,13 +43,13 @@ const companyTaskQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
-export function registerJobRoutes({
+export function registerDrawingWorkspaceRoutes({
   app,
   config,
   repository,
   writeLimiter,
 }: RouteDependencies): void {
-  app.get("/api/v1/jobs", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
@@ -58,113 +58,118 @@ export function registerJobRoutes({
     const query =
       (request.query as { scope?: unknown; search?: unknown; customerId?: unknown } | undefined) ??
       {};
-    const scope = jobScopeSchema.parse(query.scope);
+    const scope = workspaceScopeSchema.parse(query.scope);
     const search = typeof query.search === "string" ? query.search : "";
     const customerId =
       typeof query.customerId === "string" && query.customerId.trim()
         ? query.customerId.trim()
         : undefined;
-    const jobs = await repository.listJobs(authenticated.company.id, scope, search, customerId);
-    return reply.code(200).send({ jobs });
+    const workspaces = await repository.listDrawingWorkspaces(
+      authenticated.company.id,
+      scope,
+      search,
+      customerId,
+    );
+    return reply.code(200).send({ workspaces });
   });
 
-  app.post("/api/v1/jobs", async (request, reply) => {
+  app.post("/api/v1/drawing-workspaces", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-create:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-create:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const parsed = jobCreateRequestSchema.safeParse(request.body);
+    const parsed = drawingWorkspaceCreateRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
-        error: "Invalid job payload",
+        error: "Invalid drawing workspace payload",
         details: parsed.error.flatten(),
       });
     }
 
-    const result = await createJobForCompany(repository, authenticated, parsed.data);
+    const result = await createDrawingWorkspaceForCompany(repository, authenticated, parsed.data);
     if (result.kind === "invalid_customer") {
       return reply.code(400).send({ error: result.message });
     }
     if (result.kind !== "success") {
-      return reply.code(404).send({ error: "Job could not be created" });
+      return reply.code(404).send({ error: "Drawing workspace could not be created" });
     }
 
-    return reply.code(201).send({ job: result.job });
+    return reply.code(201).send({ workspace: result.workspace });
   });
 
-  app.get("/api/v1/jobs/:id", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
 
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
-    return reply.code(200).send({ job });
+    return reply.code(200).send({ workspace });
   });
 
-  app.put("/api/v1/jobs/:id", async (request, reply) => {
+  app.put("/api/v1/drawing-workspaces/:id", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-update:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-update:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
 
-    const parsed = jobUpdateRequestSchema.safeParse(request.body);
+    const parsed = drawingWorkspaceUpdateRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
-        error: "Invalid job payload",
+        error: "Invalid drawing workspace payload",
         details: parsed.error.flatten(),
       });
     }
 
-    const result = await updateJobForCompany(
+    const result = await updateDrawingWorkspaceForCompany(
       repository,
       authenticated,
       params.data.id,
       parsed.data,
     );
     if (result.kind !== "success") {
-      if (result.kind === "job_not_found") {
-        return reply.code(404).send({ error: "Job not found" });
+      if (result.kind === "workspace_not_found") {
+        return reply.code(404).send({ error: "Drawing workspace not found" });
       }
-      if (result.kind === "invalid_user") {
-        return reply.code(400).send({ error: result.message });
-      }
-      if (result.kind === "invalid_customer") {
+      if (result.kind === "invalid_user" || result.kind === "invalid_customer") {
         return reply.code(400).send({ error: result.message });
       }
       return reply.code(404).send({ error: "Drawing not found" });
     }
 
-    return reply.code(200).send({ job: result.job });
+    return reply.code(200).send({ workspace: result.workspace });
   });
 
-  app.delete("/api/v1/jobs/:id", async (request, reply) => {
+  app.delete("/api/v1/drawing-workspaces/:id", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
@@ -172,112 +177,130 @@ export function registerJobRoutes({
     if (authenticated.user.role !== "OWNER" && authenticated.user.role !== "ADMIN") {
       return reply.code(403).send({ error: "Admin role required" });
     }
-    if (!writeLimiter.allow(`job-delete:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-delete:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
 
-    const result = await deleteJobForCompany(repository, authenticated, params.data.id);
-    if (result.kind === "job_not_found") {
-      return reply.code(404).send({ error: "Job not found" });
+    const result = await deleteDrawingWorkspaceForCompany(
+      repository,
+      authenticated,
+      params.data.id,
+    );
+    if (result.kind === "workspace_not_found") {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
     if (result.kind === "not_archived") {
-      return reply.code(409).send({ error: "Job must be archived before it can be deleted" });
+      return reply
+        .code(409)
+        .send({ error: "Drawing workspace must be archived before it can be deleted" });
     }
 
     return reply.code(200).send({ deleted: true });
   });
 
-  app.get("/api/v1/jobs/:id/drawings", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id/drawings", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
 
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
 
-    const drawings = await repository.listDrawingsForJob(job.id, authenticated.company.id);
+    const drawings = await repository.listDrawingsForWorkspace(
+      workspace.id,
+      authenticated.company.id,
+    );
     return reply.code(200).send({ drawings });
   });
 
-  app.post("/api/v1/jobs/:id/drawings", async (request, reply) => {
+  app.post("/api/v1/drawing-workspaces/:id/drawings", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-drawing-create:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-drawing-create:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const parsed = jobDrawingCreateRequestSchema.safeParse(request.body ?? {});
+    const parsed = drawingWorkspaceDrawingCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
-        error: "Invalid job drawing payload",
+        error: "Invalid drawing workspace drawing payload",
         details: parsed.error.flatten(),
       });
     }
 
-    const result = await createJobDrawingForCompany(
+    const result = await createDrawingWorkspaceDrawingForCompany(
       repository,
       authenticated,
       params.data.id,
       parsed.data,
     );
-    if (result.kind === "drawing_not_found") {
-      return reply.code(404).send({ error: "Drawing or job not found" });
+    if (result.kind === "workspace_not_found") {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
-    if (result.kind === "invalid_customer") {
+    if (result.kind === "drawing_not_found") {
+      return reply.code(404).send({ error: "Drawing or workspace not found" });
+    }
+    if (result.kind === "invalid_customer" || result.kind === "invalid_layout") {
       return reply.code(400).send({ error: result.message });
     }
+    if (result.kind === "quoted_locked") {
+      return reply.code(409).send({ error: result.message });
+    }
     if (result.kind !== "success") {
-      return reply.code(400).send({ error: "Unable to create job drawing" });
+      return reply.code(400).send({ error: "Unable to create drawing revision" });
     }
 
     return reply.code(201).send({ drawing: result.drawing });
   });
 
-  app.put("/api/v1/jobs/:id/primary-drawing", async (request, reply) => {
+  app.put("/api/v1/drawing-workspaces/:id/primary-drawing", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-primary-drawing:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-primary-drawing:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const parsed = jobPrimaryDrawingUpdateRequestSchema.safeParse(request.body ?? {});
+    const parsed = drawingWorkspacePrimaryDrawingUpdateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid primary drawing payload",
@@ -285,32 +308,32 @@ export function registerJobRoutes({
       });
     }
 
-    const result = await setJobPrimaryDrawingForCompany(
+    const result = await setDrawingWorkspacePrimaryDrawingForCompany(
       repository,
       authenticated,
       params.data.id,
       parsed.data.drawingId,
     );
     if (result.kind !== "success") {
-      if (result.kind === "job_not_found") {
-        return reply.code(404).send({ error: "Job not found" });
+      if (result.kind === "workspace_not_found") {
+        return reply.code(404).send({ error: "Drawing workspace not found" });
       }
       return reply.code(404).send({ error: "Drawing not found" });
     }
 
-    return reply.code(200).send({ job: result.job });
+    return reply.code(200).send({ workspace: result.workspace });
   });
 
-  app.get("/api/v1/jobs/:id/estimate", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id/estimate", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
@@ -318,16 +341,19 @@ export function registerJobRoutes({
     const requestedDrawingId =
       typeof query.drawingId === "string" && query.drawingId.trim() ? query.drawingId.trim() : null;
 
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
-    const drawingId = requestedDrawingId ?? job.primaryDrawingId;
+    const drawingId = requestedDrawingId ?? workspace.primaryDrawingId;
     if (!drawingId) {
-      return reply.code(404).send({ error: "No drawing available for this job" });
+      return reply.code(404).send({ error: "No drawing available for this workspace" });
     }
     const drawing = await repository.getDrawingById(drawingId, authenticated.company.id);
-    if (!drawing || drawing.jobId !== job.id) {
+    if (!drawing || (drawing.workspaceId ?? drawing.jobId ?? null) !== workspace.id) {
       return reply.code(404).send({ error: "Drawing not found" });
     }
 
@@ -338,58 +364,64 @@ export function registerJobRoutes({
       drawing,
       pricingConfig,
       [],
-      mergeJobCommercialManualEntries(job.commercialInputs),
+      mergeDrawingWorkspaceCommercialManualEntries(workspace.commercialInputs),
     );
     return reply.code(200).send({ pricedEstimate });
   });
 
-  app.get("/api/v1/jobs/:id/quotes", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id/quotes", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
 
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
-    const quotes = await repository.listQuotesForJob(job.id, authenticated.company.id);
+    const quotes = await repository.listQuotesForDrawingWorkspace(
+      workspace.id,
+      authenticated.company.id,
+    );
     return reply.code(200).send({ quotes });
   });
 
-  app.post("/api/v1/jobs/:id/quotes", async (request, reply) => {
+  app.post("/api/v1/drawing-workspaces/:id/quotes", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-quote-create:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-quote-create:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
 
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const parsed = jobQuoteCreateRequestSchema.safeParse(request.body ?? {});
+    const parsed = drawingWorkspaceQuoteCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
-        error: "Invalid job quote payload",
+        error: "Invalid drawing workspace quote payload",
         details: parsed.error.flatten(),
       });
     }
 
-    const result = await createQuoteForJob(
+    const result = await createQuoteForDrawingWorkspace(
       repository,
       authenticated,
       params.data.id,
@@ -397,8 +429,8 @@ export function registerJobRoutes({
       parsed.data.ancillaryItems,
       parsed.data.manualEntries,
     );
-    if (result.kind === "job_not_found") {
-      return reply.code(404).send({ error: "Job not found" });
+    if (result.kind === "workspace_not_found") {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
     if (result.kind === "drawing_not_found") {
       return reply.code(404).send({ error: "Drawing not found" });
@@ -407,42 +439,45 @@ export function registerJobRoutes({
     return reply.code(201).send({ quote: result.quote });
   });
 
-  app.get("/api/v1/jobs/:id/tasks", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id/tasks", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
-    const tasks = await repository.listJobTasks(job.id, authenticated.company.id);
+    const tasks = await repository.listDrawingWorkspaceTasks(workspace.id, authenticated.company.id);
     return reply.code(200).send({ tasks });
   });
 
-  app.post("/api/v1/jobs/:id/tasks", async (request, reply) => {
+  app.post("/api/v1/drawing-workspaces/:id/tasks", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-task-create:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-task-create:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const parsed = jobTaskCreateRequestSchema.safeParse(request.body ?? {});
+    const parsed = drawingTaskCreateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid task payload",
@@ -450,15 +485,15 @@ export function registerJobRoutes({
       });
     }
 
-    const result = await createJobTaskForCompany(
+    const result = await createDrawingWorkspaceTaskForCompany(
       repository,
       authenticated,
       params.data.id,
       parsed.data,
     );
     if (result.kind !== "success") {
-      if (result.kind === "job_not_found") {
-        return reply.code(404).send({ error: "Job not found" });
+      if (result.kind === "workspace_not_found") {
+        return reply.code(404).send({ error: "Drawing workspace not found" });
       }
       if (result.kind === "drawing_not_found") {
         return reply.code(404).send({ error: "Drawing not found" });
@@ -471,22 +506,22 @@ export function registerJobRoutes({
     return reply.code(201).send({ task: result.task });
   });
 
-  app.put("/api/v1/jobs/:id/tasks/:taskId", async (request, reply) => {
+  app.put("/api/v1/drawing-workspaces/:id/tasks/:taskId", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    if (!writeLimiter.allow(`job-task-update:${request.ip}`)) {
+    if (!writeLimiter.allow(`workspace-task-update:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
-    const params = jobTaskRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceTaskRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid task route parameters",
         details: params.error.flatten(),
       });
     }
-    const parsed = jobTaskUpdateRequestSchema.safeParse(request.body ?? {});
+    const parsed = drawingTaskUpdateRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid task payload",
@@ -494,7 +529,7 @@ export function registerJobRoutes({
       });
     }
 
-    const result = await updateJobTaskForCompany(
+    const result = await updateDrawingWorkspaceTaskForCompany(
       repository,
       authenticated,
       params.data.id,
@@ -502,8 +537,8 @@ export function registerJobRoutes({
       parsed.data,
     );
     if (result.kind !== "success") {
-      if (result.kind === "job_not_found") {
-        return reply.code(404).send({ error: "Job not found" });
+      if (result.kind === "workspace_not_found") {
+        return reply.code(404).send({ error: "Drawing workspace not found" });
       }
       if (result.kind === "drawing_not_found") {
         return reply.code(404).send({ error: "Drawing not found" });
@@ -519,12 +554,12 @@ export function registerJobRoutes({
     return reply.code(200).send({ task: result.task });
   });
 
-  app.delete("/api/v1/jobs/:id/tasks/:taskId", async (request, reply) => {
+  app.delete("/api/v1/drawing-workspaces/:id/tasks/:taskId", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    const params = jobTaskRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceTaskRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
         error: "Invalid task route parameters",
@@ -532,15 +567,15 @@ export function registerJobRoutes({
       });
     }
 
-    const result = await deleteJobTaskForCompany(
+    const result = await deleteDrawingWorkspaceTaskForCompany(
       repository,
       authenticated,
       params.data.id,
       params.data.taskId,
     );
     if (result.kind !== "success") {
-      if (result.kind === "job_not_found") {
-        return reply.code(404).send({ error: "Job not found" });
+      if (result.kind === "workspace_not_found") {
+        return reply.code(404).send({ error: "Drawing workspace not found" });
       }
       if (result.kind === "task_not_found") {
         return reply.code(404).send({ error: "Task not found" });
@@ -562,7 +597,7 @@ export function registerJobRoutes({
         details: query.error.flatten(),
       });
     }
-    const tasks = await repository.listCompanyTasks(authenticated.company.id, {
+    const tasks = await repository.listCompanyDrawingTasks(authenticated.company.id, {
       includeCompleted: query.data.includeCompleted === "true",
       ...(query.data.assignedUserId ? { assignedUserId: query.data.assignedUserId } : {}),
       ...(query.data.priority ? { priority: query.data.priority } : {}),
@@ -573,30 +608,36 @@ export function registerJobRoutes({
     return reply.code(200).send({ tasks });
   });
 
-  app.get("/api/v1/jobs/:id/activity", async (request, reply) => {
+  app.get("/api/v1/drawing-workspaces/:id/activity", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
-    const params = jobRouteParamsSchema.safeParse(request.params ?? {});
+    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
       return reply.code(400).send({
-        error: "Invalid job route parameters",
+        error: "Invalid drawing workspace route parameters",
         details: params.error.flatten(),
       });
     }
-    const job = await repository.getJobById(params.data.id, authenticated.company.id);
-    if (!job) {
-      return reply.code(404).send({ error: "Job not found" });
+    const workspace = await repository.getDrawingWorkspaceById(
+      params.data.id,
+      authenticated.company.id,
+    );
+    if (!workspace) {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
 
     const entries = await repository.listAuditLog(authenticated.company.id, { limit: 200 });
-    const jobEntries = entries.filter((entry) => {
-      if (entry.entityType === "JOB" && entry.entityId === job.id) {
+    const workspaceEntries = entries.filter((entry) => {
+      if (entry.entityType === "JOB" && entry.entityId === workspace.id) {
         return true;
       }
-      return entry.metadata?.jobId === job.id;
+      return (
+        entry.metadata?.jobId === workspace.id ||
+        entry.metadata?.workspaceId === workspace.id
+      );
     });
-    return reply.code(200).send({ entries: jobEntries });
+    return reply.code(200).send({ entries: workspaceEntries });
   });
 }

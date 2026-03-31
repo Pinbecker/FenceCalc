@@ -394,6 +394,7 @@ export const JOB_STAGES = [
   "ON_HOLD",
 ] as const;
 export type JobStage = (typeof JOB_STAGES)[number];
+export type DrawingWorkspaceStage = JobStage;
 
 export interface JobCommercialInputs {
   labourOverheadPercent: number;
@@ -406,6 +407,7 @@ export interface JobCommercialInputs {
   hardDig: boolean;
   clearSpoils: boolean;
 }
+export type DrawingWorkspaceCommercialInputs = JobCommercialInputs;
 
 export interface JobRecord {
   id: string;
@@ -444,6 +446,43 @@ export interface JobSummary extends JobRecord {
   primaryPreviewLayout: LayoutModel | null;
 }
 
+export interface DrawingWorkspaceRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  customerName: string;
+  name: string;
+  stage: DrawingWorkspaceStage;
+  primaryDrawingId: string | null;
+  commercialInputs: DrawingWorkspaceCommercialInputs;
+  notes: string;
+  ownerUserId: string | null;
+  ownerDisplayName: string;
+  isArchived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
+  stageChangedAtIso: string | null;
+  stageChangedByUserId: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  updatedByDisplayName: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface DrawingWorkspaceSummary extends DrawingWorkspaceRecord {
+  drawingCount: number;
+  openTaskCount: number;
+  completedTaskCount: number;
+  lastActivityAtIso: string | null;
+  latestQuoteTotal: number | null;
+  latestQuoteCreatedAtIso: string | null;
+  latestEstimateTotal: number | null;
+  primaryDrawingName: string | null;
+  primaryDrawingUpdatedAtIso: string | null;
+  primaryPreviewLayout: LayoutModel | null;
+}
+
 export type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export const TASK_PRIORITIES: readonly TaskPriority[] = [
   "LOW",
@@ -459,6 +498,32 @@ export interface JobTaskRecord {
   jobName: string;
   drawingId: string | null;
   drawingName: string;
+  revisionDrawingId?: string | null;
+  revisionDrawingName?: string;
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  isCompleted: boolean;
+  assignedUserId: string | null;
+  assignedUserDisplayName: string;
+  dueAtIso: string | null;
+  completedAtIso: string | null;
+  completedByUserId: string | null;
+  completedByDisplayName: string;
+  createdByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface DrawingTaskRecord {
+  id: string;
+  companyId: string;
+  workspaceId: string;
+  workspaceName: string;
+  rootDrawingId: string | null;
+  rootDrawingName: string;
+  revisionDrawingId: string | null;
+  revisionDrawingName: string;
   title: string;
   description: string;
   priority: TaskPriority;
@@ -479,6 +544,7 @@ export type DrawingJobRole = "PRIMARY" | "SECONDARY";
 export interface DrawingRecord {
   id: string;
   companyId: string;
+  workspaceId?: string | null;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   parentDrawingId?: string | null;
@@ -507,6 +573,7 @@ export interface DrawingRecord {
 export interface DrawingSummary {
   id: string;
   companyId: string;
+  workspaceId?: string | null;
   jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   parentDrawingId?: string | null;

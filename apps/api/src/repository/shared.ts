@@ -7,6 +7,10 @@ import type {
   CompanyUserRole,
   CustomerRecord,
   CustomerSummary,
+  DrawingTaskRecord,
+  DrawingWorkspaceCommercialInputs,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
   DrawingJobRole,
   DrawingRecord,
   DrawingStatus,
@@ -34,6 +38,9 @@ import {
   customerSummarySchema,
   drawingCanvasViewportSchema,
   estimateResultSchema,
+  drawingTaskRecordSchema,
+  drawingWorkspaceRecordSchema,
+  drawingWorkspaceSummarySchema,
   jobCommercialInputsSchema,
   jobRecordSchema,
   jobSummarySchema,
@@ -232,6 +239,8 @@ export interface JobTaskRow {
   job_name?: string | null;
   drawing_id: string | null;
   drawing_name?: string | null;
+  revision_drawing_id?: string | null;
+  revision_drawing_name?: string | null;
   title: string;
   description: string | null;
   priority: string | null;
@@ -447,6 +456,12 @@ function normalizeJobCommercialInputs(inputs: unknown): JobCommercialInputs {
   return buildDefaultJobCommercialInputs();
 }
 
+function normalizeDrawingWorkspaceCommercialInputs(
+  inputs: unknown,
+): DrawingWorkspaceCommercialInputs {
+  return normalizeJobCommercialInputs(inputs);
+}
+
 type ParsedEstimateResult = Omit<EstimateResult, "corners"> & {
   corners: Omit<EstimateResult["corners"], "byHeightMm"> & {
     byHeightMm?: EstimateResult["corners"]["byHeightMm"] | undefined;
@@ -519,6 +534,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
   return {
     id: row.id,
     companyId: row.company_id,
+    workspaceId: row.job_id,
     jobId: row.job_id,
     jobRole: parseDrawingJobRole(row.job_role),
     parentDrawingId: row.parent_drawing_id ?? null,
@@ -559,6 +575,7 @@ export function toDrawingSummary(
   return {
     id: drawing.id,
     companyId: drawing.companyId,
+    ...(drawing.workspaceId !== undefined ? { workspaceId: drawing.workspaceId } : {}),
     ...(drawing.jobId !== undefined ? { jobId: drawing.jobId } : {}),
     ...(drawing.jobRole !== undefined ? { jobRole: drawing.jobRole } : {}),
     ...(drawing.parentDrawingId !== undefined ? { parentDrawingId: drawing.parentDrawingId } : {}),
@@ -679,6 +696,14 @@ export function toJob(row: JobRow): JobRecord {
   });
 }
 
+export function toDrawingWorkspace(row: JobRow): DrawingWorkspaceRecord {
+  const job = toJob(row);
+  return drawingWorkspaceRecordSchema.parse({
+    ...job,
+    commercialInputs: normalizeDrawingWorkspaceCommercialInputs(job.commercialInputs),
+  });
+}
+
 export function toJobSummary(row: JobSummaryRow): JobSummary {
   const base = toJob(row);
   let primaryPreviewLayout: LayoutModel | null = null;
@@ -714,6 +739,10 @@ export function toJobSummary(row: JobSummaryRow): JobSummary {
   }) as JobSummary;
 }
 
+export function toDrawingWorkspaceSummary(row: JobSummaryRow): DrawingWorkspaceSummary {
+  return drawingWorkspaceSummarySchema.parse(toJobSummary(row)) as DrawingWorkspaceSummary;
+}
+
 export function toJobTask(row: JobTaskRow): JobTaskRecord {
   return jobTaskRecordSchema.parse({
     id: row.id,
@@ -722,6 +751,8 @@ export function toJobTask(row: JobTaskRow): JobTaskRecord {
     jobName: row.job_name ?? "",
     drawingId: row.drawing_id,
     drawingName: row.drawing_name ?? "",
+    revisionDrawingId: row.revision_drawing_id ?? null,
+    revisionDrawingName: row.revision_drawing_name ?? "",
     title: row.title,
     description: row.description ?? "",
     priority: row.priority ?? "NORMAL",
@@ -735,7 +766,33 @@ export function toJobTask(row: JobTaskRow): JobTaskRecord {
     createdByUserId: row.created_by_user_id,
     createdAtIso: row.created_at_iso,
     updatedAtIso: row.updated_at_iso,
-  });
+  }) as unknown as JobTaskRecord;
+}
+
+export function toDrawingTask(row: JobTaskRow): DrawingTaskRecord {
+  return drawingTaskRecordSchema.parse({
+    id: row.id,
+    companyId: row.company_id,
+    workspaceId: row.job_id,
+    workspaceName: row.job_name ?? "",
+    rootDrawingId: row.drawing_id,
+    rootDrawingName: row.drawing_name ?? "",
+    revisionDrawingId: row.revision_drawing_id ?? null,
+    revisionDrawingName: row.revision_drawing_name ?? "",
+    title: row.title,
+    description: row.description ?? "",
+    priority: row.priority ?? "NORMAL",
+    isCompleted: row.is_completed === 1,
+    assignedUserId: row.assigned_user_id,
+    assignedUserDisplayName: row.assigned_user_display_name ?? "",
+    dueAtIso: row.due_at_iso,
+    completedAtIso: row.completed_at_iso,
+    completedByUserId: row.completed_by_user_id,
+    completedByDisplayName: row.completed_by_display_name ?? "",
+    createdByUserId: row.created_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  }) as unknown as DrawingTaskRecord;
 }
 
 export function normalizePricingConfigRecord(
@@ -782,6 +839,7 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
   return {
     id: row.id,
     companyId: row.company_id,
+    workspaceId: row.job_id,
     jobId: row.job_id,
     sourceDrawingId: row.source_drawing_id,
     sourceDrawingVersionNumber: row.source_drawing_version_number,

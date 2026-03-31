@@ -90,6 +90,7 @@ export class SqliteDrawingStore {
 
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
     const revisionNumber = input.revisionNumber ?? 0;
+    const workspaceId = input.workspaceId ?? input.jobId ?? null;
     const insert = this.database.transaction(() => {
       this.database
         .prepare(
@@ -103,7 +104,7 @@ export class SqliteDrawingStore {
         .run(
           input.id,
           input.companyId,
-          input.jobId,
+          workspaceId,
           input.jobRole,
           input.parentDrawingId ?? null,
           revisionNumber,
@@ -153,6 +154,8 @@ export class SqliteDrawingStore {
     insert();
     return {
       ...input,
+      workspaceId,
+      jobId: workspaceId,
       revisionNumber,
       versionNumber: 1,
       status: "DRAFT" as const,
@@ -223,6 +226,7 @@ export class SqliteDrawingStore {
 
   public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
     const nextVersionNumber = input.expectedVersionNumber + 1;
+    const workspaceId = input.workspaceId ?? input.jobId ?? null;
     const update = this.database.transaction(() => {
       const result = this.database
         .prepare(
@@ -233,7 +237,7 @@ export class SqliteDrawingStore {
           `,
         )
         .run(
-          input.jobId,
+          workspaceId,
           input.jobRole,
           input.name,
           input.customerId,

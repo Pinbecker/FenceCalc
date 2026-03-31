@@ -23,6 +23,8 @@ const baseLayout: LayoutModel = {
 const sampleDrawing = {
   id: "drawing-1",
   companyId: "company-1",
+  workspaceId: "workspace-1",
+  jobRole: "PRIMARY",
   name: "Rear boundary",
   customerId: "customer-1",
   customerName: "Cleveland Land Services",

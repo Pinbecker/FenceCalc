@@ -217,7 +217,7 @@ export function EditorWorkspaceHeader({
               </label>
               {currentDrawingId && currentDrawingStatus ? (
                 <label className="editor-document-name">
-                  <span>Job Status</span>
+                  <span>Drawing Status</span>
                   <select
                     value={currentDrawingStatus}
                     disabled={isChangingStatus}

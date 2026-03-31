@@ -34,7 +34,6 @@ interface CustomersPageProps {
       | { mode: "create"; customer: CustomerDraft }
       | { mode: "update"; customerId: string; customer: Partial<CustomerDraft> },
   ): Promise<{ id: string } | null>;
-  onOpenDrawing(this: void, drawingId: string): void;
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
 }
 
@@ -78,7 +77,6 @@ export function CustomersPage({
   isSavingCustomer,
   onRefresh,
   onSaveCustomer,
-  onOpenDrawing,
   onNavigate,
 }: CustomersPageProps) {
   const [filter, setFilter] = useState<CustomerFilter>("ACTIVE");
@@ -87,7 +85,6 @@ export function CustomersPage({
   const [onlyWithActiveWork, setOnlyWithActiveWork] = useState(false);
   const [onlyMissingContact, setOnlyMissingContact] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [showUnassignedDrawings, setShowUnassignedDrawings] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft>(buildEmptyDraft);
 
   const drawingActivityByCustomerId = useMemo(() => {
@@ -166,11 +163,6 @@ export function CustomersPage({
   const missingContactCount = customers.filter((customer) => hasMissingContact(customer)).length;
   const visibleActiveWorkCount = visibleCustomers.filter((customer) => customer.activeDrawingCount > 0).length;
 
-  const unassignedDrawings = useMemo(
-    () => drawings.filter((drawing) => !drawing.customerId).sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso)),
-    [drawings],
-  );
-
   const handleCreateCustomer = async () => {
     const trimmedDraft: CustomerDraft = {
       name: draft.name.trim(),
@@ -197,11 +189,11 @@ export function CustomersPage({
   return (
     <section className="portal-page portal-customers-page">
       <header className="portal-page-header">
-        <div className="portal-customers-heading">
-          <span className="portal-eyebrow">Customers</span>
-          <h1>Customer directory</h1>
-          <p>Use status, search, and sort controls to locate customers quickly and jump straight to workspace or latest drawing actions.</p>
-        </div>
+          <div className="portal-customers-heading">
+            <span className="portal-eyebrow">Customers</span>
+            <h1>Customer directory</h1>
+            <p>Use status, search, and sort controls to locate customers quickly and open the right customer workspace.</p>
+          </div>
         <div className="portal-header-actions">
           <button type="button" className="portal-secondary-button" onClick={() => void onRefresh()} disabled={isLoading}>
             {isLoading ? "Refreshing..." : "Refresh"}
@@ -417,7 +409,7 @@ export function CustomersPage({
         <div className="portal-section-heading portal-customers-directory-header">
           <div>
             <span className="portal-section-kicker">Directory</span>
-            <h2>Customer workspaces</h2>
+            <h2>Customers</h2>
           </div>
           <span className="drawing-library-badge">{resultsLabel}</span>
         </div>
@@ -471,20 +463,7 @@ export function CustomersPage({
                     className="portal-primary-button"
                     onClick={() => onNavigate("customer", { customerId: customer.id })}
                   >
-                    Open workspace
-                  </button>
-                  <button
-                    type="button"
-                    className="portal-secondary-button"
-                    disabled={!latestDrawing}
-                    onClick={() => {
-                      if (!latestDrawing) {
-                        return;
-                      }
-                      onOpenDrawing(latestDrawing.latestDrawingId);
-                    }}
-                  >
-                    {latestDrawing ? "Open latest drawing" : "No drawing yet"}
+                    Open customer
                   </button>
                 </div>
               </article>
@@ -493,50 +472,6 @@ export function CustomersPage({
         </div>
       </section>
 
-      {unassignedDrawings.length > 0 ? (
-        <section className="portal-surface-card portal-customer-orphans">
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">Assignment queue</span>
-              <h2>Unassigned drawings</h2>
-            </div>
-            <button
-              type="button"
-              className="portal-secondary-button"
-              onClick={() => setShowUnassignedDrawings((current) => !current)}
-            >
-              {showUnassignedDrawings ? "Hide list" : "Show list"}
-            </button>
-          </div>
-          <p className="portal-empty-copy">
-            {unassignedDrawings.length} drawing{unassignedDrawings.length === 1 ? " is" : "s are"} currently outside customer workflows.
-            Open a drawing and assign it to a customer to move it into the main list.
-          </p>
-          {showUnassignedDrawings ? (
-            <div className="portal-dashboard-list">
-              {unassignedDrawings.map((drawing) => (
-                <button type="button" key={drawing.id} className="portal-dashboard-row" onClick={() => onOpenDrawing(drawing.id)}>
-                  <div className="portal-dashboard-row-copy">
-                    <div className="portal-dashboard-row-head">
-                      <div className="portal-dashboard-row-title">
-                        <strong>{drawing.name}</strong>
-                        <p>{drawing.customerName.trim() || "Unassigned customer"}</p>
-                      </div>
-                      <span className="portal-dashboard-row-version">v{drawing.versionNumber}</span>
-                    </div>
-                    <div className="portal-dashboard-row-meta">
-                      <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                      <span>{drawing.segmentCount} segments</span>
-                      <span>{drawing.gateCount} gates</span>
-                    </div>
-                  </div>
-                  <span className="portal-dashboard-row-cta">Open</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
     </section>
   );
 }

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
-  buildDefaultJobCommercialInputs,
+  buildDefaultDrawingWorkspaceCommercialInputs,
   type DrawingRecord,
-  type JobRecord,
-  type JobTaskRecord,
+  type DrawingTaskRecord,
+  type DrawingWorkspaceCommercialInputs,
+  type DrawingWorkspaceRecord,
   type LayoutModel,
 } from "@fence-estimator/contracts";
 
@@ -24,71 +25,80 @@ const EMPTY_LAYOUT: LayoutModel = {
   sideNettings: [],
 };
 
-interface JobMutationSuccess {
-  kind: "success";
-  job: JobRecord;
-}
-
-interface JobTaskMutationSuccess {
-  kind: "success";
-  task: JobTaskRecord;
-}
-
-type JobNotFound = { kind: "job_not_found" };
+type WorkspaceNotFound = { kind: "workspace_not_found" };
 type DrawingNotFound = { kind: "drawing_not_found" };
 type InvalidCustomer = { kind: "invalid_customer"; message: string };
 type InvalidUser = { kind: "invalid_user"; message: string };
 type TaskNotFound = { kind: "task_not_found" };
 
-export type JobMutationResult =
-  | JobMutationSuccess
-  | JobNotFound
+export type DrawingWorkspaceMutationResult =
+  | { kind: "success"; workspace: DrawingWorkspaceRecord }
+  | WorkspaceNotFound
   | InvalidCustomer
   | InvalidUser
   | DrawingNotFound;
-export type JobTaskMutationResult =
-  | JobTaskMutationSuccess
-  | JobNotFound
+
+export type DrawingTaskMutationResult =
+  | { kind: "success"; task: DrawingTaskRecord }
+  | WorkspaceNotFound
   | InvalidUser
   | TaskNotFound
   | DrawingNotFound;
-export type JobDeleteResult = { kind: "success" } | JobNotFound | { kind: "not_archived" };
 
-async function resolveTaskDrawingId(
+export type DrawingWorkspaceDeleteResult =
+  | { kind: "success" }
+  | WorkspaceNotFound
+  | { kind: "not_archived" };
+
+function getDrawingWorkspaceId(drawing: Pick<DrawingRecord, "workspaceId" | "jobId">): string | null {
+  return drawing.workspaceId ?? drawing.jobId ?? null;
+}
+
+async function resolveTaskDrawingTarget(
   repository: AppRepository,
   companyId: string,
-  job: JobRecord,
+  workspace: DrawingWorkspaceRecord,
   requestedDrawingId: string | null | undefined,
-  currentDrawingId?: string | null,
+  currentRootDrawingId?: string | null,
+  currentRevisionDrawingId?: string | null,
 ) {
   const normalizedRequestedDrawingId = requestedDrawingId?.trim() ?? null;
   if (normalizedRequestedDrawingId) {
     const drawing = await repository.getDrawingById(normalizedRequestedDrawingId, companyId);
-    if (!drawing || drawing.jobId !== job.id) {
+    if (!drawing || getDrawingWorkspaceId(drawing) !== workspace.id) {
       return { kind: "drawing_not_found" as const };
     }
-    return { kind: "success" as const, drawingId: drawing.parentDrawingId ?? drawing.id };
+    return {
+      kind: "success" as const,
+      rootDrawingId: drawing.parentDrawingId ?? drawing.id,
+      revisionDrawingId: drawing.parentDrawingId ? drawing.id : null,
+    };
   }
 
   if (normalizedRequestedDrawingId === null && requestedDrawingId !== undefined) {
-    return { kind: "success" as const, drawingId: null };
+    return { kind: "success" as const, rootDrawingId: null, revisionDrawingId: null };
   }
 
-  if (currentDrawingId) {
-    return { kind: "success" as const, drawingId: currentDrawingId };
+  if (currentRootDrawingId) {
+    return {
+      kind: "success" as const,
+      rootDrawingId: currentRootDrawingId,
+      revisionDrawingId: currentRevisionDrawingId ?? null,
+    };
   }
 
-  if (job.primaryDrawingId) {
-    const primaryDrawing = await repository.getDrawingById(job.primaryDrawingId, companyId);
-    if (primaryDrawing && primaryDrawing.jobId === job.id) {
+  if (workspace.primaryDrawingId) {
+    const primaryDrawing = await repository.getDrawingById(workspace.primaryDrawingId, companyId);
+    if (primaryDrawing && getDrawingWorkspaceId(primaryDrawing) === workspace.id) {
       return {
         kind: "success" as const,
-        drawingId: primaryDrawing.parentDrawingId ?? primaryDrawing.id,
+        rootDrawingId: primaryDrawing.parentDrawingId ?? primaryDrawing.id,
+        revisionDrawingId: primaryDrawing.parentDrawingId ? primaryDrawing.id : null,
       };
     }
   }
 
-  const drawings = await repository.listDrawingsForJob(job.id, companyId);
+  const drawings = await repository.listDrawingsForWorkspace(workspace.id, companyId);
   const rootDrawing = drawings
     .filter((drawing) => !drawing.parentDrawingId)
     .sort((left, right) => {
@@ -100,10 +110,14 @@ async function resolveTaskDrawingId(
       }
       return left.createdAtIso.localeCompare(right.createdAtIso);
     })[0];
-  return { kind: "success" as const, drawingId: rootDrawing?.id ?? null };
+  return {
+    kind: "success" as const,
+    rootDrawingId: rootDrawing?.id ?? null,
+    revisionDrawingId: null,
+  };
 }
 
-async function resolveCustomerForJob(
+async function resolveCustomerForWorkspace(
   repository: AppRepository,
   companyId: string,
   customerId: string,
@@ -113,7 +127,10 @@ async function resolveCustomerForJob(
     return { kind: "invalid_customer" as const, message: "Customer not found" };
   }
   if (customer.isArchived) {
-    return { kind: "invalid_customer" as const, message: "Archived customers cannot receive jobs" };
+    return {
+      kind: "invalid_customer" as const,
+      message: "Archived customers cannot receive drawing workspaces",
+    };
   }
   return { kind: "success" as const, customer };
 }
@@ -133,16 +150,12 @@ async function resolveOwner(
   return { kind: "success" as const, ownerUserId: user.id };
 }
 
-function buildNextJobDrawingName(job: JobRecord, drawingCount: number): string {
-  return `${job.name} Drawing ${drawingCount + 1}`;
-}
-
-export async function createJobForCompany(
+export async function createDrawingWorkspaceForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
   input: { customerId: string; name: string; notes: string },
-): Promise<JobMutationResult> {
-  const customerResult = await resolveCustomerForJob(
+): Promise<DrawingWorkspaceMutationResult> {
+  const customerResult = await resolveCustomerForWorkspace(
     repository,
     authenticated.company.id,
     input.customerId,
@@ -153,19 +166,19 @@ export async function createJobForCompany(
 
   const estimateSeed = buildEstimate(EMPTY_LAYOUT);
   const nowIso = new Date().toISOString();
-  const jobId = randomUUID();
+  const workspaceId = randomUUID();
   const drawingId = randomUUID();
 
   await repository.runInTransaction(async () => {
-    await repository.createJob({
-      id: jobId,
+    await repository.createDrawingWorkspace({
+      id: workspaceId,
       companyId: authenticated.company.id,
       customerId: customerResult.customer.id,
       customerName: customerResult.customer.name,
       name: input.name,
       stage: "DRAFT",
       primaryDrawingId: null,
-      commercialInputs: buildDefaultJobCommercialInputs(),
+      commercialInputs: buildDefaultDrawingWorkspaceCommercialInputs(),
       notes: input.notes,
       ownerUserId: authenticated.user.id,
       createdByUserId: authenticated.user.id,
@@ -176,7 +189,8 @@ export async function createJobForCompany(
     await repository.createDrawing({
       id: drawingId,
       companyId: authenticated.company.id,
-      jobId,
+      workspaceId,
+      jobId: workspaceId,
       jobRole: "PRIMARY",
       name: input.name,
       customerId: customerResult.customer.id,
@@ -191,8 +205,8 @@ export async function createJobForCompany(
       createdAtIso: nowIso,
       updatedAtIso: nowIso,
     });
-    await repository.setJobPrimaryDrawing({
-      jobId,
+    await repository.setDrawingWorkspacePrimaryDrawing({
+      workspaceId,
       companyId: authenticated.company.id,
       drawingId,
       updatedByUserId: authenticated.user.id,
@@ -200,20 +214,20 @@ export async function createJobForCompany(
     });
   });
 
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
-    return { kind: "job_not_found" };
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
 
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: job.id,
+    entityId: workspace.id,
     action: "JOB_CREATED",
-    summary: `${authenticated.user.displayName} created job ${job.name}`,
+    summary: `${authenticated.user.displayName} created workspace ${workspace.name}`,
     createdAtIso: nowIso,
-    metadata: { customerId: job.customerId, primaryDrawingId: drawingId },
+    metadata: { customerId: workspace.customerId, primaryDrawingId: drawingId, workspaceId },
   });
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
@@ -223,28 +237,28 @@ export async function createJobForCompany(
     action: "DRAWING_CREATED",
     summary: `${authenticated.user.displayName} created ${input.name}`,
     createdAtIso: nowIso,
-    metadata: { versionNumber: 1, jobId: job.id },
+    metadata: { versionNumber: 1, workspaceId },
   });
 
-  return { kind: "success", job };
+  return { kind: "success", workspace };
 }
 
-export async function updateJobForCompany(
+export async function updateDrawingWorkspaceForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
+  workspaceId: string,
   input: {
     name?: string | undefined;
-    stage?: JobRecord["stage"] | undefined;
-    commercialInputs?: JobRecord["commercialInputs"] | undefined;
+    stage?: DrawingWorkspaceRecord["stage"] | undefined;
+    commercialInputs?: DrawingWorkspaceCommercialInputs | undefined;
     notes?: string | undefined;
     ownerUserId?: string | null | undefined;
     archived?: boolean | undefined;
   },
-): Promise<JobMutationResult> {
-  const existing = await repository.getJobById(jobId, authenticated.company.id);
+): Promise<DrawingWorkspaceMutationResult> {
+  const existing = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
   if (!existing) {
-    return { kind: "job_not_found" };
+    return { kind: "workspace_not_found" };
   }
 
   const ownerResult =
@@ -260,8 +274,8 @@ export async function updateJobForCompany(
   const stageChanged = input.stage !== undefined && input.stage !== existing.stage;
   const archived = input.archived ?? existing.isArchived;
   const archiveChanged = input.archived !== undefined && input.archived !== existing.isArchived;
-  const job = await repository.updateJob({
-    jobId: existing.id,
+  const workspace = await repository.updateDrawingWorkspace({
+    workspaceId: existing.id,
     companyId: authenticated.company.id,
     name: input.name ?? existing.name,
     stage: nextStage,
@@ -280,8 +294,8 @@ export async function updateJobForCompany(
     updatedByUserId: authenticated.user.id,
     updatedAtIso,
   });
-  if (!job) {
-    return { kind: "job_not_found" };
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
 
   if (
@@ -294,10 +308,11 @@ export async function updateJobForCompany(
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
       entityType: "JOB",
-      entityId: job.id,
+      entityId: workspace.id,
       action: "JOB_UPDATED",
-      summary: `${authenticated.user.displayName} updated job ${job.name}`,
+      summary: `${authenticated.user.displayName} updated workspace ${workspace.name}`,
       createdAtIso: updatedAtIso,
+      metadata: { workspaceId: workspace.id },
     });
   }
 
@@ -306,11 +321,11 @@ export async function updateJobForCompany(
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
       entityType: "JOB",
-      entityId: job.id,
+      entityId: workspace.id,
       action: "JOB_STAGE_CHANGED",
-      summary: `${authenticated.user.displayName} changed ${job.name} from ${existing.stage} to ${nextStage}`,
+      summary: `${authenticated.user.displayName} changed ${workspace.name} from ${existing.stage} to ${nextStage}`,
       createdAtIso: updatedAtIso,
-      metadata: { previousStage: existing.stage, newStage: nextStage },
+      metadata: { previousStage: existing.stage, newStage: nextStage, workspaceId: workspace.id },
     });
   }
 
@@ -319,31 +334,32 @@ export async function updateJobForCompany(
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
       entityType: "JOB",
-      entityId: job.id,
+      entityId: workspace.id,
       action: archived ? "JOB_ARCHIVED" : "JOB_UNARCHIVED",
-      summary: `${authenticated.user.displayName} ${archived ? "archived" : "restored"} job ${job.name}`,
+      summary: `${authenticated.user.displayName} ${archived ? "archived" : "restored"} workspace ${workspace.name}`,
       createdAtIso: updatedAtIso,
+      metadata: { workspaceId: workspace.id },
     });
   }
 
-  return { kind: "success", job };
+  return { kind: "success", workspace };
 }
 
-export async function deleteJobForCompany(
+export async function deleteDrawingWorkspaceForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
-): Promise<JobDeleteResult> {
-  const existing = await repository.getJobById(jobId, authenticated.company.id);
+  workspaceId: string,
+): Promise<DrawingWorkspaceDeleteResult> {
+  const existing = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
   if (!existing) {
-    return { kind: "job_not_found" };
+    return { kind: "workspace_not_found" };
   }
   if (!existing.isArchived) {
     return { kind: "not_archived" };
   }
 
-  await repository.deleteJob({
-    jobId,
+  await repository.deleteDrawingWorkspace({
+    workspaceId,
     companyId: authenticated.company.id,
   });
 
@@ -351,127 +367,127 @@ export async function deleteJobForCompany(
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: jobId,
+    entityId: workspaceId,
     action: "JOB_DELETED",
-    summary: `${authenticated.user.displayName} permanently deleted job ${existing.name}`,
+    summary: `${authenticated.user.displayName} permanently deleted workspace ${existing.name}`,
     createdAtIso: new Date().toISOString(),
+    metadata: { workspaceId },
   });
 
   return { kind: "success" };
 }
 
-export async function createJobDrawingForCompany(
+export async function createDrawingWorkspaceDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
+  workspaceId: string,
   input: { name?: string | undefined; sourceDrawingId?: string | undefined },
-): Promise<DrawingMutationResult> {
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
+): Promise<DrawingMutationResult | WorkspaceNotFound> {
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
+  }
+
+  if (!input.sourceDrawingId?.trim()) {
+    return {
+      kind: "invalid_layout",
+      message: "A source drawing is required when creating a revision.",
+    };
+  }
+
+  const sourceDrawing = await repository.getDrawingById(
+    input.sourceDrawingId,
+    authenticated.company.id,
+  );
+  if (!sourceDrawing || getDrawingWorkspaceId(sourceDrawing) !== workspace.id) {
     return { kind: "drawing_not_found" };
   }
 
-  let sourceDrawing: DrawingRecord | null = null;
-  if (input.sourceDrawingId) {
-    sourceDrawing = await repository.getDrawingById(
-      input.sourceDrawingId,
-      authenticated.company.id,
-    );
-    if (!sourceDrawing || sourceDrawing.jobId !== job.id) {
-      return { kind: "drawing_not_found" };
-    }
-  }
-
-  const existingDrawings = await repository.listDrawingsForJob(job.id, authenticated.company.id);
-
-  // When creating a revision, link to the root parent drawing
-  let parentDrawingId: string | null = null;
-  let revisionNumber = 0;
-  if (sourceDrawing) {
-    parentDrawingId = sourceDrawing.parentDrawingId ?? sourceDrawing.id;
-    // Count existing revisions for this root drawing to assign next revision number
-    const existingRevisions = existingDrawings.filter((d) => d.parentDrawingId === parentDrawingId);
-    revisionNumber = existingRevisions.length + 1;
-  }
-
-  // For new root drawings, count only other root drawings (exclude revisions)
-  const rootDrawingCount = existingDrawings.filter((d) => !d.parentDrawingId).length;
-
-  // Revision inherits the root drawing's name; new drawings get "Drawing N"
-  const rootDrawing = parentDrawingId
-    ? existingDrawings.find((d) => d.id === parentDrawingId)
-    : null;
+  const existingDrawings = await repository.listDrawingsForWorkspace(
+    workspace.id,
+    authenticated.company.id,
+  );
+  const parentDrawingId = sourceDrawing.parentDrawingId ?? sourceDrawing.id;
+  const existingRevisions = existingDrawings.filter((drawing) => drawing.parentDrawingId === parentDrawingId);
+  const revisionNumber = existingRevisions.length + 1;
+  const rootDrawing = existingDrawings.find((drawing) => drawing.id === parentDrawingId) ?? sourceDrawing;
 
   return createDrawingForCompany(repository, authenticated, {
-    name:
-      input.name?.trim() ||
-      (rootDrawing ? rootDrawing.name : buildNextJobDrawingName(job, rootDrawingCount)),
-    customerId: job.customerId,
-    jobId: job.id,
+    name: input.name?.trim() || rootDrawing.name,
+    customerId: workspace.customerId,
+    workspaceId: workspace.id,
     parentDrawingId,
     revisionNumber,
-    layout: sourceDrawing?.layout ?? EMPTY_LAYOUT,
-    savedViewport: sourceDrawing?.savedViewport ?? null,
+    layout: sourceDrawing.layout ?? EMPTY_LAYOUT,
+    savedViewport: sourceDrawing.savedViewport ?? null,
   });
 }
 
-export async function setJobPrimaryDrawingForCompany(
+export async function setDrawingWorkspacePrimaryDrawingForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
+  workspaceId: string,
   drawingId: string,
-): Promise<JobMutationResult> {
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
-    return { kind: "job_not_found" };
+): Promise<DrawingWorkspaceMutationResult> {
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
   const drawing = await repository.getDrawingById(drawingId, authenticated.company.id);
-  if (!drawing || drawing.jobId !== job.id) {
+  if (!drawing || getDrawingWorkspaceId(drawing) !== workspace.id) {
     return { kind: "drawing_not_found" };
   }
 
   const updatedAtIso = new Date().toISOString();
-  const updatedJob = await repository.setJobPrimaryDrawing({
-    jobId,
+  const updatedWorkspace = await repository.setDrawingWorkspacePrimaryDrawing({
+    workspaceId,
     companyId: authenticated.company.id,
     drawingId,
     updatedByUserId: authenticated.user.id,
     updatedAtIso,
   });
-  if (!updatedJob) {
-    return { kind: "job_not_found" };
+  if (!updatedWorkspace) {
+    return { kind: "workspace_not_found" };
   }
 
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: updatedJob.id,
+    entityId: updatedWorkspace.id,
     action: "JOB_PRIMARY_DRAWING_CHANGED",
-    summary: `${authenticated.user.displayName} changed the primary drawing for ${updatedJob.name}`,
+    summary: `${authenticated.user.displayName} changed the primary drawing for workspace ${updatedWorkspace.name}`,
     createdAtIso: updatedAtIso,
-    metadata: { drawingId },
+    metadata: { drawingId, workspaceId: updatedWorkspace.id },
   });
 
-  return { kind: "success", job: updatedJob };
+  return { kind: "success", workspace: updatedWorkspace };
 }
 
-export async function createJobTaskForCompany(
+interface DrawingWorkspaceTaskWriteInput {
+  title?: string | undefined;
+  description?: string | undefined;
+  priority?: string | undefined;
+  assignedUserId?: string | null | undefined;
+  rootDrawingId?: string | null | undefined;
+  revisionDrawingId?: string | null | undefined;
+  dueAtIso?: string | null | undefined;
+  isCompleted?: boolean | undefined;
+}
+
+interface CreateDrawingWorkspaceTaskInput extends DrawingWorkspaceTaskWriteInput {
+  title: string;
+}
+
+export async function createDrawingWorkspaceTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
-  input: {
-    title: string;
-    description?: string | undefined;
-    priority?: string | undefined;
-    assignedUserId?: string | null | undefined;
-    drawingId?: string | null | undefined;
-    dueAtIso?: string | null | undefined;
-  },
-): Promise<JobTaskMutationResult> {
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
-    return { kind: "job_not_found" };
+  workspaceId: string,
+  input: CreateDrawingWorkspaceTaskInput,
+): Promise<DrawingTaskMutationResult> {
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
   const ownerResult =
     input.assignedUserId !== undefined
@@ -480,22 +496,23 @@ export async function createJobTaskForCompany(
   if (ownerResult && ownerResult.kind !== "success") {
     return ownerResult;
   }
-  const drawingResult = await resolveTaskDrawingId(
+  const drawingResult = await resolveTaskDrawingTarget(
     repository,
     authenticated.company.id,
-    job,
-    input.drawingId,
+    workspace,
+    input.revisionDrawingId ?? input.rootDrawingId,
   );
   if (drawingResult.kind !== "success") {
     return drawingResult;
   }
 
   const nowIso = new Date().toISOString();
-  const task = await repository.createJobTask({
+  const task = await repository.createDrawingTask({
     id: randomUUID(),
     companyId: authenticated.company.id,
-    jobId,
-    drawingId: drawingResult.drawingId,
+    workspaceId,
+    rootDrawingId: drawingResult.rootDrawingId,
+    revisionDrawingId: drawingResult.revisionDrawingId,
     title: input.title,
     description: input.description ?? "",
     priority: input.priority ?? "NORMAL",
@@ -510,36 +527,28 @@ export async function createJobTaskForCompany(
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: jobId,
+    entityId: workspaceId,
     action: "JOB_TASK_CREATED",
-    summary: `${authenticated.user.displayName} added a task to ${job.name}`,
+    summary: `${authenticated.user.displayName} added a task to workspace ${workspace.name}`,
     createdAtIso: nowIso,
-    metadata: { taskId: task.id, title: task.title },
+    metadata: { taskId: task.id, title: task.title, workspaceId },
   });
 
   return { kind: "success", task };
 }
 
-export async function updateJobTaskForCompany(
+export async function updateDrawingWorkspaceTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
+  workspaceId: string,
   taskId: string,
-  input: {
-    title?: string | undefined;
-    description?: string | undefined;
-    priority?: string | undefined;
-    assignedUserId?: string | null | undefined;
-    drawingId?: string | null | undefined;
-    dueAtIso?: string | null | undefined;
-    isCompleted?: boolean | undefined;
-  },
-): Promise<JobTaskMutationResult> {
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
-    return { kind: "job_not_found" };
+  input: DrawingWorkspaceTaskWriteInput,
+): Promise<DrawingTaskMutationResult> {
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
-  const tasks = await repository.listJobTasks(jobId, authenticated.company.id);
+  const tasks = await repository.listDrawingWorkspaceTasks(workspaceId, authenticated.company.id);
   const existing = tasks.find((task) => task.id === taskId);
   if (!existing) {
     return { kind: "task_not_found" };
@@ -551,12 +560,13 @@ export async function updateJobTaskForCompany(
   if (ownerResult && ownerResult.kind !== "success") {
     return ownerResult;
   }
-  const drawingResult = await resolveTaskDrawingId(
+  const drawingResult = await resolveTaskDrawingTarget(
     repository,
     authenticated.company.id,
-    job,
-    input.drawingId,
-    existing.drawingId,
+    workspace,
+    input.revisionDrawingId ?? input.rootDrawingId,
+    existing.rootDrawingId,
+    existing.revisionDrawingId,
   );
   if (drawingResult.kind !== "success") {
     return drawingResult;
@@ -564,11 +574,12 @@ export async function updateJobTaskForCompany(
 
   const updatedAtIso = new Date().toISOString();
   const isCompleted = input.isCompleted ?? existing.isCompleted;
-  const task = await repository.updateJobTask({
+  const task = await repository.updateDrawingTask({
     taskId,
     companyId: authenticated.company.id,
-    jobId,
-    drawingId: drawingResult.drawingId,
+    workspaceId,
+    rootDrawingId: drawingResult.rootDrawingId,
+    revisionDrawingId: drawingResult.revisionDrawingId,
     title: input.title ?? existing.title,
     description: input.description ?? existing.description,
     priority: input.priority ?? existing.priority,
@@ -587,27 +598,27 @@ export async function updateJobTaskForCompany(
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: jobId,
+    entityId: workspaceId,
     action: "JOB_TASK_UPDATED",
-    summary: `${authenticated.user.displayName} updated a task on ${job.name}`,
+    summary: `${authenticated.user.displayName} updated a task on workspace ${workspace.name}`,
     createdAtIso: updatedAtIso,
-    metadata: { taskId: task.id, isCompleted: task.isCompleted },
+    metadata: { taskId: task.id, isCompleted: task.isCompleted, workspaceId },
   });
 
   return { kind: "success", task };
 }
 
-export async function deleteJobTaskForCompany(
+export async function deleteDrawingWorkspaceTaskForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  jobId: string,
+  workspaceId: string,
   taskId: string,
-): Promise<{ kind: "success" } | { kind: "job_not_found" } | { kind: "task_not_found" }> {
-  const job = await repository.getJobById(jobId, authenticated.company.id);
-  if (!job) {
-    return { kind: "job_not_found" };
+): Promise<{ kind: "success" } | WorkspaceNotFound | TaskNotFound> {
+  const workspace = await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id);
+  if (!workspace) {
+    return { kind: "workspace_not_found" };
   }
-  const deleted = await repository.deleteJobTask(taskId, jobId, authenticated.company.id);
+  const deleted = await repository.deleteDrawingTask(taskId, workspaceId, authenticated.company.id);
   if (!deleted) {
     return { kind: "task_not_found" };
   }
@@ -616,11 +627,11 @@ export async function deleteJobTaskForCompany(
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
     entityType: "JOB",
-    entityId: jobId,
+    entityId: workspaceId,
     action: "JOB_TASK_DELETED",
-    summary: `${authenticated.user.displayName} deleted a task from ${job.name}`,
+    summary: `${authenticated.user.displayName} deleted a task from workspace ${workspace.name}`,
     createdAtIso: new Date().toISOString(),
-    metadata: { taskId },
+    metadata: { taskId, workspaceId },
   });
 
   return { kind: "success" };

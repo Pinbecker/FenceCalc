@@ -12,7 +12,7 @@ import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
 import { requireAdminRole, requireAuth } from "../authorization.js";
 import { normalizeLayout } from "../estimateSupport.js";
-import { mergeJobCommercialManualEntries } from "../jobEstimateSupport.js";
+import { mergeDrawingWorkspaceCommercialManualEntries } from "../drawingWorkspaceEstimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
@@ -111,7 +111,9 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
 
     const result = await createDrawingForCompany(repository, authenticated, {
       ...parsed.data,
-      ...(parsed.data.jobId ? { jobId: parsed.data.jobId } : {}),
+      ...(parsed.data.workspaceId || parsed.data.jobId
+        ? { workspaceId: parsed.data.workspaceId ?? parsed.data.jobId }
+        : {}),
       layout: normalizeLayout(parsed.data.layout)
     });
     if (result.kind !== "success") {
@@ -158,14 +160,17 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     const pricingConfig =
       (await repository.getPricingConfig(authenticated.company.id)) ??
       buildDefaultPricingConfig(authenticated.company.id, null);
-    const job = drawing.jobId ? await repository.getJobById(drawing.jobId, authenticated.company.id) : null;
+    const workspaceId = drawing.workspaceId ?? drawing.jobId ?? null;
+    const workspace = workspaceId
+      ? await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id)
+      : null;
 
     return reply.code(200).send({
       pricedEstimate: buildPricedEstimate(
         drawing,
         pricingConfig,
         [],
-        job ? mergeJobCommercialManualEntries(job.commercialInputs) : []
+        workspace ? mergeDrawingWorkspaceCommercialManualEntries(workspace.commercialInputs) : []
       )
     });
   });
@@ -222,8 +227,8 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     if (result.kind === "drawing_not_found") {
       return reply.code(404).send({ error: "Drawing not found" });
     }
-    if (result.kind === "job_not_found") {
-      return reply.code(404).send({ error: "Job not found" });
+    if (result.kind === "workspace_not_found") {
+      return reply.code(404).send({ error: "Drawing workspace not found" });
     }
 
     return reply.code(201).send({ quote: result.quote });

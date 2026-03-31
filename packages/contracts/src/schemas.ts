@@ -996,6 +996,7 @@ export const quoteDrawingSnapshotSchema = z.object({
 export const quoteRecordSchema = z.object({
   id: z.string().trim().min(1).max(120),
   companyId: z.string().trim().min(1).max(120),
+  workspaceId: z.string().trim().min(1).max(120).optional(),
   jobId: z.string().trim().min(1).max(120).optional(),
   sourceDrawingId: z.string().trim().min(1).max(120).optional(),
   sourceDrawingVersionNumber: z.coerce.number().int().min(1).optional(),
@@ -1029,6 +1030,7 @@ export const customerTextFieldSchema = z.string().trim().max(240);
 export const customerNotesSchema = z.string().trim().max(2_000);
 export const drawingJobRoleSchema = z.enum(["PRIMARY", "SECONDARY"]);
 export const jobStageSchema = z.enum(JOB_STAGES);
+export const drawingWorkspaceStageSchema = jobStageSchema;
 export const jobTaskTitleSchema = z.string().trim().min(1).max(240);
 
 export const jobCommercialInputsSchema = z.object({
@@ -1042,6 +1044,7 @@ export const jobCommercialInputsSchema = z.object({
   hardDig: z.boolean(),
   clearSpoils: z.boolean(),
 });
+export const drawingWorkspaceCommercialInputsSchema = jobCommercialInputsSchema;
 
 export const taskPrioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
 
@@ -1052,6 +1055,32 @@ export const jobTaskRecordSchema = z.object({
   jobName: z.string().trim().max(200),
   drawingId: z.string().trim().min(1).max(120).nullable(),
   drawingName: z.string().trim().max(200),
+  revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
+  revisionDrawingName: z.string().trim().max(200).optional(),
+  title: jobTaskTitleSchema,
+  description: z.string().trim().max(2_000),
+  priority: taskPrioritySchema,
+  isCompleted: z.boolean(),
+  assignedUserId: z.string().trim().min(1).max(120).nullable(),
+  assignedUserDisplayName: z.string().trim().max(120),
+  dueAtIso: z.string().datetime().nullable(),
+  completedAtIso: z.string().datetime().nullable(),
+  completedByUserId: z.string().trim().min(1).max(120).nullable(),
+  completedByDisplayName: z.string().trim().max(120),
+  createdByUserId: z.string().trim().min(1).max(120),
+  createdAtIso: z.string().datetime(),
+  updatedAtIso: z.string().datetime(),
+});
+
+export const drawingTaskRecordSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  companyId: z.string().trim().min(1).max(120),
+  workspaceId: z.string().trim().min(1).max(120),
+  workspaceName: z.string().trim().max(200),
+  rootDrawingId: z.string().trim().min(1).max(120).nullable(),
+  rootDrawingName: z.string().trim().max(200),
+  revisionDrawingId: z.string().trim().min(1).max(120).nullable(),
+  revisionDrawingName: z.string().trim().max(200),
   title: jobTaskTitleSchema,
   description: z.string().trim().max(2_000),
   priority: taskPrioritySchema,
@@ -1090,6 +1119,7 @@ export const jobRecordSchema = z.object({
   createdAtIso: z.string().datetime(),
   updatedAtIso: z.string().datetime(),
 });
+export const drawingWorkspaceRecordSchema = jobRecordSchema;
 
 export const jobSummarySchema = jobRecordSchema.extend({
   drawingCount: z.coerce.number().int().min(0),
@@ -1103,12 +1133,14 @@ export const jobSummarySchema = jobRecordSchema.extend({
   primaryDrawingUpdatedAtIso: z.string().datetime().nullable(),
   primaryPreviewLayout: layoutModelSchema.nullable(),
 });
+export const drawingWorkspaceSummarySchema = jobSummarySchema;
 
 export const jobCreateRequestSchema = z.object({
   customerId: customerIdSchema,
   name: jobNameSchema,
   notes: z.string().trim().max(2_000).default(""),
 });
+export const drawingWorkspaceCreateRequestSchema = jobCreateRequestSchema;
 
 export const jobUpdateRequestSchema = z
   .object({
@@ -1134,6 +1166,7 @@ export const jobUpdateRequestSchema = z
       });
     }
   });
+export const drawingWorkspaceUpdateRequestSchema = jobUpdateRequestSchema;
 
 export const jobTaskCreateRequestSchema = z.object({
   title: jobTaskTitleSchema,
@@ -1141,6 +1174,15 @@ export const jobTaskCreateRequestSchema = z.object({
   priority: taskPrioritySchema.optional(),
   assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
   drawingId: z.string().trim().min(1).max(120).nullable().optional(),
+  dueAtIso: z.string().datetime().nullable().optional(),
+});
+export const drawingTaskCreateRequestSchema = z.object({
+  title: jobTaskTitleSchema,
+  description: z.string().trim().max(2_000).optional(),
+  priority: taskPrioritySchema.optional(),
+  assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
+  rootDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
+  revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
   dueAtIso: z.string().datetime().nullable().optional(),
 });
 
@@ -1170,19 +1212,51 @@ export const jobTaskUpdateRequestSchema = z
       });
     }
   });
+export const drawingTaskUpdateRequestSchema = z
+  .object({
+    title: jobTaskTitleSchema.optional(),
+    description: z.string().trim().max(2_000).optional(),
+    priority: taskPrioritySchema.optional(),
+    assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
+    rootDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
+    revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
+    dueAtIso: z.string().datetime().nullable().optional(),
+    isCompleted: z.boolean().optional(),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.title === undefined &&
+      value.description === undefined &&
+      value.priority === undefined &&
+      value.assignedUserId === undefined &&
+      value.rootDrawingId === undefined &&
+      value.revisionDrawingId === undefined &&
+      value.dueAtIso === undefined &&
+      value.isCompleted === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one task field must be provided",
+      });
+    }
+  });
 
 export const jobPrimaryDrawingUpdateRequestSchema = z.object({
   drawingId: z.string().trim().min(1).max(120),
 });
+export const drawingWorkspacePrimaryDrawingUpdateRequestSchema =
+  jobPrimaryDrawingUpdateRequestSchema;
 
 export const jobDrawingCreateRequestSchema = z.object({
   name: drawingNameSchema.optional(),
   sourceDrawingId: z.string().trim().min(1).max(120).optional(),
 });
+export const drawingWorkspaceDrawingCreateRequestSchema = jobDrawingCreateRequestSchema;
 
 export const jobQuoteCreateRequestSchema = quoteCreateRequestSchema.extend({
   drawingId: z.string().trim().min(1).max(120).optional(),
 });
+export const drawingWorkspaceQuoteCreateRequestSchema = jobQuoteCreateRequestSchema;
 
 export const customerContactSchema = z.object({
   name: z.string().trim().max(240).default(""),
@@ -1222,6 +1296,7 @@ export const loginRequestSchema = z.object({
 export const drawingCreateRequestSchema = z.object({
   name: drawingNameSchema,
   customerId: customerIdSchema,
+  workspaceId: z.string().trim().min(1).max(120).optional(),
   jobId: z.string().trim().min(1).max(120).optional(),
   layout: layoutModelSchema,
   savedViewport: drawingCanvasViewportSchema.nullable().optional(),
@@ -1232,6 +1307,7 @@ export const drawingUpdateRequestSchema = z
     expectedVersionNumber: z.coerce.number().int().min(1),
     name: drawingNameSchema.optional(),
     customerId: customerIdSchema.optional(),
+    workspaceId: z.string().trim().min(1).max(120).nullable().optional(),
     jobId: z.string().trim().min(1).max(120).nullable().optional(),
     layout: layoutModelSchema.optional(),
     savedViewport: drawingCanvasViewportSchema.nullable().optional(),
@@ -1240,6 +1316,7 @@ export const drawingUpdateRequestSchema = z
     if (
       value.name === undefined &&
       value.customerId === undefined &&
+      value.workspaceId === undefined &&
       value.jobId === undefined &&
       value.layout === undefined &&
       value.savedViewport === undefined

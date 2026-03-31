@@ -6,11 +6,12 @@ import type {
   CompanyUserRecord,
   CustomerRecord,
   CustomerSummary,
+  DrawingRecord,
   DrawingStatus,
   DrawingSummary,
   DrawingVersionRecord,
-  JobRecord,
-  JobSummary
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary
 } from "@fence-estimator/contracts";
 
 import {
@@ -36,14 +37,13 @@ export interface PortalSessionState {
   setupStatus: SetupStatus | null;
   customers: CustomerSummary[];
   drawings: DrawingSummary[];
-  jobs: JobSummary[];
+  workspaces: DrawingWorkspaceSummary[];
   users: CompanyUserRecord[];
   auditLog: AuditLogRecord[];
   isRestoringSession: boolean;
   isAuthenticating: boolean;
   isLoadingCustomers: boolean;
   isLoadingDrawings: boolean;
-  isLoadingJobs: boolean;
   isLoadingUsers: boolean;
   isLoadingAuditLog: boolean;
   isSavingCustomer: boolean;
@@ -57,7 +57,7 @@ export interface PortalSessionState {
   logout: () => Promise<void>;
   refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
-  refreshJobs: () => Promise<void>;
+  refreshWorkspaces: () => Promise<void>;
   refreshUsers: () => Promise<void>;
   refreshAuditLog: () => Promise<void>;
   refreshFilteredAuditLog: (query: AuditLogQueryOptions) => Promise<void>;
@@ -67,18 +67,19 @@ export interface PortalSessionState {
       | { mode: "create"; customer: { name: string; primaryContactName: string; primaryEmail: string; primaryPhone: string; siteAddress: string; notes: string } }
       | { mode: "update"; customerId: string; customer: { name?: string; primaryContactName?: string; primaryEmail?: string; primaryPhone?: string; siteAddress?: string; notes?: string } },
   ) => Promise<CustomerRecord | null>;
-  createJob: (input: { customerId: string; name: string; notes: string }) => Promise<JobRecord | null>;
+  createDrawing: (input: { customerId: string; name: string }) => Promise<DrawingRecord | null>;
+  createWorkspace: (input: { customerId: string; name: string; notes: string }) => Promise<DrawingWorkspaceRecord | null>;
   setCustomerArchived: (customerId: string, archived: boolean, cascadeDrawings?: boolean) => Promise<boolean>;
   createUser: (input: CreateCompanyUserInput) => Promise<boolean>;
   resetUserPassword: (userId: string, password: string) => Promise<boolean>;
   setDrawingArchived: (drawingId: string, archived: boolean) => Promise<boolean>;
-  setJobArchived: (jobId: string, archived: boolean) => Promise<boolean>;
+  setWorkspaceArchived: (workspaceId: string, archived: boolean) => Promise<boolean>;
   changeDrawingStatus: (drawingId: string, status: DrawingStatus) => Promise<boolean>;
   loadDrawingVersions: (drawingId: string) => Promise<DrawingVersionRecord[]>;
   restoreDrawingVersion: (drawingId: string, versionNumber: number) => Promise<boolean>;
   deleteDrawing: (drawingId: string) => Promise<boolean>;
   deleteCustomer: (customerId: string) => Promise<boolean>;
-  deleteJob: (jobId: string) => Promise<boolean>;
+  deleteWorkspace: (workspaceId: string) => Promise<boolean>;
   clearMessages: () => void;
 }
 
@@ -100,13 +101,12 @@ export function usePortalSession(): PortalSessionState {
     clearCompanyData,
     createUser,
     drawings,
-    jobs,
+    workspaces,
     auditLog,
     isArchivingCustomerId,
     isLoadingAuditLog,
     isLoadingCustomers,
     isLoadingDrawings,
-    refreshJobs,
     isLoadingUsers,
     isSavingCustomer,
     isResettingUserId,
@@ -118,18 +118,20 @@ export function usePortalSession(): PortalSessionState {
     refreshAuditLog,
     refreshFilteredAuditLog,
     refreshDrawings,
+    refreshWorkspaces,
     refreshUsers,
     resetUserPassword,
     restoreDrawingVersion,
     saveCustomer,
-    createJob,
+    createDrawing,
+    createWorkspace,
     setCustomerArchived,
     setDrawingArchived,
-    setJobArchived,
+    setWorkspaceArchived,
     exportAuditLog,
     deleteDrawing,
     deleteCustomer,
-    deleteJob,
+    deleteWorkspace,
     users
   } = companyData;
   const { clearMessages, errorMessage, noticeMessage, setErrorMessage, setNoticeMessage } = feedback;
@@ -304,14 +306,13 @@ export function usePortalSession(): PortalSessionState {
     setupStatus,
     customers,
     drawings,
-    jobs,
+    workspaces,
     users,
     auditLog,
     isRestoringSession,
     isAuthenticating,
     isLoadingCustomers,
     isLoadingDrawings,
-    isLoadingJobs: false,
     isLoadingUsers,
     isLoadingAuditLog,
     isSavingCustomer,
@@ -325,24 +326,25 @@ export function usePortalSession(): PortalSessionState {
     logout,
     refreshCustomers,
     refreshDrawings,
-    refreshJobs,
+    refreshWorkspaces,
     refreshUsers,
     refreshAuditLog,
     refreshFilteredAuditLog,
     exportAuditLog,
     saveCustomer,
-    createJob,
+    createDrawing,
+    createWorkspace,
     setCustomerArchived,
     createUser,
     resetUserPassword,
     setDrawingArchived,
-    setJobArchived,
+    setWorkspaceArchived,
     changeDrawingStatus,
     loadDrawingVersions,
     restoreDrawingVersion,
     deleteDrawing,
     deleteCustomer,
-    deleteJob,
+    deleteWorkspace,
     clearMessages
   };
 }

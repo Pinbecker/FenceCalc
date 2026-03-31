@@ -1,5 +1,8 @@
 import type {
   CustomerRecord,
+  DrawingTaskRecord,
+  DrawingWorkspaceRecord,
+  DrawingWorkspaceSummary,
   DrawingRecord,
   DrawingVersionRecord,
   JobRecord,
@@ -11,12 +14,14 @@ import type {
 import { toDrawingSummary } from "./shared.js";
 import type {
   CompanyTaskListOptions,
+  CreateDrawingWorkspaceInput,
   DeleteJobInput,
   CreateJobInput,
   CreateJobTaskInput,
   CustomerScope,
   SetJobPrimaryDrawingInput,
   StoredUser,
+  UpdateDrawingWorkspaceInput,
   UpdateJobInput,
   UpdateJobTaskInput,
 } from "./types.js";
@@ -33,6 +38,32 @@ export interface InMemoryJobState {
 
 export class InMemoryJobStore {
   public constructor(private readonly state: InMemoryJobState) {}
+
+  private toDrawingTaskRecord(task: JobTaskRecord): DrawingTaskRecord {
+    return {
+      id: task.id,
+      companyId: task.companyId,
+      workspaceId: task.jobId,
+      workspaceName: task.jobName,
+      rootDrawingId: task.drawingId,
+      rootDrawingName: task.drawingName,
+      revisionDrawingId: task.revisionDrawingId ?? null,
+      revisionDrawingName: task.revisionDrawingName ?? "",
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      isCompleted: task.isCompleted,
+      assignedUserId: task.assignedUserId,
+      assignedUserDisplayName: task.assignedUserDisplayName,
+      dueAtIso: task.dueAtIso,
+      completedAtIso: task.completedAtIso,
+      completedByUserId: task.completedByUserId,
+      completedByDisplayName: task.completedByDisplayName,
+      createdByUserId: task.createdByUserId,
+      createdAtIso: task.createdAtIso,
+      updatedAtIso: task.updatedAtIso,
+    };
+  }
 
   private isStalePlaceholderJob(job: JobRecord): boolean {
     if (!job.id.startsWith("job:")) {
@@ -112,6 +143,10 @@ export class InMemoryJobStore {
     return this.withDisplayNames(job);
   }
 
+  public createDrawingWorkspace(input: CreateDrawingWorkspaceInput): DrawingWorkspaceRecord {
+    return this.createJob(input);
+  }
+
   public listJobs(
     companyId: string,
     scope: CustomerScope = "ACTIVE",
@@ -140,8 +175,24 @@ export class InMemoryJobStore {
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
   }
 
+  public listDrawingWorkspaces(
+    companyId: string,
+    scope: CustomerScope = "ACTIVE",
+    search = "",
+    customerId?: string,
+  ): DrawingWorkspaceSummary[] {
+    return this.listJobs(companyId, scope, search, customerId);
+  }
+
   public listJobsForCustomer(customerId: string, companyId: string): JobSummary[] {
     return this.listJobs(companyId, "ALL", "", customerId);
+  }
+
+  public listDrawingWorkspacesForCustomer(
+    customerId: string,
+    companyId: string,
+  ): DrawingWorkspaceSummary[] {
+    return this.listDrawingWorkspaces(companyId, "ALL", "", customerId);
   }
 
   public getJobById(jobId: string, companyId: string): JobRecord | null {
@@ -150,6 +201,13 @@ export class InMemoryJobStore {
       return null;
     }
     return this.withDisplayNames(job);
+  }
+
+  public getDrawingWorkspaceById(
+    workspaceId: string,
+    companyId: string,
+  ): DrawingWorkspaceRecord | null {
+    return this.getJobById(workspaceId, companyId);
   }
 
   public updateJob(input: UpdateJobInput): JobRecord | null {
@@ -178,6 +236,12 @@ export class InMemoryJobStore {
     };
     this.state.jobs.set(updated.id, updated);
     return this.withDisplayNames(updated);
+  }
+
+  public updateDrawingWorkspace(
+    input: UpdateDrawingWorkspaceInput,
+  ): DrawingWorkspaceRecord | null {
+    return this.updateJob({ ...input, jobId: input.workspaceId });
   }
 
   public deleteJob(input: DeleteJobInput): boolean {
@@ -232,6 +296,12 @@ export class InMemoryJobStore {
     return this.withDisplayNames(updated);
   }
 
+  public setDrawingWorkspacePrimaryDrawing(
+    input: SetJobPrimaryDrawingInput,
+  ): DrawingWorkspaceRecord | null {
+    return this.setJobPrimaryDrawing(input);
+  }
+
   public listJobTasks(jobId: string, companyId: string): JobTaskRecord[] {
     const job = this.state.jobs.get(jobId);
     return (this.state.jobTasks.get(jobId) ?? [])
@@ -257,6 +327,13 @@ export class InMemoryJobStore {
           Number(left.isCompleted) - Number(right.isCompleted) ||
           (left.dueAtIso ?? "").localeCompare(right.dueAtIso ?? ""),
       );
+  }
+
+  public listDrawingWorkspaceTasks(
+    workspaceId: string,
+    companyId: string,
+  ): DrawingTaskRecord[] {
+    return this.listJobTasks(workspaceId, companyId).map((task) => this.toDrawingTaskRecord(task));
   }
 
   public listCompanyTasks(
@@ -365,6 +442,13 @@ export class InMemoryJobStore {
     return sorted.slice(0, Math.max(1, maxItems));
   }
 
+  public listCompanyDrawingTasks(
+    companyId: string,
+    options: CompanyTaskListOptions = {},
+  ): DrawingTaskRecord[] {
+    return this.listCompanyTasks(companyId, options).map((task) => this.toDrawingTaskRecord(task));
+  }
+
   public createJobTask(input: CreateJobTaskInput): JobTaskRecord {
     const job = this.state.jobs.get(input.jobId);
     const task: JobTaskRecord = {
@@ -374,6 +458,9 @@ export class InMemoryJobStore {
       jobName: job?.name ?? "",
       drawingId: input.drawingId,
       drawingName: input.drawingId ? (this.state.drawings.get(input.drawingId)?.name ?? "") : "",
+      revisionDrawingId: input.revisionDrawingId ?? null,
+      revisionDrawingName:
+        input.revisionDrawingId ? (this.state.drawings.get(input.revisionDrawingId)?.name ?? "") : "",
       title: input.title,
       description: input.description,
       priority: input.priority as JobTaskRecord["priority"],
@@ -394,6 +481,10 @@ export class InMemoryJobStore {
     return task;
   }
 
+  public createDrawingTask(input: CreateJobTaskInput): DrawingTaskRecord {
+    return this.toDrawingTaskRecord(this.createJobTask(input));
+  }
+
   public updateJobTask(input: UpdateJobTaskInput): JobTaskRecord | null {
     const tasks = this.state.jobTasks.get(input.jobId) ?? [];
     const existing = tasks.find(
@@ -406,6 +497,9 @@ export class InMemoryJobStore {
       ...existing,
       drawingId: input.drawingId,
       drawingName: input.drawingId ? (this.state.drawings.get(input.drawingId)?.name ?? "") : "",
+      revisionDrawingId: input.revisionDrawingId ?? null,
+      revisionDrawingName:
+        input.revisionDrawingId ? (this.state.drawings.get(input.revisionDrawingId)?.name ?? "") : "",
       title: input.title,
       description: input.description,
       priority: input.priority as JobTaskRecord["priority"],
@@ -429,6 +523,11 @@ export class InMemoryJobStore {
     return updated;
   }
 
+  public updateDrawingTask(input: UpdateJobTaskInput): DrawingTaskRecord | null {
+    const updated = this.updateJobTask(input);
+    return updated ? this.toDrawingTaskRecord(updated) : null;
+  }
+
   public deleteJobTask(taskId: string, jobId: string, companyId: string): boolean {
     const tasks = this.state.jobTasks.get(jobId) ?? [];
     const filtered = tasks.filter((task) => !(task.id === taskId && task.companyId === companyId));
@@ -437,5 +536,9 @@ export class InMemoryJobStore {
     }
     this.state.jobTasks.set(jobId, filtered);
     return true;
+  }
+
+  public deleteDrawingTask(taskId: string, workspaceId: string, companyId: string): boolean {
+    return this.deleteJobTask(taskId, workspaceId, companyId);
   }
 }

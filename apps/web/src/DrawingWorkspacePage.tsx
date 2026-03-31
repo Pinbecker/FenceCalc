@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  JOB_STAGES,
   TASK_PRIORITIES,
   type AncillaryEstimateItem,
   type AuditLogRecord,
@@ -10,13 +9,14 @@ import {
   type CustomerSummary,
   type DrawingRecord,
   type DrawingSummary,
+  type DrawingTaskRecord,
+  type DrawingWorkspaceCommercialInputs,
+  type DrawingWorkspaceRecord,
+  type DrawingWorkspaceStage,
   type EstimateWorkbookManualEntry,
-  type JobCommercialInputs,
-  type JobRecord,
-  type JobStage,
-  type JobTaskRecord,
   type LayoutModel,
   type PricedEstimateResult,
+  type QuoteDrawingSnapshot,
   type QuoteRecord,
   type TaskPriority,
 } from "@fence-estimator/contracts";
@@ -24,20 +24,30 @@ import {
 import { DrawingPreview } from "./DrawingPreview";
 import { exportQuotePdfReport } from "./drawingPdfReport";
 import {
-  createJobDrawing,
-  createJobQuoteSnapshot,
-  createJobTask,
-  deleteJobTask,
+  createDrawingWorkspaceDrawing,
+  createDrawingWorkspaceQuoteSnapshot,
+  createDrawingWorkspaceTask,
+  deleteDrawingWorkspaceTask,
   getDrawing,
-  getJob,
-  getJobEstimate,
-  listJobActivity,
-  listJobDrawings,
-  listJobQuotes,
-  listJobTasks,
-  updateJob,
-  updateJobTask,
+  getDrawingWorkspace,
+  getDrawingWorkspaceEstimate,
+  listDrawingWorkspaceActivity,
+  listDrawingWorkspaceDrawings,
+  listDrawingWorkspaceQuotes,
+  listDrawingWorkspaceTasks,
+  updateDrawing,
+  updateDrawingWorkspace,
+  updateDrawingWorkspaceTask,
 } from "./apiClient";
+import {
+  DRAWING_WORKSPACE_TAB_LABELS,
+  DRAWING_WORKSPACE_TABS,
+  buildDrawingWorkspaceQuery,
+  getRevisionLabel,
+  normalizeDrawingWorkspaceTab,
+  resolveDrawingWorkspaceLoadTarget,
+  type DrawingWorkspaceTab,
+} from "./drawingWorkspace";
 import {
   COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE,
   COMMERCIAL_DISTRIBUTION_CHARGE_CODE,
@@ -57,16 +67,12 @@ import {
 import type { PortalRoute } from "./useHashRoute";
 import { buildEstimateDisplaySections, formatQuantityForDisplay } from "./workbookPresentation";
 
-type JobTab = "overview" | "tasks" | "drawings" | "estimate" | "activity";
-
-const JOB_TABS: JobTab[] = ["overview", "tasks", "drawings", "estimate", "activity"];
-
-const JOB_TAB_LABELS: Record<JobTab, string> = {
-  overview: "Overview",
-  tasks: "Tasks",
-  drawings: "Drawings",
-  estimate: "Estimate",
-  activity: "Activity",
+const DRAWING_STATUS_LABELS: Record<DrawingSummary["status"], string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
 };
 
 const EMPTY_LAYOUT: LayoutModel = {
@@ -105,17 +111,19 @@ interface TaskDraftState {
   description: string;
   priority: TaskPriority;
   assignedUserId: string | null;
-  drawingId: string | null;
+  rootDrawingId: string | null;
+  revisionDrawingId: string | null;
   dueDate: string;
 }
 
-function buildTaskDraft(task: JobTaskRecord): TaskDraftState {
+function buildTaskDraft(task: DrawingTaskRecord): TaskDraftState {
   return {
     title: task.title,
     description: task.description,
     priority: task.priority,
     assignedUserId: task.assignedUserId,
-    drawingId: task.drawingId,
+    rootDrawingId: task.rootDrawingId,
+    revisionDrawingId: task.revisionDrawingId,
     dueDate: task.dueAtIso ? task.dueAtIso.slice(0, 10) : "",
   };
 }
@@ -129,15 +137,44 @@ function getTaskRootDrawingId(
   return drawing.parentDrawingId ?? drawing.id;
 }
 
-function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">): string {
-  return drawing.revisionNumber === 0 ? "Original" : `REV ${drawing.revisionNumber}`;
-}
-
 function getEstimateOptionLabel(drawing: DrawingSummary): string {
   const baseLabel = getRevisionLabel(drawing);
   return drawing.revisionNumber === 0
     ? `${baseLabel} • ${drawing.name}`
-    : `${baseLabel} • ${drawing.status}`;
+    : `${baseLabel} • ${DRAWING_STATUS_LABELS[drawing.status]}`;
+}
+
+function buildDrawingRecordFromQuoteSnapshot(
+  snapshot: QuoteDrawingSnapshot,
+  workspaceId: string | null,
+): DrawingRecord {
+  return {
+    id: snapshot.drawingId,
+    companyId: "",
+    ...(workspaceId ? { workspaceId } : {}),
+    jobRole: snapshot.revisionNumber && snapshot.revisionNumber > 0 ? "SECONDARY" : "PRIMARY",
+    parentDrawingId: null,
+    revisionNumber: snapshot.revisionNumber ?? 0,
+    name: snapshot.drawingName,
+    customerId: snapshot.customerId ?? "",
+    customerName: snapshot.customerName,
+    layout: snapshot.layout,
+    savedViewport: snapshot.savedViewport ?? null,
+    estimate: snapshot.estimate,
+    schemaVersion: snapshot.schemaVersion,
+    rulesVersion: snapshot.rulesVersion,
+    versionNumber: snapshot.versionNumber,
+    status: "QUOTED",
+    isArchived: false,
+    archivedAtIso: null,
+    archivedByUserId: null,
+    statusChangedAtIso: null,
+    statusChangedByUserId: null,
+    createdByUserId: "",
+    updatedByUserId: "",
+    createdAtIso: "",
+    updatedAtIso: "",
+  };
 }
 
 function buildAncillaryItem(): AncillaryEstimateItem {
@@ -196,7 +233,7 @@ function getManualEntryValue(
 function buildCommercialInputs(
   pricedEstimate: PricedEstimateResult | null,
   manualEntries: EstimateWorkbookManualEntry[],
-): JobCommercialInputs | null {
+): DrawingWorkspaceCommercialInputs | null {
   const workbook = pricedEstimate?.workbook;
   if (!workbook) {
     return null;
@@ -222,40 +259,46 @@ function buildCommercialInputs(
   };
 }
 
-interface JobPageProps {
+function serializeCommercialInputs(inputs: DrawingWorkspaceCommercialInputs | null): string | null {
+  return inputs ? JSON.stringify(inputs) : null;
+}
+
+interface DrawingWorkspacePageProps {
   session: AuthSessionEnvelope;
   query?: Record<string, string>;
   customers: CustomerSummary[];
   users: CompanyUserRecord[];
   onNavigate(this: void, route: PortalRoute, query?: Record<string, string>): void;
-  onRefreshJobs(this: void): Promise<void>;
+  onRefreshWorkspaces(this: void): Promise<void>;
   onRefreshDrawings(this: void): Promise<void>;
   onToggleDrawingArchived(this: void, drawingId: string, archived: boolean): Promise<boolean>;
-  onDeleteJob(this: void, jobId: string): Promise<boolean>;
+  onSetWorkspaceArchived(this: void, workspaceId: string, archived: boolean): Promise<boolean>;
+  onDeleteWorkspace(this: void, workspaceId: string): Promise<boolean>;
 }
 
-export function JobPage({
+export function DrawingWorkspacePage({
   session,
   query,
   customers,
   users,
   onNavigate,
-  onRefreshJobs,
+  onRefreshWorkspaces,
   onRefreshDrawings,
   onToggleDrawingArchived,
-  onDeleteJob,
-}: JobPageProps) {
-  const jobId = query?.jobId ?? null;
+  onSetWorkspaceArchived,
+  onDeleteWorkspace,
+}: DrawingWorkspacePageProps) {
+  const refreshWorkspaces = onRefreshWorkspaces;
+  const setWorkspaceArchived = onSetWorkspaceArchived;
+  const workspaceId = query?.workspaceId ?? query?.drawingId ?? null;
   const requestedDrawingId = query?.drawingId ?? null;
   const focusTaskId = query?.focusTaskId ?? null;
-  const tabValue = (query?.tab as JobTab | undefined) ?? "overview";
-  const normalizedTab: JobTab = JOB_TABS.includes(tabValue) ? tabValue : "overview";
-  const currentTab: JobTab = focusTaskId && normalizedTab === "overview" ? "tasks" : normalizedTab;
+  const currentTab = normalizeDrawingWorkspaceTab(query?.tab);
 
-  const [job, setJob] = useState<JobRecord | null>(null);
+  const [job, setJob] = useState<DrawingWorkspaceRecord | null>(null);
   const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
-  const [selectedDrawingRecord, setSelectedDrawingRecord] = useState<DrawingRecord | null>(null);
-  const [tasks, setTasks] = useState<JobTaskRecord[]>([]);
+  const [activeDrawingRecord, setActiveDrawingRecord] = useState<DrawingRecord | null>(null);
+  const [tasks, setTasks] = useState<DrawingTaskRecord[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [activity, setActivity] = useState<AuditLogRecord[]>([]);
   const [basePricedEstimate, setBasePricedEstimate] = useState<PricedEstimateResult | null>(null);
@@ -263,7 +306,7 @@ export function JobPage({
   const [manualEntries, setManualEntries] = useState<EstimateWorkbookManualEntry[]>([]);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
-  const [taskAssignee, setTaskAssignee] = useState<string | null>(null);
+  const [taskAssignee, setTaskAssignee] = useState<string | null>(session.user.id);
   const [taskDrawingId, setTaskDrawingId] = useState<string | null>(null);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("NORMAL");
@@ -276,12 +319,9 @@ export function JobPage({
   const [isSavingControls, setIsSavingControls] = useState(false);
   const [isSavingQuote, setIsSavingQuote] = useState(false);
   const [isAddingDrawing, setIsAddingDrawing] = useState(false);
-  const [isCreatingDrawingModalOpen, setIsCreatingDrawingModalOpen] = useState(false);
-  const [newDrawingName, setNewDrawingName] = useState("");
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
-  const [isDeletingJob, setIsDeletingJob] = useState(false);
-  const [confirmDeleteJob, setConfirmDeleteJob] = useState(false);
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
   const [isEditingJobDetails, setIsEditingJobDetails] = useState(false);
   const [editJobName, setEditJobName] = useState("");
   const [editJobNotes, setEditJobNotes] = useState("");
@@ -289,13 +329,7 @@ export function JobPage({
   const [isSavingJobDetails, setIsSavingJobDetails] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
-  const canDeleteJob = session.user.role === "OWNER" || session.user.role === "ADMIN";
-  const currentTabRef = useRef<JobTab>(currentTab);
-
-  useEffect(() => {
-    currentTabRef.current = currentTab;
-  }, [currentTab]);
-
+  const latestCommercialSaveRequestRef = useRef(0);
   useEffect(() => {
     if (!noticeMessage) return;
     const timer = globalThis.setTimeout(() => setNoticeMessage(null), 4000);
@@ -306,7 +340,8 @@ export function JobPage({
     () => customers.find((entry) => entry.id === job?.customerId) ?? null,
     [customers, job?.customerId],
   );
-  const selectedDrawing = useMemo(
+  const canDeleteWorkspace = session.user.role === "OWNER" || session.user.role === "ADMIN";
+  const activeDrawing = useMemo(
     () =>
       drawings.find((entry) => entry.id === requestedDrawingId) ??
       drawings.find((entry) => entry.id === job?.primaryDrawingId) ??
@@ -323,45 +358,42 @@ export function JobPage({
   }, [ancillaryItems, basePricedEstimate, manualEntries]);
 
   const workbook = pricedEstimate?.workbook ?? null;
+  const commercialInputs = useMemo(
+    () => buildCommercialInputs(pricedEstimate, manualEntries),
+    [manualEntries, pricedEstimate],
+  );
+  const commercialInputsKey = useMemo(
+    () => serializeCommercialInputs(commercialInputs),
+    [commercialInputs],
+  );
+  const workspaceCommercialInputsKey = useMemo(
+    () => serializeCommercialInputs(job?.commercialInputs ?? null),
+    [job?.commercialInputs],
+  );
   const materialSections = useMemo(
     () =>
-      selectedDrawingRecord && workbook
-        ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "MATERIALS")
+      activeDrawingRecord && workbook
+        ? buildEstimateDisplaySections(workbook, activeDrawingRecord, "MATERIALS")
         : [],
-    [selectedDrawingRecord, workbook],
+    [activeDrawingRecord, workbook],
   );
   const labourSections = useMemo(
     () =>
-      selectedDrawingRecord && workbook
-        ? buildEstimateDisplaySections(workbook, selectedDrawingRecord, "LABOUR")
+      activeDrawingRecord && workbook
+        ? buildEstimateDisplaySections(workbook, activeDrawingRecord, "LABOUR")
         : [],
-    [selectedDrawingRecord, workbook],
+    [activeDrawingRecord, workbook],
   );
 
-  const sortedTasks = useMemo(() => {
-    const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
-    return [...tasks].sort((a, b) => {
-      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
-      if (!a.isCompleted) {
-        const pa = priorityOrder[a.priority] ?? 2;
-        const pb = priorityOrder[b.priority] ?? 2;
-        if (pa !== pb) return pa - pb;
-        if (a.dueAtIso && b.dueAtIso) return a.dueAtIso.localeCompare(b.dueAtIso);
-        if (a.dueAtIso) return -1;
-        if (b.dueAtIso) return 1;
-      }
-      return b.createdAtIso.localeCompare(a.createdAtIso);
-    });
-  }, [tasks]);
-  const rootDrawings = useMemo(
+  const allRootDrawings = useMemo(
     () =>
       drawings
         .filter((drawing) => !drawing.parentDrawingId)
         .sort((left, right) => left.createdAtIso.localeCompare(right.createdAtIso)),
     [drawings],
   );
-  const preferredTaskDrawingId = useMemo(() => {
-    const selectedRootDrawingId = getTaskRootDrawingId(selectedDrawing);
+  const activeRootDrawingId = useMemo(() => {
+    const selectedRootDrawingId = getTaskRootDrawingId(activeDrawing);
     if (selectedRootDrawingId) {
       return selectedRootDrawingId;
     }
@@ -369,9 +401,67 @@ export function JobPage({
       ? (drawings.find((drawing) => drawing.id === job.primaryDrawingId) ?? null)
       : null;
     const primaryRootDrawingId = getTaskRootDrawingId(primaryDrawing);
-    return primaryRootDrawingId ?? rootDrawings[0]?.id ?? null;
-  }, [drawings, job?.primaryDrawingId, rootDrawings, selectedDrawing]);
-  const openTaskCount = tasks.filter((entry) => !entry.isCompleted).length;
+    return primaryRootDrawingId ?? allRootDrawings[0]?.id ?? null;
+  }, [allRootDrawings, drawings, job?.primaryDrawingId, activeDrawing]);
+  const activeRootDrawing = useMemo(
+    () =>
+      activeRootDrawingId
+        ? drawings.find((drawing) => drawing.id === activeRootDrawingId) ?? null
+        : null,
+    [activeRootDrawingId, drawings],
+  );
+  const rootDrawings = useMemo(
+    () => (activeRootDrawing ? [activeRootDrawing] : []),
+    [activeRootDrawing],
+  );
+  const activeDrawingChain = useMemo(() => {
+    if (!activeRootDrawing) {
+      return [] as DrawingSummary[];
+    }
+    return [
+      activeRootDrawing,
+      ...drawings
+        .filter((drawing) => drawing.parentDrawingId === activeRootDrawing.id)
+        .sort((left, right) => {
+          if (left.revisionNumber !== right.revisionNumber) {
+            return left.revisionNumber - right.revisionNumber;
+          }
+          return left.createdAtIso.localeCompare(right.createdAtIso);
+        }),
+    ];
+  }, [activeRootDrawing, drawings]);
+  const activeLatestDrawing = useMemo(
+    () => activeDrawingChain[activeDrawingChain.length - 1] ?? activeRootDrawing ?? null,
+    [activeDrawingChain, activeRootDrawing],
+  );
+  const activeDrawingIds = useMemo(
+    () => new Set(activeDrawingChain.map((drawing) => drawing.id)),
+    [activeDrawingChain],
+  );
+  const sortedTasks = useMemo(() => {
+    const priorityOrder: Record<string, number> = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
+    return [...tasks]
+      .filter((task) => {
+        const taskDrawingId = task.revisionDrawingId ?? task.rootDrawingId;
+        return !taskDrawingId || activeDrawingIds.has(taskDrawingId);
+      })
+      .sort((a, b) => {
+        if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+        if (!a.isCompleted) {
+          const pa = priorityOrder[a.priority] ?? 2;
+          const pb = priorityOrder[b.priority] ?? 2;
+          if (pa !== pb) return pa - pb;
+          if (a.dueAtIso && b.dueAtIso) return a.dueAtIso.localeCompare(b.dueAtIso);
+          if (a.dueAtIso) return -1;
+          if (b.dueAtIso) return 1;
+        }
+        return b.createdAtIso.localeCompare(a.createdAtIso);
+      });
+  }, [activeDrawingIds, tasks]);
+  const preferredTaskDrawingId = useMemo(() => {
+    return activeDrawing?.id ?? activeLatestDrawing?.id ?? null;
+  }, [activeLatestDrawing?.id, activeDrawing?.id]);
+  const openTaskCount = sortedTasks.filter((entry) => !entry.isCompleted).length;
   const latestQuoteByDrawingId = useMemo(() => {
     const latestByDrawingId = new Map<string, QuoteRecord>();
     for (const quote of quotes) {
@@ -381,72 +471,62 @@ export function JobPage({
     }
     return latestByDrawingId;
   }, [quotes]);
-  const sortedDrawings = useMemo(() => {
-    return [...drawings]
-      .filter((d) => !d.parentDrawingId)
-      .sort((a, b) => a.createdAtIso.localeCompare(b.createdAtIso));
-  }, [drawings]);
 
   const drawingGroups = useMemo(() => {
-    return sortedDrawings.map((rootDrawing) => ({
-      rootDrawing,
-      chain: [
-        rootDrawing,
-        ...drawings
-          .filter((drawing) => drawing.parentDrawingId === rootDrawing.id)
-          .sort((left, right) => {
-            if (left.revisionNumber !== right.revisionNumber) {
-              return left.revisionNumber - right.revisionNumber;
-            }
-            return left.createdAtIso.localeCompare(right.createdAtIso);
-          }),
-      ],
-    }));
-  }, [drawings, sortedDrawings]);
+    return activeRootDrawing ? [{ rootDrawing: activeRootDrawing, chain: activeDrawingChain }] : [];
+  }, [activeDrawingChain, activeRootDrawing]);
 
-  const latestDrawingByRootId = useMemo(() => {
-    return new Map(
-      drawingGroups.map(({ rootDrawing, chain }) => [
-        rootDrawing.id,
-        chain[chain.length - 1] ?? rootDrawing,
-      ]),
-    );
-  }, [drawingGroups]);
-
-  const revisionCountByDrawing = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const d of drawings) {
-      if (d.parentDrawingId) {
-        counts.set(d.parentDrawingId, (counts.get(d.parentDrawingId) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [drawings]);
-
-  const navigateToJob = useCallback(
-    (nextTab: JobTab, nextDrawingId?: string | null) => {
-      if (!jobId) {
+  const navigateToWorkspace = useCallback(
+    (nextTab: DrawingWorkspaceTab, nextDrawingId?: string | null) => {
+      const targetDrawingId = nextDrawingId ?? activeDrawing?.id ?? requestedDrawingId ?? null;
+      const fallbackWorkspaceId = job?.id ?? query?.workspaceId ?? null;
+      if (!targetDrawingId && !fallbackWorkspaceId) {
         return;
       }
-      onNavigate("job", {
-        jobId,
-        tab: nextTab,
-        ...(nextDrawingId ? { drawingId: nextDrawingId } : {}),
-      });
+      onNavigate(
+        "drawing",
+        buildDrawingWorkspaceQuery({
+          workspaceId: fallbackWorkspaceId,
+          drawingId: targetDrawingId,
+          tab: nextTab,
+        }),
+      );
     },
-    [jobId, onNavigate],
+    [job?.id, onNavigate, query?.workspaceId, requestedDrawingId, activeDrawing?.id],
+  );
+
+  const openDrawingInEditor = useCallback(
+    (drawingId: string | null | undefined) => {
+      if (!drawingId) {
+        return;
+      }
+      onNavigate("editor", { drawingId });
+    },
+    [onNavigate],
   );
 
   const loadWorkspace = useCallback(
-    async (targetJobId: string) => {
+    async (targetId: string) => {
       setIsLoading(true);
       try {
+        const targetDrawing = requestedDrawingId ? await getDrawing(requestedDrawingId) : null;
+        const { workspaceLookupId } = resolveDrawingWorkspaceLoadTarget({
+          targetId,
+          requestedDrawingId,
+          query,
+          resolvedDrawingWorkspaceId: targetDrawing?.workspaceId ?? null,
+        });
+
+        if (!workspaceLookupId) {
+          throw new Error("Drawing is not linked to a workspace.");
+        }
+
         const [nextJob, nextDrawings, nextTasks, nextQuotes, nextActivity] = await Promise.all([
-          getJob(targetJobId),
-          listJobDrawings(targetJobId),
-          listJobTasks(targetJobId),
-          listJobQuotes(targetJobId),
-          listJobActivity(targetJobId),
+          getDrawingWorkspace(workspaceLookupId),
+          listDrawingWorkspaceDrawings(workspaceLookupId),
+          listDrawingWorkspaceTasks(workspaceLookupId),
+          listDrawingWorkspaceQuotes(workspaceLookupId),
+          listDrawingWorkspaceActivity(workspaceLookupId),
         ]);
         setJob(nextJob);
         setDrawings(
@@ -466,19 +546,6 @@ export function JobPage({
         setActivity(nextActivity);
         setErrorMessage(null);
       } catch (error) {
-        try {
-          const drawing = await getDrawing(targetJobId);
-          if (drawing.jobId && drawing.jobId !== targetJobId) {
-            onNavigate("job", {
-              jobId: drawing.jobId,
-              tab: currentTabRef.current,
-              drawingId: requestedDrawingId ?? drawing.id,
-            });
-            return;
-          }
-        } catch {
-          // Fall back to the original job error below if the ID is not a drawing either.
-        }
         setJob(null);
         setDrawings([]);
         setTasks([]);
@@ -490,11 +557,11 @@ export function JobPage({
         setIsLoading(false);
       }
     },
-    [onNavigate, requestedDrawingId],
+    [query?.workspaceId, requestedDrawingId],
   );
 
   useEffect(() => {
-    if (!jobId) {
+    if (!workspaceId) {
       setJob(null);
       setDrawings([]);
       setTasks([]);
@@ -502,17 +569,17 @@ export function JobPage({
       setQuotes([]);
       setActivity([]);
       setBasePricedEstimate(null);
-      setSelectedDrawingRecord(null);
+      setActiveDrawingRecord(null);
       setIsLoading(false);
       return;
     }
-    void loadWorkspace(jobId);
-  }, [jobId, loadWorkspace]);
+    void loadWorkspace(workspaceId);
+  }, [loadWorkspace, workspaceId]);
 
   useEffect(() => {
-    if (!jobId || !selectedDrawing) {
+    if (!job?.id || !activeDrawing) {
       setBasePricedEstimate(null);
-      setSelectedDrawingRecord(null);
+      setActiveDrawingRecord(null);
       setAncillaryItems([]);
       setManualEntries([]);
       return;
@@ -523,20 +590,20 @@ export function JobPage({
     void (async () => {
       try {
         const [nextEstimate, nextDrawingRecord] = await Promise.all([
-          getJobEstimate(jobId, selectedDrawing.id),
-          getDrawing(selectedDrawing.id),
+          getDrawingWorkspaceEstimate(job.id, activeDrawing.id),
+          getDrawing(activeDrawing.id),
         ]);
         if (cancelled) {
           return;
         }
         setBasePricedEstimate(nextEstimate);
-        setSelectedDrawingRecord(nextDrawingRecord);
+        setActiveDrawingRecord(nextDrawingRecord);
         setAncillaryItems([]);
         setManualEntries(buildInitialManualEntries(nextEstimate));
       } catch (error) {
         if (!cancelled) {
           setBasePricedEstimate(null);
-          setSelectedDrawingRecord(null);
+          setActiveDrawingRecord(null);
           setErrorMessage((error as Error).message);
         }
       } finally {
@@ -549,7 +616,7 @@ export function JobPage({
     return () => {
       cancelled = true;
     };
-  }, [jobId, selectedDrawing]);
+  }, [job?.id, activeDrawing]);
 
   useEffect(() => {
     if (!focusTaskId || !tasks.some((task) => task.id === focusTaskId)) {
@@ -559,31 +626,64 @@ export function JobPage({
   }, [focusTaskId, tasks]);
 
   useEffect(() => {
+    if (!workspaceId || !activeDrawing?.id) {
+      return;
+    }
+
+    onNavigate(
+      "drawing",
+        buildDrawingWorkspaceQuery({
+        workspaceId: job?.id ?? query?.workspaceId ?? workspaceId,
+        drawingId: activeDrawing.id,
+        tab: currentTab,
+        focusTaskId,
+      }),
+    );
+  }, [currentTab, focusTaskId, job?.id, onNavigate, query?.workspaceId, activeDrawing?.id, workspaceId]);
+
+  useEffect(() => {
+    if (!job?.id || !commercialInputs) {
+      return;
+    }
+    if (commercialInputsKey === workspaceCommercialInputsKey) {
+      return;
+    }
+
+    const timer = globalThis.setTimeout(() => {
+      const requestId = latestCommercialSaveRequestRef.current + 1;
+      latestCommercialSaveRequestRef.current = requestId;
+      setIsSavingControls(true);
+      void (async () => {
+        try {
+          const updated = await updateDrawingWorkspace(job.id, { commercialInputs });
+          if (latestCommercialSaveRequestRef.current !== requestId) {
+            return;
+          }
+          setJob(updated);
+        } catch (error) {
+          if (latestCommercialSaveRequestRef.current !== requestId) {
+            return;
+          }
+          setErrorMessage((error as Error).message);
+        } finally {
+          if (latestCommercialSaveRequestRef.current === requestId) {
+            setIsSavingControls(false);
+          }
+        }
+      })();
+    }, 600);
+
+    return () => globalThis.clearTimeout(timer);
+  }, [commercialInputs, commercialInputsKey, job?.id, workspaceCommercialInputsKey]);
+
+  useEffect(() => {
     setTaskDrawingId((current) => {
-      if (current && rootDrawings.some((drawing) => drawing.id === current)) {
+      if (current && activeDrawingChain.some((drawing) => drawing.id === current)) {
         return current;
       }
       return preferredTaskDrawingId;
     });
-  }, [preferredTaskDrawingId, rootDrawings]);
-
-  const handleStageChange = async (stage: JobStage) => {
-    if (!job) {
-      return;
-    }
-    setIsSavingStage(true);
-    setErrorMessage(null);
-    try {
-      const updated = await updateJob(job.id, { stage });
-      setJob(updated);
-      await onRefreshJobs();
-      setNoticeMessage(`Updated stage to ${stage.replaceAll("_", " ").toLowerCase()}.`);
-    } catch (error) {
-      setErrorMessage((error as Error).message);
-    } finally {
-      setIsSavingStage(false);
-    }
-  };
+  }, [activeDrawingChain, preferredTaskDrawingId]);
 
   const handleArchiveToggle = async () => {
     if (!job) {
@@ -592,11 +692,19 @@ export function JobPage({
     setIsSavingStage(true);
     setErrorMessage(null);
     try {
-      const updated = await updateJob(job.id, { archived: !job.isArchived });
-      setJob(updated);
-      await onRefreshJobs();
-      setNoticeMessage(
-        updated.isArchived ? `Archived ${updated.name}.` : `Restored ${updated.name}.`,
+      const updated = await setWorkspaceArchived(job.id, !job.isArchived);
+      if (updated) {
+        if (job.isArchived) {
+          await loadWorkspace(job.id);
+          return;
+        }
+        onNavigate("customer", { customerId: job.customerId });
+        return;
+      }
+      setErrorMessage(
+        job.isArchived
+          ? "This workspace could not be restored right now."
+          : "This workspace could not be archived right now.",
       );
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -605,45 +713,50 @@ export function JobPage({
     }
   };
 
-  const handleDeleteJob = async () => {
-    if (!job) {
+  const handleDeleteWorkspace = async () => {
+    if (!job || !job.isArchived || !canDeleteWorkspace) {
       return;
     }
-    setIsDeletingJob(true);
+    if (!window.confirm(`Delete workspace "${activeRootDrawing?.name ?? job.name}" permanently?`)) {
+      return;
+    }
+
+    setIsDeletingWorkspace(true);
     setErrorMessage(null);
     try {
-      const deleted = await onDeleteJob(job.id);
+      const deleted = await onDeleteWorkspace(job.id);
       if (deleted) {
         onNavigate("customer", { customerId: job.customerId });
+        return;
       }
+      setErrorMessage("This workspace could not be deleted right now.");
+    } catch (error) {
+      setErrorMessage((error as Error).message);
     } finally {
-      setIsDeletingJob(false);
-      setConfirmDeleteJob(false);
+      setIsDeletingWorkspace(false);
     }
   };
 
-  const openCreateDrawingModal = () => {
-    setNewDrawingName("");
-    setIsCreatingDrawingModalOpen(true);
-  };
-
-  const handleAddDrawing = async (sourceDrawingId?: string, name?: string) => {
-    if (!job) {
+  const handleCreateRevision = async () => {
+    if (!job || !activeLatestDrawing) {
       return;
     }
     setIsAddingDrawing(true);
     setErrorMessage(null);
     try {
-      const drawing = await createJobDrawing(job.id, {
-        ...(sourceDrawingId ? { sourceDrawingId } : {}),
-        ...(name?.trim() ? { name: name.trim() } : {}),
+      const drawing = await createDrawingWorkspaceDrawing(job.id, {
+        sourceDrawingId: activeLatestDrawing.id,
       });
-      await Promise.all([loadWorkspace(job.id), onRefreshJobs(), onRefreshDrawings()]);
-      if (!sourceDrawingId) {
-        setIsCreatingDrawingModalOpen(false);
-        setNewDrawingName("");
-      }
-      onNavigate("editor", { drawingId: drawing.id });
+      await Promise.all([loadWorkspace(job.id), refreshWorkspaces(), onRefreshDrawings()]);
+      onNavigate(
+        "drawing",
+        buildDrawingWorkspaceQuery({
+          workspaceId: job.id,
+          drawingId: drawing.id,
+          tab: "workspace",
+        }),
+      );
+      setNoticeMessage("Revision created. Open it in the editor when you're ready.");
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -651,19 +764,12 @@ export function JobPage({
     }
   };
 
-  const handleCreateRootDrawing = async () => {
-    if (!newDrawingName.trim()) {
-      return;
-    }
-    await handleAddDrawing(undefined, newDrawingName);
-  };
-
   const handleCreateTask = async () => {
     if (!job || !taskTitle.trim()) {
       return;
     }
-    if (rootDrawings.length > 0 && !taskDrawingId) {
-      setErrorMessage("Choose a drawing for this task.");
+    if (activeDrawingChain.length > 0 && !taskDrawingId) {
+      setErrorMessage("Choose a revision for this task.");
       return;
     }
     setIsSavingTask(true);
@@ -672,20 +778,21 @@ export function JobPage({
       const createTaskInput = {
         title: taskTitle.trim(),
         assignedUserId: taskAssignee,
-        drawingId: taskDrawingId,
+        rootDrawingId: activeRootDrawing?.id ?? null,
+        revisionDrawingId: taskDrawingId,
         dueAtIso: taskDueDate ? new Date(`${taskDueDate}T09:00:00`).toISOString() : null,
         ...(taskDescription.trim() ? { description: taskDescription.trim() } : {}),
         ...(taskPriority !== "NORMAL" ? { priority: taskPriority } : {}),
       };
-      await createJobTask(job.id, createTaskInput);
+      await createDrawingWorkspaceTask(job.id, createTaskInput);
       setTaskTitle("");
       setTaskDueDate("");
-      setTaskAssignee(null);
+      setTaskAssignee(session.user.id);
       setTaskDrawingId(preferredTaskDrawingId);
       setTaskDescription("");
       setTaskPriority("NORMAL");
       setIsTaskFormExpanded(false);
-      await Promise.all([loadWorkspace(job.id), onRefreshJobs()]);
+      await Promise.all([loadWorkspace(job.id), refreshWorkspaces()]);
       setNoticeMessage("Task added.");
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -694,7 +801,7 @@ export function JobPage({
     }
   };
 
-  const handleExpandTask = (task: JobTaskRecord) => {
+  const handleExpandTask = (task: DrawingTaskRecord) => {
     setTaskDrafts((current) => ({
       ...current,
       [task.id]: current[task.id] ?? buildTaskDraft(task),
@@ -715,7 +822,8 @@ export function JobPage({
           description: "",
           priority: "NORMAL",
           assignedUserId: null,
-          drawingId: null,
+          rootDrawingId: null,
+          revisionDrawingId: null,
           dueDate: "",
         }),
         [field]: value,
@@ -723,14 +831,14 @@ export function JobPage({
     }));
   };
 
-  const handleResetTaskDraft = (task: JobTaskRecord) => {
+  const handleResetTaskDraft = (task: DrawingTaskRecord) => {
     setTaskDrafts((current) => ({
       ...current,
       [task.id]: buildTaskDraft(task),
     }));
   };
 
-  const handleSaveTaskDraft = async (task: JobTaskRecord) => {
+  const handleSaveTaskDraft = async (task: DrawingTaskRecord) => {
     if (!job) {
       return;
     }
@@ -739,19 +847,20 @@ export function JobPage({
       setErrorMessage("Task title is required.");
       return;
     }
-    if (rootDrawings.length > 0 && !draft.drawingId) {
-      setErrorMessage("Choose a drawing for this task.");
+    if (activeDrawingChain.length > 0 && !draft.revisionDrawingId && !draft.rootDrawingId) {
+      setErrorMessage("Choose a revision for this task.");
       return;
     }
     setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
-      const updated = await updateJobTask(job.id, task.id, {
+      const updated = await updateDrawingWorkspaceTask(job.id, task.id, {
         title: draft.title.trim(),
         description: draft.description.trim(),
         priority: draft.priority,
         assignedUserId: draft.assignedUserId,
-        drawingId: draft.drawingId,
+        rootDrawingId: draft.rootDrawingId,
+        revisionDrawingId: draft.revisionDrawingId,
         dueAtIso: draft.dueDate ? new Date(`${draft.dueDate}T09:00:00`).toISOString() : null,
       });
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
@@ -759,7 +868,7 @@ export function JobPage({
         ...current,
         [updated.id]: buildTaskDraft(updated),
       }));
-      await onRefreshJobs();
+      await refreshWorkspaces();
       setNoticeMessage("Task details saved.");
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -768,13 +877,13 @@ export function JobPage({
     }
   };
 
-  const handleDeleteTask = async (task: JobTaskRecord) => {
+  const handleDeleteTask = async (task: DrawingTaskRecord) => {
     if (!job) {
       return;
     }
     setErrorMessage(null);
     try {
-      await deleteJobTask(job.id, task.id);
+      await deleteDrawingWorkspaceTask(job.id, task.id);
       setTasks((current) => current.filter((entry) => entry.id !== task.id));
       setTaskDrafts((current) => {
         const next = { ...current };
@@ -784,27 +893,29 @@ export function JobPage({
       if (expandedTaskId === task.id) {
         setExpandedTaskId(null);
       }
-      await onRefreshJobs();
+      await refreshWorkspaces();
       setNoticeMessage("Task deleted.");
     } catch (error) {
       setErrorMessage((error as Error).message);
     }
   };
 
-  const handleToggleTask = async (task: JobTaskRecord) => {
+  const handleToggleTask = async (task: DrawingTaskRecord) => {
     if (!job) {
       return;
     }
     setSavingTaskId(task.id);
     setErrorMessage(null);
     try {
-      const updated = await updateJobTask(job.id, task.id, { isCompleted: !task.isCompleted });
+      const updated = await updateDrawingWorkspaceTask(job.id, task.id, {
+        isCompleted: !task.isCompleted,
+      });
       setTasks((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setTaskDrafts((current) => ({
         ...current,
         [updated.id]: buildTaskDraft(updated),
       }));
-      await onRefreshJobs();
+      await refreshWorkspaces();
       setNoticeMessage(updated.isCompleted ? "Task completed." : "Task reopened.");
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -813,47 +924,25 @@ export function JobPage({
     }
   };
 
-  const handleSaveControls = async () => {
-    if (!job) {
-      return;
-    }
-    const commercialInputs = buildCommercialInputs(pricedEstimate, manualEntries);
-    if (!commercialInputs) {
-      return;
-    }
-    setIsSavingControls(true);
-    setErrorMessage(null);
-    try {
-      const updated = await updateJob(job.id, { commercialInputs });
-      setJob(updated);
-      await onRefreshJobs();
-      setNoticeMessage("Estimate controls saved to this job.");
-    } catch (error) {
-      setErrorMessage((error as Error).message);
-    } finally {
-      setIsSavingControls(false);
-    }
-  };
-
   const handleGenerateQuotePdf = async () => {
-    if (!job || !selectedDrawing || !selectedDrawingRecord || !pricedEstimate) {
+    if (!job || !activeDrawing || !activeDrawingRecord || !pricedEstimate) {
       return;
     }
     setIsSavingQuote(true);
     setErrorMessage(null);
     try {
-      const quote = await createJobQuoteSnapshot(
+      const quote = await createDrawingWorkspaceQuoteSnapshot(
         job.id,
         ancillaryItems,
         manualEntries,
-        selectedDrawing.id,
+        activeDrawing.id,
       );
       setQuotes((current) => [quote, ...current]);
-      await onRefreshJobs();
+      await refreshWorkspaces();
 
-      const revisionLabel = getRevisionLabel(selectedDrawing);
+      const revisionLabel = getRevisionLabel(activeDrawing);
 
-      const layout = selectedDrawingRecord.layout ?? EMPTY_LAYOUT;
+      const layout = activeDrawingRecord.layout ?? EMPTY_LAYOUT;
       const segments = layout.segments ?? [];
       const ordinalMap = new Map(segments.map((s, i) => [s.id, i + 1]));
 
@@ -861,8 +950,8 @@ export function JobPage({
         companyName: session.company.name ?? null,
         preparedBy: session.user.displayName ?? null,
         customerName: customer?.name ?? "",
-        jobName: job.name,
-        drawingName: selectedDrawing.name,
+        jobName: activeRootDrawing?.name ?? job.name,
+        drawingName: activeDrawing.name,
         revisionLabel,
         generatedAtIso: new Date().toISOString(),
         layout,
@@ -908,9 +997,75 @@ export function JobPage({
     }
   };
 
+  const handleOpenSavedQuotePdf = useCallback(
+    (quote: QuoteRecord) => {
+      const workbook = quote.pricedEstimate.workbook;
+      if (!workbook) {
+        setErrorMessage("This quote snapshot cannot be opened because its workbook data is unavailable.");
+        return;
+      }
+
+      const snapshotDrawing = buildDrawingRecordFromQuoteSnapshot(quote.drawingSnapshot, job?.id ?? null);
+      const materialSections = buildEstimateDisplaySections(workbook, snapshotDrawing, "MATERIALS");
+      const labourSections = buildEstimateDisplaySections(workbook, snapshotDrawing, "LABOUR");
+      const layout = quote.drawingSnapshot.layout ?? EMPTY_LAYOUT;
+      const estimateSegments = layout.segments ?? [];
+      const segmentOrdinalById = new Map(estimateSegments.map((segment, index) => [segment.id, index + 1]));
+      const preparedBy =
+        users.find((user) => user.id === quote.createdByUserId)?.displayName ?? session.user.displayName ?? null;
+      const workspaceName =
+        activeRootDrawing?.name ?? job?.name ?? quote.drawingSnapshot.drawingName;
+      const opened = exportQuotePdfReport({
+        companyName: session.company.name ?? null,
+        preparedBy,
+        customerName: quote.drawingSnapshot.customerName,
+        jobName: workspaceName,
+        drawingName: quote.drawingSnapshot.drawingName,
+        revisionLabel: getRevisionLabel({
+          revisionNumber: quote.drawingSnapshot.revisionNumber ?? 0,
+        }),
+        generatedAtIso: quote.createdAtIso,
+        layout,
+        materialSections: materialSections.map((section) => ({
+          title: section.title,
+          subtotal: section.subtotal,
+          rows: section.rows.map((row) => ({
+            label: row.label,
+            unit: row.unit,
+            quantity: row.quantity,
+            rate: row.rate,
+            total: row.total,
+          })),
+        })),
+        labourSections: labourSections.map((section) => ({
+          title: section.title,
+          subtotal: section.subtotal,
+          rows: section.rows.map((row) => ({
+            label: row.label,
+            unit: row.unit,
+            quantity: row.quantity,
+            rate: row.rate,
+            total: row.total,
+          })),
+        })),
+        totals: quote.pricedEstimate.totals,
+        warnings: quote.pricedEstimate.warnings,
+        estimateSegments,
+        segmentOrdinalById,
+      });
+
+      if (!opened) {
+        setErrorMessage(
+          "Could not open quote PDF. Please allow pop-ups for this site and try again.",
+        );
+      }
+    },
+    [activeRootDrawing?.name, job?.name, session.company.name, session.user.displayName, users],
+  );
+
   const handleOpenEditDetails = () => {
     if (!job) return;
-    setEditJobName(job.name);
+    setEditJobName(activeRootDrawing?.name ?? job.name);
     setEditJobNotes(job.notes);
     setEditJobOwner(job.ownerUserId);
     setIsEditingJobDetails(true);
@@ -918,22 +1073,43 @@ export function JobPage({
 
   const handleSaveJobDetails = async () => {
     if (!job) return;
+    const trimmedName = editJobName.trim();
+    const currentWorkspaceName = activeRootDrawing?.name ?? job.name;
+    const nameChanged = trimmedName !== currentWorkspaceName;
+    const detailsChanged = editJobNotes !== job.notes || editJobOwner !== job.ownerUserId;
+    if (!trimmedName) {
+      setErrorMessage("Drawing name is required.");
+      return;
+    }
     setIsSavingJobDetails(true);
     setErrorMessage(null);
     try {
-      const updates: Record<string, unknown> = {};
-      if (editJobName.trim() && editJobName.trim() !== job.name) updates.name = editJobName.trim();
-      if (editJobNotes !== job.notes) updates.notes = editJobNotes;
-      if (editJobOwner !== job.ownerUserId) updates.ownerUserId = editJobOwner;
-      if (Object.keys(updates).length === 0) {
+      if (!nameChanged && !detailsChanged) {
         setIsEditingJobDetails(false);
         return;
       }
-      const updated = await updateJob(job.id, updates as Parameters<typeof updateJob>[1]);
-      setJob(updated);
-      await onRefreshJobs();
+      if (nameChanged) {
+        if (!activeRootDrawing) {
+          setErrorMessage("This workspace has no drawing to rename.");
+          return;
+        }
+        await updateDrawing(activeRootDrawing.id, {
+          expectedVersionNumber: activeRootDrawing.versionNumber,
+          name: trimmedName,
+        });
+      }
+      if (detailsChanged) {
+        const updated = await updateDrawingWorkspace(job.id, {
+          ...(editJobNotes !== job.notes ? { notes: editJobNotes } : {}),
+          ...(editJobOwner !== job.ownerUserId ? { ownerUserId: editJobOwner } : {}),
+        });
+        setJob(updated);
+      }
+      await Promise.all([loadWorkspace(job.id), refreshWorkspaces(), onRefreshDrawings()]);
       setIsEditingJobDetails(false);
-      setNoticeMessage("Job details updated.");
+      setNoticeMessage(
+        nameChanged ? "Drawing name updated across the workspace." : "Drawing workspace details updated.",
+      );
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
@@ -941,13 +1117,13 @@ export function JobPage({
     }
   };
 
-  if (!jobId) {
+  if (!workspaceId) {
     return (
       <section className="portal-page">
         <div className="portal-empty-state">
-          <h1>No job selected</h1>
+          <h1>No drawing workspace selected</h1>
           <p>
-            Open a customer workspace and choose a job to review drawings, estimates, and activity.
+            Open a customer workspace and choose a drawing chain to review revisions, estimates, and activity.
           </p>
           <button
             type="button"
@@ -965,7 +1141,7 @@ export function JobPage({
     return (
       <section className="portal-page">
         <div className="portal-empty-state">
-          <h2>Loading job workspace...</h2>
+          <h2>Loading drawing workspace...</h2>
         </div>
       </section>
     );
@@ -975,8 +1151,8 @@ export function JobPage({
     return (
       <section className="portal-page">
         <div className="portal-empty-state">
-          <h1>Job not found</h1>
-          <p>The selected job could not be loaded.</p>
+          <h1>Drawing workspace not found</h1>
+          <p>The drawing workspace could not be loaded.</p>
           <button
             type="button"
             className="portal-secondary-button portal-compact-button"
@@ -1000,7 +1176,7 @@ export function JobPage({
       <div className="portal-job-task-form">
         {rootDrawings.length === 0 ? (
           <p className="portal-empty-copy">
-            Create a drawing for this job before adding drawing-specific tasks.
+            Open a drawing before adding drawing-linked tasks.
           </p>
         ) : null}
         <div className="portal-job-task-form-compact-row">
@@ -1011,7 +1187,13 @@ export function JobPage({
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
               onFocus={() => {
-                if (taskDescription || taskDueDate || taskAssignee || taskPriority !== "NORMAL") {
+                if (
+                  taskDescription ||
+                  taskDueDate ||
+                  taskAssignee !== session.user.id ||
+                  taskPriority !== "NORMAL" ||
+                  taskDrawingId !== preferredTaskDrawingId
+                ) {
                   setIsTaskFormExpanded(true);
                 }
               }}
@@ -1035,8 +1217,8 @@ export function JobPage({
               disabled={
                 isSavingTask ||
                 !taskTitle.trim() ||
-                rootDrawings.length === 0 ||
-                (rootDrawings.length > 0 && !taskDrawingId)
+                activeDrawingChain.length === 0 ||
+                (activeDrawingChain.length > 0 && !taskDrawingId)
               }
             >
               {isSavingTask ? "Saving..." : "Add task"}
@@ -1047,16 +1229,16 @@ export function JobPage({
           <>
             <div className="portal-job-task-form-row">
               <label className="portal-customer-edit-field portal-task-input-field">
-                <span>Drawing</span>
+                <span>Revision</span>
                 <select
                   value={taskDrawingId ?? ""}
                   onChange={(event) => setTaskDrawingId(event.target.value || null)}
-                  disabled={rootDrawings.length === 0}
+                  disabled={activeDrawingChain.length === 0}
                 >
-                  <option value="">Choose drawing</option>
-                  {rootDrawings.map((drawing) => (
+                  <option value="">Choose revision</option>
+                  {activeDrawingChain.map((drawing) => (
                     <option key={drawing.id} value={drawing.id}>
-                      {drawing.name}
+                      {getRevisionLabel(drawing)}
                     </option>
                   ))}
                 </select>
@@ -1116,7 +1298,7 @@ export function JobPage({
 
       <div className="portal-job-task-list">
         {sortedTasks.length === 0 ? (
-          <p className="portal-empty-copy">No tasks on this job yet.</p>
+          <p className="portal-empty-copy">No tasks on this drawing workspace yet.</p>
         ) : null}
         {sortedTasks.map((task) => {
           const isExpanded = expandedTaskId === task.id;
@@ -1148,9 +1330,9 @@ export function JobPage({
                       {task.title}
                     </h3>
                     <div className="portal-job-task-card-context">
-                      {task.drawingName ? (
+                      {task.revisionDrawingName || task.rootDrawingName ? (
                         <span className="portal-job-task-context-pill is-drawing">
-                          Drawing: {task.drawingName}
+                          Revision: {task.revisionDrawingName || task.rootDrawingName}
                         </span>
                       ) : null}
                       <span className="portal-job-task-context-pill">
@@ -1223,18 +1405,22 @@ export function JobPage({
                   </div>
                   <div className="portal-job-task-card-fields">
                     <label className="portal-customer-edit-field">
-                      <span>Drawing</span>
+                      <span>Revision</span>
                       <select
-                        value={taskDraft.drawingId ?? ""}
+                        value={taskDraft.revisionDrawingId ?? ""}
                         onChange={(event) =>
-                          handleTaskDraftChange(task.id, "drawingId", event.target.value || null)
+                          handleTaskDraftChange(
+                            task.id,
+                            "revisionDrawingId",
+                            event.target.value || null,
+                          )
                         }
-                        disabled={rootDrawings.length === 0}
+                        disabled={activeDrawingChain.length === 0}
                       >
-                        <option value="">Choose drawing</option>
-                        {rootDrawings.map((drawing) => (
+                        <option value="">Choose revision</option>
+                        {activeDrawingChain.map((drawing) => (
                           <option key={drawing.id} value={drawing.id}>
-                            {drawing.name}
+                            {getRevisionLabel(drawing)}
                           </option>
                         ))}
                       </select>
@@ -1344,8 +1530,8 @@ export function JobPage({
     <section className="portal-page portal-customer-page portal-job-page">
       <header className="portal-page-header">
         <div className="portal-job-heading">
-          <span className="portal-eyebrow">Job workspace</span>
-          <h1>{job.name}</h1>
+          <span className="portal-eyebrow">Drawing workspace</span>
+          <h1>{activeRootDrawing?.name ?? job.name}</h1>
           <p>
             {job.customerName}
             {customer?.siteAddress ? ` | ${customer.siteAddress}` : ""}
@@ -1353,12 +1539,12 @@ export function JobPage({
           </p>
           <div className="workbook-summary-strip portal-job-summary-strip">
             <article>
-              <span>Stage</span>
-              <strong>{job.stage.replaceAll("_", " ")}</strong>
+              <span>Status</span>
+              <strong>{(activeLatestDrawing?.status ?? job.stage).replaceAll("_", " ")}</strong>
             </article>
             <article>
-              <span>Drawings</span>
-              <strong>{drawings.length}</strong>
+              <span>Revisions</span>
+              <strong>{Math.max(activeDrawingChain.length - 1, 0)}</strong>
             </article>
             <article>
               <span>Open tasks</span>
@@ -1366,11 +1552,19 @@ export function JobPage({
             </article>
             <article>
               <span>Last activity</span>
-              <strong>{formatTimestamp(job.updatedAtIso)}</strong>
+              <strong>{formatTimestamp(activeLatestDrawing?.updatedAtIso ?? job.updatedAtIso)}</strong>
             </article>
           </div>
         </div>
         <div className="portal-header-actions">
+          <button
+            type="button"
+            className="portal-primary-button portal-compact-button"
+            onClick={() => void handleCreateRevision()}
+            disabled={isAddingDrawing || !activeLatestDrawing}
+          >
+            {isAddingDrawing ? "Creating..." : "Create revision"}
+          </button>
           <button
             type="button"
             className="portal-secondary-button portal-compact-button"
@@ -1384,16 +1578,16 @@ export function JobPage({
             onClick={() => void handleArchiveToggle()}
             disabled={isSavingStage}
           >
-            {job.isArchived ? "Restore job" : "Archive job"}
+            {job.isArchived ? "Restore workspace" : "Archive workspace"}
           </button>
-          {canDeleteJob ? (
+          {job.isArchived && canDeleteWorkspace ? (
             <button
               type="button"
               className="portal-danger-button portal-compact-button"
-              onClick={() => setConfirmDeleteJob(true)}
-              disabled={isDeletingJob}
+              onClick={() => void handleDeleteWorkspace()}
+              disabled={isDeletingWorkspace}
             >
-              {isDeletingJob ? "Deleting..." : "Delete job"}
+              {isDeletingWorkspace ? "Deleting..." : "Delete workspace"}
             </button>
           ) : null}
         </div>
@@ -1405,39 +1599,56 @@ export function JobPage({
       {noticeMessage ? (
         <div className="portal-inline-message portal-inline-notice">{noticeMessage}</div>
       ) : null}
+      {job.isArchived ? (
+        <div className="portal-inline-message portal-inline-notice">
+          This workspace is archived. Restore it to resume work, or delete it permanently if it is no longer needed.
+        </div>
+      ) : null}
 
       <div
         className="portal-filter-row portal-job-tab-row"
         role="tablist"
-        aria-label="Job sections"
+        aria-label="Drawing workspace sections"
       >
-        {JOB_TABS.map((jobTab) => (
+        {DRAWING_WORKSPACE_TABS.map((workspaceTab) => (
           <button
-            key={jobTab}
+            key={workspaceTab}
             type="button"
-            className={currentTab === jobTab ? "is-active" : undefined}
+            className={currentTab === workspaceTab ? "is-active" : undefined}
             role="tab"
-            id={`job-tab-${jobTab}`}
-            aria-selected={currentTab === jobTab}
-            aria-controls={`job-tab-panel-${jobTab}`}
-            onClick={() => navigateToJob(jobTab, selectedDrawing?.id ?? null)}
+            id={`workspace-tab-${workspaceTab}`}
+            aria-selected={currentTab === workspaceTab}
+            aria-controls={`workspace-tab-panel-${workspaceTab}`}
+            onClick={() => navigateToWorkspace(workspaceTab, activeDrawing?.id ?? null)}
           >
-            {JOB_TAB_LABELS[jobTab]}
+            {DRAWING_WORKSPACE_TAB_LABELS[workspaceTab]}
           </button>
         ))}
       </div>
 
-      {currentTab === "overview" ? (
-        <div role="tabpanel" id="job-tab-panel-overview" aria-labelledby="job-tab-overview">
+      {currentTab === "workspace" ? (
+        <div
+          role="tabpanel"
+          id="workspace-tab-panel-workspace"
+          aria-labelledby="workspace-tab-workspace"
+        >
           <section className="portal-surface-card portal-job-drawing-timeline-card">
             <div className="portal-section-heading">
               <div>
                 <span className="portal-section-kicker">Drawing history</span>
               </div>
+              <button
+                type="button"
+                className="portal-secondary-button portal-compact-button"
+                onClick={() => void handleCreateRevision()}
+                disabled={isAddingDrawing || !activeLatestDrawing}
+              >
+                {isAddingDrawing ? "Creating..." : "Create revision"}
+              </button>
             </div>
             {drawingGroups.length === 0 ? (
               <p className="portal-empty-copy">
-                No drawings yet. Create a drawing to start this job timeline.
+                No drawing chain loaded yet.
               </p>
             ) : null}
             <div
@@ -1461,9 +1672,10 @@ export function JobPage({
                     <button
                       type="button"
                       className="portal-text-button"
-                      onClick={() => onNavigate("drawing", { drawingId: rootDrawing.id })}
+                      onClick={() => void handleCreateRevision()}
+                      disabled={isAddingDrawing || !activeLatestDrawing}
                     >
-                      View chain
+                      {isAddingDrawing ? "Creating..." : "Create revision"}
                     </button>
                   </div>
                   <div className="portal-job-drawing-timeline-chain">
@@ -1474,7 +1686,7 @@ export function JobPage({
                           <button
                             type="button"
                             className={`portal-job-drawing-timeline-node${isLatest ? " is-latest" : ""}${drawing.status === "QUOTED" ? " is-quoted" : ""}${drawing.isArchived ? " is-archived" : ""}`}
-                            onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                            onClick={() => openDrawingInEditor(drawing.id)}
                           >
                             <span className="portal-job-drawing-timeline-node-label">
                               {getRevisionLabel(drawing)}
@@ -1511,7 +1723,7 @@ export function JobPage({
               <section className="portal-surface-card portal-dashboard-activity">
                 <div className="portal-section-heading">
                   <div>
-                    <span className="portal-section-kicker">Job notes</span>
+                    <span className="portal-section-kicker">Workspace notes</span>
                   </div>
                 </div>
                 <p
@@ -1527,36 +1739,36 @@ export function JobPage({
               <section className="portal-surface-card portal-job-primary-card">
                 <div className="portal-section-heading">
                   <div>
-                    <span className="portal-section-kicker">Drawings</span>
+                    <span className="portal-section-kicker">Workspace revisions</span>
                   </div>
                   <button
                     type="button"
                     className="portal-secondary-button portal-compact-button"
-                    onClick={openCreateDrawingModal}
-                    disabled={isAddingDrawing}
+                    onClick={() => void handleCreateRevision()}
+                    disabled={isAddingDrawing || !activeLatestDrawing}
                   >
-                    {isAddingDrawing ? "Adding..." : "New drawing"}
+                    {isAddingDrawing ? "Creating..." : "Create revision"}
                   </button>
                 </div>
                 <div className="portal-customer-drawing-grid">
-                  {sortedDrawings.length === 0 ? (
+                  {activeDrawingChain.length === 0 ? (
                     <p className="portal-empty-copy">
-                      No drawings yet. Create a drawing to get started.
+                      No drawings are available in this workspace.
                     </p>
                   ) : null}
-                  {sortedDrawings.map((drawing) => {
-                    const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
-                    const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
+                  {activeDrawingChain.map((drawing) => {
+                    const isLatestRevision = drawing.id === activeLatestDrawing?.id;
+                    const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
                     return (
                       <article key={drawing.id} className="portal-customer-drawing-card">
                         <div
                           className="portal-customer-drawing-card-preview"
                           role="button"
                           tabIndex={0}
-                          onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                          onClick={() => openDrawingInEditor(drawing.id)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
-                              onNavigate("drawing", { drawingId: drawing.id });
+                              openDrawingInEditor(drawing.id);
                             }
                           }}
                         >
@@ -1569,41 +1781,47 @@ export function JobPage({
                         <div className="portal-customer-drawing-card-body">
                           <div className="portal-customer-drawing-card-head">
                             <div className="portal-customer-drawing-card-copy">
-                              <h3>{drawing.name}</h3>
-                              <span>Latest: {getRevisionLabel(latestRevision)}</span>
+                              <h3>{getRevisionLabel(drawing)}</h3>
+                              <span>{drawing.name}</span>
                             </div>
                             <div className="portal-customer-drawing-card-badges">
-                              {latestRevision.status === "QUOTED" ? (
-                                <span className="portal-customer-drawing-badge is-quoted">
-                                  Quoted
+                              {isLatestRevision ? (
+                                <span className="portal-customer-drawing-badge">Latest</span>
+                              ) : null}
+                              <span className={`portal-customer-drawing-badge drawing-status-${drawing.status.toLowerCase()}`}>
+                                {DRAWING_STATUS_LABELS[drawing.status]}
+                              </span>
+                              {drawing.isArchived ? (
+                                <span className="portal-customer-drawing-badge is-archived">
+                                  Archived
                                 </span>
                               ) : null}
                             </div>
                           </div>
                           <div className="portal-customer-drawing-card-meta">
-                            <span>
-                              {drawing.segmentCount} segments | {drawing.gateCount} gates
-                            </span>
-                            <span>
-                              {revCount} revision{revCount !== 1 ? "s" : ""}
-                            </span>
-                            <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
+                            <strong>
+                              {drawingQuote
+                                ? `Quote ${formatMoney(drawingQuote.pricedEstimate.totals.totalCost)}`
+                                : "No quote yet"}
+                            </strong>
                           </div>
                           <div className="portal-customer-drawing-card-footer">
                             <button
                               type="button"
                               className="portal-text-button"
-                              onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
+                              onClick={() => navigateToWorkspace("estimate", drawing.id)}
                             >
-                              View drawing
+                              Estimate
                             </button>
-                            <button
-                              type="button"
-                              className="portal-text-button"
-                              onClick={() => onNavigate("editor", { drawingId: drawing.id })}
-                            >
-                              Open editor
-                            </button>
+                            {drawingQuote ? (
+                              <button
+                                type="button"
+                                className="portal-text-button"
+                                onClick={() => handleOpenSavedQuotePdf(drawingQuote)}
+                              >
+                                Quote PDF
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       </article>
@@ -1611,190 +1829,28 @@ export function JobPage({
                   })}
                 </div>
               </section>
-
-              <section className="portal-surface-card portal-job-quotes-card">
-                <div className="portal-section-heading">
-                  <div>
-                    <span className="portal-section-kicker">Quotes</span>
-                  </div>
-                </div>
-                <div className="estimate-ancillary-list">
-                  {drawingGroups.length === 0 ? (
-                    <p className="portal-empty-copy">Add a drawing to generate a quote.</p>
-                  ) : null}
-                  {drawingGroups.map(({ rootDrawing, chain }) => (
-                    <div key={rootDrawing.id} className="portal-revision-chain-group">
-                      <div className="estimate-item-copy portal-revision-chain-header">
-                        <strong>{rootDrawing.name}</strong>
-                        <span>
-                          {chain.length - 1} revision{chain.length - 1 !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      {chain.map((drawing) => {
-                        const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
-                        return (
-                          <article
-                            key={drawing.id}
-                            className="estimate-ancillary-row portal-job-quote-row"
-                          >
-                            <div className="estimate-item-copy">
-                              <strong>{getRevisionLabel(drawing)}</strong>
-                              <span>{drawingQuote ? drawing.status : "No quote saved"}</span>
-                            </div>
-                            <div className="portal-job-quote-row-meta">
-                              <strong>
-                                {drawingQuote
-                                  ? formatMoney(drawingQuote.pricedEstimate.totals.totalCost)
-                                  : "No quote yet"}
-                              </strong>
-                              <button
-                                type="button"
-                                className="portal-text-button"
-                                onClick={() => navigateToJob("estimate", drawing.id)}
-                              >
-                                {drawingQuote ? "Update" : "Generate"}
-                              </button>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </section>
             </div>
           </div>
         </div>
-      ) : null}
-
-      {currentTab === "tasks" ? (
-        <div role="tabpanel" id="job-tab-panel-tasks" aria-labelledby="job-tab-tasks">
-          {taskPanel}
-        </div>
-      ) : null}
-
-      {currentTab === "drawings" ? (
-        <section
-          className="portal-surface-card portal-customer-drawings-panel"
-          role="tabpanel"
-          id="job-tab-panel-drawings"
-          aria-labelledby="job-tab-drawings"
-        >
-          <div className="portal-section-heading">
-            <div>
-              <span className="portal-section-kicker">All drawings</span>
-            </div>
-            <button
-              type="button"
-              className="portal-secondary-button portal-compact-button"
-              onClick={openCreateDrawingModal}
-              disabled={isAddingDrawing}
-            >
-              {isAddingDrawing ? "Adding..." : "New drawing"}
-            </button>
-          </div>
-
-          <div className="portal-customer-drawing-grid">
-            {sortedDrawings.map((drawing) => {
-              const revCount = revisionCountByDrawing.get(drawing.id) ?? 0;
-              const latestRevision = latestDrawingByRootId.get(drawing.id) ?? drawing;
-              return (
-                <article
-                  key={drawing.id}
-                  className={`portal-customer-drawing-card${drawing.isArchived ? " is-archived" : ""}`}
-                >
-                  <div
-                    className="portal-customer-drawing-card-preview"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        onNavigate("drawing", { drawingId: drawing.id });
-                      }
-                    }}
-                  >
-                    <DrawingPreview
-                      layout={drawing.previewLayout}
-                      label={drawing.name}
-                      variant="card"
-                    />
-                  </div>
-                  <div className="portal-customer-drawing-card-body">
-                    <div className="portal-customer-drawing-card-head">
-                      <div className="portal-customer-drawing-card-copy">
-                        <h3>{drawing.name}</h3>
-                        <span>Latest: {getRevisionLabel(latestRevision)}</span>
-                      </div>
-                      <div className="portal-customer-drawing-card-badges">
-                        {latestRevision.status === "QUOTED" ? (
-                          <span className="portal-customer-drawing-badge is-quoted">Quoted</span>
-                        ) : null}
-                        {drawing.isArchived ? (
-                          <span className="portal-customer-drawing-badge is-archived">
-                            Archived
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="portal-customer-drawing-card-meta">
-                      <span>
-                        {drawing.segmentCount} segments | {drawing.gateCount} gates
-                      </span>
-                      <span>
-                        {revCount} revision{revCount !== 1 ? "s" : ""}
-                      </span>
-                      <span>Updated {formatTimestamp(drawing.updatedAtIso)}</span>
-                    </div>
-                    <div className="portal-customer-drawing-card-footer">
-                      <button
-                        type="button"
-                        className="portal-text-button"
-                        onClick={() => onNavigate("drawing", { drawingId: drawing.id })}
-                      >
-                        View drawing
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-text-button"
-                        onClick={() => onNavigate("editor", { drawingId: drawing.id })}
-                      >
-                        Open editor
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-text-button"
-                        onClick={() =>
-                          void onToggleDrawingArchived(drawing.id, !drawing.isArchived)
-                        }
-                      >
-                        {drawing.isArchived ? "Unarchive" : "Archive"}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
       ) : null}
 
       {currentTab === "estimate" ? (
-        <div role="tabpanel" id="job-tab-panel-estimate" aria-labelledby="job-tab-estimate">
+        <div
+          role="tabpanel"
+          id="workspace-tab-panel-estimate"
+          aria-labelledby="workspace-tab-estimate"
+        >
           <section className="portal-surface-card workbook-commercial-card estimate-control-card">
             <div className="portal-section-heading">
               <div>
-                <span className="portal-section-kicker">Estimate controls</span>
+                <span className="portal-section-kicker">Estimate defaults</span>
+                <p className="portal-empty-copy" style={{ margin: "6px 0 0" }}>
+                  {isSavingControls
+                    ? "Saving workspace defaults..."
+                    : "Changes here save to this workspace automatically."}
+                </p>
               </div>
               <div className="portal-header-actions">
-                <button
-                  type="button"
-                  className="portal-secondary-button portal-compact-button"
-                  onClick={() => void handleSaveControls()}
-                  disabled={isSavingControls || !pricedEstimate}
-                >
-                  {isSavingControls ? "Saving..." : "Save controls"}
-                </button>
                 <button
                   type="button"
                   className="portal-primary-button portal-compact-button"
@@ -1806,13 +1862,13 @@ export function JobPage({
               </div>
             </div>
 
-            {selectedDrawing ? (
+            {activeDrawing ? (
               <div className="portal-job-task-form">
                 <label className="portal-customer-edit-field">
                   <span>Drawing revision</span>
                   <select
-                    value={selectedDrawing.id}
-                    onChange={(event) => navigateToJob("estimate", event.target.value)}
+                    value={activeDrawing.id}
+                    onChange={(event) => navigateToWorkspace("estimate", event.target.value)}
                   >
                     {drawingGroups.map(({ rootDrawing, chain }) => (
                       <optgroup key={rootDrawing.id} label={rootDrawing.name}>
@@ -2011,8 +2067,8 @@ export function JobPage({
                 <article>
                   <span>Revision</span>
                   <strong>
-                    {selectedDrawing
-                      ? `${selectedDrawing.name} (${getRevisionLabel(selectedDrawing)})`
+                    {activeDrawing
+                      ? `${activeDrawing.name} (${getRevisionLabel(activeDrawing)})`
                       : "None"}
                   </strong>
                 </article>
@@ -2156,7 +2212,7 @@ export function JobPage({
                     </div>
                     {sheet.sections.length === 0 ? (
                       <p className="portal-empty-copy">
-                        No {sheet.title.toLowerCase()} lines are currently on this job.
+                        No {sheet.title.toLowerCase()} lines are currently on this drawing workspace.
                       </p>
                     ) : null}
                     <div className="workbook-section-grid">
@@ -2231,16 +2287,16 @@ export function JobPage({
         </div>
       ) : null}
 
-      {currentTab === "activity" ? (
+      {currentTab === "history" ? (
         <section
           className="portal-surface-card portal-dashboard-activity"
           role="tabpanel"
-          id="job-tab-panel-activity"
-          aria-labelledby="job-tab-activity"
+          id="workspace-tab-panel-history"
+          aria-labelledby="workspace-tab-history"
         >
           <div className="portal-section-heading">
             <div>
-              <span className="portal-section-kicker">Job activity</span>
+              <span className="portal-section-kicker">Drawing activity</span>
             </div>
           </div>
           <div className="portal-dashboard-activity-list">
@@ -2260,63 +2316,6 @@ export function JobPage({
         </section>
       ) : null}
 
-      {isCreatingDrawingModalOpen ? (
-        <div
-          className="portal-customer-edit-backdrop portal-modal-backdrop"
-          onClick={() => setIsCreatingDrawingModalOpen(false)}
-        >
-          <div
-            className="portal-customer-edit-modal portal-modal-card"
-            role="dialog"
-            aria-label="Create drawing"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="portal-customer-edit-modal-header portal-modal-header">
-              <h2>New drawing</h2>
-              <button
-                type="button"
-                className="portal-text-button"
-                onClick={() => setIsCreatingDrawingModalOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="portal-customer-edit-modal-body portal-modal-body">
-              <label className="portal-customer-edit-field">
-                <span>Drawing title</span>
-                <input
-                  value={newDrawingName}
-                  onChange={(event) => setNewDrawingName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && newDrawingName.trim()) {
-                      void handleCreateRootDrawing();
-                    }
-                  }}
-                  autoFocus
-                />
-              </label>
-            </div>
-            <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button
-                type="button"
-                className="portal-secondary-button portal-compact-button"
-                onClick={() => setIsCreatingDrawingModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="portal-primary-button portal-compact-button"
-                disabled={isAddingDrawing || !newDrawingName.trim()}
-                onClick={() => void handleCreateRootDrawing()}
-              >
-                {isAddingDrawing ? "Creating..." : "Create drawing"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {isEditingJobDetails ? (
         <div
           className="portal-customer-edit-backdrop portal-modal-backdrop"
@@ -2325,11 +2324,11 @@ export function JobPage({
           <div
             className="portal-customer-edit-modal portal-modal-card"
             role="dialog"
-            aria-label="Edit job details"
+            aria-label="Edit drawing workspace details"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="portal-customer-edit-modal-header portal-modal-header">
-              <h2>Edit job details</h2>
+              <h2>Edit drawing workspace details</h2>
               <button
                 type="button"
                 className="portal-text-button"
@@ -2340,7 +2339,7 @@ export function JobPage({
             </div>
             <div className="portal-customer-edit-modal-body portal-modal-body">
               <label className="portal-customer-edit-field">
-                <span>Job name</span>
+                <span>Drawing name</span>
                 <input
                   value={editJobName}
                   onChange={(event) => setEditJobName(event.target.value)}
@@ -2389,54 +2388,7 @@ export function JobPage({
           </div>
         </div>
       ) : null}
-
-      {confirmDeleteJob ? (
-        <div
-          className="portal-customer-edit-backdrop portal-modal-backdrop"
-          onClick={() => setConfirmDeleteJob(false)}
-        >
-          <div
-            className="portal-customer-edit-modal portal-confirm-modal portal-modal-card"
-            role="dialog"
-            aria-label="Confirm delete job"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="portal-customer-edit-modal-header portal-modal-header">
-              <h2>Permanently delete job?</h2>
-              <button
-                type="button"
-                className="portal-text-button"
-                onClick={() => setConfirmDeleteJob(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="portal-customer-edit-modal-body portal-modal-body">
-              <p>
-                This will permanently remove the job, its drawings, tasks, and quote history. This
-                action cannot be undone.
-              </p>
-            </div>
-            <div className="portal-customer-edit-modal-footer portal-modal-footer">
-              <button
-                type="button"
-                className="portal-secondary-button portal-compact-button"
-                onClick={() => setConfirmDeleteJob(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="portal-danger-button portal-compact-button"
-                disabled={isDeletingJob}
-                onClick={() => void handleDeleteJob()}
-              >
-                {isDeletingJob ? "Deleting..." : "Delete permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
+

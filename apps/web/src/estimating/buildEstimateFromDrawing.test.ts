@@ -39,6 +39,8 @@ function buildDrawing(): DrawingRecord {
   return {
     id: "drawing-1",
     companyId: "company-1",
+    workspaceId: "workspace-1",
+    jobRole: "PRIMARY",
     name: "Court Perimeter",
     customerId: "customer-1",
     customerName: "Town Club",

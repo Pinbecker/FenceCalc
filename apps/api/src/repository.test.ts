@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildDefaultJobCommercialInputs,
+  buildDefaultDrawingWorkspaceCommercialInputs,
   DRAWING_SCHEMA_VERSION,
   type EstimateResult,
   type LayoutModel,
@@ -176,16 +176,16 @@ async function createTestCustomer(
   });
 }
 
-async function createTestJob(repository: AppRepository, companyId: string, userId: string) {
-  return repository.createJob({
-    id: "job-1",
+async function createTestWorkspace(repository: AppRepository, companyId: string, userId: string) {
+  return repository.createDrawingWorkspace({
+    id: "workspace-1",
     companyId,
     customerId: TEST_CUSTOMER_ID,
     customerName: TEST_CUSTOMER_NAME,
     name: "North compound",
     stage: "FOLLOW_UP",
     primaryDrawingId: null,
-    commercialInputs: buildDefaultJobCommercialInputs(),
+    commercialInputs: buildDefaultDrawingWorkspaceCommercialInputs(),
     notes: "",
     ownerUserId: userId,
     createdByUserId: userId,
@@ -203,7 +203,8 @@ async function createTestRootDrawing(
   const drawing = await repository.createDrawing({
     id: "drawing-root-1",
     companyId,
-    jobId: "job-1",
+    workspaceId: "workspace-1",
+    jobId: "workspace-1",
     jobRole: "PRIMARY",
     parentDrawingId: null,
     revisionNumber: 0,
@@ -220,8 +221,8 @@ async function createTestRootDrawing(
     createdAtIso: "2026-03-10T00:00:00.000Z",
     updatedAtIso: "2026-03-10T00:00:00.000Z",
   });
-  await repository.setJobPrimaryDrawing({
-    jobId: "job-1",
+  await repository.setDrawingWorkspacePrimaryDrawing({
+    workspaceId: "workspace-1",
     companyId,
     drawingId: drawing.id,
     updatedByUserId: userId,
@@ -236,7 +237,7 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     companyId,
     userId,
   );
-  await createTestJob(repository, companyId, userId);
+  await createTestWorkspace(repository, companyId, userId);
   await createTestRootDrawing(
     repository as InMemoryAppRepository | SqliteAppRepository,
     companyId,
@@ -252,11 +253,11 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     passwordSalt: "salt-2",
     createdAtIso: "2026-03-10T00:00:00.000Z",
   });
-  await repository.createJobTask({
+  await repository.createDrawingTask({
     id: "task-open-overdue",
     companyId,
-    jobId: "job-1",
-    drawingId: "drawing-root-1",
+    workspaceId: "workspace-1",
+    rootDrawingId: "drawing-root-1",
     title: "Call site contact",
     description: "Confirm site access code",
     priority: "URGENT",
@@ -266,11 +267,11 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     createdAtIso: "2026-03-01T08:00:00.000Z",
     updatedAtIso: "2026-03-01T08:00:00.000Z",
   });
-  await repository.createJobTask({
+  await repository.createDrawingTask({
     id: "task-open-unassigned",
     companyId,
-    jobId: "job-1",
-    drawingId: "drawing-root-1",
+    workspaceId: "workspace-1",
+    rootDrawingId: "drawing-root-1",
     title: "Book installer",
     description: "",
     priority: "NORMAL",
@@ -280,11 +281,11 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     createdAtIso: "2026-03-02T08:00:00.000Z",
     updatedAtIso: "2026-03-02T08:00:00.000Z",
   });
-  await repository.createJobTask({
+  await repository.createDrawingTask({
     id: "task-complete",
     companyId,
-    jobId: "job-1",
-    drawingId: "drawing-root-1",
+    workspaceId: "workspace-1",
+    rootDrawingId: "drawing-root-1",
     title: "Send quote",
     description: "Sent and acknowledged",
     priority: "HIGH",
@@ -294,11 +295,11 @@ async function seedCompanyTasks(repository: AppRepository, companyId: string, us
     createdAtIso: "2026-03-03T08:00:00.000Z",
     updatedAtIso: "2026-03-03T08:00:00.000Z",
   });
-  await repository.updateJobTask({
+  await repository.updateDrawingTask({
     taskId: "task-complete",
     companyId,
-    jobId: "job-1",
-    drawingId: "drawing-root-1",
+    workspaceId: "workspace-1",
+    rootDrawingId: "drawing-root-1",
     title: "Send quote",
     description: "Sent and acknowledged",
     priority: "HIGH",
@@ -626,27 +627,34 @@ describe("InMemoryAppRepository", () => {
     });
     await seedCompanyTasks(repository, "company-1", "user-1");
 
-    await expect(repository.listCompanyTasks("company-1")).resolves.toHaveLength(2);
+    await expect(repository.listCompanyDrawingTasks("company-1")).resolves.toHaveLength(2);
     await expect(
-      repository.listCompanyTasks("company-1", { includeCompleted: true }),
+      repository.listCompanyDrawingTasks("company-1", { includeCompleted: true }),
     ).resolves.toHaveLength(3);
     await expect(
-      repository.listCompanyTasks("company-1", { assignedUserId: "user-1" }),
+      repository.listCompanyDrawingTasks("company-1", { assignedUserId: "user-1" }),
     ).resolves.toMatchObject([{ id: "task-open-overdue" }]);
     await expect(
-      repository.listCompanyTasks("company-1", { assignedUserId: "unassigned" }),
+      repository.listCompanyDrawingTasks("company-1", { assignedUserId: "unassigned" }),
     ).resolves.toMatchObject([{ id: "task-open-unassigned" }]);
     await expect(
-      repository.listCompanyTasks("company-1", { includeCompleted: true, search: "acknowledged" }),
+      repository.listCompanyDrawingTasks("company-1", {
+        includeCompleted: true,
+        search: "acknowledged",
+      }),
     ).resolves.toMatchObject([{ id: "task-complete" }]);
     await expect(
-      repository.listCompanyTasks("company-1", { search: "north perimeter" }),
+      repository.listCompanyDrawingTasks("company-1", { search: "north perimeter" }),
     ).resolves.toMatchObject([
-      { id: "task-open-overdue", drawingId: "drawing-root-1", drawingName: "North perimeter" },
+      {
+        id: "task-open-overdue",
+        rootDrawingId: "drawing-root-1",
+        rootDrawingName: "North perimeter",
+      },
       {
         id: "task-open-unassigned",
-        drawingId: "drawing-root-1",
-        drawingName: "North perimeter",
+        rootDrawingId: "drawing-root-1",
+        rootDrawingName: "North perimeter",
       },
     ]);
   });
@@ -1071,19 +1079,140 @@ describe("SqliteAppRepository", () => {
 
     await seedCompanyTasks(repository, account.company.id, account.user.id);
 
-    await expect(repository.listCompanyTasks(account.company.id)).resolves.toHaveLength(2);
+    await expect(repository.listCompanyDrawingTasks(account.company.id)).resolves.toHaveLength(2);
     await expect(
-      repository.listCompanyTasks(account.company.id, { includeCompleted: true }),
+      repository.listCompanyDrawingTasks(account.company.id, { includeCompleted: true }),
     ).resolves.toHaveLength(3);
     await expect(
-      repository.listCompanyTasks(account.company.id, { assignedUserId: account.user.id }),
+      repository.listCompanyDrawingTasks(account.company.id, {
+        assignedUserId: account.user.id,
+      }),
     ).resolves.toMatchObject([{ id: "task-open-overdue" }]);
     await expect(
-      repository.listCompanyTasks(account.company.id, {
+      repository.listCompanyDrawingTasks(account.company.id, {
         includeCompleted: true,
         search: "acknowledged",
       }),
     ).resolves.toMatchObject([{ id: "task-complete" }]);
+  });
+
+  it("deletes archived sqlite workspaces that still have tasks and quotes", async () => {
+    const repository = new SqliteAppRepository(
+      join(tmpdir(), `fence-estimator-${randomUUID()}.db`),
+    );
+
+    const account = await repository.bootstrapOwnerAccount({
+      companyId: "company-1",
+      companyName: "Acme",
+      userId: "user-1",
+      displayName: "Jane",
+      email: "jane@example.com",
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+    });
+    if (!account) {
+      throw new Error("Expected bootstrap account");
+    }
+
+    await createTestCustomer(repository, account.company.id, account.user.id);
+    await createTestWorkspace(repository, account.company.id, account.user.id);
+    const rootDrawing = await createTestRootDrawing(repository, account.company.id, account.user.id);
+
+    await repository.createDrawingTask({
+      id: "task-1",
+      companyId: account.company.id,
+      workspaceId: "workspace-1",
+      rootDrawingId: rootDrawing.id,
+      title: "Review quote",
+      description: "",
+      priority: "NORMAL",
+      assignedUserId: account.user.id,
+      dueAtIso: null,
+      createdByUserId: account.user.id,
+      createdAtIso: "2026-03-10T00:00:00.000Z",
+      updatedAtIso: "2026-03-10T00:00:00.000Z",
+    });
+
+    await repository.createQuote({
+      id: "quote-1",
+      companyId: account.company.id,
+      workspaceId: "workspace-1",
+      jobId: "workspace-1",
+      sourceDrawingId: rootDrawing.id,
+      sourceDrawingVersionNumber: 1,
+      drawingId: rootDrawing.id,
+      drawingVersionNumber: 1,
+      pricedEstimate: {
+        drawing: {
+          drawingId: rootDrawing.id,
+          drawingName: rootDrawing.name,
+          customerId: TEST_CUSTOMER_ID,
+          customerName: TEST_CUSTOMER_NAME,
+        },
+        groups: [],
+        ancillaryItems: [],
+        totals: {
+          materialCost: 100,
+          labourCost: 20,
+          totalCost: 120,
+        },
+        warnings: [],
+        pricingSnapshot: {
+          updatedAtIso: new Date(0).toISOString(),
+          updatedByUserId: null,
+          source: "DEFAULT",
+        },
+      },
+      drawingSnapshot: {
+        drawingId: rootDrawing.id,
+        drawingName: rootDrawing.name,
+        customerId: TEST_CUSTOMER_ID,
+        customerName: TEST_CUSTOMER_NAME,
+        layout: emptyLayout,
+        estimate: emptyEstimate,
+        schemaVersion: DRAWING_SCHEMA_VERSION,
+        rulesVersion: RULES_ENGINE_VERSION,
+        versionNumber: 1,
+      },
+      createdByUserId: account.user.id,
+      createdAtIso: "2026-03-10T01:00:00.000Z",
+    });
+
+    await repository.updateDrawingWorkspace({
+      workspaceId: "workspace-1",
+      companyId: account.company.id,
+      name: "North compound",
+      stage: "FOLLOW_UP",
+      commercialInputs: buildDefaultDrawingWorkspaceCommercialInputs(),
+      notes: "",
+      ownerUserId: account.user.id,
+      archived: true,
+      archivedAtIso: "2026-03-11T00:00:00.000Z",
+      archivedByUserId: account.user.id,
+      stageChangedAtIso: null,
+      stageChangedByUserId: null,
+      updatedByUserId: account.user.id,
+      updatedAtIso: "2026-03-11T00:00:00.000Z",
+    });
+
+    await expect(
+      repository.deleteDrawingWorkspace({
+        workspaceId: "workspace-1",
+        companyId: account.company.id,
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      repository.getDrawingWorkspaceById("workspace-1", account.company.id),
+    ).resolves.toBeNull();
+    await expect(
+      repository.listDrawingWorkspaceTasks("workspace-1", account.company.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      repository.listQuotesForDrawingWorkspace("workspace-1", account.company.id),
+    ).resolves.toHaveLength(0);
+    await expect(repository.listDrawings(account.company.id)).resolves.toHaveLength(0);
   });
 
   it("patches legacy sqlite databases with missing newer columns", async () => {
