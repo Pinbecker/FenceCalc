@@ -9,7 +9,7 @@ const auditLogQuerySchema = z.object({
   before: z.string().datetime().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
-  entityType: z.enum(["AUTH", "USER", "DRAWING", "QUOTE", "CUSTOMER"]).optional(),
+  entityType: z.enum(["AUTH", "USER", "DRAWING", "QUOTE", "CUSTOMER", "WORKSPACE"]).optional(),
   search: z.string().trim().max(120).optional()
 });
 

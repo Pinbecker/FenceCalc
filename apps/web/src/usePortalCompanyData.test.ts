@@ -204,6 +204,12 @@ async function loadUsePortalCompanyData(options?: {
   let stateIndex = 0;
 
   const apiClient = {
+    createDrawingWorkspace: vi.fn(() =>
+      Promise.resolve({
+        ...sampleWorkspaces[0],
+        primaryDrawingId: "drawing-1",
+      }),
+    ),
     createUser: vi.fn(() => Promise.resolve({
       id: "user-2",
       companyId: "company-1",
@@ -266,8 +272,68 @@ async function loadUsePortalCompanyData(options?: {
         createdAtIso: "2026-03-10T10:00:00.000Z"
       }
     ])),
+    getDrawing: vi.fn(() =>
+      Promise.resolve({
+        id: "drawing-1",
+        companyId: "company-1",
+        workspaceId: "workspace-1",
+        jobRole: "PRIMARY",
+        name: "Front boundary",
+        customerId: "customer-1",
+        customerName: "Cleveland Land Services",
+        layout: { segments: [], gates: [] },
+        estimate: {
+          posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+          corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+          materials: {
+            twinBarPanels: 0,
+            twinBarPanelsSuperRebound: 0,
+            twinBarPanelsByStockHeightMm: {},
+            twinBarPanelsByFenceHeight: {},
+            roll2100: 0,
+            roll900: 0,
+            totalRolls: 0,
+            rollsByFenceHeight: {}
+          },
+          optimization: {
+            strategy: "CHAINED_CUT_PLANNER",
+            twinBar: {
+              reuseAllowanceMm: 200,
+              stockPanelWidthMm: 2525,
+              fixedFullPanels: 0,
+              baselinePanels: 0,
+              optimizedPanels: 0,
+              panelsSaved: 0,
+              totalCutDemands: 0,
+              stockPanelsOpened: 0,
+              reusedCuts: 0,
+              totalConsumedMm: 0,
+              totalLeftoverMm: 0,
+              reusableLeftoverMm: 0,
+              utilizationRate: 0,
+              buckets: []
+            }
+          },
+          segments: []
+        },
+        schemaVersion: 1,
+        rulesVersion: "2026-03-11",
+        versionNumber: 1,
+        revisionNumber: 0,
+        status: "DRAFT",
+        isArchived: false,
+        archivedAtIso: null,
+        archivedByUserId: null,
+        createdByUserId: "user-1",
+        updatedByUserId: "user-1",
+        createdAtIso: "2026-03-10T10:00:00.000Z",
+        updatedAtIso: "2026-03-10T10:00:00.000Z",
+        savedViewport: null,
+        statusChangedAtIso: null,
+        statusChangedByUserId: null
+      }),
+    ),
     listDrawings: vi.fn(() => Promise.resolve(sampleDrawings)),
-    listDrawingWorkspaceDrawings: vi.fn(() => Promise.resolve(sampleDrawings)),
     listDrawingWorkspaces: vi.fn(() => Promise.resolve(sampleWorkspaces)),
     listUsers: vi.fn(() => Promise.resolve(sampleUsers)),
     deleteDrawingWorkspace: vi.fn(() => Promise.resolve()),
@@ -512,7 +578,7 @@ describe("usePortalCompanyData", () => {
     ]);
   });
 
-  it("archives workspace drawings together with the workspace record", async () => {
+  it("archives a workspace with one server-side update", async () => {
     const { usePortalCompanyData, apiClient, stateSetters } = await loadUsePortalCompanyData({
       stateValues: [sampleDrawings, sampleWorkspaces, sampleCustomers, sampleUsers, sampleAuditLog, false, false, null, false, false, false, false, null]
     });
@@ -528,9 +594,7 @@ describe("usePortalCompanyData", () => {
 
     expect(await state.setWorkspaceArchived("workspace-1", true)).toBe(true);
 
-    expect(apiClient.listDrawingWorkspaceDrawings).toHaveBeenCalledWith("workspace-1");
     expect(apiClient.updateDrawingWorkspace).toHaveBeenCalledWith("workspace-1", { archived: true });
-    expect(apiClient.setDrawingArchivedState).toHaveBeenCalledWith("drawing-1", true, 2);
     expect(apiClient.listCustomers).toHaveBeenCalled();
     expect(apiClient.listDrawings).toHaveBeenCalled();
     expect(apiClient.listDrawingWorkspaces).toHaveBeenCalledWith({ scope: "ALL" });

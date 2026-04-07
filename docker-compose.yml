@@ -27,8 +27,8 @@ services:
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     volumes:
       - fence_estimator_data:/var/lib/fence-estimator
     healthcheck:
@@ -58,8 +58,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "4173:4173"
+    expose:
+      - "4173"
 
   proxy:
     build:

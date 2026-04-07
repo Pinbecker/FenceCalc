@@ -8,15 +8,14 @@ export class SqliteQuoteStore {
   public constructor(private readonly database: Database.Database) {}
 
   public createQuote(input: CreateQuoteInput): QuoteRecord {
-    const jobId = input.jobId ?? input.sourceDrawingId ?? input.drawingId;
-    if (!jobId) {
-      throw new Error("Quotes must be associated with a job or drawing");
+    const workspaceId = input.workspaceId ?? input.jobId ?? input.sourceDrawingId ?? input.drawingId;
+    if (!workspaceId) {
+      throw new Error("Quotes must be associated with a workspace or drawing");
     }
 
     const record: QuoteRecord = {
       ...input,
-      workspaceId: input.workspaceId ?? jobId,
-      ...(input.jobId ? { jobId: input.jobId } : { jobId }),
+      workspaceId,
       ...(input.sourceDrawingId ? {} : input.drawingId ? { sourceDrawingId: input.drawingId } : {}),
       ...(input.sourceDrawingVersionNumber !== undefined
         ? {}
@@ -45,7 +44,7 @@ export class SqliteQuoteStore {
       .run(
         record.id,
         record.companyId,
-        record.jobId,
+        workspaceId,
         record.sourceDrawingId,
         record.sourceDrawingVersionNumber,
         record.drawingId,

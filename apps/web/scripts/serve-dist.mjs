@@ -16,9 +16,18 @@ const contentTypes = {
   ".woff2": "font/woff2"
 };
 
+const securityHeaders = {
+  "content-security-policy":
+    "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: http: ws: wss:",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY"
+};
+
 function sendFile(response, filePath) {
   const extension = extname(filePath).toLowerCase();
   response.writeHead(200, {
+    ...securityHeaders,
     "content-type": contentTypes[extension] ?? "application/octet-stream",
     "cache-control": extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable"
   });

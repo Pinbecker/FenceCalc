@@ -31,7 +31,11 @@ interface EditorOverlayPanelsProps {
     double: number;
     custom: number;
   };
-  gateCountsByHeight: HeightLabelCountRow[];
+  gateCountsByHeight: {
+    single: HeightLabelCountRow[];
+    double: HeightLabelCountRow[];
+    custom: HeightLabelCountRow[];
+  };
   basketballPostCountsByHeight: HeightLabelCountRow[];
   floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: TwinBarFenceRow[];
@@ -138,7 +142,7 @@ export function EditorOverlayPanels({
             <strong>{featureCounts.goalUnits}</strong>
           </article>
           <article className="editor-summary-metric">
-            <span>Kickboards</span>
+            <span>Kickboard Boards</span>
             <strong>{featureCounts.kickboards}</strong>
           </article>
           <article className="editor-summary-metric">
@@ -146,7 +150,7 @@ export function EditorOverlayPanels({
             <strong>{featureCounts.pitchDividers}</strong>
           </article>
           <article className="editor-summary-metric">
-            <span>Side Netting</span>
+            <span>Netting m2</span>
             <strong>{featureCounts.sideNettings}</strong>
           </article>
           <article className="editor-summary-metric">
@@ -226,11 +230,16 @@ export function EditorOverlayPanels({
                   empty="No gates placed."
                   rows={[
                     { label: "Total", value: gateCounts.total },
-                    { label: "Single Leaf", value: gateCounts.single },
-                    { label: "Double Leaf", value: gateCounts.double },
-                    { label: "Custom", value: gateCounts.custom },
-                    ...gateCountsByHeight.map((row) => ({
-                      label: row.height,
+                    ...gateCountsByHeight.single.map((row) => ({
+                      label: `Single leaf ${row.height}`,
+                      value: row.count
+                    })),
+                    ...gateCountsByHeight.double.map((row) => ({
+                      label: `Double leaf ${row.height}`,
+                      value: row.count
+                    })),
+                    ...gateCountsByHeight.custom.map((row) => ({
+                      label: `Custom ${row.height}`,
                       value: row.count
                     }))
                   ].filter((row) => row.value > 0)}

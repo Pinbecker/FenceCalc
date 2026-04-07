@@ -10,16 +10,15 @@ export class InMemoryQuoteStore {
   public constructor(private readonly state: InMemoryQuoteState) {}
 
   public createQuote(input: CreateQuoteInput): QuoteRecord {
-    const jobId = input.jobId ?? input.sourceDrawingId ?? input.drawingId;
-    if (!jobId) {
-      throw new Error("Quotes must be associated with a job or drawing");
+    const workspaceId = input.workspaceId ?? input.jobId ?? input.sourceDrawingId ?? input.drawingId;
+    if (!workspaceId) {
+      throw new Error("Quotes must be associated with a workspace or drawing");
     }
 
-    const quotes = this.state.quotesByJobId.get(jobId) ?? [];
+    const quotes = this.state.quotesByJobId.get(workspaceId) ?? [];
     const record: QuoteRecord = {
       ...input,
-      workspaceId: input.workspaceId ?? jobId,
-      ...(input.jobId ? { jobId: input.jobId } : { jobId }),
+      workspaceId,
       ...(input.sourceDrawingId ? {} : input.drawingId ? { sourceDrawingId: input.drawingId } : {}),
       ...(input.sourceDrawingVersionNumber !== undefined
         ? {}
@@ -28,7 +27,7 @@ export class InMemoryQuoteStore {
           : {})
     };
     quotes.unshift(record);
-    this.state.quotesByJobId.set(jobId, quotes);
+    this.state.quotesByJobId.set(workspaceId, quotes);
     return record;
   }
 

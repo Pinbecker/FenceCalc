@@ -6,6 +6,7 @@ import {
   drawingCreateRequestSchema,
   drawingUpdateRequestSchema,
   estimateSnapshotRequestSchema,
+  estimateResultSchema,
   fenceSpecSchema,
   layoutModelSchema,
   loginRequestSchema,
@@ -318,5 +319,55 @@ describe("contracts schemas", () => {
     });
 
     expect(recordResult.success).toBe(true);
+  });
+
+  it("accepts feature quantity lines with many related drawing ids", () => {
+    const result = estimateResultSchema.safeParse({
+      posts: { terminal: 0, intermediate: 0, total: 0, cornerPosts: 0, byHeightAndType: {}, byHeightMm: {} },
+      corners: { total: 0, internal: 0, external: 0, unclassified: 0 },
+      materials: {
+        twinBarPanels: 0,
+        twinBarPanelsSuperRebound: 0,
+        twinBarPanelsByStockHeightMm: {},
+        twinBarPanelsByFenceHeight: {},
+        roll2100: 0,
+        roll900: 0,
+        totalRolls: 0,
+        rollsByFenceHeight: {}
+      },
+      featureQuantities: [
+        {
+          key: "side-netting-total",
+          kind: "SIDE_NETTING",
+          component: "NETTING_AREA",
+          description: "Side netting area",
+          quantity: 250,
+          unit: "m2",
+          relatedIds: Array.from({ length: 50 }, (_, index) => `side-netting-${index}`)
+        }
+      ],
+      optimization: {
+        strategy: "CHAINED_CUT_PLANNER",
+        twinBar: {
+          reuseAllowanceMm: 200,
+          stockPanelWidthMm: 2525,
+          fixedFullPanels: 0,
+          baselinePanels: 0,
+          optimizedPanels: 0,
+          panelsSaved: 0,
+          totalCutDemands: 0,
+          stockPanelsOpened: 0,
+          reusedCuts: 0,
+          totalConsumedMm: 0,
+          totalLeftoverMm: 0,
+          reusableLeftoverMm: 0,
+          utilizationRate: 0,
+          buckets: []
+        }
+      },
+      segments: []
+    });
+
+    expect(result.success).toBe(true);
   });
 });

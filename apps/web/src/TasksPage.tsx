@@ -367,10 +367,7 @@ export function TasksPage({
                       type="button"
                       className="portal-text-button"
                       onClick={() =>
-                        onNavigate(
-                          "drawing",
-                          buildTaskWorkspaceNavigationQuery(task, workspaces, [], "workspace"),
-                        )
+                        onNavigate("drawing", buildTaskWorkspaceNavigationQuery(task, workspaces, []))
                       }
                     >
                       Open workspace

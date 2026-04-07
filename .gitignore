@@ -6,6 +6,8 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+*.db.json
+apps/api/data/
 *.tsbuildinfo
 .env
 .env.*

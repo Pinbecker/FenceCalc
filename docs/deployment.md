@@ -51,6 +51,13 @@ Recommended deploy sequence:
 7. Start the web build with the production API origin baked into `VITE_API_BASE_URL`.
 8. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
 
+If you are deploying with the checked-in API container image, the runtime image includes the
+ops scripts under `apps/api/scripts`, so the migration step can also be run inside the container:
+
+```powershell
+docker compose run --rm api npm run migrate --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db
+```
+
 ## Container Workflow
 
 The repository now includes:
@@ -66,6 +73,9 @@ docker compose up --build
 ```
 
 The checked-in `docker-compose.yml` keeps `SESSION_COOKIE_SECURE=true` because that is the required production setting. That means authenticated browser flows need HTTPS in front of the stack. Plain `http://localhost` can still be used for unauthenticated smoke checks such as `/health` and setup-status, but not for a realistic cookie-backed sign-in flow.
+
+The compose stack intentionally publishes host ports only for the reverse proxy. The raw `api`
+and `web` services stay on the internal Docker network and should not be exposed directly.
 
 ## CI Expectations
 
@@ -83,6 +93,7 @@ The reverse proxy should:
 
 - terminate HTTPS
 - forward requests to the API process
+- be the only publicly reachable HTTP(S) entry point for the stack
 - forward the original client IP so Fastify proxy-aware request IP handling remains accurate
 - serve the built web app
 - preserve secure cookie behavior

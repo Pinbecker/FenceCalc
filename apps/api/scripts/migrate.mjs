@@ -41,6 +41,9 @@ database.pragma("foreign_keys = ON");
 
 // Dynamic import of the compiled migration module
 const { migrateSqliteDatabase } = await import("../dist/repository/sqliteSchema.js");
+const { auditLegacyJobDrawingLinks, migrateLegacyWorkspaceData } = await import(
+  "../dist/repository/legacyJobBackfill.js"
+);
 
 const beforeRows = database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all().catch?.(() => []);
 const beforeSet = new Set();
@@ -55,6 +58,10 @@ try {
 
 migrateSqliteDatabase(database);
 
+const beforeLegacyAudit = auditLegacyJobDrawingLinks(database);
+const normalizationResult = migrateLegacyWorkspaceData(database);
+const afterLegacyAudit = auditLegacyJobDrawingLinks(database);
+
 const afterRows = database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all();
 const applied = afterRows.filter((row) => !beforeSet.has(row.name));
 
@@ -65,6 +72,41 @@ if (applied.length === 0) {
   for (const row of applied) {
     console.log(`  - ${row.name}`);
   }
+}
+
+const normalizationChangeCount =
+  normalizationResult.backfill.createdJobs +
+  normalizationResult.backfill.updatedDrawings +
+  normalizationResult.backfill.updatedQuotes +
+  normalizationResult.backfill.removedPlaceholderJobs +
+  normalizationResult.audit.updatedEntityTypes +
+  normalizationResult.audit.updatedActions +
+  normalizationResult.audit.updatedMetadata;
+
+if (normalizationChangeCount === 0) {
+  console.log("No legacy workspace normalization was needed.");
+} else {
+  console.log("Applied legacy workspace normalization:");
+  console.log(
+    `  - ${normalizationResult.backfill.createdJobs} workspaces created, ` +
+      `${normalizationResult.backfill.updatedDrawings} drawings relinked, ` +
+      `${normalizationResult.backfill.updatedQuotes} quotes updated, ` +
+      `${normalizationResult.backfill.removedPlaceholderJobs} placeholder workspaces removed`,
+  );
+  console.log(
+    `  - ${normalizationResult.audit.updatedEntityTypes} audit entity types, ` +
+      `${normalizationResult.audit.updatedActions} audit actions, ` +
+      `${normalizationResult.audit.updatedMetadata} audit metadata payloads updated`,
+  );
+}
+
+if (
+  afterLegacyAudit.backfillableChainCount > 0 ||
+  afterLegacyAudit.drawingsMissingJob.length > 0 ||
+  afterLegacyAudit.stalePlaceholderJobCount > 0
+) {
+  console.error("Legacy workspace normalization is still incomplete after migration.");
+  process.exitCode = 1;
 }
 
 database.close();

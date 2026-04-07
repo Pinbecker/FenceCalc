@@ -601,13 +601,16 @@ const featureQuantityLineSchema = z.object({
   description: z.string().trim().min(1).max(240),
   quantity: z.number().finite().min(0),
   unit: z.enum(["item", "panel", "post", "assembly", "board", "m", "m2"]),
-  relatedIds: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
+  relatedIds: z.array(z.string().trim().min(1).max(160)).max(2_000).optional(),
 });
 const twinBarCutSectionSchema = z.object({
   segmentId: z.string().min(1),
   startOffsetMm: z.number().finite().nonnegative(),
   endOffsetMm: z.number().finite().nonnegative(),
   lengthMm: z.number().finite().nonnegative(),
+  fenceHeightKey: fenceHeightKeySchema.optional(),
+  panelHeightMm: nonNegativeIntegerSchema.optional(),
+  lift: z.enum(["GROUND", "FIRST", "SECOND"]).optional(),
 });
 const twinBarOptimizationCutSchema = z.object({
   id: z.string().min(1),
@@ -746,57 +749,17 @@ const pricingWorkbookQuantityRuleSchema = z.discriminatedUnion("kind", [
     defaultQuantity: z.number().finite().min(0).optional(),
   }),
   z.object({
-    kind: z.literal("PANEL_COUNT"),
-    heightKey: fenceHeightKeySchema,
-    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"]),
-  }),
-  z.object({
-    kind: z.literal("PANEL_LAYER_COUNT"),
-    panelHeightMm: z.number().finite().positive(),
-    variant: z.enum(["STANDARD", "SUPER_REBOUND", "TOTAL"]),
-    lift: installLiftLevelSchema.optional(),
-  }),
-  z.object({
-    kind: z.literal("POST_COUNT"),
-    heightMm: z.number().finite().nonnegative(),
-    postType: z.enum(["end", "intermediate", "corner", "junction", "inlineJoin", "total"]),
-  }),
-  z.object({
-    kind: z.literal("CORNER_COUNT"),
-    heightMm: z.number().finite().nonnegative(),
-    cornerType: z.enum(["internal", "external", "unclassified", "total"]),
-  }),
-  z.object({
-    kind: z.literal("TOP_RAIL_COUNT"),
-    heightKey: fenceHeightKeySchema,
-  }),
-  z.object({
-    kind: z.literal("GATE_COUNT"),
-    heightKey: fenceHeightKeySchema,
-    gateType: gateTypeSchema,
-    output: z.enum(["gate", "leaf", "post_set"]),
-  }),
-  z.object({
-    kind: z.literal("GATE_COUNT_BUCKET"),
-    heightBucket: z.enum(["UP_TO_4M", "AT_LEAST_4_5M"]),
-    gateType: z.enum(["SINGLE_LEAF", "DOUBLE_LEAF"]),
-  }),
-  z.object({
-    kind: z.literal("FEATURE_QUANTITY"),
-    featureKind: z.enum(["GOAL_UNIT", "BASKETBALL", "KICKBOARD", "PITCH_DIVIDER", "SIDE_NETTING"]),
-    component: z.string().trim().min(1).max(120),
-  }),
-  z.object({
-    kind: z.literal("FLOODLIGHT_COLUMN_COUNT"),
-  }),
-  z.object({
-    kind: z.literal("TOTAL_POSTS_BY_HEIGHT"),
-    heightMm: z.number().finite().nonnegative(),
-  }),
-  z.object({
-    kind: z.literal("TOTAL_POSTS"),
+    kind: z.literal("CATALOG_QUANTITY"),
+    quantityKey: z.string().trim().min(1).max(160),
   }),
 ]);
+
+export const pricingWorkbookRowPresentationSchema = z.object({
+  pairKey: z.string().trim().min(1).max(160),
+  groupKey: z.string().trim().min(1).max(160),
+  groupTitle: z.string().trim().min(1).max(160),
+  sortOrder: z.number().finite(),
+});
 
 export const pricingWorkbookRowSchema = z.object({
   code: z.string().trim().min(1).max(160),
@@ -807,6 +770,12 @@ export const pricingWorkbookRowSchema = z.object({
   quantityRule: pricingWorkbookQuantityRuleSchema,
   notes: z.string().trim().max(600).optional(),
   tone: z.enum(["default", "highlight", "manual", "warning"]).optional(),
+  category: pricingItemCategorySchema.optional(),
+  presentation: pricingWorkbookRowPresentationSchema.optional(),
+  concreteQuantityKey: z.string().trim().min(1).max(160).optional(),
+  concreteQuantity: z.number().finite().min(0).optional(),
+  holeQuantityKey: z.string().trim().min(1).max(160).optional(),
+  holeQuantity: z.number().finite().min(0).optional(),
 });
 
 export const pricingWorkbookSectionSchema = z.object({
@@ -818,13 +787,16 @@ export const pricingWorkbookSectionSchema = z.object({
 });
 
 export const pricingWorkbookSettingsSchema = z.object({
-  labourOverheadPercent: z.number().finite().min(0),
+  labourOverheadPercent: z.number().finite().min(0).optional(),
+  labourDayValue: z.number().finite().positive().optional(),
   travelLodgePerDay: z.number().finite().min(0),
   markupRate: z.number().finite().min(0),
   distributionCharge: z.number().finite().min(0),
   concretePricePerCube: z.number().finite().min(0),
   hardDigDefault: z.boolean(),
   clearSpoilsDefault: z.boolean(),
+  hardDigRatePerHole: z.number().finite().min(0).optional(),
+  clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
   colourOption: z.string().trim().min(1).max(120),
 });
 
@@ -839,8 +811,17 @@ export const estimateWorkbookManualEntrySchema = z.object({
 });
 
 export const estimateWorkbookCommercialInputsSchema = z.object({
-  travelDays: z.number().finite().min(0),
-  markupUnits: z.number().finite().min(0),
+  labourDayValue: z.number().finite().positive().optional(),
+  labourDays: z.number().finite().min(0).optional(),
+  travelLodgePerDay: z.number().finite().min(0).optional(),
+  travelDays: z.number().finite().min(0).optional(),
+  markupRate: z.number().finite().min(0).optional(),
+  markupUnits: z.number().finite().min(0).optional(),
+  distributionCharge: z.number().finite().min(0).optional(),
+  concretePricePerCube: z.number().finite().min(0).optional(),
+  hardDigRatePerHole: z.number().finite().min(0).optional(),
+  clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
+  holeCount: z.number().finite().min(0).optional(),
 });
 
 export const estimateWorkbookRowSchema = z.object({
@@ -854,6 +835,10 @@ export const estimateWorkbookRowSchema = z.object({
   isEditable: z.boolean(),
   notes: z.string().trim().max(600).optional(),
   tone: z.enum(["default", "highlight", "manual", "warning"]).optional(),
+  category: pricingItemCategorySchema.optional(),
+  presentation: pricingWorkbookRowPresentationSchema.optional(),
+  concreteQuantityKey: z.string().trim().min(1).max(160).optional(),
+  holeQuantityKey: z.string().trim().min(1).max(160).optional(),
 });
 
 export const estimateWorkbookSectionSchema = z.object({
@@ -868,15 +853,22 @@ export const estimateWorkbookSectionSchema = z.object({
 export const estimateWorkbookTotalsSchema = z.object({
   materialsSubtotal: z.number().finite().min(0),
   labourSubtotal: z.number().finite().min(0),
-  labourOverheadPercent: z.number().finite().min(0),
-  labourOverheadAmount: z.number().finite().min(0),
+  labourOverheadPercent: z.number().finite().min(0).optional(),
+  labourOverheadAmount: z.number().finite().min(0).optional(),
   distributionCharge: z.number().finite().min(0),
-  travelDays: z.number().finite().min(0),
-  travelRatePerDay: z.number().finite().min(0),
+  travelDays: z.number().finite().min(0).optional(),
+  travelRatePerDay: z.number().finite().min(0).optional(),
   travelTotal: z.number().finite().min(0),
-  markupUnits: z.number().finite().min(0),
+  markupUnits: z.number().finite().min(0).optional(),
   markupRate: z.number().finite().min(0),
   markupTotal: z.number().finite().min(0),
+  labourDayValue: z.number().finite().positive().optional(),
+  labourDays: z.number().finite().min(0).optional(),
+  holeCount: z.number().finite().min(0).optional(),
+  hardDigRatePerHole: z.number().finite().min(0).optional(),
+  hardDigTotal: z.number().finite().min(0).optional(),
+  clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
+  clearSpoilsTotal: z.number().finite().min(0).optional(),
   grandTotal: z.number().finite().min(0),
 });
 
@@ -997,7 +989,6 @@ export const quoteRecordSchema = z.object({
   id: z.string().trim().min(1).max(120),
   companyId: z.string().trim().min(1).max(120),
   workspaceId: z.string().trim().min(1).max(120).optional(),
-  jobId: z.string().trim().min(1).max(120).optional(),
   sourceDrawingId: z.string().trim().min(1).max(120).optional(),
   sourceDrawingVersionNumber: z.coerce.number().int().min(1).optional(),
   drawingId: z.string().trim().min(1).max(120),
@@ -1034,15 +1025,18 @@ export const drawingWorkspaceStageSchema = jobStageSchema;
 export const jobTaskTitleSchema = z.string().trim().min(1).max(240);
 
 export const jobCommercialInputsSchema = z.object({
-  labourOverheadPercent: z.number().finite().min(0),
+  labourOverheadPercent: z.number().finite().min(0).optional(),
+  labourDayValue: z.number().finite().positive().optional(),
   travelLodgePerDay: z.number().finite().min(0),
-  travelDays: z.number().finite().min(0),
   markupRate: z.number().finite().min(0),
-  markupUnits: z.number().finite().min(0),
   distributionCharge: z.number().finite().min(0),
   concretePricePerCube: z.number().finite().min(0),
-  hardDig: z.boolean(),
-  clearSpoils: z.boolean(),
+  hardDigRatePerHole: z.number().finite().min(0).optional(),
+  clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
+  travelDays: z.number().finite().min(0).optional(),
+  markupUnits: z.number().finite().min(0).optional(),
+  hardDig: z.boolean().optional(),
+  clearSpoils: z.boolean().optional(),
 });
 export const drawingWorkspaceCommercialInputsSchema = jobCommercialInputsSchema;
 
@@ -1140,7 +1134,13 @@ export const jobCreateRequestSchema = z.object({
   name: jobNameSchema,
   notes: z.string().trim().max(2_000).default(""),
 });
-export const drawingWorkspaceCreateRequestSchema = jobCreateRequestSchema;
+const drawingWorkspaceInitialDrawingSchema = z.object({
+  layout: layoutModelSchema,
+  savedViewport: drawingCanvasViewportSchema.nullable().optional(),
+});
+export const drawingWorkspaceCreateRequestSchema = jobCreateRequestSchema.extend({
+  initialDrawing: drawingWorkspaceInitialDrawingSchema.optional(),
+});
 
 export const jobUpdateRequestSchema = z
   .object({
@@ -1297,7 +1297,6 @@ export const drawingCreateRequestSchema = z.object({
   name: drawingNameSchema,
   customerId: customerIdSchema,
   workspaceId: z.string().trim().min(1).max(120).optional(),
-  jobId: z.string().trim().min(1).max(120).optional(),
   layout: layoutModelSchema,
   savedViewport: drawingCanvasViewportSchema.nullable().optional(),
 });
@@ -1308,7 +1307,6 @@ export const drawingUpdateRequestSchema = z
     name: drawingNameSchema.optional(),
     customerId: customerIdSchema.optional(),
     workspaceId: z.string().trim().min(1).max(120).nullable().optional(),
-    jobId: z.string().trim().min(1).max(120).nullable().optional(),
     layout: layoutModelSchema.optional(),
     savedViewport: drawingCanvasViewportSchema.nullable().optional(),
   })
@@ -1317,7 +1315,6 @@ export const drawingUpdateRequestSchema = z
       value.name === undefined &&
       value.customerId === undefined &&
       value.workspaceId === undefined &&
-      value.jobId === undefined &&
       value.layout === undefined &&
       value.savedViewport === undefined
     ) {

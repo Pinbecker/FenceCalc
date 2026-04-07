@@ -5,6 +5,8 @@ import { loadConfig } from "./config.js";
 
 describe("loadConfig", () => {
   const productionDatabasePath = resolve("var", "lib", "fence-estimator", "fence-estimator.db");
+  const defaultDatabasePath = resolve("data", "fence-estimator.db");
+  const explicitTestDatabasePath = resolve("data", "test.db");
 
   it("provides safe local defaults", () => {
     const config = loadConfig({});
@@ -13,7 +15,7 @@ describe("loadConfig", () => {
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(3001);
     expect(config.trustProxy).toBe(false);
-    expect(config.databasePath).toBe("./data/fence-estimator.db");
+    expect(config.databasePath).toBe(defaultDatabasePath);
     expect(config.allowedOrigins).toContain("http://localhost:5173");
     expect(config.loginAttemptWindowMs).toBe(900000);
     expect(config.loginMaxAttempts).toBe(5);
@@ -61,7 +63,7 @@ describe("loadConfig", () => {
     expect(config.host).toBe("0.0.0.0");
     expect(config.port).toBe(8080);
     expect(config.trustProxy).toBe(true);
-    expect(config.databasePath).toBe("./data/test.db");
+    expect(config.databasePath).toBe(explicitTestDatabasePath);
     expect(config.allowedOrigins).toEqual(["https://app.example.com", "https://admin.example.com"]);
     expect(config.bodyLimitBytes).toBe(524288);
     expect(config.writeRateLimitWindowMs).toBe(30000);

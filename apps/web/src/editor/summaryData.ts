@@ -3,14 +3,14 @@ import type {
   ResolvedGoalUnitPlacement,
   ResolvedKickboardAttachment,
   ResolvedPitchDividerPlacement,
-  ResolvedSideNettingAttachment
+  ResolvedSideNettingAttachment,
 } from "@fence-estimator/rules-engine";
 
 import type {
   HeightCountRow,
   HeightLabelCountRow,
   ResolvedBasketballPostPlacement,
-  ResolvedFloodlightColumnPlacement
+  ResolvedFloodlightColumnPlacement,
 } from "./types.js";
 
 interface PostHeightRow {
@@ -31,6 +31,18 @@ interface ResolvedGateSummary {
   };
 }
 
+interface FenceHeightPanelRow {
+  height: string;
+  standard: number;
+  superRebound: number;
+  total: number;
+}
+
+interface SavedPanelContext {
+  savedByFenceHeightAndVariant: Map<string, number>;
+  savedGroundPanelsBySegmentId: Map<string, number>;
+}
+
 export interface EditorSummaryData {
   postRowsByType: {
     end: HeightCountRow[];
@@ -45,10 +57,15 @@ export interface EditorSummaryData {
     double: number;
     custom: number;
   };
-  gateCountsByHeight: HeightLabelCountRow[];
+  gateCountsByHeight: {
+    single: HeightLabelCountRow[];
+    double: HeightLabelCountRow[];
+    custom: HeightLabelCountRow[];
+  };
   basketballPostCountsByHeight: HeightLabelCountRow[];
   floodlightColumnCountsByHeight: HeightLabelCountRow[];
-  twinBarFenceRows: Array<{ height: string; standard: number; superRebound: number }>;
+  twinBarFenceRows: FenceHeightPanelRow[];
+  panelCount: number;
   featureCounts: {
     goalUnits: number;
     kickboards: number;
@@ -64,8 +81,104 @@ export interface EditorSummaryData {
 }
 
 function formatFeatureQuantity(value: number, unit: string): string {
-  const normalized = Number.isInteger(value) ? value.toString() : value.toFixed(3).replace(/\.?0+$/, "");
+  const normalized = Number.isInteger(value)
+    ? value.toString()
+    : value.toFixed(3).replace(/\.?0+$/, "");
   return `${normalized} ${unit}`;
+}
+
+function roundMetric(value: number): number {
+  return Number(Number.isInteger(value) ? value : value.toFixed(2));
+}
+
+function buildHeightRows(counts: Map<string, number>): HeightLabelCountRow[] {
+  return [...counts.entries()]
+    .map(([height, count]) => ({ height, count }))
+    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+}
+
+function buildSavedPanelContext(estimate: EstimateResult): SavedPanelContext {
+  const savedByFenceHeightAndVariant = new Map<string, number>();
+  const savedGroundPanelsBySegmentId = new Map<string, number>();
+
+  const incrementSaved = (
+    map: Map<string, number>,
+    key: string,
+    amount: number = 1,
+  ): void => {
+    map.set(key, (map.get(key) ?? 0) + amount);
+  };
+
+  for (const bucket of estimate.optimization.twinBar.buckets) {
+    for (const plan of bucket.plans) {
+      for (const cut of plan.cuts) {
+        if (cut.mode !== "REUSE_OFFCUT") {
+          continue;
+        }
+        const fenceHeightKey = cut.demand.fenceHeightKey;
+        if (fenceHeightKey) {
+          incrementSaved(
+            savedByFenceHeightAndVariant,
+            `${fenceHeightKey}:${bucket.variant}`,
+          );
+        }
+        if (cut.demand.lift === "GROUND") {
+          incrementSaved(savedGroundPanelsBySegmentId, cut.demand.segmentId);
+        }
+      }
+    }
+  }
+
+  return {
+    savedByFenceHeightAndVariant,
+    savedGroundPanelsBySegmentId,
+  };
+}
+
+function buildAdjustedFenceRows(estimate: EstimateResult): {
+  rows: FenceHeightPanelRow[];
+  panelCount: number;
+  savedGroundPanelsBySegmentId: Map<string, number>;
+} {
+  const { savedByFenceHeightAndVariant, savedGroundPanelsBySegmentId } =
+    buildSavedPanelContext(estimate);
+
+  const rows = Object.entries(estimate.materials.twinBarPanelsByFenceHeight)
+    .map(([height, counts]) => {
+      const savedStandard = savedByFenceHeightAndVariant.get(`${height}:STANDARD`) ?? 0;
+      const savedSuperRebound = savedByFenceHeightAndVariant.get(`${height}:SUPER_REBOUND`) ?? 0;
+      const standard = Math.max(0, counts.standard - savedStandard);
+      const superRebound = Math.max(0, counts.superRebound - savedSuperRebound);
+      return {
+        height,
+        standard,
+        superRebound,
+        total: standard + superRebound,
+      };
+    })
+    .filter((row) => row.total > 0)
+    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+
+  return {
+    rows,
+    panelCount: rows.reduce((sum, row) => sum + row.total, 0),
+    savedGroundPanelsBySegmentId,
+  };
+}
+
+function buildGateCountsByHeight(
+  gates: ResolvedGateSummary[],
+  gateType: GatePlacement["gateType"],
+): HeightLabelCountRow[] {
+  const counts = gates.reduce<Map<string, number>>((map, gate) => {
+    if (gate.gateType !== gateType) {
+      return map;
+    }
+    map.set(gate.spec.height, (map.get(gate.spec.height) ?? 0) + 1);
+    return map;
+  }, new Map());
+
+  return buildHeightRows(counts);
 }
 
 export function buildEditorSummaryData(input: {
@@ -79,7 +192,9 @@ export function buildEditorSummaryData(input: {
   resolvedSideNettings: ResolvedSideNettingAttachment[];
   estimate: EstimateResult;
 }): EditorSummaryData {
-  const rowsForType = (typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin") =>
+  const rowsForType = (
+    typeKey: "end" | "intermediate" | "corner" | "junction" | "inlineJoin",
+  ) =>
     input.postHeightRows
       .filter((row) => row[typeKey] > 0)
       .map((row) => ({ heightMm: row.heightMm, count: row[typeKey] }));
@@ -99,46 +214,120 @@ export function buildEditorSummaryData(input: {
     }
   }
 
-  const gateCountsByHeight = [...input.resolvedGatePlacements.reduce<Map<string, number>>((map, gate) => {
-    map.set(gate.spec.height, (map.get(gate.spec.height) ?? 0) + 1);
-    return map;
-  }, new Map())]
-    .map(([height, count]) => ({ height, count }))
-    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+  const basketballPostCountsByHeight = buildHeightRows(
+    input.resolvedBasketballPostPlacements.reduce<Map<string, number>>((map, basketballPost) => {
+      map.set(
+        basketballPost.spec.height,
+        (map.get(basketballPost.spec.height) ?? 0) + 1,
+      );
+      return map;
+    }, new Map()),
+  );
 
-  const basketballPostCountsByHeight = [...input.resolvedBasketballPostPlacements.reduce<Map<string, number>>((map, basketballPost) => {
-    map.set(basketballPost.spec.height, (map.get(basketballPost.spec.height) ?? 0) + 1);
-    return map;
-  }, new Map())]
-    .map(([height, count]) => ({ height, count }))
-    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+  const floodlightColumnCountsByHeight = buildHeightRows(
+    input.resolvedFloodlightColumnPlacements.reduce<Map<string, number>>(
+      (map, floodlightColumn) => {
+        map.set(
+          floodlightColumn.spec.height,
+          (map.get(floodlightColumn.spec.height) ?? 0) + 1,
+        );
+        return map;
+      },
+      new Map(),
+    ),
+  );
 
-  const floodlightColumnCountsByHeight = [...input.resolvedFloodlightColumnPlacements.reduce<Map<string, number>>((map, floodlightColumn) => {
-    map.set(floodlightColumn.spec.height, (map.get(floodlightColumn.spec.height) ?? 0) + 1);
-    return map;
-  }, new Map())]
-    .map(([height, count]) => ({ height, count }))
-    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+  const { rows: twinBarFenceRows, panelCount, savedGroundPanelsBySegmentId } =
+    buildAdjustedFenceRows(input.estimate);
 
-  const twinBarFenceRows = Object.entries(input.estimate.materials.twinBarPanelsByFenceHeight)
-    .map(([height, counts]) => ({ height, ...counts }))
-    .sort((left, right) => Number.parseFloat(left.height) - Number.parseFloat(right.height));
+  const resolvedKickboardsByAttachmentId = new Map<
+    string,
+    (typeof input.resolvedKickboards)[number]
+  >();
+  for (const kickboard of input.resolvedKickboards) {
+    const existing = resolvedKickboardsByAttachmentId.get(kickboard.sourceAttachmentId);
+    if (!existing || kickboard.boardCount > existing.boardCount) {
+      resolvedKickboardsByAttachmentId.set(kickboard.sourceAttachmentId, kickboard);
+    }
+  }
+
+  const kickboardRows = [...resolvedKickboardsByAttachmentId.values()]
+    .reduce<
+      Map<
+        string,
+        {
+          label: string;
+          quantity: number;
+        }
+      >
+    >((map, kickboard) => {
+      const savedBoards = savedGroundPanelsBySegmentId.get(kickboard.segmentId) ?? 0;
+      const adjustedBoardCount = Math.max(0, kickboard.boardCount - savedBoards);
+      const key = `${kickboard.placement.sectionHeightMm}:${kickboard.placement.profile}`;
+      const existing = map.get(key);
+      const label = `${kickboard.placement.sectionHeightMm} x ${kickboard.placement.thicknessMm} ${kickboard.placement.profile.toLowerCase()} kickboards`;
+      if (existing) {
+        existing.quantity += adjustedBoardCount;
+      } else {
+        map.set(key, { label, quantity: adjustedBoardCount });
+      }
+      return map;
+    }, new Map())
+    .values();
+
+  const kickboardRowsByKind = [...kickboardRows]
+    .filter((row) => row.quantity > 0)
+    .sort((left, right) => left.label.localeCompare(right.label, "en-GB", { numeric: true }))
+    .map((row) => ({
+      label: row.label,
+      value: formatFeatureQuantity(row.quantity, "board"),
+    }));
+
+  const sideNettingLengthRows = [...input.resolvedSideNettings.reduce<Map<number, number>>((map, sideNetting) => {
+    map.set(
+      sideNetting.additionalHeightMm,
+      (map.get(sideNetting.additionalHeightMm) ?? 0) + sideNetting.lengthMm / 1000,
+    );
+    return map;
+  }, new Map()).entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([additionalHeightMm, totalLengthM]) => ({
+      label: `+${additionalHeightMm}mm side netting`,
+      value: formatFeatureQuantity(totalLengthM, "m"),
+    }));
+
+  const totalSideNettingAreaM2 = input.resolvedSideNettings.reduce(
+    (sum, sideNetting) =>
+      sum + (sideNetting.lengthMm / 1000) * (sideNetting.additionalHeightMm / 1000),
+    0,
+  );
 
   const featureRowsByKind = {
-    goalUnits: (input.estimate.featureQuantities ?? [])
-      .filter((line) => line.kind === "GOAL_UNIT" || (line.kind === "BASKETBALL" && line.component === "GOAL_UNIT_INTEGRATED"))
-      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
-    kickboards: (input.estimate.featureQuantities ?? [])
-      .filter((line) => line.kind === "KICKBOARD")
-      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
-    pitchDividers: (input.estimate.featureQuantities ?? [])
-      .filter((line) => line.kind === "PITCH_DIVIDER")
-      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) })),
-    sideNettings: (input.estimate.featureQuantities ?? [])
-      .filter((line) => line.kind === "SIDE_NETTING")
-      .map((line) => ({ label: line.description, value: formatFeatureQuantity(line.quantity, line.unit) }))
+    goalUnits: input.resolvedGoalUnits
+      .map((goalUnit) => ({
+        label: `Goal unit ${goalUnit.widthMm / 1000}m x ${goalUnit.goalHeightMm / 1000}m`,
+        value: "1 item",
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label, "en-GB", { numeric: true })),
+    kickboards: kickboardRowsByKind,
+    pitchDividers: input.resolvedPitchDividers
+      .filter((divider) => divider.isValid)
+      .map((divider, index) => ({
+        label: `Pitch divider ${index + 1}`,
+        value: formatFeatureQuantity(divider.spanMm / 1000, "m"),
+      })),
+    sideNettings: [
+      ...sideNettingLengthRows,
+      ...(totalSideNettingAreaM2 > 0
+        ? [
+            {
+              label: "Total netting area",
+              value: formatFeatureQuantity(totalSideNettingAreaM2, "m2"),
+            },
+          ]
+        : []),
+    ],
   };
-  const uniqueKickboardCount = new Set(input.resolvedKickboards.map((kickboard) => kickboard.sourceAttachmentId)).size;
 
   return {
     postRowsByType: {
@@ -146,24 +335,32 @@ export function buildEditorSummaryData(input: {
       intermediate: rowsForType("intermediate"),
       corner: rowsForType("corner"),
       junction: rowsForType("junction"),
-      inlineJoin: rowsForType("inlineJoin")
+      inlineJoin: rowsForType("inlineJoin"),
     },
     gateCounts: {
       total: input.resolvedGatePlacements.length,
       single,
       double,
-      custom
+      custom,
     },
-    gateCountsByHeight,
+    gateCountsByHeight: {
+      single: buildGateCountsByHeight(input.resolvedGatePlacements, "SINGLE_LEAF"),
+      double: buildGateCountsByHeight(input.resolvedGatePlacements, "DOUBLE_LEAF"),
+      custom: buildGateCountsByHeight(input.resolvedGatePlacements, "CUSTOM"),
+    },
     basketballPostCountsByHeight,
     floodlightColumnCountsByHeight,
     twinBarFenceRows,
+    panelCount,
     featureCounts: {
       goalUnits: input.resolvedGoalUnits.length,
-      kickboards: uniqueKickboardCount,
-      pitchDividers: input.resolvedPitchDividers.length,
-      sideNettings: input.resolvedSideNettings.length
+      kickboards: kickboardRowsByKind.reduce((sum, row) => {
+        const numeric = Number.parseFloat(row.value);
+        return sum + (Number.isFinite(numeric) ? numeric : 0);
+      }, 0),
+      pitchDividers: input.resolvedPitchDividers.filter((divider) => divider.isValid).length,
+      sideNettings: roundMetric(totalSideNettingAreaM2),
     },
-    featureRowsByKind
+    featureRowsByKind,
   };
 }

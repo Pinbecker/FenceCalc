@@ -18,6 +18,58 @@ async function createCustomerForSession(app: Awaited<ReturnType<typeof registerA
   return response.json<{ customer: { id: string } }>().customer.id;
 }
 
+async function createWorkspaceDrawingForSession(
+  app: Awaited<ReturnType<typeof registerAndGetSession>>["app"],
+  cookieHeader: { cookie: string },
+  input: {
+    customerId: string;
+    name: string;
+    layout?: Record<string, unknown>;
+    savedViewport?: { x: number; y: number; scale: number } | null;
+  },
+) {
+  const createWorkspace = await app.inject({
+    method: "POST",
+    url: "/api/v1/drawing-workspaces",
+    headers: cookieHeader,
+    payload: {
+      customerId: input.customerId,
+      name: input.name,
+      notes: "",
+    },
+  });
+
+  expect(createWorkspace.statusCode).toBe(201);
+  const workspace = createWorkspace.json<{
+    workspace: { id: string; primaryDrawingId: string };
+  }>().workspace;
+
+  const configureDrawing = await app.inject({
+    method: "PUT",
+    url: `/api/v1/drawings/${workspace.primaryDrawingId}`,
+    headers: cookieHeader,
+    payload: {
+      expectedVersionNumber: 1,
+      ...(input.layout ? { layout: input.layout } : {}),
+      ...(input.savedViewport !== undefined ? { savedViewport: input.savedViewport } : {}),
+    },
+  });
+
+  expect(configureDrawing.statusCode).toBe(200);
+  return {
+    workspaceId: workspace.id,
+    drawing: configureDrawing.json<{
+      drawing: {
+        id: string;
+        name: string;
+        versionNumber: number;
+        savedViewport?: { x: number; y: number; scale: number } | null;
+        layout: Record<string, unknown>;
+      };
+    }>().drawing,
+  };
+}
+
 describe("API drawing routes", { timeout: 10000 }, () => {
   it("returns estimate for valid layout", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
@@ -46,60 +98,45 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Yard perimeter",
-        customerId,
-        layout: {
-          segments: [
-            {
-              id: "one",
-              start: { x: 0.4, y: 0.2 },
-              end: { x: 10000.6, y: 0.8 },
-              spec: { system: "TWIN_BAR", height: "2m" }
-            }
-          ],
-          gates: [
-            {
-              id: "gate-1",
-              segmentId: "one",
-              startOffsetMm: 4000.2,
-              endOffsetMm: 5200.6,
-              gateType: "SINGLE_LEAF"
-            }
-          ]
-        },
-        savedViewport: {
-          x: 320,
-          y: 180,
-          scale: 0.27
-        }
+    const createdWorkspace = await createWorkspaceDrawingForSession(app, cookieHeader, {
+      customerId,
+      name: "Yard perimeter",
+      layout: {
+        segments: [
+          {
+            id: "one",
+            start: { x: 0.4, y: 0.2 },
+            end: { x: 10000.6, y: 0.8 },
+            spec: { system: "TWIN_BAR", height: "2m" }
+          }
+        ],
+        gates: [
+          {
+            id: "gate-1",
+            segmentId: "one",
+            startOffsetMm: 4000.2,
+            endOffsetMm: 5200.6,
+            gateType: "SINGLE_LEAF"
+          }
+        ]
+      },
+      savedViewport: {
+        x: 320,
+        y: 180,
+        scale: 0.27
       }
     });
-    expect(create.statusCode).toBe(201);
-    const createdBody = create.json<{
-      drawing: {
-        id: string;
-        versionNumber: number;
-        savedViewport?: { x: number; y: number; scale: number } | null;
-        layout: {
-          segments: Array<{ end: { x: number; y: number } }>;
-          gates: Array<{ startOffsetMm: number; endOffsetMm: number }>;
-        };
-        estimate: { posts: { total: number } };
-      };
-    }>();
-    const drawingId = createdBody.drawing.id;
-    expect(createdBody.drawing.layout.gates[0]).toMatchObject({
+    const drawingId = createdWorkspace.drawing.id;
+    expect(
+      (createdWorkspace.drawing.layout as {
+        gates: Array<{ startOffsetMm: number; endOffsetMm: number }>;
+      }).gates[0],
+    ).toMatchObject({
       startOffsetMm: 4000,
       endOffsetMm: 5201
     });
-    expect(createdBody.drawing.estimate.posts.total).toBe(6);
-    expect(createdBody.drawing.versionNumber).toBe(1);
-    expect(createdBody.drawing.savedViewport).toEqual({ x: 320, y: 180, scale: 0.27 });
+    expect(createdWorkspace.drawing.versionNumber).toBe(2);
+    expect(createdWorkspace.drawing.savedViewport).toEqual({ x: 320, y: 180, scale: 0.27 });
 
     const list = await app.inject({
       method: "GET",
@@ -139,8 +176,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       url: `/api/v1/drawings/${drawingId}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: 1,
-        name: "Updated yard perimeter",
+        expectedVersionNumber: 2,
         savedViewport: {
           x: 640,
           y: 260,
@@ -150,11 +186,29 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
     expect(update.statusCode).toBe(200);
     const updatedDrawing = update.json<{
-      drawing: { name: string; versionNumber: number; savedViewport?: { x: number; y: number; scale: number } | null };
+      drawing: { versionNumber: number; savedViewport?: { x: number; y: number; scale: number } | null };
     }>().drawing;
-    expect(updatedDrawing.name).toBe("Updated yard perimeter");
-    expect(updatedDrawing.versionNumber).toBe(2);
+    expect(updatedDrawing.versionNumber).toBe(3);
     expect(updatedDrawing.savedViewport).toEqual({ x: 640, y: 260, scale: 0.42 });
+
+    const renameWorkspace = await app.inject({
+      method: "PUT",
+      url: `/api/v1/drawing-workspaces/${createdWorkspace.workspaceId}`,
+      headers: cookieHeader,
+      payload: {
+        name: "Updated yard perimeter"
+      }
+    });
+    expect(renameWorkspace.statusCode).toBe(200);
+    expect(renameWorkspace.json<{ workspace: { name: string } }>().workspace.name).toBe("Updated yard perimeter");
+
+    const renamedDrawing = await app.inject({
+      method: "GET",
+      url: `/api/v1/drawings/${drawingId}`,
+      headers: cookieHeader
+    });
+    expect(renamedDrawing.statusCode).toBe(200);
+    expect(renamedDrawing.json<{ drawing: { name: string } }>().drawing.name).toBe("Updated yard perimeter");
 
     const versions = await app.inject({
       method: "GET",
@@ -162,7 +216,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader
     });
     expect(versions.statusCode).toBe(200);
-    expect(versions.json<{ versions: Array<{ versionNumber: number }> }>().versions).toHaveLength(2);
+    expect(versions.json<{ versions: Array<{ versionNumber: number }> }>().versions).toHaveLength(4);
     await app.close();
   });
 
@@ -170,13 +224,10 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Feature-rich drawing",
+    const createdLayout = (
+      await createWorkspaceDrawingForSession(app, cookieHeader, {
         customerId,
+        name: "Feature-rich drawing",
         layout: {
           segments: [
             {
@@ -237,25 +288,20 @@ describe("API drawing routes", { timeout: 10000 }, () => {
             }
           ]
         }
-      }
-    });
-
-    expect(create.statusCode).toBe(201);
-    const createdLayout = create.json<{
-      drawing: {
-        id: string;
-        layout: {
-          goalUnits: Array<{ centerOffsetMm: number; depthMm: number }>;
-          kickboards: Array<{ profile: string }>;
-          pitchDividers: Array<{ startAnchor: { offsetMm: number }; endAnchor: { offsetMm: number } }>;
-          sideNettings: Array<{
-            additionalHeightMm: number;
-            startOffsetMm?: number;
-            endOffsetMm?: number;
-          }>;
-        };
+      })
+    ).drawing as unknown as {
+      id: string;
+      layout: {
+        goalUnits: Array<{ centerOffsetMm: number; depthMm: number }>;
+        kickboards: Array<{ profile: string }>;
+        pitchDividers: Array<{ startAnchor: { offsetMm: number }; endAnchor: { offsetMm: number } }>;
+        sideNettings: Array<{
+          additionalHeightMm: number;
+          startOffsetMm?: number;
+          endOffsetMm?: number;
+        }>;
       };
-    }>().drawing;
+    };
 
     expect(createdLayout.layout.goalUnits[0]).toMatchObject({
       centerOffsetMm: 6000,
@@ -310,13 +356,10 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Priced estimate test",
+    const drawingId = (
+      await createWorkspaceDrawingForSession(app, cookieHeader, {
         customerId,
+        name: "Priced estimate test",
         layout: {
           segments: [
             {
@@ -328,10 +371,8 @@ describe("API drawing routes", { timeout: 10000 }, () => {
           ],
           gates: []
         }
-      }
-    });
-    expect(create.statusCode).toBe(201);
-    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+      })
+    ).drawing.id;
 
     const pricedEstimate = await app.inject({
       method: "GET",
@@ -352,7 +393,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     });
     expect(
       pricedEstimate.json<{ pricedEstimate: { groups: Array<{ key: string }> } }>().pricedEstimate.groups.map((group) => group.key)
-    ).toContain("panels");
+    ).toContain("height-2000");
 
     await app.close();
   });
@@ -361,13 +402,10 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Quoted yard",
+    const drawingId = (
+      await createWorkspaceDrawingForSession(app, cookieHeader, {
         customerId,
+        name: "Quoted yard",
         layout: {
           segments: [
             {
@@ -379,10 +417,8 @@ describe("API drawing routes", { timeout: 10000 }, () => {
           ],
           gates: []
         }
-      }
-    });
-    expect(create.statusCode).toBe(201);
-    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+      })
+    ).drawing.id;
 
     const quoteCreate = await app.inject({
       method: "POST",
@@ -411,7 +447,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       };
     }>().quote;
     expect(createdQuote.drawingId).toBe(drawingId);
-    expect(createdQuote.drawingVersionNumber).toBe(1);
+    expect(createdQuote.drawingVersionNumber).toBe(2);
     expect(createdQuote.drawingSnapshot.revisionNumber).toBe(0);
     expect(createdQuote.pricedEstimate.ancillaryItems[0]?.description).toBe("Lift hire");
 
@@ -429,16 +465,22 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       url: `/api/v1/drawings/${drawingId}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: 2,
-        name: "Quoted yard revised"
+        expectedVersionNumber: 3,
+        layout: {
+          segments: [
+            {
+              id: "one",
+              start: { x: 0, y: 0 },
+              end: { x: 6050, y: 0 },
+              spec: { system: "TWIN_BAR", height: "2m" }
+            }
+          ],
+          gates: []
+        }
       }
     });
 
-    expect(quotedUpdate.statusCode).toBe(200);
-    expect(quotedUpdate.json<{ drawing: { name: string; versionNumber: number } }>().drawing).toMatchObject({
-      name: "Quoted yard revised",
-      versionNumber: 3
-    });
+    expect(quotedUpdate.statusCode).toBe(409);
 
     const quoteList = await app.inject({
       method: "GET",
@@ -448,7 +490,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
 
     expect(quoteList.statusCode).toBe(200);
     expect(quoteList.json<{ quotes: Array<{ drawingVersionNumber: number }> }>().quotes).toEqual([
-      expect.objectContaining({ drawingVersionNumber: 1 })
+      expect.objectContaining({ drawingVersionNumber: 2 })
     ]);
 
     await app.close();
@@ -458,26 +500,21 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Conflict test",
+    const drawingId = (
+      await createWorkspaceDrawingForSession(app, cookieHeader, {
         customerId,
+        name: "Conflict test",
         layout: { segments: [] }
-      }
-    });
-    expect(create.statusCode).toBe(201);
-    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+      })
+    ).drawing.id;
 
     const update = await app.inject({
       method: "PUT",
       url: `/api/v1/drawings/${drawingId}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: 1,
-        name: "Conflict test v2"
+        expectedVersionNumber: 2,
+        savedViewport: { x: 10, y: 20, scale: 1.2 }
       }
     });
     expect(update.statusCode).toBe(200);
@@ -487,13 +524,13 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       url: `/api/v1/drawings/${drawingId}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: 1,
-        name: "Conflict test stale"
+        expectedVersionNumber: 2,
+        savedViewport: { x: 15, y: 25, scale: 1.4 }
       }
     });
 
     expect(staleUpdate.statusCode).toBe(409);
-    expect(staleUpdate.json<{ details: { currentVersionNumber: number } }>().details.currentVersionNumber).toBe(2);
+    expect(staleUpdate.json<{ details: { currentVersionNumber: number } }>().details.currentVersionNumber).toBe(3);
     await app.close();
   });
 
@@ -501,17 +538,13 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
-    const create = await app.inject({
-      method: "POST",
-      url: "/api/v1/drawings",
-      headers: cookieHeader,
-      payload: {
-        name: "Archive me",
+    const drawingId = (
+      await createWorkspaceDrawingForSession(app, cookieHeader, {
         customerId,
+        name: "Archive me",
         layout: { segments: [] }
-      }
-    });
-    const drawingId = create.json<{ drawing: { id: string } }>().drawing.id;
+      })
+    ).drawing.id;
 
     const archive = await app.inject({
       method: "PUT",
@@ -519,7 +552,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       headers: cookieHeader,
       payload: {
         archived: true,
-        expectedVersionNumber: 1
+        expectedVersionNumber: 2
       }
     });
 
@@ -553,7 +586,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
-  it("allows admins to permanently delete jobs and removes them from follow-up loads", async () => {
+  it("allows admins to permanently delete workspaces and removes them from follow-up loads", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
@@ -623,7 +656,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
-  it("filters stale placeholder jobs after drawings move under a real job", async () => {
+  it("filters stale placeholder workspaces after drawings move under a real workspace", async () => {
     const repository = new InMemoryAppRepository();
     const app = buildApp({ repository });
 
@@ -664,16 +697,15 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     expect(createdJob.primaryDrawingId).not.toBeNull();
     const primaryDrawingId = createdJob.primaryDrawingId!;
 
-    const renamePrimaryDrawing = await app.inject({
+    const renameWorkspace = await app.inject({
       method: "PUT",
-      url: `/api/v1/drawings/${primaryDrawingId}`,
+      url: `/api/v1/drawing-workspaces/${createdJob.id}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: 1,
         name: "Football pitch"
       }
     });
-    expect(renamePrimaryDrawing.statusCode).toBe(200);
+    expect(renameWorkspace.statusCode).toBe(200);
 
     const createRevision = await app.inject({
       method: "POST",
@@ -751,7 +783,7 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     await app.close();
   });
 
-  it("keeps the workspace name tied to the drawing chain name", async () => {
+  it("keeps drawing names synchronized when the workspace name changes", async () => {
     const { app, cookieHeader } = await registerAndGetSession();
     const customerId = await createCustomerForSession(app, cookieHeader);
 
@@ -778,19 +810,17 @@ describe("API drawing routes", { timeout: 10000 }, () => {
       payload: { sourceDrawingId: createdJob.primaryDrawingId }
     });
     expect(createRevision.statusCode).toBe(201);
-    const revision = createRevision.json<{ drawing: { id: string; versionNumber: number } }>().drawing;
 
-    const renameRevision = await app.inject({
+    const renameWorkspace = await app.inject({
       method: "PUT",
-      url: `/api/v1/drawings/${revision.id}`,
+      url: `/api/v1/drawing-workspaces/${createdJob.id}`,
       headers: cookieHeader,
       payload: {
-        expectedVersionNumber: revision.versionNumber,
         name: "Training ground"
       }
     });
 
-    expect(renameRevision.statusCode).toBe(200);
+    expect(renameWorkspace.statusCode).toBe(200);
 
     const loadJob = await app.inject({
       method: "GET",
@@ -816,6 +846,29 @@ describe("API drawing routes", { timeout: 10000 }, () => {
     expect(
       loadDrawings.json<{ drawings: Array<{ name: string }> }>().drawings.every((drawing) => drawing.name === "Training ground"),
     ).toBe(true);
+
+    await app.close();
+  });
+
+  it("rejects creating a root drawing through the revision endpoint", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+    const customerId = await createCustomerForSession(app, cookieHeader);
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawings",
+      headers: cookieHeader,
+      payload: {
+        name: "Should fail",
+        customerId,
+        layout: { segments: [] }
+      }
+    });
+
+    expect(create.statusCode).toBe(400);
+    expect(create.json<{ error: string }>().error).toBe(
+      "Root drawings must be created through the drawing workspace endpoint",
+    );
 
     await app.close();
   });

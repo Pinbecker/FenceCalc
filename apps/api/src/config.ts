@@ -1,7 +1,10 @@
-import { isAbsolute } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"];
+const CONFIG_DIR = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_DATABASE_PATH = resolve(CONFIG_DIR, "../data/fence-estimator.db");
 const envBooleanSchema = z.preprocess((value) => {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
@@ -26,7 +29,7 @@ const envSchema = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   TRUST_PROXY: envBooleanSchema.default(false),
-  DATABASE_PATH: z.string().trim().min(1).default("./data/fence-estimator.db"),
+  DATABASE_PATH: z.string().trim().min(1).default(DEFAULT_DATABASE_PATH),
   ALLOWED_ORIGINS: z.string().optional(),
   BODY_LIMIT_BYTES: z.coerce.number().int().min(1_024).max(5_242_880).default(262_144),
   WRITE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
@@ -99,12 +102,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
+  const databasePath = isAbsolute(parsed.DATABASE_PATH)
+    ? parsed.DATABASE_PATH
+    : resolve(process.cwd(), parsed.DATABASE_PATH);
+
   return {
     nodeEnv: parsed.NODE_ENV,
     host: parsed.HOST,
     port: parsed.PORT,
     trustProxy: parsed.TRUST_PROXY,
-    databasePath: parsed.DATABASE_PATH,
+    databasePath,
     allowedOrigins,
     bodyLimitBytes: parsed.BODY_LIMIT_BYTES,
     writeRateLimitWindowMs: parsed.WRITE_RATE_LIMIT_WINDOW_MS,

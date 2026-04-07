@@ -37,7 +37,6 @@ interface EditorMenuBarProps {
   onSaveDrawing: () => void;
   onOpenSaveAs: () => void;
   onExportPdf: () => void;
-  onStartNewDraft: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onDeleteSelection: () => void;
@@ -96,7 +95,6 @@ export function EditorMenuBar({
   onSaveDrawing,
   onOpenSaveAs,
   onExportPdf,
-  onStartNewDraft,
   onUndo,
   onRedo,
   onDeleteSelection,
@@ -194,9 +192,6 @@ export function EditorMenuBar({
                     title={isReadOnly ? readOnlyTitle : undefined}
                   >
                     Save As...
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => menuAction(onStartNewDraft)}>
-                    New Drawing...
                   </button>
                   <div className="menu-bar-divider" />
                 </>
@@ -318,7 +313,7 @@ export function EditorMenuBar({
                 {currentCustomerName || "No customer selected"}
               </button>
             ) : (
-              <span className="menu-bar-customer-label" title={currentCustomerName || "Create drawing to select customer"}>
+              <span className="menu-bar-customer-label" title={currentCustomerName || "Open a workspace drawing to select customer"}>
                 {currentCustomerName || "No customer selected"}
               </span>
             )}

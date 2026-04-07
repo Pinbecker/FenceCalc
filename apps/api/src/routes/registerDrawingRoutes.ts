@@ -108,12 +108,14 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
         details: parsed.error.flatten()
       });
     }
+    if (!parsed.data.workspaceId) {
+      return reply.code(400).send({
+        error: "Root drawings must be created through the drawing workspace endpoint"
+      });
+    }
 
     const result = await createDrawingForCompany(repository, authenticated, {
       ...parsed.data,
-      ...(parsed.data.workspaceId || parsed.data.jobId
-        ? { workspaceId: parsed.data.workspaceId ?? parsed.data.jobId }
-        : {}),
       layout: normalizeLayout(parsed.data.layout)
     });
     if (result.kind !== "success") {
@@ -160,7 +162,7 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
     const pricingConfig =
       (await repository.getPricingConfig(authenticated.company.id)) ??
       buildDefaultPricingConfig(authenticated.company.id, null);
-    const workspaceId = drawing.workspaceId ?? drawing.jobId ?? null;
+    const workspaceId = drawing.workspaceId ?? null;
     const workspace = workspaceId
       ? await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id)
       : null;

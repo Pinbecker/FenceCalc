@@ -33,7 +33,11 @@ interface EditorFloatingPanelsProps {
     double: number;
     custom: number;
   };
-  gateCountsByHeight: HeightLabelCountRow[];
+  gateCountsByHeight: {
+    single: HeightLabelCountRow[];
+    double: HeightLabelCountRow[];
+    custom: HeightLabelCountRow[];
+  };
   basketballPostCountsByHeight: HeightLabelCountRow[];
   floodlightColumnCountsByHeight: HeightLabelCountRow[];
   twinBarFenceRows: TwinBarFenceRow[];
@@ -129,9 +133,9 @@ export function EditorFloatingPanels({
             <FloatingMiniMetric label="BB Posts" value={basketballPostCount} />
             <FloatingMiniMetric label="Floodlights" value={floodlightColumnCount} />
             <FloatingMiniMetric label="Goal Units" value={featureCounts.goalUnits} />
-            <FloatingMiniMetric label="Kickboards" value={featureCounts.kickboards} />
+            <FloatingMiniMetric label="KB Boards" value={featureCounts.kickboards} />
             <FloatingMiniMetric label="Dividers" value={featureCounts.pitchDividers} />
-            <FloatingMiniMetric label="Side Netting" value={featureCounts.sideNettings} />
+            <FloatingMiniMetric label="Netting m2" value={featureCounts.sideNettings} />
             <FloatingMiniMetric label="Panels" value={panelCount} />
             <FloatingMiniMetric label="Runs" value={fenceRunCount} />
           </div>
@@ -183,10 +187,9 @@ export function EditorFloatingPanels({
                   empty="No gates."
                   rows={[
                     { label: "Total", value: gateCounts.total },
-                    { label: "Single", value: gateCounts.single },
-                    { label: "Double", value: gateCounts.double },
-                    { label: "Custom", value: gateCounts.custom },
-                    ...gateCountsByHeight.map((r) => ({ label: r.height, value: r.count }))
+                    ...gateCountsByHeight.single.map((r) => ({ label: `Single leaf ${r.height}`, value: r.count })),
+                    ...gateCountsByHeight.double.map((r) => ({ label: `Double leaf ${r.height}`, value: r.count })),
+                    ...gateCountsByHeight.custom.map((r) => ({ label: `Custom ${r.height}`, value: r.count }))
                   ].filter((r) => r.value > 0)}
                 />
               </div>

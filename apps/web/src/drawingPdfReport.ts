@@ -997,10 +997,10 @@ export function buildQuotePdfReportHtml(input: QuotePdfReportInput): string {
           <h2 class="quote-sheet-title">Fence Schedule</h2>
           ${fenceScheduleHtml}
 
-          <h2 class="quote-sheet-title">Materials</h2>
+          <h2 class="quote-sheet-title">Material Sheet</h2>
           ${materialSectionsHtml || "<p>No material items.</p>"}
 
-          <h2 class="quote-sheet-title">Labour</h2>
+          <h2 class="quote-sheet-title">Labour Sheet</h2>
           ${labourSectionsHtml || "<p>No labour items.</p>"}
 
           <div class="quote-totals">

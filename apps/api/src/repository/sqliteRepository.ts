@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 
-import { auditLegacyJobDrawingLinks, backfillLegacyJobDrawingLinks } from "./legacyJobBackfill.js";
+import { auditLegacyJobDrawingLinks } from "./legacyJobBackfill.js";
 import { migrateSqliteDatabase } from "./sqliteSchema.js";
 import { SqliteCustomerStore } from "./sqliteCustomerStore.js";
 import { SqliteDrawingStore } from "./sqliteDrawingStore.js";
@@ -75,45 +75,31 @@ export class SqliteAppRepository implements AppRepository {
     if (!options.skipMigration) {
       migrateSqliteDatabase(this.database);
     }
-    const initialLegacyAudit = auditLegacyJobDrawingLinks(this.database);
-    const needsLegacyBackfill =
-      initialLegacyAudit.backfillableChainCount > 0 ||
-      initialLegacyAudit.drawingsMissingJob.length > 0 ||
-      initialLegacyAudit.stalePlaceholderJobCount > 0;
-
-    if (needsLegacyBackfill) {
-      const runBackfill = this.database.transaction(() => backfillLegacyJobDrawingLinks(this.database));
-      const result = runBackfill();
-      const totalChanges =
-        result.createdJobs +
-        result.updatedDrawings +
-        result.updatedQuotes +
-        result.removedPlaceholderJobs;
-      if (totalChanges > 0) {
-        console.warn(
-          `[workspace-migration] Backfilled legacy drawing links: ${result.createdJobs} jobs created, ` +
-            `${result.updatedDrawings} drawings relinked, ${result.updatedQuotes} quotes updated, ` +
-            `${result.removedPlaceholderJobs} placeholder jobs removed.`,
-        );
-      }
-    }
-
-    const finalLegacyAudit = auditLegacyJobDrawingLinks(this.database);
-    if (finalLegacyAudit.drawingsMissingCustomer.length > 0) {
+    const legacyAudit = auditLegacyJobDrawingLinks(this.database);
+    if (legacyAudit.drawingsMissingCustomer.length > 0) {
       console.warn(
-        `[workspace-migration] ${finalLegacyAudit.drawingsMissingCustomer.length} drawings are missing customers and still require manual cleanup.`,
+        `[workspace-migration] ${legacyAudit.drawingsMissingCustomer.length} drawings are missing customers and still require manual cleanup.`,
       );
     }
-    if (finalLegacyAudit.chainsWithMixedCustomers.length > 0) {
+    if (legacyAudit.chainsWithMixedCustomers.length > 0) {
       console.warn(
-        `[workspace-migration] ${finalLegacyAudit.chainsWithMixedCustomers.length} drawing chains span multiple customers and still require manual cleanup: ` +
-          formatLegacyChainSummary(finalLegacyAudit.chainsWithMixedCustomers),
+        `[workspace-migration] ${legacyAudit.chainsWithMixedCustomers.length} drawing chains span multiple customers and still require manual cleanup: ` +
+          formatLegacyChainSummary(legacyAudit.chainsWithMixedCustomers),
       );
     }
-    if (finalLegacyAudit.chainsWithMultipleRealJobs.length > 0) {
+    if (legacyAudit.chainsWithMultipleRealJobs.length > 0) {
       throw new Error(
         "Legacy workspace cleanup required before startup. Multiple real jobs are linked to the same drawing chain: " +
-          formatLegacyChainSummary(finalLegacyAudit.chainsWithMultipleRealJobs),
+          formatLegacyChainSummary(legacyAudit.chainsWithMultipleRealJobs),
+      );
+    }
+    if (
+      legacyAudit.backfillableChainCount > 0 ||
+      legacyAudit.drawingsMissingJob.length > 0 ||
+      legacyAudit.stalePlaceholderJobCount > 0
+    ) {
+      throw new Error(
+        "Legacy workspace migration required before startup. Run apps/api/scripts/migrate.mjs to normalize workspace links and audit data.",
       );
     }
     this.userSessions = new SqliteUserSessionStore(this.database);

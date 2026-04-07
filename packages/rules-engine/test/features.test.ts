@@ -171,7 +171,7 @@ describe("feature helpers", () => {
     expect(invalid?.isValid).toBe(false);
   });
 
-  it("extends every third post for side netting and exposes quantity placeholders", () => {
+  it("extends every third post for side netting and replaces the underlying post heights", () => {
     const layout: LayoutModel = {
       segments: [buildSegment("side-run", 0, 0, 15150, 0, "3m")],
       sideNettings: [
@@ -188,12 +188,19 @@ describe("feature helpers", () => {
     const estimate = estimateDrawingLayout(layout);
 
     expect(resolved?.extendedPostIndices).toEqual([0, 3, 6]);
+    expect(estimate.posts.byHeightAndType["3000"]).toMatchObject({
+      end: 0,
+      intermediate: 4,
+      total: 4
+    });
+    expect(estimate.posts.byHeightAndType["5000"]).toMatchObject({
+      end: 2,
+      intermediate: 1,
+      total: 3
+    });
+    expect(estimate.featureQuantities?.some((line) => line.component === "EXTENDED_POSTS")).toBe(false);
     expect(
-      estimate.featureQuantities?.find((line) => line.component === "EXTENDED_POSTS" && line.relatedIds?.includes("net-1"))
-        ?.quantity
-    ).toBe(3);
-    expect(
-      estimate.featureQuantities?.find((line) => line.component === "NETTING_AREA" && line.relatedIds?.includes("net-1"))
+      estimate.featureQuantities?.find((line) => line.component === "NETTING_AREA")
         ?.quantity
     ).toBe(30.3);
   });
@@ -221,8 +228,18 @@ describe("feature helpers", () => {
     expect(resolved?.endOffsetMm).toBe(10100);
     expect(resolved?.extendedPostIndices).toEqual([0, 3]);
     expect(resolved?.extendedPostPoints).toHaveLength(2);
+    expect(estimate.posts.byHeightAndType["3000"]).toMatchObject({
+      end: 2,
+      intermediate: 3,
+      total: 5
+    });
+    expect(estimate.posts.byHeightAndType["5000"]).toMatchObject({
+      end: 0,
+      intermediate: 2,
+      total: 2
+    });
     expect(
-      estimate.featureQuantities?.find((line) => line.component === "NETTING_RUN" && line.relatedIds?.includes("net-partial"))
+      estimate.featureQuantities?.find((line) => line.component === "NETTING_RUN")
         ?.quantity
     ).toBe(7.575);
   });

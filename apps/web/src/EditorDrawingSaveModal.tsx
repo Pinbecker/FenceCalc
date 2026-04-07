@@ -4,7 +4,6 @@ import type { CustomerSummary } from "@fence-estimator/contracts";
 
 interface EditorDrawingSaveModalProps {
   isOpen: boolean;
-  mode: "create" | "saveAs";
   customers: CustomerSummary[];
   currentDrawingName: string;
   initialCustomerId: string | null;
@@ -29,7 +28,6 @@ function buildCopyName(name: string): string {
 
 export function EditorDrawingSaveModal({
   isOpen,
-  mode,
   customers,
   currentDrawingName,
   initialCustomerId,
@@ -63,7 +61,7 @@ export function EditorDrawingSaveModal({
       return;
     }
 
-    setNameDraft(mode === "saveAs" ? buildCopyName(currentDrawingName) : currentDrawingName.trim());
+    setNameDraft(buildCopyName(currentDrawingName));
     setCustomerIdDraft(initialCustomerId ?? "");
     setValidationMessage(null);
     setIsCreatingCustomer(false);
@@ -75,13 +73,11 @@ export function EditorDrawingSaveModal({
       siteAddress: "",
       notes: ""
     });
-  }, [currentDrawingName, initialCustomerId, isOpen, mode]);
+  }, [currentDrawingName, initialCustomerId, isOpen]);
 
   if (!isOpen) {
     return null;
   }
-
-  const isCreateMode = mode === "create";
 
   async function handleCreateCustomer() {
     if (!newCustomerDraft.name.trim()) {
@@ -137,18 +133,12 @@ export function EditorDrawingSaveModal({
       <div className="editor-drawing-modal" role="dialog" aria-modal="true" aria-labelledby="editor-drawing-modal-title">
         <div className="editor-drawing-modal-head">
           <div>
-            <h2 id="editor-drawing-modal-title">{isCreateMode ? "Create Drawing" : "Save Drawing As"}</h2>
-            <p>
-              {isCreateMode
-                ? "Name and assign a customer before editing."
-                : "Save a copy with a new name or customer."}
-            </p>
+            <h2 id="editor-drawing-modal-title">Save Drawing As</h2>
+            <p>Save a copy with a new name or customer.</p>
           </div>
-          {!isCreateMode ? (
-            <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-          ) : null}
+          <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
         </div>
 
         {validationMessage ? <div className="editor-drawing-modal-validation">{validationMessage}</div> : null}
@@ -256,18 +246,16 @@ export function EditorDrawingSaveModal({
         ) : null}
 
         <div className="editor-drawing-modal-footer">
-          {!isCreateMode ? (
-            <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-          ) : null}
+          <button type="button" className="editor-drawing-modal-btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
           <button
             type="button"
             className="editor-drawing-modal-btn-primary"
             onClick={() => void handleSubmit()}
             disabled={isSavingDrawing}
           >
-            {isSavingDrawing ? "Saving..." : isCreateMode ? "Create drawing" : "Save copy"}
+            {isSavingDrawing ? "Saving..." : "Save copy"}
           </button>
         </div>
       </div>

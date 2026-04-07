@@ -324,7 +324,7 @@ export function buildOptimizationSummary(layout: LayoutModel): OptimizationSumma
     const fullPanels = Math.floor(segmentLengthMm / TWIN_BAR_PANEL_WIDTH_MM);
     const cutPieceMm = segmentLengthMm % TWIN_BAR_PANEL_WIDTH_MM;
 
-    for (const layer of config.layers) {
+    for (const [layerIndex, layer] of config.layers.entries()) {
       const key = demandBucketKey(variant, layer.heightMm);
       const existing = buckets.get(key);
       const bucket = existing ?? {
@@ -340,7 +340,10 @@ export function buildOptimizationSummary(layout: LayoutModel): OptimizationSumma
           segmentId: segment.id,
           startOffsetMm: fullPanels * TWIN_BAR_PANEL_WIDTH_MM,
           endOffsetMm: segmentLengthMm,
-          lengthMm: cutPieceMm
+          lengthMm: cutPieceMm,
+          fenceHeightKey: segment.spec.height,
+          panelHeightMm: layer.heightMm,
+          lift: layerIndex === 0 ? "GROUND" : layerIndex === 1 ? "FIRST" : "SECOND",
         });
       }
       if (!existing) {

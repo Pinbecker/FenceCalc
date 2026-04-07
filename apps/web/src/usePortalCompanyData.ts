@@ -15,18 +15,17 @@ import type {
 
 import {
   createDrawingWorkspace,
-  createDrawing as createDrawingRecord,
   createCustomer,
   createUser,
   deleteCustomer,
   deleteDrawing,
   deleteDrawingWorkspace,
   exportAuditLogCsv,
+  getDrawing,
   listCustomers,
   listAuditLog,
   listDrawingVersions,
   listDrawings,
-  listDrawingWorkspaceDrawings,
   listDrawingWorkspaces,
   listUsers,
   restoreDrawingVersion,
@@ -280,21 +279,15 @@ export function usePortalCompanyData({
 
       clearMessages();
       try {
-        const drawing = await createDrawingRecord({
-          name: input.name,
+        const workspace = await createDrawingWorkspace({
           customerId: input.customerId,
-          layout: {
-            segments: [],
-            gates: [],
-            basketballPosts: [],
-            floodlightColumns: [],
-            goalUnits: [],
-            kickboards: [],
-            pitchDividers: [],
-            sideNettings: [],
-          },
-          savedViewport: null,
+          name: input.name,
+          notes: "",
         });
+        if (!workspace.primaryDrawingId) {
+          throw new Error("Workspace was created without a root drawing.");
+        }
+        const drawing = await getDrawing(workspace.primaryDrawingId);
         const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
           listCustomers(),
           listDrawings(),
@@ -605,15 +598,7 @@ export function usePortalCompanyData({
       if (!session) return false;
       clearMessages();
       try {
-        const workspaceDrawings = await listDrawingWorkspaceDrawings(workspaceId);
         await updateDrawingWorkspace(workspaceId, { archived });
-        await Promise.all(
-          workspaceDrawings
-            .filter((drawing) => drawing.isArchived !== archived)
-            .map((drawing) =>
-              setDrawingArchivedState(drawing.id, archived, drawing.versionNumber),
-            ),
-        );
         const [nextCustomers, nextDrawings, nextWorkspaces] = await Promise.all([
           listCustomers(),
           listDrawings(),

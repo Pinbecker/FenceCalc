@@ -9,7 +9,7 @@ import type {
 } from "@fence-estimator/contracts";
 import { distanceMm, pointKey } from "@fence-estimator/geometry";
 
-import { estimateLayout } from "./estimate.js";
+import { estimateLayout, resolveEstimatedPosts } from "./estimate.js";
 import {
   buildBasketballReplacementOffsetsBySegmentId,
   buildGoalUnitEstimateSegments,
@@ -195,15 +195,6 @@ function buildFeatureQuantities(input: {
         quantity: enclosureEstimate.posts.total,
         unit: "post",
         relatedIds: [goalUnit.id]
-      },
-      {
-        key: `${goalUnit.id}::integrated-basketball`,
-        kind: "BASKETBALL",
-        component: "GOAL_UNIT_INTEGRATED",
-        description: "Goal-unit integrated basketball assembly",
-        quantity: 1,
-        unit: "assembly",
-        relatedIds: [goalUnit.id]
       }
     );
   }
@@ -243,6 +234,21 @@ function buildFeatureQuantities(input: {
         unit: "assembly",
         relatedIds: [basketballFeature.id]
       });
+      continue;
+    }
+
+    if (basketballFeature.type === "GOAL_UNIT_INTEGRATED") {
+      quantities.push({
+        key: `${basketballFeature.id}::goal-unit-integrated`,
+        kind: "BASKETBALL",
+        component: "GOAL_UNIT_INTEGRATED",
+        description: "Goal-unit integrated basketball assembly",
+        quantity: 1,
+        unit: "assembly",
+        relatedIds: [basketballFeature.id, basketballFeature.placement.goalUnitId ?? ""].filter(
+          Boolean
+        )
+      });
     }
   }
 
@@ -254,27 +260,42 @@ function buildFeatureQuantities(input: {
     }
   }
 
+  const kickboardTotalsByType = new Map<
+    string,
+    {
+      sectionHeightMm: number;
+      thicknessMm: number;
+      profile: string;
+      quantity: number;
+      relatedIds: string[];
+    }
+  >();
   for (const kickboard of kickboardsBySourceAttachmentId.values()) {
-    quantities.push(
-      {
-        key: `${kickboard.id}::boards`,
-        kind: "KICKBOARD",
-        component: "BOARDS",
-        description: `${kickboard.placement.sectionHeightMm} x ${kickboard.placement.thicknessMm} ${kickboard.placement.profile.toLowerCase()} kickboards`,
-        quantity: kickboard.boardCount,
-        unit: "board",
-        relatedIds: [kickboard.id, kickboard.segmentId]
-      },
-      {
-        key: `${kickboard.id}::run`,
-        kind: "KICKBOARD",
-        component: "RUN_LENGTH",
-        description: "Kickboard run length",
-        quantity: kickboard.lengthMm / 1000,
-        unit: "m",
-        relatedIds: [kickboard.id, kickboard.segmentId]
-      }
-    );
+    const key = `${kickboard.placement.sectionHeightMm}:${kickboard.placement.thicknessMm}:${kickboard.placement.profile}`;
+    const existing = kickboardTotalsByType.get(key);
+    if (existing) {
+      existing.quantity += kickboard.boardCount;
+      existing.relatedIds.push(kickboard.id, kickboard.segmentId);
+      continue;
+    }
+    kickboardTotalsByType.set(key, {
+      sectionHeightMm: kickboard.placement.sectionHeightMm,
+      thicknessMm: kickboard.placement.thicknessMm,
+      profile: kickboard.placement.profile,
+      quantity: kickboard.boardCount,
+      relatedIds: [kickboard.id, kickboard.segmentId],
+    });
+  }
+  for (const [key, total] of kickboardTotalsByType) {
+    quantities.push({
+      key: `kickboard:${key}`,
+      kind: "KICKBOARD",
+      component: "BOARDS",
+      description: `${total.sectionHeightMm} x ${total.thicknessMm} ${total.profile.toLowerCase()} kickboards`,
+      quantity: total.quantity,
+      unit: "board",
+      relatedIds: [...new Set(total.relatedIds)],
+    });
   }
 
   for (const pitchDivider of input.pitchDividers) {
@@ -312,39 +333,162 @@ function buildFeatureQuantities(input: {
     );
   }
 
+  const sideNettingLengthByHeight = new Map<number, { quantity: number; relatedIds: string[] }>();
+  let totalSideNettingAreaM2 = 0;
+  const totalSideNettingRelatedIds: string[] = [];
+
   for (const sideNetting of input.sideNettings) {
-    quantities.push(
-      {
-        key: `${sideNetting.id}::run`,
-        kind: "SIDE_NETTING",
-        component: "NETTING_RUN",
-        description: "Side-netting run length",
-        quantity: sideNetting.lengthMm / 1000,
-        unit: "m",
-        relatedIds: [sideNetting.id, sideNetting.segmentId]
-      },
-      {
-        key: `${sideNetting.id}::area`,
-        kind: "SIDE_NETTING",
-        component: "NETTING_AREA",
-        description: "Side-netting area",
-        quantity: (sideNetting.lengthMm / 1000) * (sideNetting.additionalHeightMm / 1000),
-        unit: "m2",
-        relatedIds: [sideNetting.id, sideNetting.segmentId]
-      },
-      {
-        key: `${sideNetting.id}::extended-posts`,
-        kind: "SIDE_NETTING",
-        component: "EXTENDED_POSTS",
-        description: "Extended posts supporting side netting",
-        quantity: sideNetting.extendedPostPoints.length,
-        unit: "post",
-        relatedIds: [sideNetting.id, sideNetting.segmentId]
-      }
-    );
+    const lengthM = sideNetting.lengthMm / 1000;
+    const areaM2 = lengthM * (sideNetting.additionalHeightMm / 1000);
+    const existing = sideNettingLengthByHeight.get(sideNetting.additionalHeightMm);
+    if (existing) {
+      existing.quantity += lengthM;
+      existing.relatedIds.push(sideNetting.id, sideNetting.segmentId);
+    } else {
+      sideNettingLengthByHeight.set(sideNetting.additionalHeightMm, {
+        quantity: lengthM,
+        relatedIds: [sideNetting.id, sideNetting.segmentId],
+      });
+    }
+    totalSideNettingAreaM2 += areaM2;
+    totalSideNettingRelatedIds.push(sideNetting.id, sideNetting.segmentId);
+  }
+
+  for (const [additionalHeightMm, total] of [...sideNettingLengthByHeight.entries()].sort(
+    (left, right) => left[0] - right[0],
+  )) {
+    quantities.push({
+      key: `side-netting:${additionalHeightMm}:run`,
+      kind: "SIDE_NETTING",
+      component: "NETTING_RUN",
+      description: `Side netting +${additionalHeightMm}mm total length`,
+      quantity: total.quantity,
+      unit: "m",
+      relatedIds: [...new Set(total.relatedIds)],
+    });
+  }
+
+  if (totalSideNettingAreaM2 > 0) {
+    quantities.push({
+      key: "side-netting:total-area",
+      kind: "SIDE_NETTING",
+      component: "NETTING_AREA",
+      description: "Side netting total area",
+      quantity: totalSideNettingAreaM2,
+      unit: "m2",
+      relatedIds: [...new Set(totalSideNettingRelatedIds)],
+    });
   }
 
   return quantities.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function clonePostBreakdown(
+  byHeightAndType: EstimateResult["posts"]["byHeightAndType"],
+): EstimateResult["posts"]["byHeightAndType"] {
+  return Object.fromEntries(
+    Object.entries(byHeightAndType).map(([heightKey, breakdown]) => [
+      heightKey,
+      { ...breakdown },
+    ]),
+  );
+}
+
+function ensurePostBreakdownBucket(
+  byHeightAndType: EstimateResult["posts"]["byHeightAndType"],
+  heightMm: number,
+) {
+  const heightKey = String(heightMm);
+  const existing = byHeightAndType[heightKey];
+  if (existing) {
+    return existing;
+  }
+  const created = {
+    end: 0,
+    intermediate: 0,
+    corner: 0,
+    junction: 0,
+    inlineJoin: 0,
+    total: 0,
+  };
+  byHeightAndType[heightKey] = created;
+  return created;
+}
+
+function buildPostTotalsByHeightMm(
+  byHeightAndType: EstimateResult["posts"]["byHeightAndType"],
+): EstimateResult["posts"]["byHeightMm"] {
+  return Object.fromEntries(
+    Object.entries(byHeightAndType)
+      .filter(([, breakdown]) => breakdown.total > 0)
+      .map(([heightKey, breakdown]) => [heightKey, breakdown.total]),
+  );
+}
+
+function applySideNettingPostHeightAdjustments(
+  estimate: EstimateResult,
+  layout: LayoutModel,
+  estimateSegments: LayoutSegment[],
+  replacementNodeKeys: Set<string>,
+): EstimateResult["posts"] {
+  const sideNettings = resolveSideNettingAttachments(
+    new Map(layout.segments.map((segment) => [segment.id, segment] as const)),
+    layout.sideNettings ?? [],
+  );
+  if (sideNettings.length === 0) {
+    return estimate.posts;
+  }
+
+  const countedPosts = resolveEstimatedPosts(
+    { segments: estimateSegments },
+    { excludedNodeKeys: replacementNodeKeys },
+  );
+  const countedPostsByKey = new Map(countedPosts.map((post) => [post.key, post] as const));
+  const adjustedHeightsByPostKey = new Map<string, number>();
+
+  for (const sideNetting of sideNettings) {
+    for (const point of sideNetting.extendedPostPoints) {
+      const key = pointKey(point);
+      const countedPost = countedPostsByKey.get(key);
+      if (!countedPost) {
+        continue;
+      }
+      adjustedHeightsByPostKey.set(
+        key,
+        Math.max(
+          sideNetting.totalHeightMm,
+          adjustedHeightsByPostKey.get(key) ?? countedPost.heightMm,
+        ),
+      );
+    }
+  }
+
+  if (adjustedHeightsByPostKey.size === 0) {
+    return estimate.posts;
+  }
+
+  const byHeightAndType = clonePostBreakdown(estimate.posts.byHeightAndType);
+
+  for (const post of countedPosts) {
+    const nextHeightMm = adjustedHeightsByPostKey.get(post.key);
+    if (!nextHeightMm || nextHeightMm === post.heightMm) {
+      continue;
+    }
+
+    const currentBucket = ensurePostBreakdownBucket(byHeightAndType, post.heightMm);
+    currentBucket[post.type] = Math.max(0, currentBucket[post.type] - 1);
+    currentBucket.total = Math.max(0, currentBucket.total - 1);
+
+    const adjustedBucket = ensurePostBreakdownBucket(byHeightAndType, nextHeightMm);
+    adjustedBucket[post.type] += 1;
+    adjustedBucket.total += 1;
+  }
+
+  return {
+    ...estimate.posts,
+    byHeightAndType,
+    byHeightMm: buildPostTotalsByHeightMm(byHeightAndType),
+  };
 }
 
 export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopology {
@@ -471,6 +615,12 @@ export function estimateDrawingLayout(layout: LayoutModel): EstimateResult {
 
   return {
     ...estimate,
+    posts: applySideNettingPostHeightAdjustments(
+      estimate,
+      layout,
+      derived.estimateSegments,
+      derived.replacementNodeKeys,
+    ),
     featureQuantities: derived.featureQuantities
   };
 }

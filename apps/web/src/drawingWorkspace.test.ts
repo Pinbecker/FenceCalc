@@ -14,7 +14,6 @@ describe("drawing workspace helpers", () => {
         query: { workspaceId: "workspace-1", drawingId: "drawing-2" },
       }),
     ).toEqual({
-      drawingLookupId: "drawing-2",
       workspaceLookupId: "workspace-1",
     });
   });
@@ -28,7 +27,6 @@ describe("drawing workspace helpers", () => {
         resolvedDrawingWorkspaceId: "workspace-1",
       }),
     ).toEqual({
-      drawingLookupId: "drawing-2",
       workspaceLookupId: "workspace-1",
     });
   });
@@ -38,13 +36,13 @@ describe("drawing workspace helpers", () => {
       buildDrawingWorkspaceQuery({
         workspaceId: "workspace-1",
         drawingId: "drawing-2",
-        tab: "estimate",
+        estimateDrawingId: "drawing-2",
         focusTaskId: "task-3",
       }),
     ).toEqual({
       workspaceId: "workspace-1",
       drawingId: "drawing-2",
-      tab: "estimate",
+      estimateDrawingId: "drawing-2",
       focusTaskId: "task-3",
     });
   });

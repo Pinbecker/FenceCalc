@@ -15,7 +15,6 @@ interface EditorPageActionsWorkspace {
   currentCustomerName: string | null;
   isDirty: boolean;
   refreshDrawings: () => Promise<unknown>;
-  startNewDraft: () => void;
   drawings: Array<{ id: string; status: DrawingStatus; versionNumber: number }>;
 }
 
@@ -48,8 +47,6 @@ interface UseEditorPageActionsOptions {
   resolvedBasketballPostPlacements: ResolvedBasketballPostPlacement[];
   resolvedFloodlightColumnPlacements: ResolvedFloodlightColumnPlacement[];
   confirmDiscardChanges: (message: string) => boolean;
-  resetWorkspaceCanvas: () => void;
-  resetView: () => void;
   onNavigate: (
     route: "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
     query?: Record<string, string>
@@ -96,8 +93,6 @@ export function useEditorPageActions({
   resolvedBasketballPostPlacements,
   resolvedFloodlightColumnPlacements,
   confirmDiscardChanges,
-  resetWorkspaceCanvas,
-  resetView,
   onNavigate
 }: UseEditorPageActionsOptions) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
@@ -106,7 +101,7 @@ export function useEditorPageActions({
     () => (workspace.currentDrawingId ? workspace.drawings.find((drawing) => drawing.id === workspace.currentDrawingId) ?? null : null),
     [workspace.currentDrawingId, workspace.drawings]
   );
-  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : session ? "Create drawing" : "New drawing draft");
+  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "Open a workspace drawing");
   const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
   const canManagePricing = canManageAdmin;
   const interactionLabel = getInteractionLabel(interactionMode);
@@ -131,16 +126,6 @@ export function useEditorPageActions({
     },
     [currentDrawingSummary, workspace],
   );
-
-  const handleStartNewDraft = useCallback(() => {
-    if (!confirmDiscardChanges("Discard unsaved changes and create a new drawing?")) {
-      return;
-    }
-
-    resetWorkspaceCanvas();
-    resetView();
-    workspace.startNewDraft();
-  }, [confirmDiscardChanges, resetView, resetWorkspaceCanvas, workspace]);
 
   const handleOpenCustomers = useCallback(() => {
     if (!confirmDiscardChanges("Discard unsaved changes before opening the customer directory?")) {
@@ -206,7 +191,6 @@ export function useEditorPageActions({
     handleChangeDrawingStatus,
     handleExportPdf,
     handleOpenCustomers,
-    handleStartNewDraft,
     interactionLabel,
     isChangingStatus
   };

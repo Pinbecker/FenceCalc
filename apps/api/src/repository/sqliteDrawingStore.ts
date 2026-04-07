@@ -1,5 +1,11 @@
 import Database from "better-sqlite3";
-import { DRAWING_STATUSES, type DrawingRecord, type DrawingSummary, type DrawingVersionRecord } from "@fence-estimator/contracts";
+import {
+  DRAWING_STATUSES,
+  type DrawingRecord,
+  type DrawingSummary,
+  type DrawingVersionRecord,
+  type DrawingVersionSource
+} from "@fence-estimator/contracts";
 
 import { type DrawingRow, type DrawingVersionRow, toDrawing, toDrawingSummary, toDrawingVersion } from "./shared.js";
 import type {
@@ -13,6 +19,39 @@ import type {
 
 export class SqliteDrawingStore {
   public constructor(private readonly database: Database.Database) {}
+
+  private insertDrawingVersionSnapshot(
+    drawing: DrawingRecord,
+    source: DrawingVersionSource,
+    createdByUserId: string,
+    createdAtIso: string,
+  ): void {
+    this.database
+      .prepare(
+        `
+          INSERT INTO drawing_versions (
+            id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        `${drawing.id}:${drawing.versionNumber}`,
+        drawing.id,
+        drawing.companyId,
+        drawing.schemaVersion,
+        drawing.rulesVersion,
+        drawing.versionNumber,
+        source,
+        drawing.name,
+        drawing.customerId,
+        drawing.customerName,
+        JSON.stringify(drawing.layout),
+        drawing.savedViewport ? JSON.stringify(drawing.savedViewport) : null,
+        JSON.stringify(drawing.estimate),
+        createdByUserId,
+        createdAtIso,
+      );
+  }
 
   private normalizeDrawingStatus(raw: string): DrawingRecord["status"] {
     return (DRAWING_STATUSES as readonly string[]).includes(raw) ? (raw as DrawingRecord["status"]) : "DRAFT";
@@ -155,7 +194,6 @@ export class SqliteDrawingStore {
     return {
       ...input,
       workspaceId,
-      jobId: workspaceId,
       revisionNumber,
       versionNumber: 1,
       status: "DRAFT" as const,
@@ -296,71 +334,89 @@ export class SqliteDrawingStore {
   }
 
   public setDrawingArchivedState(input: SetDrawingArchivedStateInput): DrawingRecord | null {
-    const result = this.database
-      .prepare(
-        `
-          UPDATE drawings
-          SET is_archived = ?, archived_at_iso = ?, archived_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
-          WHERE id = ? AND company_id = ? AND version_number = ?
-        `,
-      )
-      .run(
-        input.archived ? 1 : 0,
-        input.archived ? input.archivedAtIso : null,
-        input.archived ? input.archivedByUserId : null,
-        input.updatedByUserId,
-        input.updatedAtIso,
-        input.drawingId,
-        input.companyId,
-        input.expectedVersionNumber,
-      );
-    if (result.changes === 0) {
-      return null;
-    }
+    const update = this.database.transaction(() => {
+      const result = this.database
+        .prepare(
+          `
+            UPDATE drawings
+            SET is_archived = ?, archived_at_iso = ?, archived_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
+            WHERE id = ? AND company_id = ? AND version_number = ?
+          `,
+        )
+        .run(
+          input.archived ? 1 : 0,
+          input.archived ? input.archivedAtIso : null,
+          input.archived ? input.archivedByUserId : null,
+          input.updatedByUserId,
+          input.updatedAtIso,
+          input.drawingId,
+          input.companyId,
+          input.expectedVersionNumber,
+        );
+      if (result.changes === 0) {
+        return null;
+      }
 
-    const row = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
-      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    return row ? this.tryReadDrawing(row) : null;
+      const row = this.database
+        .prepare(`
+          SELECT d.*, c.name AS resolved_customer_name
+          FROM drawings d
+          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+          WHERE d.id = ? AND d.company_id = ?
+        `)
+        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+      const drawing = row ? this.tryReadDrawing(row) : null;
+      if (!drawing) {
+        return null;
+      }
+
+      this.insertDrawingVersionSnapshot(drawing, "ARCHIVE", input.updatedByUserId, input.updatedAtIso);
+      return drawing;
+    });
+    return update();
   }
 
   public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
-    const result = this.database
-      .prepare(
-        `
-          UPDATE drawings
-          SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
-          WHERE id = ? AND company_id = ? AND version_number = ?
-        `,
-      )
-      .run(
-        input.status,
-        input.statusChangedAtIso,
-        input.statusChangedByUserId,
-        input.updatedByUserId,
-        input.updatedAtIso,
-        input.drawingId,
-        input.companyId,
-        input.expectedVersionNumber,
-      );
-    if (result.changes === 0) {
-      return null;
-    }
+    const update = this.database.transaction(() => {
+      const result = this.database
+        .prepare(
+          `
+            UPDATE drawings
+            SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
+            WHERE id = ? AND company_id = ? AND version_number = ?
+          `,
+        )
+        .run(
+          input.status,
+          input.statusChangedAtIso,
+          input.statusChangedByUserId,
+          input.updatedByUserId,
+          input.updatedAtIso,
+          input.drawingId,
+          input.companyId,
+          input.expectedVersionNumber,
+        );
+      if (result.changes === 0) {
+        return null;
+      }
 
-    const row = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
-      .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-    return row ? this.tryReadDrawing(row) : null;
+      const row = this.database
+        .prepare(`
+          SELECT d.*, c.name AS resolved_customer_name
+          FROM drawings d
+          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
+          WHERE d.id = ? AND d.company_id = ?
+        `)
+        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
+      const drawing = row ? this.tryReadDrawing(row) : null;
+      if (!drawing) {
+        return null;
+      }
+
+      this.insertDrawingVersionSnapshot(drawing, "STATUS", input.updatedByUserId, input.updatedAtIso);
+      return drawing;
+    });
+    return update();
   }
 
   public listDrawingVersions(drawingId: string, companyId: string): DrawingVersionRecord[] {

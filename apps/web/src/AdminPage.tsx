@@ -50,7 +50,7 @@ const AUDIT_CATEGORIES: { key: AuditCategoryFilter; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "AUTH", label: "Auth" },
   { key: "USER", label: "Users" },
-  { key: "JOB", label: "Workspaces" },
+  { key: "WORKSPACE", label: "Workspaces" },
   { key: "DRAWING", label: "Drawings" },
   { key: "QUOTE", label: "Quotes" },
   { key: "CUSTOMER", label: "Customers" }

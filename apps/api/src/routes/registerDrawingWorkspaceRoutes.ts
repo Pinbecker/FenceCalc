@@ -1,10 +1,11 @@
 import {
   buildDefaultPricingConfig,
+  type DrawingCanvasViewport,
+  type LayoutModel,
   drawingTaskCreateRequestSchema,
   drawingTaskUpdateRequestSchema,
   drawingWorkspaceDrawingCreateRequestSchema,
   drawingWorkspaceCreateRequestSchema,
-  drawingWorkspacePrimaryDrawingUpdateRequestSchema,
   drawingWorkspaceQuoteCreateRequestSchema,
   drawingWorkspaceUpdateRequestSchema,
 } from "@fence-estimator/contracts";
@@ -20,7 +21,6 @@ import {
   createDrawingWorkspaceTaskForCompany,
   deleteDrawingWorkspaceForCompany,
   deleteDrawingWorkspaceTaskForCompany,
-  setDrawingWorkspacePrimaryDrawingForCompany,
   updateDrawingWorkspaceForCompany,
   updateDrawingWorkspaceTaskForCompany,
 } from "../services/drawingWorkspaceService.js";
@@ -90,7 +90,26 @@ export function registerDrawingWorkspaceRoutes({
       });
     }
 
-    const result = await createDrawingWorkspaceForCompany(repository, authenticated, parsed.data);
+    const createInput = {
+      customerId: parsed.data.customerId,
+      name: parsed.data.name,
+      notes: parsed.data.notes,
+      ...(parsed.data.initialDrawing
+        ? {
+            initialDrawing: {
+              layout: parsed.data.initialDrawing.layout as LayoutModel,
+              ...(parsed.data.initialDrawing.savedViewport === undefined
+                ? {}
+                : {
+                    savedViewport:
+                      parsed.data.initialDrawing.savedViewport as DrawingCanvasViewport | null,
+                  }),
+            },
+          }
+        : {}),
+    };
+
+    const result = await createDrawingWorkspaceForCompany(repository, authenticated, createInput);
     if (result.kind === "invalid_customer") {
       return reply.code(400).send({ error: result.message });
     }
@@ -284,46 +303,6 @@ export function registerDrawingWorkspaceRoutes({
     return reply.code(201).send({ drawing: result.drawing });
   });
 
-  app.put("/api/v1/drawing-workspaces/:id/primary-drawing", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`workspace-primary-drawing:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing workspace route parameters",
-        details: params.error.flatten(),
-      });
-    }
-    const parsed = drawingWorkspacePrimaryDrawingUpdateRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid primary drawing payload",
-        details: parsed.error.flatten(),
-      });
-    }
-
-    const result = await setDrawingWorkspacePrimaryDrawingForCompany(
-      repository,
-      authenticated,
-      params.data.id,
-      parsed.data.drawingId,
-    );
-    if (result.kind !== "success") {
-      if (result.kind === "workspace_not_found") {
-        return reply.code(404).send({ error: "Drawing workspace not found" });
-      }
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
-
-    return reply.code(200).send({ workspace: result.workspace });
-  });
-
   app.get("/api/v1/drawing-workspaces/:id/estimate", async (request, reply) => {
     const authenticated = await requireAuth(request, reply, repository, config);
     if (!authenticated) {
@@ -353,7 +332,7 @@ export function registerDrawingWorkspaceRoutes({
       return reply.code(404).send({ error: "No drawing available for this workspace" });
     }
     const drawing = await repository.getDrawingById(drawingId, authenticated.company.id);
-    if (!drawing || (drawing.workspaceId ?? drawing.jobId ?? null) !== workspace.id) {
+    if (!drawing || drawing.workspaceId !== workspace.id) {
       return reply.code(404).send({ error: "Drawing not found" });
     }
 
@@ -608,36 +587,4 @@ export function registerDrawingWorkspaceRoutes({
     return reply.code(200).send({ tasks });
   });
 
-  app.get("/api/v1/drawing-workspaces/:id/activity", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    const params = workspaceRouteParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing workspace route parameters",
-        details: params.error.flatten(),
-      });
-    }
-    const workspace = await repository.getDrawingWorkspaceById(
-      params.data.id,
-      authenticated.company.id,
-    );
-    if (!workspace) {
-      return reply.code(404).send({ error: "Drawing workspace not found" });
-    }
-
-    const entries = await repository.listAuditLog(authenticated.company.id, { limit: 200 });
-    const workspaceEntries = entries.filter((entry) => {
-      if (entry.entityType === "JOB" && entry.entityId === workspace.id) {
-        return true;
-      }
-      return (
-        entry.metadata?.jobId === workspace.id ||
-        entry.metadata?.workspaceId === workspace.id
-      );
-    });
-    return reply.code(200).send({ entries: workspaceEntries });
-  });
 }

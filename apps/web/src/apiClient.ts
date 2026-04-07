@@ -46,7 +46,7 @@ export interface AuditLogQueryOptions {
   before?: string;
   from?: string;
   to?: string;
-  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "JOB";
+  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "WORKSPACE";
   search?: string;
 }
 
@@ -99,6 +99,10 @@ export interface CreateDrawingWorkspaceInput {
   customerId: string;
   name: string;
   notes: string;
+  initialDrawing?: {
+    layout: LayoutModel;
+    savedViewport?: DrawingCanvasViewport | null;
+  };
 }
 
 export interface UpdateDrawingWorkspaceInput {
@@ -565,20 +569,6 @@ export async function createDrawingWorkspaceDrawing(
   return response.drawing;
 }
 
-export async function setDrawingWorkspacePrimaryDrawing(
-  workspaceId: string,
-  drawingId: string,
-): Promise<DrawingWorkspaceRecord> {
-  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/primary-drawing`,
-    {
-      method: "PUT",
-      body: { drawingId },
-    },
-  );
-  return response.workspace;
-}
-
 export async function getDrawingWorkspaceEstimate(
   workspaceId: string,
   drawingId?: string | null,
@@ -681,15 +671,6 @@ export async function listCompanyDrawingTasks(
   options: CompanyTaskQueryOptions = {},
 ): Promise<DrawingTaskRecord[]> {
   return listCompanyTasks(options);
-}
-
-export async function listDrawingWorkspaceActivity(
-  workspaceId: string,
-): Promise<AuditLogRecord[]> {
-  const response = await requestJson<{ entries: AuditLogRecord[] }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/activity`,
-  );
-  return response.entries;
 }
 
 export async function deleteDrawing(drawingId: string): Promise<void> {

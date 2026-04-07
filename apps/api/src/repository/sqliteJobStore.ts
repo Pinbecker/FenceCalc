@@ -12,7 +12,6 @@ import {
   type JobRow,
   type JobSummaryRow,
   type JobTaskRow,
-  toDrawingTask,
   toJob,
   toJobSummary,
   toJobTask,

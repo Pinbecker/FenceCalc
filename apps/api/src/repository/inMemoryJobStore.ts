@@ -71,7 +71,7 @@ export class InMemoryJobStore {
     }
 
     return ![...this.state.drawings.values()].some(
-      (drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id,
+      (drawing) => drawing.companyId === job.companyId && drawing.workspaceId === job.id,
     );
   }
 
@@ -89,7 +89,7 @@ export class InMemoryJobStore {
   private buildSummary(job: JobRecord): JobSummary {
     const resolved = this.withDisplayNames(job);
     const drawings = [...this.state.drawings.values()]
-      .filter((drawing) => drawing.companyId === job.companyId && drawing.jobId === job.id)
+      .filter((drawing) => drawing.companyId === job.companyId && drawing.workspaceId === job.id)
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
     const tasks = (this.state.jobTasks.get(job.id) ?? []).filter(
       (task) => task.companyId === job.companyId,
@@ -251,7 +251,7 @@ export class InMemoryJobStore {
     }
 
     for (const drawing of [...this.state.drawings.values()]) {
-      if (drawing.companyId === input.companyId && drawing.jobId === input.jobId) {
+      if (drawing.companyId === input.companyId && drawing.workspaceId === input.jobId) {
         this.state.drawings.delete(drawing.id);
         this.state.drawingVersions.delete(drawing.id);
       }
@@ -271,13 +271,13 @@ export class InMemoryJobStore {
       job.companyId !== input.companyId ||
       !drawing ||
       drawing.companyId !== input.companyId ||
-      drawing.jobId !== input.jobId
+      drawing.workspaceId !== input.jobId
     ) {
       return null;
     }
 
     for (const current of this.state.drawings.values()) {
-      if (current.companyId === input.companyId && current.jobId === input.jobId) {
+      if (current.companyId === input.companyId && current.workspaceId === input.jobId) {
         this.state.drawings.set(current.id, {
           ...current,
           jobRole: current.id === input.drawingId ? "PRIMARY" : "SECONDARY",

@@ -28,27 +28,13 @@ function pageHeading(page: Page, name: string) {
   return page.locator("h1").filter({ hasText: name });
 }
 
-async function expectCustomerPickerState(page: Page, open: boolean) {
-  const modal = page.getByRole("dialog", { name: "Customer picker" });
-  if (open) {
-    await expect(modal).toBeVisible();
-    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("hidden");
-    await expect.poll(() => page.evaluate(() => document.documentElement.style.overflow)).toBe("hidden");
-    return;
-  }
-
-  await expect(modal).toBeHidden();
-  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.overflow)).toBe("");
-}
-
 test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the refreshed portal views", async ({ page }) => {
   test.setTimeout(60_000);
 
   await bootstrapOrLoginOwner(page);
   await expect(page.getByRole("heading", { name: "Welcome, Owner User" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Latest company drawings" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recent changes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest company workspace activity" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent workspace movement" })).toBeVisible();
 
   let primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Admin" }).click();
@@ -82,82 +68,63 @@ test("covers bootstrap, admin user setup, customer-scoped drawing flows, and the
 
   primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
-  const customerPicker = page.getByRole("dialog", { name: "Customer picker" });
-  await customerPicker.getByRole("button", { name: "New customer" }).click();
-  await customerPicker.getByLabel("Customer name").fill("Operations Yard");
-  await customerPicker.getByRole("button", { name: "Create customer" }).click();
-  await expectCustomerPickerState(page, false);
+  await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
+  await page.getByRole("button", { name: "New customer" }).click();
+  await page.getByRole("textbox", { name: "Name" }).fill("Operations Yard");
+  await page.getByRole("button", { name: "Create customer" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
 
   await page.getByRole("button", { name: "New drawing" }).click();
-  const createDrawingDialog = page.getByRole("dialog", { name: "Create Drawing" });
+  const createDrawingDialog = page.getByRole("dialog", { name: "New drawing" });
   await expect(createDrawingDialog).toBeVisible();
   await createDrawingDialog.getByLabel("Drawing name").fill("Operations Yard");
-  await createDrawingDialog.getByLabel("Customer").selectOption({ label: "Operations Yard" });
   await createDrawingDialog.getByRole("button", { name: "Create drawing" }).click();
   await expect(createDrawingDialog).toBeHidden();
+  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
+  await page.locator(".portal-customer-drawing-card-preview").first().click();
 
   const editorNav = page.getByRole("navigation", { name: "Editor navigation" });
-  await editorNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
-  await page.locator(".customer-picker-row").filter({ hasText: "Operations Yard" }).click();
-  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
-
-  const initialCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" });
-  await initialCard.locator(".portal-customer-drawing-card-head").click();
-  await expect(page.locator(".menu-bar-save-pill")).toHaveText("Saved");
-
-  await page.locator(".menu-bar-drawing-name").click();
-  await page.locator(".menu-bar-name-input").fill("Operations Yard v2");
-  await page.locator(".menu-bar-name-input").press("Enter");
+  await expect(editorNav).toBeVisible();
+  const drawingNameButton = page.locator(".menu-bar-drawing-name");
+  await expect(drawingNameButton).toHaveText("Operations Yard");
+  await drawingNameButton.click();
+  const drawingNameInput = page.locator(".menu-bar-name-input");
+  await expect(drawingNameInput).toHaveValue("Operations Yard");
+  await drawingNameInput.fill("Operations Yard v2");
+  await drawingNameInput.blur();
   await expect(page.locator(".menu-bar-save-pill")).toHaveText("Unsaved");
-
   await page.getByRole("button", { name: "File" }).click();
   await page.getByRole("menuitem", { name: "Save Ctrl+S" }).click();
   await expect(page.locator(".menu-bar-save-pill")).toHaveText("Saved");
 
   await editorNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
-  await page.locator(".customer-picker-row").filter({ hasText: "Operations Yard" }).click();
+  await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
+  const customerRow = page.locator(".portal-customer-directory-row").filter({ hasText: "Operations Yard" });
+  await customerRow.getByRole("button", { name: "Open customer" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
   const drawingCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" });
 
-  await drawingCard.getByRole("button", { name: "Archive" }).click();
-  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" })).toHaveCount(0);
+  await drawingCard.getByRole("button", { name: "Archive workspace" }).click();
+  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Archived" }).click();
   const archivedCard = page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" });
   await expect(archivedCard).toContainText("Archived");
 
-  await archivedCard.getByRole("button", { name: "Unarchive" }).click();
+  await archivedCard.getByRole("button", { name: "Restore workspace" }).click();
 
   await page.getByRole("button", { name: "Active" }).click();
-  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard" })).toHaveCount(1);
+  await expect(page.locator(".portal-customer-drawing-card").filter({ hasText: "Operations Yard v2" })).toHaveCount(1);
   await expect(page).toHaveURL(/#\/customer\?customerId=/);
 
   const portalNav = page.getByRole("navigation", { name: "Primary" });
   await portalNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
   await expect(page).toHaveURL(/#\/customers$/);
 
-  await page.keyboard.press("Escape");
-  await expectCustomerPickerState(page, false);
+  await page.locator(".portal-customer-directory-row").filter({ hasText: "Operations Yard" }).getByRole("button", { name: "Open customer" }).click();
   await expect(pageHeading(page, "Operations Yard")).toBeVisible();
   await expect(page).toHaveURL(/#\/customer\?customerId=/);
-
-  await portalNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
-  await page.locator(".customer-picker-backdrop").click({ position: { x: 6, y: 6 } });
-  await expectCustomerPickerState(page, false);
-  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
-
-  await portalNav.getByRole("button", { name: "Customers" }).click();
-  await expectCustomerPickerState(page, true);
-  await page.locator(".customer-picker-row").filter({ hasText: "Operations Yard" }).click();
-  await expectCustomerPickerState(page, false);
-  await expect(pageHeading(page, "Operations Yard")).toBeVisible();
 });
 
 test("keeps dashboard, drawings, and customers usable on a mobile viewport", async ({ page }) => {
@@ -167,21 +134,16 @@ test("keeps dashboard, drawings, and customers usable on a mobile viewport", asy
   await bootstrapOrLoginOwner(page);
 
   await expect(page.getByRole("heading", { name: "Welcome, Owner User" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New drawing" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Browse customers" }).first()).toBeVisible();
 
   const primaryNav = page.getByRole("navigation", { name: "Primary" });
   await primaryNav.getByRole("button", { name: "Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /New customer|Cancel/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New customer|Close create panel/ })).toBeVisible();
 
   await page.getByRole("button", { name: "New customer" }).click();
-  await page.getByLabel("Customer name").fill("Mobile Yard");
+  await page.getByRole("textbox", { name: "Name" }).fill("Mobile Yard");
   await page.getByRole("button", { name: "Create customer" }).click();
   await expect(pageHeading(page, "Mobile Yard")).toBeVisible();
-
-  await primaryNav.getByRole("button", { name: "Customers" }).click();
-  const customerRow = page.locator(".customer-picker-row").filter({ hasText: "Mobile Yard" });
-  await expect(customerRow).toBeVisible();
-  await customerRow.click();
-  await expect(pageHeading(page, "Mobile Yard")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New drawing" })).toBeVisible();
 });

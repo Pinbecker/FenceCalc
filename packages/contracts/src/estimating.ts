@@ -15,6 +15,11 @@ export const PRICING_ITEM_CATEGORIES = [
   "CONCRETE",
   "FLOODLIGHT_COLUMNS",
   "BASKETBALL_POSTS",
+  "GOAL_UNITS",
+  "KICKBOARDS",
+  "PITCH_DIVIDERS",
+  "SIDE_NETTING",
+  "COMMERCIAL",
   "FIXINGS",
   "PLANT",
   "ANCILLARY"
@@ -142,7 +147,6 @@ export interface QuoteRecord {
   id: string;
   companyId: string;
   workspaceId?: string | undefined;
-  jobId?: string | undefined;
   sourceDrawingId?: string | undefined;
   sourceDrawingVersionNumber?: number | undefined;
   drawingId: string;

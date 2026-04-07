@@ -220,6 +220,9 @@ export interface TwinBarCutSection {
   startOffsetMm: number;
   endOffsetMm: number;
   lengthMm: number;
+  fenceHeightKey?: FenceHeightKey | undefined;
+  panelHeightMm?: number | undefined;
+  lift?: "GROUND" | "FIRST" | "SECOND" | undefined;
 }
 
 export interface TwinBarOptimizationCut {
@@ -397,15 +400,18 @@ export type JobStage = (typeof JOB_STAGES)[number];
 export type DrawingWorkspaceStage = JobStage;
 
 export interface JobCommercialInputs {
-  labourOverheadPercent: number;
+  labourOverheadPercent?: number | undefined;
+  labourDayValue?: number | undefined;
   travelLodgePerDay: number;
-  travelDays: number;
   markupRate: number;
-  markupUnits: number;
   distributionCharge: number;
   concretePricePerCube: number;
-  hardDig: boolean;
-  clearSpoils: boolean;
+  hardDigRatePerHole?: number | undefined;
+  clearSpoilsRatePerHole?: number | undefined;
+  travelDays?: number | undefined;
+  markupUnits?: number | undefined;
+  hardDig?: boolean | undefined;
+  clearSpoils?: boolean | undefined;
 }
 export type DrawingWorkspaceCommercialInputs = JobCommercialInputs;
 
@@ -545,7 +551,6 @@ export interface DrawingRecord {
   id: string;
   companyId: string;
   workspaceId?: string | null;
-  jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   parentDrawingId?: string | null;
   revisionNumber: number;
@@ -574,7 +579,6 @@ export interface DrawingSummary {
   id: string;
   companyId: string;
   workspaceId?: string | null;
-  jobId?: string | null;
   jobRole?: DrawingJobRole | null;
   parentDrawingId?: string | null;
   revisionNumber: number;
@@ -606,7 +610,7 @@ export interface DrawingSummary {
 export const DRAWING_STATUSES = ["DRAFT", "QUOTED", "WON", "LOST", "ON_HOLD"] as const;
 export type DrawingStatus = (typeof DRAWING_STATUSES)[number];
 
-export type DrawingVersionSource = "CREATE" | "UPDATE" | "RESTORE";
+export type DrawingVersionSource = "CREATE" | "UPDATE" | "RESTORE" | "ARCHIVE" | "STATUS";
 
 export interface DrawingVersionRecord {
   id: string;
@@ -626,7 +630,7 @@ export interface DrawingVersionRecord {
   createdAtIso: string;
 }
 
-export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "JOB";
+export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "WORKSPACE";
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
   | "LOGIN_SUCCEEDED"
@@ -642,17 +646,16 @@ export type AuditAction =
   | "DRAWING_STATUS_CHANGED"
   | "DRAWING_VERSION_RESTORED"
   | "QUOTE_CREATED"
-  | "JOB_CREATED"
-  | "JOB_UPDATED"
-  | "JOB_ARCHIVED"
-  | "JOB_UNARCHIVED"
-  | "JOB_STAGE_CHANGED"
-  | "JOB_PRIMARY_DRAWING_CHANGED"
-  | "JOB_DRAWING_ADDED"
-  | "JOB_TASK_CREATED"
-  | "JOB_TASK_UPDATED"
-  | "JOB_TASK_DELETED"
-  | "JOB_DELETED"
+  | "WORKSPACE_CREATED"
+  | "WORKSPACE_UPDATED"
+  | "WORKSPACE_ARCHIVED"
+  | "WORKSPACE_UNARCHIVED"
+  | "WORKSPACE_STAGE_CHANGED"
+  | "WORKSPACE_DRAWING_ADDED"
+  | "WORKSPACE_TASK_CREATED"
+  | "WORKSPACE_TASK_UPDATED"
+  | "WORKSPACE_TASK_DELETED"
+  | "WORKSPACE_DELETED"
   | "CUSTOMER_CREATED"
   | "CUSTOMER_UPDATED"
   | "CUSTOMER_ARCHIVED"

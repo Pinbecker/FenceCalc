@@ -4,24 +4,10 @@ import type {
   DrawingWorkspaceSummary,
 } from "@fence-estimator/contracts";
 
-export type DrawingWorkspaceTab = "workspace" | "estimate" | "history";
-
-export const DRAWING_WORKSPACE_TABS: DrawingWorkspaceTab[] = [
-  "workspace",
-  "estimate",
-  "history",
-];
-
-export const DRAWING_WORKSPACE_TAB_LABELS: Record<DrawingWorkspaceTab, string> = {
-  workspace: "Workspace",
-  estimate: "Estimate",
-  history: "History",
-};
-
 export interface BuildDrawingWorkspaceQueryOptions {
   workspaceId: string | null;
   drawingId?: string | null;
-  tab?: DrawingWorkspaceTab | null;
+  estimateDrawingId?: string | null;
   focusTaskId?: string | null;
 }
 
@@ -41,24 +27,16 @@ export interface CustomerWorkspaceCardModel {
   lastActivityAtIso: string;
 }
 
-export function normalizeDrawingWorkspaceTab(
-  value: string | null | undefined,
-): DrawingWorkspaceTab {
-  return DRAWING_WORKSPACE_TABS.includes(value as DrawingWorkspaceTab)
-    ? (value as DrawingWorkspaceTab)
-    : "workspace";
-}
-
 export function buildDrawingWorkspaceQuery({
   workspaceId,
   drawingId,
-  tab,
+  estimateDrawingId,
   focusTaskId,
 }: BuildDrawingWorkspaceQueryOptions): Record<string, string> {
   return {
     ...(workspaceId ? { workspaceId } : {}),
     ...(drawingId ? { drawingId } : {}),
-    ...(tab ? { tab } : {}),
+    ...(estimateDrawingId ? { estimateDrawingId } : {}),
     ...(focusTaskId ? { focusTaskId } : {}),
   };
 }
@@ -69,11 +47,9 @@ export function resolveDrawingWorkspaceLoadTarget({
   query,
   resolvedDrawingWorkspaceId,
 }: ResolveDrawingWorkspaceLoadTargetOptions): {
-  drawingLookupId: string | null;
   workspaceLookupId: string | null;
 } {
   return {
-    drawingLookupId: requestedDrawingId,
     workspaceLookupId:
       query?.workspaceId ?? resolvedDrawingWorkspaceId ?? (requestedDrawingId ? null : targetId),
   };
@@ -173,16 +149,16 @@ export function buildWorkspaceNavigationQuery(
   drawings: DrawingSummary[],
   options: {
     drawingId?: string | null;
-    tab?: DrawingWorkspaceTab | null;
+    estimateDrawingId?: string | null;
     focusTaskId?: string | null;
   } = {},
 ): Record<string, string> {
-  const tab = options.tab ?? null;
+  const estimateDrawingId = options.estimateDrawingId ?? null;
   const focusTaskId = options.focusTaskId ?? null;
   return buildDrawingWorkspaceQuery({
     workspaceId: workspace.id,
     drawingId: resolveWorkspaceDrawingId(workspace, drawings, options.drawingId),
-    tab,
+    estimateDrawingId,
     focusTaskId,
   });
 }
@@ -191,7 +167,6 @@ export function buildTaskWorkspaceNavigationQuery(
   task: DrawingTaskRecord,
   workspaces: DrawingWorkspaceSummary[],
   drawings: DrawingSummary[],
-  tab: DrawingWorkspaceTab = "workspace",
 ): Record<string, string> {
   const workspace = workspaces.find((entry) => entry.id === task.workspaceId) ?? null;
   const drawingId =
@@ -202,7 +177,6 @@ export function buildTaskWorkspaceNavigationQuery(
   return buildDrawingWorkspaceQuery({
     workspaceId: task.workspaceId,
     drawingId,
-    tab,
     focusTaskId: task.id,
   });
 }

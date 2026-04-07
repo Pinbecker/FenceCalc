@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   buildDefaultDrawingWorkspaceCommercialInputs,
+  type DrawingCanvasViewport,
   type DrawingRecord,
   type DrawingTaskRecord,
   type DrawingWorkspaceCommercialInputs,
@@ -25,11 +26,27 @@ const EMPTY_LAYOUT: LayoutModel = {
   sideNettings: [],
 };
 
-type WorkspaceNotFound = { kind: "workspace_not_found" };
-type DrawingNotFound = { kind: "drawing_not_found" };
-type InvalidCustomer = { kind: "invalid_customer"; message: string };
-type InvalidUser = { kind: "invalid_user"; message: string };
-type TaskNotFound = { kind: "task_not_found" };
+interface WorkspaceNotFound {
+  kind: "workspace_not_found";
+}
+
+interface DrawingNotFound {
+  kind: "drawing_not_found";
+}
+
+interface InvalidCustomer {
+  kind: "invalid_customer";
+  message: string;
+}
+
+interface InvalidUser {
+  kind: "invalid_user";
+  message: string;
+}
+
+interface TaskNotFound {
+  kind: "task_not_found";
+}
 
 export type DrawingWorkspaceMutationResult =
   | { kind: "success"; workspace: DrawingWorkspaceRecord }
@@ -50,8 +67,8 @@ export type DrawingWorkspaceDeleteResult =
   | WorkspaceNotFound
   | { kind: "not_archived" };
 
-function getDrawingWorkspaceId(drawing: Pick<DrawingRecord, "workspaceId" | "jobId">): string | null {
-  return drawing.workspaceId ?? drawing.jobId ?? null;
+function getDrawingWorkspaceId(drawing: Pick<DrawingRecord, "workspaceId">): string | null {
+  return drawing.workspaceId ?? null;
 }
 
 async function resolveTaskDrawingTarget(
@@ -153,7 +170,15 @@ async function resolveOwner(
 export async function createDrawingWorkspaceForCompany(
   repository: AppRepository,
   authenticated: AuthenticatedRequestContext,
-  input: { customerId: string; name: string; notes: string },
+  input: {
+    customerId: string;
+    name: string;
+    notes: string;
+    initialDrawing?: {
+      layout: LayoutModel;
+      savedViewport?: DrawingCanvasViewport | null;
+    } | undefined;
+  },
 ): Promise<DrawingWorkspaceMutationResult> {
   const customerResult = await resolveCustomerForWorkspace(
     repository,
@@ -164,7 +189,8 @@ export async function createDrawingWorkspaceForCompany(
     return customerResult;
   }
 
-  const estimateSeed = buildEstimate(EMPTY_LAYOUT);
+  const initialLayout = input.initialDrawing?.layout ?? EMPTY_LAYOUT;
+  const estimateSeed = buildEstimate(initialLayout);
   const nowIso = new Date().toISOString();
   const workspaceId = randomUUID();
   const drawingId = randomUUID();
@@ -196,7 +222,7 @@ export async function createDrawingWorkspaceForCompany(
       customerId: customerResult.customer.id,
       customerName: customerResult.customer.name,
       layout: estimateSeed.layout,
-      savedViewport: null,
+      savedViewport: input.initialDrawing?.savedViewport ?? null,
       estimate: estimateSeed.estimate,
       schemaVersion: estimateSeed.schemaVersion,
       rulesVersion: estimateSeed.rulesVersion,
@@ -222,9 +248,9 @@ export async function createDrawingWorkspaceForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: workspace.id,
-    action: "JOB_CREATED",
+    action: "WORKSPACE_CREATED",
     summary: `${authenticated.user.displayName} created workspace ${workspace.name}`,
     createdAtIso: nowIso,
     metadata: { customerId: workspace.customerId, primaryDrawingId: drawingId, workspaceId },
@@ -272,27 +298,92 @@ export async function updateDrawingWorkspaceForCompany(
   const updatedAtIso = new Date().toISOString();
   const nextStage = input.stage ?? existing.stage;
   const stageChanged = input.stage !== undefined && input.stage !== existing.stage;
+  const nameChanged = input.name !== undefined && input.name !== existing.name;
   const archived = input.archived ?? existing.isArchived;
   const archiveChanged = input.archived !== undefined && input.archived !== existing.isArchived;
-  const workspace = await repository.updateDrawingWorkspace({
-    workspaceId: existing.id,
-    companyId: authenticated.company.id,
-    name: input.name ?? existing.name,
-    stage: nextStage,
-    commercialInputs: input.commercialInputs ?? existing.commercialInputs,
-    notes: input.notes ?? existing.notes,
-    ownerUserId: ownerResult?.ownerUserId ?? existing.ownerUserId,
-    archived,
-    archivedAtIso: archived ? (archiveChanged ? updatedAtIso : existing.archivedAtIso) : null,
-    archivedByUserId: archived
-      ? archiveChanged
-        ? authenticated.user.id
-        : existing.archivedByUserId
-      : null,
-    stageChangedAtIso: stageChanged ? updatedAtIso : existing.stageChangedAtIso,
-    stageChangedByUserId: stageChanged ? authenticated.user.id : existing.stageChangedByUserId,
-    updatedByUserId: authenticated.user.id,
-    updatedAtIso,
+  const workspace = await repository.runInTransaction(async () => {
+    const updatedWorkspace = await repository.updateDrawingWorkspace({
+      workspaceId: existing.id,
+      companyId: authenticated.company.id,
+      name: input.name ?? existing.name,
+      stage: nextStage,
+      commercialInputs: input.commercialInputs ?? existing.commercialInputs,
+      notes: input.notes ?? existing.notes,
+      ownerUserId: ownerResult?.ownerUserId ?? existing.ownerUserId,
+      archived,
+      archivedAtIso: archived ? (archiveChanged ? updatedAtIso : existing.archivedAtIso) : null,
+      archivedByUserId: archived
+        ? archiveChanged
+          ? authenticated.user.id
+          : existing.archivedByUserId
+        : null,
+      stageChangedAtIso: stageChanged ? updatedAtIso : existing.stageChangedAtIso,
+      stageChangedByUserId: stageChanged ? authenticated.user.id : existing.stageChangedByUserId,
+      updatedByUserId: authenticated.user.id,
+      updatedAtIso,
+    });
+    if (!updatedWorkspace) {
+      return null;
+    }
+
+    if (nameChanged || archiveChanged) {
+      const workspaceDrawings = await repository.listDrawingsForWorkspace(
+        existing.id,
+        authenticated.company.id,
+      );
+      for (const workspaceDrawing of workspaceDrawings) {
+        let currentDrawing = await repository.getDrawingById(
+          workspaceDrawing.id,
+          authenticated.company.id,
+        );
+        if (!currentDrawing) {
+          throw new Error("Workspace drawing could not be reloaded during workspace update");
+        }
+
+        if (nameChanged && currentDrawing.name !== updatedWorkspace.name) {
+          const renamedDrawing = await repository.updateDrawing({
+            drawingId: currentDrawing.id,
+            companyId: authenticated.company.id,
+            expectedVersionNumber: currentDrawing.versionNumber,
+            workspaceId: updatedWorkspace.id,
+            jobId: updatedWorkspace.id,
+            ...(currentDrawing.jobRole !== undefined ? { jobRole: currentDrawing.jobRole } : {}),
+            name: updatedWorkspace.name,
+            customerId: currentDrawing.customerId,
+            customerName: currentDrawing.customerName,
+            layout: currentDrawing.layout,
+            savedViewport: currentDrawing.savedViewport ?? null,
+            estimate: currentDrawing.estimate,
+            schemaVersion: currentDrawing.schemaVersion,
+            rulesVersion: currentDrawing.rulesVersion,
+            updatedByUserId: authenticated.user.id,
+            updatedAtIso,
+          });
+          if (!renamedDrawing) {
+            throw new Error("Workspace rename conflicted with a drawing update");
+          }
+          currentDrawing = renamedDrawing;
+        }
+
+        if (archiveChanged && currentDrawing.isArchived !== archived) {
+          const archivedDrawing = await repository.setDrawingArchivedState({
+            drawingId: currentDrawing.id,
+            companyId: authenticated.company.id,
+            expectedVersionNumber: currentDrawing.versionNumber,
+            archived,
+            archivedAtIso: archived ? updatedAtIso : null,
+            archivedByUserId: archived ? authenticated.user.id : null,
+            updatedAtIso,
+            updatedByUserId: authenticated.user.id,
+          });
+          if (!archivedDrawing) {
+            throw new Error("Workspace archive conflicted with a drawing update");
+          }
+        }
+      }
+    }
+
+    return updatedWorkspace;
   });
   if (!workspace) {
     return { kind: "workspace_not_found" };
@@ -307,9 +398,9 @@ export async function updateDrawingWorkspaceForCompany(
     await writeAuditLog(repository, {
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
-      entityType: "JOB",
+      entityType: "WORKSPACE",
       entityId: workspace.id,
-      action: "JOB_UPDATED",
+      action: "WORKSPACE_UPDATED",
       summary: `${authenticated.user.displayName} updated workspace ${workspace.name}`,
       createdAtIso: updatedAtIso,
       metadata: { workspaceId: workspace.id },
@@ -320,9 +411,9 @@ export async function updateDrawingWorkspaceForCompany(
     await writeAuditLog(repository, {
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
-      entityType: "JOB",
+      entityType: "WORKSPACE",
       entityId: workspace.id,
-      action: "JOB_STAGE_CHANGED",
+      action: "WORKSPACE_STAGE_CHANGED",
       summary: `${authenticated.user.displayName} changed ${workspace.name} from ${existing.stage} to ${nextStage}`,
       createdAtIso: updatedAtIso,
       metadata: { previousStage: existing.stage, newStage: nextStage, workspaceId: workspace.id },
@@ -333,9 +424,9 @@ export async function updateDrawingWorkspaceForCompany(
     await writeAuditLog(repository, {
       companyId: authenticated.company.id,
       actorUserId: authenticated.user.id,
-      entityType: "JOB",
+      entityType: "WORKSPACE",
       entityId: workspace.id,
-      action: archived ? "JOB_ARCHIVED" : "JOB_UNARCHIVED",
+      action: archived ? "WORKSPACE_ARCHIVED" : "WORKSPACE_UNARCHIVED",
       summary: `${authenticated.user.displayName} ${archived ? "archived" : "restored"} workspace ${workspace.name}`,
       createdAtIso: updatedAtIso,
       metadata: { workspaceId: workspace.id },
@@ -366,9 +457,9 @@ export async function deleteDrawingWorkspaceForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: workspaceId,
-    action: "JOB_DELETED",
+    action: "WORKSPACE_DELETED",
     summary: `${authenticated.user.displayName} permanently deleted workspace ${existing.name}`,
     createdAtIso: new Date().toISOString(),
     metadata: { workspaceId },
@@ -408,8 +499,10 @@ export async function createDrawingWorkspaceDrawingForCompany(
     authenticated.company.id,
   );
   const parentDrawingId = sourceDrawing.parentDrawingId ?? sourceDrawing.id;
-  const existingRevisions = existingDrawings.filter((drawing) => drawing.parentDrawingId === parentDrawingId);
-  const revisionNumber = existingRevisions.length + 1;
+  const existingRevisionNumbers = existingDrawings
+    .filter((drawing) => drawing.parentDrawingId === parentDrawingId)
+    .map((drawing) => drawing.revisionNumber);
+  const revisionNumber = Math.max(0, ...existingRevisionNumbers) + 1;
   const rootDrawing = existingDrawings.find((drawing) => drawing.id === parentDrawingId) ?? sourceDrawing;
 
   return createDrawingForCompany(repository, authenticated, {
@@ -453,10 +546,10 @@ export async function setDrawingWorkspacePrimaryDrawingForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: updatedWorkspace.id,
-    action: "JOB_PRIMARY_DRAWING_CHANGED",
-    summary: `${authenticated.user.displayName} changed the primary drawing for workspace ${updatedWorkspace.name}`,
+    action: "WORKSPACE_UPDATED",
+    summary: `${authenticated.user.displayName} updated workspace ${updatedWorkspace.name}`,
     createdAtIso: updatedAtIso,
     metadata: { drawingId, workspaceId: updatedWorkspace.id },
   });
@@ -526,9 +619,9 @@ export async function createDrawingWorkspaceTaskForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: workspaceId,
-    action: "JOB_TASK_CREATED",
+    action: "WORKSPACE_TASK_CREATED",
     summary: `${authenticated.user.displayName} added a task to workspace ${workspace.name}`,
     createdAtIso: nowIso,
     metadata: { taskId: task.id, title: task.title, workspaceId },
@@ -597,9 +690,9 @@ export async function updateDrawingWorkspaceTaskForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: workspaceId,
-    action: "JOB_TASK_UPDATED",
+    action: "WORKSPACE_TASK_UPDATED",
     summary: `${authenticated.user.displayName} updated a task on workspace ${workspace.name}`,
     createdAtIso: updatedAtIso,
     metadata: { taskId: task.id, isCompleted: task.isCompleted, workspaceId },
@@ -626,9 +719,9 @@ export async function deleteDrawingWorkspaceTaskForCompany(
   await writeAuditLog(repository, {
     companyId: authenticated.company.id,
     actorUserId: authenticated.user.id,
-    entityType: "JOB",
+    entityType: "WORKSPACE",
     entityId: workspaceId,
-    action: "JOB_TASK_DELETED",
+    action: "WORKSPACE_TASK_DELETED",
     summary: `${authenticated.user.displayName} deleted a task from workspace ${workspace.name}`,
     createdAtIso: new Date().toISOString(),
     metadata: { taskId, workspaceId },

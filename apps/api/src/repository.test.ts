@@ -13,6 +13,7 @@ import {
 import { RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 
 import type { AppRepository } from "./repository/types.js";
+import { migrateSqliteDatabase } from "./repository/sqliteSchema.js";
 import { InMemoryAppRepository, SqliteAppRepository } from "./repository.js";
 
 const emptyLayout: LayoutModel = {
@@ -607,7 +608,7 @@ describe("InMemoryAppRepository", () => {
     await expect(repository.getPricingConfig("company-1")).resolves.toMatchObject({
       workbook: {
         settings: {
-          labourOverheadPercent: 75,
+          labourDayValue: 205,
         },
       },
     });
@@ -1052,7 +1053,7 @@ describe("SqliteAppRepository", () => {
     await expect(repository.getPricingConfig(account.company.id)).resolves.toMatchObject({
       workbook: {
         settings: {
-          labourOverheadPercent: 75,
+          labourDayValue: 205,
         },
       },
     });
@@ -1215,7 +1216,7 @@ describe("SqliteAppRepository", () => {
     await expect(repository.listDrawings(account.company.id)).resolves.toHaveLength(0);
   });
 
-  it("patches legacy sqlite databases with missing newer columns", async () => {
+  it("patches legacy sqlite databases with missing newer columns but still requires explicit workspace normalization", () => {
     const databasePath = join(tmpdir(), `fence-estimator-legacy-${randomUUID()}.db`);
     const legacyDatabase = new Database(databasePath);
     legacyDatabase.exec(`
@@ -1301,16 +1302,21 @@ describe("SqliteAppRepository", () => {
         "2026-03-10T00:00:00.000Z",
         "2026-03-10T00:00:00.000Z",
       );
+    migrateSqliteDatabase(legacyDatabase);
+    const drawingColumns = legacyDatabase
+      .prepare("PRAGMA table_info(drawings)")
+      .all() as Array<{ name: string }>;
+    const jobColumns = legacyDatabase
+      .prepare("PRAGMA table_info(jobs)")
+      .all() as Array<{ name: string }>;
     legacyDatabase.close();
 
-    const repository = new SqliteAppRepository(databasePath);
-
-    await expect(repository.getAuthenticatedSession("token-hash")).resolves.toMatchObject({
-      company: { id: "company-1" },
-      user: { id: "user-1" },
-    });
-    await expect(repository.listDrawings("company-1")).resolves.toHaveLength(1);
-    await expect(repository.listDrawingVersions("drawing-1", "company-1")).resolves.toHaveLength(1);
+    expect(drawingColumns.some((column) => column.name === "job_id")).toBe(true);
+    expect(drawingColumns.some((column) => column.name === "customer_id")).toBe(true);
+    expect(jobColumns.some((column) => column.name === "commercial_inputs_json")).toBe(true);
+    expect(() => new SqliteAppRepository(databasePath)).toThrow(
+      /Legacy workspace migration required before startup/,
+    );
   });
 
   it("rejects a second persisted bootstrap attempt", async () => {

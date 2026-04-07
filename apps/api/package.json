@@ -10,6 +10,7 @@
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8",
+    "migrate": "node scripts/migrate.mjs",
     "backup:sqlite": "node scripts/backup-sqlite.mjs",
     "restore:sqlite": "node scripts/restore-sqlite.mjs",
     "recover:user": "node scripts/reset-user-password.mjs"

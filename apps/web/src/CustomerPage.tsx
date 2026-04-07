@@ -331,7 +331,7 @@ export function CustomerPage({
 
   const openDrawingWorkspace = (
     workspace: DrawingWorkspaceSummary,
-    options?: { drawingId?: string; tab?: "workspace" | "estimate" | "history" },
+    options?: { drawingId?: string; estimateDrawingId?: string },
   ) => {
     onNavigate("drawing", buildWorkspaceNavigationQuery(workspace, drawings, options));
   };

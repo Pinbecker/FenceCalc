@@ -65,6 +65,17 @@ export interface LegacyJobDrawingBackfillResult {
   blockedDrawingIds: string[];
 }
 
+export interface LegacyWorkspaceAuditMigrationResult {
+  updatedEntityTypes: number;
+  updatedActions: number;
+  updatedMetadata: number;
+}
+
+export interface LegacyWorkspaceNormalizationResult {
+  backfill: LegacyJobDrawingBackfillResult;
+  audit: LegacyWorkspaceAuditMigrationResult;
+}
+
 function tableExists(database: Database.Database, tableName: string): boolean {
   const row = database
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -524,16 +535,16 @@ export function backfillLegacyJobDrawingLinks(
         desiredRole,
         drawing.id,
         drawing.company_id,
-      ) as Database.RunResult;
+      );
       updatedDrawings += result.changes;
     }
   }
 
   const updatedQuotes =
-    (updateQuoteSourceDrawing?.run() as Database.RunResult | undefined)?.changes ?? 0 +
-    ((updateQuoteSourceVersion?.run() as Database.RunResult | undefined)?.changes ?? 0) +
-    ((updateQuoteJobId?.run() as Database.RunResult | undefined)?.changes ?? 0);
-  const removedPlaceholderJobs = (deleteStalePlaceholderJobs.run() as Database.RunResult).changes;
+    updateQuoteSourceDrawing?.run().changes ?? 0 +
+    (updateQuoteSourceVersion?.run().changes ?? 0) +
+    (updateQuoteJobId?.run().changes ?? 0);
+  const removedPlaceholderJobs = deleteStalePlaceholderJobs.run().changes;
 
   return {
     createdJobs,
@@ -542,4 +553,75 @@ export function backfillLegacyJobDrawingLinks(
     removedPlaceholderJobs,
     blockedDrawingIds,
   };
+}
+
+export function migrateLegacyWorkspaceAuditLog(
+  database: Database.Database,
+): LegacyWorkspaceAuditMigrationResult {
+  if (!tableExists(database, "audit_log")) {
+    return {
+      updatedEntityTypes: 0,
+      updatedActions: 0,
+      updatedMetadata: 0,
+    };
+  }
+
+  const updatedEntityTypes = (
+    database
+      .prepare(`UPDATE audit_log SET entity_type = 'WORKSPACE' WHERE entity_type = 'JOB'`)
+      .run()
+  ).changes;
+
+  const actionMappings = [
+    ["JOB_CREATED", "WORKSPACE_CREATED"],
+    ["JOB_UPDATED", "WORKSPACE_UPDATED"],
+    ["JOB_ARCHIVED", "WORKSPACE_ARCHIVED"],
+    ["JOB_UNARCHIVED", "WORKSPACE_UNARCHIVED"],
+    ["JOB_STAGE_CHANGED", "WORKSPACE_STAGE_CHANGED"],
+    ["JOB_PRIMARY_DRAWING_CHANGED", "WORKSPACE_UPDATED"],
+    ["JOB_DRAWING_ADDED", "WORKSPACE_DRAWING_ADDED"],
+    ["JOB_TASK_CREATED", "WORKSPACE_TASK_CREATED"],
+    ["JOB_TASK_UPDATED", "WORKSPACE_TASK_UPDATED"],
+    ["JOB_TASK_DELETED", "WORKSPACE_TASK_DELETED"],
+    ["JOB_DELETED", "WORKSPACE_DELETED"],
+  ] as const;
+
+  let updatedActions = 0;
+  for (const [fromAction, toAction] of actionMappings) {
+    updatedActions += (
+      database
+        .prepare(`UPDATE audit_log SET action = ? WHERE action = ?`)
+        .run(toAction, fromAction)
+    ).changes;
+  }
+
+  const updatedMetadata = (
+    database
+      .prepare(
+        `
+          UPDATE audit_log
+          SET metadata_json = REPLACE(metadata_json, '"jobId":', '"workspaceId":')
+          WHERE metadata_json LIKE '%"jobId":%'
+            AND metadata_json NOT LIKE '%"workspaceId":%'
+        `,
+      )
+      .run()
+  ).changes;
+
+  return {
+    updatedEntityTypes,
+    updatedActions,
+    updatedMetadata,
+  };
+}
+
+export function migrateLegacyWorkspaceData(
+  database: Database.Database,
+): LegacyWorkspaceNormalizationResult {
+  const runMigration = database.transaction(() => ({
+    backfill: backfillLegacyJobDrawingLinks(database),
+    audit: migrateLegacyWorkspaceAuditLog(database),
+  }));
+
+  return runMigration();
 }

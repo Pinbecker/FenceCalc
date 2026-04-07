@@ -185,4 +185,53 @@ describe("API user administration", { timeout: 10000 }, () => {
 
     await app.close();
   });
+
+  it("supports workspace audit filtering and export", async () => {
+    const { app, cookieHeader } = await registerAndGetSession();
+
+    const createCustomer = await app.inject({
+      method: "POST",
+      url: "/api/v1/customers",
+      headers: cookieHeader,
+      payload: {
+        name: "Operations Yard"
+      }
+    });
+    expect(createCustomer.statusCode).toBe(201);
+    const customerId = createCustomer.json<{ customer: { id: string } }>().customer.id;
+
+    const createWorkspace = await app.inject({
+      method: "POST",
+      url: "/api/v1/drawing-workspaces",
+      headers: cookieHeader,
+      payload: {
+        customerId,
+        name: "North boundary",
+        notes: ""
+      }
+    });
+    expect(createWorkspace.statusCode).toBe(201);
+
+    const filteredAudit = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit-log?limit=20&entityType=WORKSPACE&search=workspace",
+      headers: cookieHeader
+    });
+    expect(filteredAudit.statusCode).toBe(200);
+    expect(filteredAudit.json<{ entries: Array<{ action: string; entityType: string }> }>().entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "WORKSPACE_CREATED", entityType: "WORKSPACE" })
+      ]),
+    );
+
+    const exportedAudit = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit-log/export?entityType=WORKSPACE&search=workspace",
+      headers: cookieHeader
+    });
+    expect(exportedAudit.statusCode).toBe(200);
+    expect(exportedAudit.body).toContain("WORKSPACE_CREATED");
+
+    await app.close();
+  });
 });

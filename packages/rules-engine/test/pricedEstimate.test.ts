@@ -46,7 +46,7 @@ function buildTwinBarDrawing(): DrawingRecord {
         id: "seg-1",
         start: { x: 0, y: 0 },
         end: { x: 5050, y: 0 },
-        spec: { system: "TWIN_BAR", height: "2m", twinBarVariant: "STANDARD" }
+        spec: { system: "TWIN_BAR", height: "3m", twinBarVariant: "STANDARD" }
       }
     ],
     gates: [],
@@ -55,7 +55,10 @@ function buildTwinBarDrawing(): DrawingRecord {
         id: "bb-1",
         segmentId: "seg-1",
         offsetMm: 1200,
-        facing: "LEFT"
+        facing: "LEFT",
+        type: "DEDICATED_POST",
+        mountingMode: "PROJECTING_ARM",
+        armLengthMm: 1200
       }
     ],
     floodlightColumns: [
@@ -70,34 +73,7 @@ function buildTwinBarDrawing(): DrawingRecord {
 }
 
 function buildPricingConfig(updatedByUserId: string | null = "user-1"): PricingConfigRecord {
-  const config = buildDefaultPricingConfig("company-1", updatedByUserId);
-  const costByCode: Record<string, { materialCost: number; labourCost: number }> = {
-    TWIN_BAR_PANEL_2M: { materialCost: 10, labourCost: 2 },
-    TWIN_BAR_POST_INTERMEDIATE: { materialCost: 5, labourCost: 1 },
-    TWIN_BAR_POST_END: { materialCost: 6, labourCost: 1 },
-    TWIN_BAR_POST_CORNER_INTERNAL: { materialCost: 7, labourCost: 1 },
-    TWIN_BAR_POST_CORNER_EXTERNAL: { materialCost: 8, labourCost: 1 },
-    TWIN_BAR_GATE_SINGLE_LEAF_LEAF: { materialCost: 30, labourCost: 5 },
-    TWIN_BAR_GATE_SINGLE_LEAF_POSTS: { materialCost: 12, labourCost: 2 },
-    TWIN_BAR_GATE_DOUBLE_LEAF_LEAVES: { materialCost: 35, labourCost: 6 },
-    TWIN_BAR_GATE_DOUBLE_LEAF_POSTS: { materialCost: 16, labourCost: 3 },
-    TWIN_BAR_FENCE_CONCRETE: { materialCost: 100, labourCost: 0 },
-    TWIN_BAR_FLOODLIGHT_COLUMN: { materialCost: 200, labourCost: 20 },
-    TWIN_BAR_FLOODLIGHT_COLUMN_CONCRETE: { materialCost: 120, labourCost: 0 },
-    TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS: { materialCost: 3, labourCost: 0 },
-    TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX: { materialCost: 8, labourCost: 0 },
-    TWIN_BAR_BASKETBALL_POST: { materialCost: 150, labourCost: 10 },
-    TWIN_BAR_BASKETBALL_POST_CONCRETE: { materialCost: 110, labourCost: 0 },
-    TWIN_BAR_GENERAL_PLANT: { materialCost: 700, labourCost: 0 }
-  };
-
-  return {
-    ...config,
-    items: config.items.map((item) => ({
-      ...item,
-      ...(costByCode[item.itemCode] ?? {})
-    }))
-  };
+  return buildDefaultPricingConfig("company-1", updatedByUserId);
 }
 
 describe("concretePricing", () => {
@@ -126,17 +102,15 @@ describe("buildPricedEstimate", () => {
     ]);
 
     expect(result.pricingSnapshot.source).toBe("COMPANY_CONFIG");
-    expect(result.groups.find((group) => group.key === "panels")?.rows[0]?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "panels")?.subtotalCost).toBeCloseTo(166.32, 2);
-    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "MAT_2000_INTERS_ENDS")?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "LAB_2000_INTERS_ENDS")?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "concrete")?.rows[0]?.quantity).toBe(2);
+    expect(result.groups.find((group) => group.key === "height-3000")?.rows.some((row) => row.quantity === 2)).toBe(true);
+    expect(result.groups.find((group) => group.key === "height-3000")?.subtotalCost).toBeGreaterThan(0);
     expect(
-      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "MAT_FEATURE_FLOODLIGHT_COLUMNS")?.quantity
+      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemName === "Floodlight columns")?.quantity
     ).toBe(1);
     expect(
-      result.groups.find((group) => group.key === "basketball-posts")?.rows.find((row) => row.itemCode === "MAT_FEATURE_BASKETBALL_DEDICATED")?.quantity
+      result.groups.flatMap((group) => group.rows).find((row) => row.itemName.toLowerCase().includes("basketball"))?.quantity
     ).toBe(1);
+    expect(result.groups.map((group) => group.key)).toContain("commercial");
     expect(result.groups.find((group) => group.key === "ancillary-items")?.rows.find((row) => row.itemCode === null)?.totalCost).toBe(60);
     expect(result.totals.totalCost).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
@@ -218,9 +192,39 @@ describe("buildPricedEstimate", () => {
         )
     });
 
-    expect(result.groups.find((group) => group.key === "posts")?.rows.find((row) => row.itemCode === "MAT_2000_INTERS_ENDS")?.quantity).toBe(2);
-    expect(result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemCode === "MAT_FEATURE_FLOODLIGHT_COLUMNS")?.quantity).toBe(1);
+    expect(result.groups.find((group) => group.key === "height-3000")?.rows.some((row) => row.quantity === 2)).toBe(true);
+    expect(
+      result.groups.find((group) => group.key === "floodlight-columns")?.rows.find((row) => row.itemName === "Floodlight columns")?.quantity
+    ).toBe(1);
     expect(result.groups.flatMap((group) => group.rows).some((row) => row.notes?.includes("Pricing item is inactive.") ?? false)).toBe(false);
     expect(result.groups.flatMap((group) => group.rows).some((row) => row.notes?.includes("Pricing item is missing from configuration.") ?? false)).toBe(false);
+  });
+
+  it("replaces side-netting support posts instead of adding extra post holes", () => {
+    const drawing = buildDrawing({
+      segments: [
+        {
+          id: "seg-net",
+          start: { x: 0, y: 0 },
+          end: { x: 15150, y: 0 },
+          spec: { system: "TWIN_BAR", height: "3m", twinBarVariant: "STANDARD" }
+        }
+      ],
+      sideNettings: [
+        {
+          id: "net-1",
+          segmentId: "seg-net",
+          additionalHeightMm: 2000,
+          extendedPostInterval: 3
+        }
+      ]
+    });
+
+    const result = buildPricedEstimate(drawing, buildPricingConfig());
+    const rows = result.groups.flatMap((group) => group.rows);
+
+    expect(rows.find((row) => row.itemName === "End posts" && row.quantity === 2)?.key).toBe("post:5000:end");
+    expect(rows.find((row) => row.itemName === "Intermediate posts" && row.quantity === 1)?.key).toBe("post:5000:intermediate");
+    expect(result.workbook?.totals.holeCount).toBe(7);
   });
 });

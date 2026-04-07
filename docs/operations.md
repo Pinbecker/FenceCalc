@@ -26,6 +26,13 @@ npm run migrate --workspace @fence-estimator/api -- --database C:\srv\fence-esti
 
 The script reports which migrations were applied. Always take a backup before migrating production.
 
+If you are using the checked-in API container image, the same script is available inside the
+container runtime:
+
+```powershell
+docker compose run --rm api npm run migrate --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db
+```
+
 ## Concurrency and Conflict Handling
 
 Drawing mutations (update, archive, restore, status change) enforce optimistic concurrency at the database level. Every mutation requires the caller to supply the expected version number. If another request has modified the drawing since the caller last read it, the API returns `409 Conflict`. Clients should refresh and retry.
@@ -50,6 +57,12 @@ Minimum operating policy:
 - verify that backup output is copied to durable storage
 - alert on backup failure
 
+Containerized deployment note:
+
+```powershell
+docker compose run --rm api npm run backup:sqlite --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db --output-dir /var/lib/fence-estimator/backups
+```
+
 ## Restore
 
 Restore a backup into the live database path:
@@ -70,6 +83,12 @@ Restore rules:
 - confirm the restored database boots successfully
 - verify recent drawings and users after the restore
 - document every restore event
+
+Containerized restore example:
+
+```powershell
+docker compose run --rm api npm run restore:sqlite --workspace @fence-estimator/api -- --backup /var/lib/fence-estimator/backups/fence-estimator-2026-03-11T10-00-00-000Z.db --database /var/lib/fence-estimator/fence-estimator.db
+```
 
 ## Restore Drill
 

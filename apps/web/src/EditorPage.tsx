@@ -66,7 +66,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
   const [isItemCountsVisible, setIsItemCountsVisible] = useState(false);
   const [isPostKeyVisible, setIsPostKeyVisible] = useState(false);
-  const [drawingModalMode, setDrawingModalMode] = useState<"create" | "saveAs" | null>(null);
+  const [drawingModalMode, setDrawingModalMode] = useState<"saveAs" | null>(null);
   const {
     currentLayout,
     segments,
@@ -111,7 +111,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     endPan,
     zoomAtPointer,
     restoreView,
-    resetView,
     toWorld,
     visibleBounds,
     verticalLines,
@@ -203,12 +202,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     basketballPostCountsByHeight,
     floodlightColumnCountsByHeight,
     twinBarFenceRows,
+    panelCount,
     featureCounts,
     featureRowsByKind,
   } = editorSummary;
   const optimizationSummary = estimate.optimization;
-  const panelCount =
-    estimate.materials.twinBarPanels + estimate.materials.twinBarPanelsSuperRebound;
   const fenceRunCount = estimateSegments.length;
   const resolvedBasketballPostById = useMemo(
     () =>
@@ -340,7 +338,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     onStageMouseUp,
     onStageWheel,
     openLengthEditor,
-    resetWorkspaceCanvas,
     startSelectedBasketballPostDrag,
     startSelectedFloodlightColumnDrag,
     startSelectedGateDrag,
@@ -489,14 +486,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   useEffect(() => {
     if (!session) {
       setDrawingModalMode(null);
-      return;
     }
-    if (!workspace.currentDrawingId) {
-      setDrawingModalMode("create");
-      return;
-    }
-    setDrawingModalMode((current) => (current === "create" ? null : current));
-  }, [session, workspace.currentDrawingId]);
+  }, [session]);
 
   useEffect(() => {
     if (!isQuotedViewOnly) {
@@ -523,7 +514,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     handleChangeDrawingStatus,
     handleExportPdf,
     handleOpenCustomers,
-    handleStartNewDraft,
     isChangingStatus,
   } = useEditorPageActions({
     stageRef,
@@ -538,8 +528,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     resolvedBasketballPostPlacements,
     resolvedFloodlightColumnPlacements,
     confirmDiscardChanges,
-    resetWorkspaceCanvas,
-    resetView,
     onNavigate,
   });
   const canDeleteSelection =
@@ -596,7 +584,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       setDrawingModalMode("saveAs");
     },
     onExportPdf: handleExportPdf,
-    onStartNewDraft: handleStartNewDraft,
     onUndo: () => {
       if (isQuotedViewOnly) {
         return;
@@ -639,7 +626,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       guardedNavigate("drawing", {
         ...(workspace.currentWorkspaceId ? { workspaceId: workspace.currentWorkspaceId } : {}),
         drawingId: workspace.currentDrawingId,
-        tab: "estimate",
+        estimateDrawingId: workspace.currentDrawingId,
       });
     },
     onNavigatePricing: () => guardedNavigate("pricing"),
@@ -905,7 +892,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       <EditorLengthEditor {...lengthEditorProps} />
       <EditorDrawingSaveModal
         isOpen={drawingModalMode !== null}
-        mode={drawingModalMode ?? "create"}
         customers={workspace.customers}
         currentDrawingName={workspace.currentDrawingName}
         initialCustomerId={workspace.currentCustomerId}
@@ -913,12 +899,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         isSavingCustomer={workspace.isSavingCustomer}
         onClose={() => setDrawingModalMode(null)}
         onCreateCustomer={workspace.saveCustomer}
-        onSubmit={(input) => {
-          if (drawingModalMode === "saveAs") {
-            return workspace.saveDrawingAsCopy(input);
-          }
-          return workspace.createDrawingRecord(input);
-        }}
+        onSubmit={workspace.saveDrawingAsCopy}
       />
     </div>
   );

@@ -154,10 +154,8 @@ const mockWorkspace = {
   isSavingDrawing: false,
   setCurrentDrawingName: vi.fn(),
   saveCustomer: vi.fn(() => Promise.resolve({ id: "customer-2" })),
-  createDrawingRecord: vi.fn(() => Promise.resolve(true)),
   saveDrawing: vi.fn(() => Promise.resolve()),
   saveDrawingAsCopy: vi.fn(() => Promise.resolve(true)),
-  startNewDraft: vi.fn(),
   currentDrawingVersion: 1,
   drawings: [],
   isRestoringSession: false,
@@ -229,10 +227,27 @@ const mockDerivedState = {
       double: 0,
       custom: 0
     },
-    gateCountsByHeight: [],
+    gateCountsByHeight: {
+      single: [],
+      double: [],
+      custom: []
+    },
     basketballPostCountsByHeight: [],
     floodlightColumnCountsByHeight: [],
-    twinBarFenceRows: []
+    twinBarFenceRows: [],
+    panelCount: 6,
+    featureCounts: {
+      goalUnits: 0,
+      kickboards: 0,
+      pitchDividers: 0,
+      sideNettings: 0
+    },
+    featureRowsByKind: {
+      goalUnits: [],
+      kickboards: [],
+      pitchDividers: [],
+      sideNettings: []
+    }
   },
   estimate: {
     materials: {
@@ -330,10 +345,14 @@ vi.mock("./OptimizationPlanner", () => ({
   OptimizationPlanner: ({ canInspect }: { canInspect: boolean }) => <div>{`OptimizationPlanner ${canInspect}`}</div>
 }));
 
-const mockUseEditorCommands = vi.fn((_options?: unknown) => mockCommands);
+const mockUseEditorCommands = vi.fn(() => mockCommands);
+const mockUseEditorCommandsArgs = vi.fn();
 
 vi.mock("./editor/useEditorCommands", () => ({
-  useEditorCommands: (options: unknown) => mockUseEditorCommands(options)
+  useEditorCommands: (options: unknown) => {
+    mockUseEditorCommandsArgs(options);
+    return mockUseEditorCommands();
+  }
 }));
 
 vi.mock("./editor/useEditorDerivedState", () => ({
@@ -485,7 +504,7 @@ describe("EditorPage", () => {
 
     expect(html).toContain("ToolPalette GATE readonly:no");
     expect(html).toContain("CanvasStage");
-    expect(html).toContain("MenuBar title:New drawing draft");
+    expect(html).toContain("MenuBar title:Open a workspace drawing");
   });
 
   it("shows dirty save state and the length editor when conditions match", () => {
@@ -504,7 +523,7 @@ describe("EditorPage", () => {
     expect(html).toContain("LengthEditorOpen");
   });
 
-  it("shows the create drawing title for authenticated users without a current drawing", () => {
+  it("shows the workspace drawing fallback title for authenticated users without a current drawing", () => {
     mockWorkspace.currentDrawingId = null;
     mockWorkspace.currentDrawingName = "";
     mockWorkspace.currentCustomerId = null;
@@ -512,7 +531,7 @@ describe("EditorPage", () => {
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
-    expect(html).toContain("MenuBar title:Create drawing");
+    expect(html).toContain("MenuBar title:Open a workspace drawing");
     expect(html).toContain("save:Saved");
   });
 
@@ -542,7 +561,7 @@ describe("EditorPage", () => {
     expect(html).toContain("status:QUOTED");
     expect(html).toContain("mode:view-only");
     expect(html).toContain("ToolPalette SELECT readonly:yes");
-    expect(mockUseEditorCommands).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockUseEditorCommandsArgs).toHaveBeenLastCalledWith(expect.objectContaining({
       interactionMode: "SELECT",
       isReadOnly: true
     }));

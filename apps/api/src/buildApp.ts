@@ -28,7 +28,14 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
   app.register(helmet, {
     global: true,
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+        frameAncestors: ["'none'"],
+      }
+    },
     crossOriginEmbedderPolicy: false
   });
   app.register(cors, {

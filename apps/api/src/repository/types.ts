@@ -20,12 +20,11 @@ import type {
   DrawingVersionRecord,
   EstimateResult,
   JobCommercialInputs,
-  JobRecord,
   JobStage,
-  JobSummary,
-  JobTaskRecord,
   LayoutModel,
   PricingConfigRecord,
+  PricedEstimateResult,
+  QuoteDrawingSnapshot,
   QuoteRecord,
 } from "@fence-estimator/contracts";
 
@@ -237,6 +236,16 @@ export interface DeleteDrawingWorkspaceInput {
   companyId: string;
 }
 
+export interface SetDrawingWorkspaceArchivedStateInput {
+  workspaceId: string;
+  companyId: string;
+  archived: boolean;
+  archivedAtIso: string | null;
+  archivedByUserId: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
 export interface CreateJobInput {
   id: string;
   companyId: string;
@@ -367,7 +376,20 @@ export interface CompanyTaskListOptions {
   limit?: number;
 }
 
-export type CreateQuoteInput = QuoteRecord;
+export interface CreateQuoteInput {
+  id: string;
+  companyId: string;
+  workspaceId?: string | undefined;
+  jobId?: string | undefined;
+  sourceDrawingId?: string | undefined;
+  sourceDrawingVersionNumber?: number | undefined;
+  drawingId: string;
+  drawingVersionNumber: number;
+  pricedEstimate: PricedEstimateResult;
+  drawingSnapshot: QuoteDrawingSnapshot;
+  createdByUserId: string;
+  createdAtIso: string;
+}
 
 export interface PasswordResetConsumption {
   user: CompanyUserRecord;

@@ -444,7 +444,7 @@ export function buildOptimization3DRenderData(
   viewportWidth: number,
   viewportHeight: number
 ): Optimization3DRenderData {
-  const { projectVisiblePoint, projectFace, projectSegment, projectPolyline, scale } = buildProjector(
+  const { projectVisiblePoint, projectFace, projectSegment, projectPolyline } = buildProjector(
     scene,
     camera,
     viewportWidth,

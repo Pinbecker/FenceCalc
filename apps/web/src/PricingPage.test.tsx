@@ -78,6 +78,6 @@ describe("PricingPage", () => {
     });
 
     expect(workbook.sections.length).toBeGreaterThan(0);
-    expect(workbook.settings.labourOverheadPercent).toBe(75);
+    expect(workbook.settings.labourDayValue).toBe(205);
   });
 });

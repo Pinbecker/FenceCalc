@@ -1,4 +1,13 @@
-import type { CustomerRecord, DrawingRecord, DrawingSummary, DrawingVersionRecord, JobRecord, JobTaskRecord, QuoteRecord } from "@fence-estimator/contracts";
+import type {
+  CustomerRecord,
+  DrawingRecord,
+  DrawingSummary,
+  DrawingVersionRecord,
+  DrawingVersionSource,
+  JobRecord,
+  JobTaskRecord,
+  QuoteRecord
+} from "@fence-estimator/contracts";
 
 import { toDrawingSummary } from "./shared.js";
 import type {
@@ -23,6 +32,33 @@ export interface InMemoryDrawingState {
 
 export class InMemoryDrawingStore {
   public constructor(private readonly state: InMemoryDrawingState) {}
+
+  private appendVersionRecord(
+    drawing: DrawingRecord,
+    source: DrawingVersionSource,
+    createdByUserId: string,
+    createdAtIso: string,
+  ): void {
+    const versions = this.state.drawingVersions.get(drawing.id) ?? [];
+    versions.push({
+      id: `${drawing.id}:${drawing.versionNumber}`,
+      drawingId: drawing.id,
+      companyId: drawing.companyId,
+      schemaVersion: drawing.schemaVersion,
+      rulesVersion: drawing.rulesVersion,
+      versionNumber: drawing.versionNumber,
+      source,
+      name: drawing.name,
+      customerId: drawing.customerId,
+      customerName: drawing.customerName,
+      layout: drawing.layout,
+      ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),
+      estimate: drawing.estimate,
+      createdByUserId,
+      createdAtIso
+    });
+    this.state.drawingVersions.set(drawing.id, versions);
+  }
 
   private resolveCurrentDrawing(drawing: DrawingRecord): DrawingRecord {
     if (!drawing.customerId) {
@@ -62,7 +98,6 @@ export class InMemoryDrawingStore {
     const drawing: DrawingRecord = {
       ...input,
       workspaceId,
-      jobId: workspaceId,
       revisionNumber: input.revisionNumber ?? 0,
       versionNumber: 1,
       status: "DRAFT",
@@ -73,25 +108,7 @@ export class InMemoryDrawingStore {
       statusChangedByUserId: null
     };
     this.state.drawings.set(drawing.id, drawing);
-    this.state.drawingVersions.set(drawing.id, [
-      {
-        id: `${drawing.id}:1`,
-        drawingId: drawing.id,
-        companyId: drawing.companyId,
-        schemaVersion: drawing.schemaVersion,
-        rulesVersion: drawing.rulesVersion,
-        versionNumber: 1,
-        source: "CREATE",
-        name: drawing.name,
-        customerId: drawing.customerId,
-        customerName: drawing.customerName,
-        layout: drawing.layout,
-        ...(drawing.savedViewport ? { savedViewport: drawing.savedViewport } : {}),
-        estimate: drawing.estimate,
-        createdByUserId: drawing.createdByUserId,
-        createdAtIso: drawing.createdAtIso
-      }
-    ]);
+    this.appendVersionRecord(drawing, "CREATE", drawing.createdByUserId, drawing.createdAtIso);
     return drawing;
   }
 
@@ -129,7 +146,7 @@ export class InMemoryDrawingStore {
 
   public listDrawingsForJob(jobId: string, companyId: string): DrawingSummary[] {
     return [...this.state.drawings.values()]
-      .filter((drawing) => drawing.companyId === companyId && drawing.jobId === jobId)
+      .filter((drawing) => drawing.companyId === companyId && drawing.workspaceId === jobId)
       .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso))
       .map((drawing) => this.toSummary(drawing));
   }
@@ -141,14 +158,14 @@ export class InMemoryDrawingStore {
     }
     this.state.drawings.delete(input.drawingId);
     this.state.drawingVersions.delete(input.drawingId);
-    if (existing.jobId) {
+    if (existing.workspaceId) {
       const remaining = [...this.state.drawings.values()]
-        .filter((drawing) => drawing.companyId === input.companyId && drawing.jobId === existing.jobId)
+        .filter((drawing) => drawing.companyId === input.companyId && drawing.workspaceId === existing.workspaceId)
         .sort((left, right) => right.updatedAtIso.localeCompare(left.updatedAtIso));
       if (remaining.length === 0) {
-        this.state.jobTasks.delete(existing.jobId);
-        this.state.quotesByJobId.delete(existing.jobId);
-        this.state.jobs.delete(existing.jobId);
+        this.state.jobTasks.delete(existing.workspaceId);
+        this.state.quotesByJobId.delete(existing.workspaceId);
+        this.state.jobs.delete(existing.workspaceId);
       } else {
         const nextPrimaryId = remaining[0]?.id ?? null;
         for (const drawing of remaining) {
@@ -157,9 +174,9 @@ export class InMemoryDrawingStore {
             jobRole: drawing.id === nextPrimaryId ? "PRIMARY" : "SECONDARY"
           });
         }
-        const job = this.state.jobs.get(existing.jobId);
+        const job = this.state.jobs.get(existing.workspaceId);
         if (job) {
-          this.state.jobs.set(existing.jobId, {
+          this.state.jobs.set(existing.workspaceId, {
             ...job,
             primaryDrawingId: nextPrimaryId
           });
@@ -185,11 +202,10 @@ export class InMemoryDrawingStore {
     if (existing.versionNumber !== input.expectedVersionNumber) {
       return null;
     }
-    const workspaceId = input.workspaceId ?? input.jobId ?? existing.jobId ?? null;
+    const workspaceId = input.workspaceId ?? input.jobId ?? existing.workspaceId ?? null;
     const updated: DrawingRecord = {
       ...existing,
       workspaceId,
-      jobId: workspaceId,
       name: input.name,
       customerId: input.customerId,
       customerName: input.customerName,
@@ -203,25 +219,7 @@ export class InMemoryDrawingStore {
       updatedAtIso: input.updatedAtIso
     };
     this.state.drawings.set(updated.id, updated);
-    const versions = this.state.drawingVersions.get(updated.id) ?? [];
-    versions.push({
-      id: `${updated.id}:${updated.versionNumber}`,
-      drawingId: updated.id,
-      companyId: updated.companyId,
-      schemaVersion: updated.schemaVersion,
-      rulesVersion: updated.rulesVersion,
-      versionNumber: updated.versionNumber,
-      source: "UPDATE",
-      name: updated.name,
-      customerId: updated.customerId,
-      customerName: updated.customerName,
-      layout: updated.layout,
-      ...(updated.savedViewport ? { savedViewport: updated.savedViewport } : {}),
-      estimate: updated.estimate,
-      createdByUserId: input.updatedByUserId,
-      createdAtIso: input.updatedAtIso
-    });
-    this.state.drawingVersions.set(updated.id, versions);
+    this.appendVersionRecord(updated, "UPDATE", input.updatedByUserId, input.updatedAtIso);
     return updated;
   }
 
@@ -244,6 +242,7 @@ export class InMemoryDrawingStore {
       updatedAtIso: input.updatedAtIso
     };
     this.state.drawings.set(updated.id, updated);
+    this.appendVersionRecord(updated, "ARCHIVE", input.updatedByUserId, input.updatedAtIso);
     return updated;
   }
 
@@ -266,6 +265,7 @@ export class InMemoryDrawingStore {
       updatedAtIso: input.updatedAtIso
     };
     this.state.drawings.set(updated.id, updated);
+    this.appendVersionRecord(updated, "STATUS", input.updatedByUserId, input.updatedAtIso);
     return updated;
   }
 
@@ -301,25 +301,7 @@ export class InMemoryDrawingStore {
       updatedAtIso: input.restoredAtIso
     };
     this.state.drawings.set(restored.id, restored);
-    const versions = this.state.drawingVersions.get(restored.id) ?? [];
-    versions.push({
-      id: `${restored.id}:${restored.versionNumber}`,
-      drawingId: restored.id,
-      companyId: restored.companyId,
-      schemaVersion: restored.schemaVersion,
-      rulesVersion: restored.rulesVersion,
-      versionNumber: restored.versionNumber,
-      source: "RESTORE",
-      name: restored.name,
-      customerId: restored.customerId,
-      customerName: restored.customerName,
-      layout: restored.layout,
-      ...(restored.savedViewport ? { savedViewport: restored.savedViewport } : {}),
-      estimate: restored.estimate,
-      createdByUserId: input.restoredByUserId,
-      createdAtIso: input.restoredAtIso
-    });
-    this.state.drawingVersions.set(restored.id, versions);
+    this.appendVersionRecord(restored, "RESTORE", input.restoredByUserId, input.restoredAtIso);
     return restored;
   }
 }

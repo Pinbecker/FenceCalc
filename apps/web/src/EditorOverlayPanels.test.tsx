@@ -15,16 +15,23 @@ describe("EditorOverlayPanels", () => {
           inlineJoin: []
         }}
         gateCounts={{ total: 1, single: 1, double: 0, custom: 0 }}
-        gateCountsByHeight={[{ height: "2m", count: 1 }]}
+        gateCountsByHeight={{
+          single: [{ height: "2m", count: 1 }],
+          double: [],
+          custom: []
+        }}
         basketballPostCountsByHeight={[{ height: "2m", count: 2 }]}
         floodlightColumnCountsByHeight={[{ height: "2m", count: 1 }]}
         twinBarFenceRows={[{ height: "2m", standard: 4, superRebound: 1 }]}
-        featureCounts={{ goalUnits: 1, kickboards: 2, pitchDividers: 1, sideNettings: 1 }}
+        featureCounts={{ goalUnits: 1, kickboards: 2, pitchDividers: 1, sideNettings: 20.2 }}
         featureRowsByKind={{
           goalUnits: [{ label: "Goal unit 3m x 3m", value: "1 item" }],
           kickboards: [{ label: "200 x 50 square kickboards", value: "2 board" }],
           pitchDividers: [{ label: "Pitch-divider netting run", value: "12 m" }],
-          sideNettings: [{ label: "Side-netting run length", value: "10.1 m" }]
+          sideNettings: [
+            { label: "+2000mm side netting", value: "10.1 m" },
+            { label: "Total netting area", value: "20.2 m2" }
+          ]
         }}
         postTypeCounts={{
           END: 2,
@@ -50,6 +57,6 @@ describe("EditorOverlayPanels", () => {
     expect(html).toContain("BB Posts");
     expect(html).toContain("Floodlights");
     expect(html).toContain("Goal Units");
-    expect(html).toContain("Kickboards");
+    expect(html).toContain("Kickboard Boards");
   });
 });

@@ -34,6 +34,7 @@ import {
   DRAWING_STATUSES,
   buildDefaultJobCommercialInputs,
   buildDefaultPricingWorkbookConfig,
+  mergePricingWorkbookWithTemplate,
   customerRecordSchema,
   customerSummarySchema,
   drawingCanvasViewportSchema,
@@ -166,9 +167,9 @@ export interface AuditLogRow {
   id: string;
   company_id: string;
   actor_user_id: string | null;
-  entity_type: AuditEntityType;
+  entity_type: string;
   entity_id: string | null;
-  action: AuditAction;
+  action: string;
   summary: string;
   metadata_json: string | null;
   created_at_iso: string;
@@ -448,10 +449,53 @@ function parseDrawingJobRole(raw: string | undefined | null): DrawingJobRole | n
   return null;
 }
 
+function normalizeAuditEntityType(entityType: string): AuditEntityType {
+  return entityType === "JOB" ? "WORKSPACE" : (entityType as AuditEntityType);
+}
+
+function normalizeAuditAction(action: string): AuditAction {
+  switch (action) {
+    case "JOB_CREATED":
+      return "WORKSPACE_CREATED";
+    case "JOB_UPDATED":
+      return "WORKSPACE_UPDATED";
+    case "JOB_ARCHIVED":
+      return "WORKSPACE_ARCHIVED";
+    case "JOB_UNARCHIVED":
+      return "WORKSPACE_UNARCHIVED";
+    case "JOB_STAGE_CHANGED":
+      return "WORKSPACE_STAGE_CHANGED";
+    case "JOB_PRIMARY_DRAWING_CHANGED":
+      return "WORKSPACE_UPDATED";
+    case "JOB_DRAWING_ADDED":
+      return "WORKSPACE_DRAWING_ADDED";
+    case "JOB_TASK_CREATED":
+      return "WORKSPACE_TASK_CREATED";
+    case "JOB_TASK_UPDATED":
+      return "WORKSPACE_TASK_UPDATED";
+    case "JOB_TASK_DELETED":
+      return "WORKSPACE_TASK_DELETED";
+    case "JOB_DELETED":
+      return "WORKSPACE_DELETED";
+    default:
+      return action as AuditAction;
+  }
+}
+
 function normalizeJobCommercialInputs(inputs: unknown): JobCommercialInputs {
   const parsed = jobCommercialInputsSchema.safeParse(inputs);
   if (parsed.success) {
-    return parsed.data;
+    return {
+      ...buildDefaultJobCommercialInputs(),
+      ...parsed.data,
+      labourDayValue:
+        parsed.data.labourDayValue ?? buildDefaultJobCommercialInputs().labourDayValue,
+      hardDigRatePerHole:
+        parsed.data.hardDigRatePerHole ?? buildDefaultJobCommercialInputs().hardDigRatePerHole,
+      clearSpoilsRatePerHole:
+        parsed.data.clearSpoilsRatePerHole ??
+        buildDefaultJobCommercialInputs().clearSpoilsRatePerHole,
+    };
   }
   return buildDefaultJobCommercialInputs();
 }
@@ -535,7 +579,6 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     id: row.id,
     companyId: row.company_id,
     workspaceId: row.job_id,
-    jobId: row.job_id,
     jobRole: parseDrawingJobRole(row.job_role),
     parentDrawingId: row.parent_drawing_id ?? null,
     revisionNumber: row.revision_number ?? 0,
@@ -576,7 +619,6 @@ export function toDrawingSummary(
     id: drawing.id,
     companyId: drawing.companyId,
     ...(drawing.workspaceId !== undefined ? { workspaceId: drawing.workspaceId } : {}),
-    ...(drawing.jobId !== undefined ? { jobId: drawing.jobId } : {}),
     ...(drawing.jobRole !== undefined ? { jobRole: drawing.jobRole } : {}),
     ...(drawing.parentDrawingId !== undefined ? { parentDrawingId: drawing.parentDrawingId } : {}),
     revisionNumber: drawing.revisionNumber,
@@ -654,9 +696,9 @@ export function toAuditLog(row: AuditLogRow): AuditLogRecord {
     id: row.id,
     companyId: row.company_id,
     actorUserId: row.actor_user_id,
-    entityType: row.entity_type,
+    entityType: normalizeAuditEntityType(row.entity_type),
     entityId: row.entity_id,
-    action: row.action,
+    action: normalizeAuditAction(row.action),
     summary: row.summary,
     createdAtIso: row.created_at_iso,
     ...(metadata ? { metadata } : {}),
@@ -798,12 +840,12 @@ export function toDrawingTask(row: JobTaskRow): DrawingTaskRecord {
 export function normalizePricingConfigRecord(
   pricingConfig: PricingConfigRecord,
 ): PricingConfigRecord {
-  return pricingConfig.workbook
-    ? pricingConfig
-    : {
-        ...pricingConfig,
-        workbook: buildDefaultPricingWorkbookConfig(),
-      };
+  return {
+    ...pricingConfig,
+    workbook: mergePricingWorkbookWithTemplate(
+      pricingConfig.workbook ?? buildDefaultPricingWorkbookConfig(),
+    ),
+  };
 }
 
 export function toPricingConfig(row: PricingConfigRow): PricingConfigRecord {
@@ -840,7 +882,6 @@ export function toQuoteRecord(row: QuoteRow): QuoteRecord {
     id: row.id,
     companyId: row.company_id,
     workspaceId: row.job_id,
-    jobId: row.job_id,
     sourceDrawingId: row.source_drawing_id,
     sourceDrawingVersionNumber: row.source_drawing_version_number,
     drawingId: row.drawing_id,

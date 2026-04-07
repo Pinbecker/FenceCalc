@@ -115,7 +115,6 @@ export function PricingPage({ session }: PricingPageProps) {
     setNoticeMessage(null);
     try {
       const nextPricingConfig = await updatePricingConfig({
-        ...(pricingConfig?.items ? { items: pricingConfig.items } : {}),
         workbook: draftWorkbook
       });
       setPricingConfig(nextPricingConfig);

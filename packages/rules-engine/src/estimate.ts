@@ -41,6 +41,12 @@ interface EstimateLayoutOptions {
   excludedNodeKeys?: Set<string>;
 }
 
+export interface EstimatedPostInstance {
+  key: string;
+  heightMm: number;
+  type: "end" | "intermediate" | "corner" | "junction" | "inlineJoin";
+}
+
 function buildNodes(segments: LayoutSegment[]): Map<string, NodeRecord> {
   const nodes = new Map<string, NodeRecord>();
 
@@ -198,6 +204,56 @@ function classifyTerminalPostType(node: NodeRecord): TerminalPostType {
   }
 
   return angleBetweenDegrees(first.vectorAway, second.vectorAway) > CORNER_STRAIGHT_TOLERANCE_DEGREES ? "corner" : "inlineJoin";
+}
+
+function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): PointMm {
+  const lengthMm = distanceMm(segment.start, segment.end);
+  if (lengthMm <= 0) {
+    return segment.start;
+  }
+  const ratio = Math.max(0, Math.min(1, offsetMm / lengthMm));
+  return {
+    x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
+    y: segment.start.y + (segment.end.y - segment.start.y) * ratio,
+  };
+}
+
+export function resolveEstimatedPosts(
+  layout: LayoutModel,
+  options: EstimateLayoutOptions = {},
+): EstimatedPostInstance[] {
+  const segments = layout.segments.filter((segment) => distanceMm(segment.start, segment.end) > 0);
+  const nodes = buildNodes(segments);
+  const excludedNodeKeys = options.excludedNodeKeys ?? new Set<string>();
+  const posts: EstimatedPostInstance[] = [];
+
+  for (const node of nodes.values()) {
+    if (excludedNodeKeys.has(node.key)) {
+      continue;
+    }
+    posts.push({
+      key: node.key,
+      heightMm: node.maxHeightMm,
+      type: classifyTerminalPostType(node),
+    });
+  }
+
+  for (const segment of segments) {
+    const config = getSpecConfig(segment.spec);
+    const lengthMm = Math.round(distanceMm(segment.start, segment.end));
+    const bays = Math.max(1, Math.ceil(lengthMm / config.bayWidthMm));
+
+    for (let index = 1; index < bays; index += 1) {
+      const point = interpolateAlongSegment(segment, Math.min(lengthMm, config.bayWidthMm * index));
+      posts.push({
+        key: pointKey(point),
+        heightMm: config.assembledHeightMm,
+        type: "intermediate",
+      });
+    }
+  }
+
+  return posts;
 }
 
 export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptions = {}): EstimateResult {

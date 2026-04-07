@@ -212,39 +212,33 @@ function getLegacyRouteRedirect(
   }
 
   if (route === "estimate") {
-    if (query.drawingId) {
-      return {
-        route: "drawing",
-        query: {
-          drawingId: query.drawingId,
-          tab: "estimate",
-          ...(query.focusTaskId ? { focusTaskId: query.focusTaskId } : {}),
-        },
-      };
+    if (!query.drawingId && !query.jobId && !query.workspaceId) {
+      return { route: "customers" };
     }
 
-    if (query.jobId) {
-      return {
-        route: "drawing",
-        query: {
-          workspaceId: query.jobId,
-          tab: "estimate",
-          ...(query.drawingId ? { drawingId: query.drawingId } : {}),
-          ...(query.focusTaskId ? { focusTaskId: query.focusTaskId } : {}),
-        },
-      };
-    }
-
-    return { route: "customers" };
-  }
-
-  if (route === "drawing" && query.jobId && !query.workspaceId) {
     return {
       route: "drawing",
       query: {
+        ...(query.jobId && !query.workspaceId ? { workspaceId: query.jobId } : {}),
+        ...(query.workspaceId ? { workspaceId: query.workspaceId } : {}),
         ...(query.drawingId ? { drawingId: query.drawingId } : {}),
-        workspaceId: query.jobId,
-        ...(query.tab ? { tab: query.tab } : {}),
+        ...(query.drawingId ? { estimateDrawingId: query.drawingId } : {}),
+        ...(query.focusTaskId ? { focusTaskId: query.focusTaskId } : {}),
+      },
+    };
+  }
+
+  if (route === "drawing" && (query.jobId || query.tab)) {
+    const workspaceId = query.workspaceId ?? query.jobId ?? undefined;
+    const estimateDrawingId =
+      query.estimateDrawingId ?? (query.tab === "estimate" ? query.drawingId : undefined);
+
+    return {
+      route: "drawing",
+      query: {
+        ...(workspaceId ? { workspaceId } : {}),
+        ...(query.drawingId ? { drawingId: query.drawingId } : {}),
+        ...(estimateDrawingId ? { estimateDrawingId } : {}),
         ...(query.focusTaskId ? { focusTaskId: query.focusTaskId } : {}),
       },
     };
@@ -437,7 +431,6 @@ export function App() {
                 onNavigate={navigate}
                 onRefreshWorkspaces={portal.refreshWorkspaces}
                 onRefreshDrawings={portal.refreshDrawings}
-                onToggleDrawingArchived={portal.setDrawingArchived}
                 onSetWorkspaceArchived={portal.setWorkspaceArchived}
                 onDeleteWorkspace={portal.deleteWorkspace}
               />
