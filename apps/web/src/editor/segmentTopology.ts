@@ -6,6 +6,7 @@ import type {
   LayoutSegment,
   PointMm
 } from "@fence-estimator/contracts";
+import type { SegmentOpeningSpan } from "@fence-estimator/rules-engine";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { MIN_SEGMENT_MM, quantize } from "./constants.js";
@@ -17,6 +18,10 @@ import {
   resolveGatePreviewLeafCount
 } from "./editorMath.js";
 import { interpolateAlongSegment } from "./gateMath.js";
+import {
+  doesRangeOverlapSegmentOpenings,
+  isOffsetWithinSegmentOpenings
+} from "./goalUnitOpenings.js";
 import type {
   ResolvedBasketballPostPlacement,
   ResolvedFloodlightColumnPlacement,
@@ -125,6 +130,7 @@ export function buildSegmentConnectivity(segments: LayoutSegment[]): SegmentConn
 export function resolveGatePlacements(
   segmentsById: Map<string, LayoutSegment>,
   gatePlacements: GatePlacement[],
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map(),
 ): ResolvedGatePlacement[] {
   const sorted = [...gatePlacements].sort((left, right) => left.id.localeCompare(right.id));
   const resolved: ResolvedGatePlacement[] = [];
@@ -137,6 +143,15 @@ export function resolveGatePlacements(
     const segmentLengthMm = distanceMm(segment.start, segment.end);
     const clamped = clampGatePlacementToSegment(placement, segmentLengthMm);
     if (!clamped) {
+      continue;
+    }
+    if (
+      doesRangeOverlapSegmentOpenings(
+        clamped.startOffsetMm,
+        clamped.endOffsetMm,
+        openingsBySegmentId.get(placement.segmentId) ?? []
+      )
+    ) {
       continue;
     }
     const entryPoint = interpolateAlongSegment(segment, clamped.startOffsetMm);
@@ -176,6 +191,7 @@ export function resolveGatePlacements(
 export function resolveBasketballPostPlacements(
   segmentsById: Map<string, LayoutSegment>,
   basketballPostPlacements: BasketballPostPlacement[],
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map(),
 ): ResolvedBasketballPostPlacement[] {
   const sorted = [...basketballPostPlacements].sort((left, right) => left.id.localeCompare(right.id));
   const resolved: ResolvedBasketballPostPlacement[] = [];
@@ -197,6 +213,9 @@ export function resolveBasketballPostPlacements(
       continue;
     }
     const offsetMm = Math.max(0, Math.min(segmentLengthMm, placement.offsetMm));
+    if (isOffsetWithinSegmentOpenings(offsetMm, openingsBySegmentId.get(placement.segmentId) ?? [])) {
+      continue;
+    }
     const point = interpolateAlongSegment(segment, offsetMm);
     const leftNormal = { x: -tangent.y, y: tangent.x };
     const normal =
@@ -315,6 +334,7 @@ export function resolveFloodlightColumnNormal(
 export function resolveFloodlightColumnPlacements(
   segmentsById: Map<string, LayoutSegment>,
   floodlightColumnPlacements: FloodlightColumnPlacement[],
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map(),
 ): ResolvedFloodlightColumnPlacement[] {
   const sorted = [...floodlightColumnPlacements].sort((left, right) => left.id.localeCompare(right.id));
   const resolved: ResolvedFloodlightColumnPlacement[] = [];
@@ -337,6 +357,9 @@ export function resolveFloodlightColumnPlacements(
       continue;
     }
     const offsetMm = Math.max(0, Math.min(segmentLengthMm, placement.offsetMm));
+    if (isOffsetWithinSegmentOpenings(offsetMm, openingsBySegmentId.get(placement.segmentId) ?? [])) {
+      continue;
+    }
     const point = interpolateAlongSegment(segment, offsetMm);
     const normal = resolveFloodlightColumnNormal(segment, segmentLengthMm, offsetMm, placement.facing, segments);
     if (!normal) {

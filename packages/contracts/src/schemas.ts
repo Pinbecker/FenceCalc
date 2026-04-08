@@ -199,6 +199,13 @@ function fenceHeightToMm(heightKey: string): number {
   return Number.parseFloat(heightKey) * 1000;
 }
 
+const supportedFenceHeightsMm = [1200, 1800, 2000, 2400, 3000, 4000, 4500, 5000, 6000] as const;
+
+function resolveSupportedFenceHeightMm(heightMm: number): number {
+  const supportedHeightMm = supportedFenceHeightsMm.find((candidate) => heightMm <= candidate);
+  return supportedHeightMm ?? supportedFenceHeightsMm[supportedFenceHeightsMm.length - 1]!;
+}
+
 function interpolatePoint(
   start: { x: number; y: number },
   end: { x: number; y: number },
@@ -213,6 +220,89 @@ function interpolatePoint(
     x: start.x + (end.x - start.x) * ratio,
     y: start.y + (end.y - start.y) * ratio,
   };
+}
+
+function normalizeVector(vector: { x: number; y: number }) {
+  const length = Math.hypot(vector.x, vector.y);
+  if (length <= 0.000001) {
+    return null;
+  }
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+function buildGoalUnitHostSegments(
+  segment: z.infer<typeof layoutSegmentSchema>,
+  goalUnit: z.infer<typeof goalUnitPlacementSchema>,
+) {
+  const tangent = normalizeVector({
+    x: segment.end.x - segment.start.x,
+    y: segment.end.y - segment.start.y,
+  });
+  if (!tangent) {
+    return [];
+  }
+
+  const leftNormal = { x: -tangent.y, y: tangent.x };
+  const normal =
+    goalUnit.side === "RIGHT"
+      ? { x: -leftNormal.x, y: -leftNormal.y }
+      : leftNormal;
+  const segmentLengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
+  const startOffsetMm = goalUnit.centerOffsetMm - goalUnit.widthMm / 2;
+  const endOffsetMm = goalUnit.centerOffsetMm + goalUnit.widthMm / 2;
+  const entryPoint = interpolatePoint(segment.start, segment.end, startOffsetMm, segmentLengthMm);
+  const exitPoint = interpolatePoint(segment.start, segment.end, endOffsetMm, segmentLengthMm);
+  const recessEntryPoint = {
+    x: entryPoint.x + normal.x * goalUnit.depthMm,
+    y: entryPoint.y + normal.y * goalUnit.depthMm,
+  };
+  const recessExitPoint = {
+    x: exitPoint.x + normal.x * goalUnit.depthMm,
+    y: exitPoint.y + normal.y * goalUnit.depthMm,
+  };
+  const rearCenterPoint = {
+    x: (recessEntryPoint.x + recessExitPoint.x) / 2,
+    y: (recessEntryPoint.y + recessExitPoint.y) / 2,
+  };
+  const virtualHeightMm = resolveSupportedFenceHeightMm(goalUnit.goalHeightMm);
+  const hostSpec = {
+    ...segment.spec,
+    height: `${virtualHeightMm / 1000}m`,
+  } as z.infer<typeof fenceSpecSchema>;
+
+  return [
+    {
+      id: `${goalUnit.id}::side-start`,
+      start: entryPoint,
+      end: recessEntryPoint,
+      spec: hostSpec,
+      lengthMm: goalUnit.depthMm,
+    },
+    {
+      id: `${goalUnit.id}::rear-start`,
+      start: recessEntryPoint,
+      end: rearCenterPoint,
+      spec: hostSpec,
+      lengthMm: goalUnit.widthMm / 2,
+    },
+    {
+      id: `${goalUnit.id}::rear-end`,
+      start: rearCenterPoint,
+      end: recessExitPoint,
+      spec: hostSpec,
+      lengthMm: goalUnit.widthMm / 2,
+    },
+    {
+      id: `${goalUnit.id}::side-end`,
+      start: recessExitPoint,
+      end: exitPoint,
+      spec: hostSpec,
+      lengthMm: goalUnit.depthMm,
+    },
+  ];
 }
 
 export const layoutModelSchema = z
@@ -242,9 +332,12 @@ export const layoutModelSchema = z
       ...(layout.basketballPosts ?? []),
     ];
     const seenSegmentIds = new Set<string>();
-    const segmentLengthById = new Map<string, number>();
-    const segmentsById = new Map<string, z.infer<typeof layoutSegmentSchema>>();
-
+    const rawSegmentLengthById = new Map<string, number>();
+    const rawSegmentsById = new Map<string, z.infer<typeof layoutSegmentSchema>>();
+    const featureSegmentsById = new Map<
+      string,
+      z.infer<typeof layoutSegmentSchema> & { lengthMm: number }
+    >();
     for (const segment of layout.segments) {
       if (seenSegmentIds.has(segment.id)) {
         context.addIssue({
@@ -255,8 +348,9 @@ export const layoutModelSchema = z
       seenSegmentIds.add(segment.id);
 
       const lengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
-      segmentLengthById.set(segment.id, lengthMm);
-      segmentsById.set(segment.id, segment);
+      rawSegmentLengthById.set(segment.id, lengthMm);
+      rawSegmentsById.set(segment.id, segment);
+      featureSegmentsById.set(segment.id, { ...segment, lengthMm });
       if (lengthMm <= 0) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -271,6 +365,47 @@ export const layoutModelSchema = z
       Array<{ id: string; startOffsetMm: number; endOffsetMm: number }>
     >();
 
+    const seenGoalUnitIds = new Set<string>();
+    for (const goalUnit of layout.goalUnits ?? []) {
+      if (seenGoalUnitIds.has(goalUnit.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate goal unit id: ${goalUnit.id}`,
+        });
+      }
+      seenGoalUnitIds.add(goalUnit.id);
+
+      const segmentLengthMm = rawSegmentLengthById.get(goalUnit.segmentId);
+      const hostSegment = rawSegmentsById.get(goalUnit.segmentId);
+      if (segmentLengthMm === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Goal unit ${goalUnit.id} references missing segment ${goalUnit.segmentId}`,
+        });
+        continue;
+      }
+
+      const halfWidthMm = goalUnit.widthMm / 2;
+      if (
+        goalUnit.centerOffsetMm - halfWidthMm < 0 ||
+        goalUnit.centerOffsetMm + halfWidthMm > segmentLengthMm
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Goal unit ${goalUnit.id} exceeds segment ${goalUnit.segmentId} length`,
+        });
+        continue;
+      }
+
+      if (!hostSegment) {
+        continue;
+      }
+
+      for (const virtualSegment of buildGoalUnitHostSegments(hostSegment, goalUnit)) {
+        featureSegmentsById.set(virtualSegment.id, virtualSegment);
+      }
+    }
+
     for (const gate of layout.gates ?? []) {
       if (seenGateIds.has(gate.id)) {
         context.addIssue({
@@ -280,7 +415,7 @@ export const layoutModelSchema = z
       }
       seenGateIds.add(gate.id);
 
-      const segmentLengthMm = segmentLengthById.get(gate.segmentId);
+      const segmentLengthMm = featureSegmentsById.get(gate.segmentId)?.lengthMm;
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -318,37 +453,6 @@ export const layoutModelSchema = z
       }
     }
 
-    const seenGoalUnitIds = new Set<string>();
-    for (const goalUnit of layout.goalUnits ?? []) {
-      if (seenGoalUnitIds.has(goalUnit.id)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Duplicate goal unit id: ${goalUnit.id}`,
-        });
-      }
-      seenGoalUnitIds.add(goalUnit.id);
-
-      const segmentLengthMm = segmentLengthById.get(goalUnit.segmentId);
-      if (segmentLengthMm === undefined) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Goal unit ${goalUnit.id} references missing segment ${goalUnit.segmentId}`,
-        });
-        continue;
-      }
-
-      const halfWidthMm = goalUnit.widthMm / 2;
-      if (
-        goalUnit.centerOffsetMm - halfWidthMm < 0 ||
-        goalUnit.centerOffsetMm + halfWidthMm > segmentLengthMm
-      ) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Goal unit ${goalUnit.id} exceeds segment ${goalUnit.segmentId} length`,
-        });
-      }
-    }
-
     const seenBasketballFeatureIds = new Set<string>();
     for (const basketballFeature of basketballFeatures) {
       if (seenBasketballFeatureIds.has(basketballFeature.id)) {
@@ -359,8 +463,8 @@ export const layoutModelSchema = z
       }
       seenBasketballFeatureIds.add(basketballFeature.id);
 
-      const segmentLengthMm = segmentLengthById.get(basketballFeature.segmentId);
-      const segment = segmentsById.get(basketballFeature.segmentId);
+      const segment = featureSegmentsById.get(basketballFeature.segmentId);
+      const segmentLengthMm = segment?.lengthMm;
       if (segmentLengthMm === undefined || !segment) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -405,7 +509,7 @@ export const layoutModelSchema = z
       }
       seenFloodlightColumnIds.add(floodlightColumn.id);
 
-      const segmentLengthMm = segmentLengthById.get(floodlightColumn.segmentId);
+      const segmentLengthMm = featureSegmentsById.get(floodlightColumn.segmentId)?.lengthMm;
       if (segmentLengthMm === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -420,6 +524,7 @@ export const layoutModelSchema = z
           message: `Floodlight column ${floodlightColumn.id} exceeds segment ${floodlightColumn.segmentId} length`,
         });
       }
+
     }
 
     const seenKickboardIds = new Set<string>();
@@ -441,7 +546,7 @@ export const layoutModelSchema = z
       }
       kickboardSegmentIds.add(kickboard.segmentId);
 
-      if (!segmentLengthById.has(kickboard.segmentId)) {
+      if (!featureSegmentsById.has(kickboard.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Kickboard ${kickboard.id} references missing segment ${kickboard.segmentId}`,
@@ -468,7 +573,7 @@ export const layoutModelSchema = z
       }
       sideNettingSegmentIds.add(sideNetting.segmentId);
 
-      if (!segmentLengthById.has(sideNetting.segmentId)) {
+      if (!featureSegmentsById.has(sideNetting.segmentId)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Side netting ${sideNetting.id} references missing segment ${sideNetting.segmentId}`,
@@ -476,7 +581,7 @@ export const layoutModelSchema = z
         continue;
       }
 
-      const segmentLengthMm = segmentLengthById.get(sideNetting.segmentId) ?? 0;
+      const segmentLengthMm = featureSegmentsById.get(sideNetting.segmentId)?.lengthMm ?? 0;
       const startOffsetMm = sideNetting.startOffsetMm ?? 0;
       const endOffsetMm = sideNetting.endOffsetMm ?? segmentLengthMm;
 
@@ -505,10 +610,10 @@ export const layoutModelSchema = z
       }
       seenPitchDividerIds.add(pitchDivider.id);
 
-      const startSegment = segmentsById.get(pitchDivider.startAnchor.segmentId);
-      const endSegment = segmentsById.get(pitchDivider.endAnchor.segmentId);
-      const startLengthMm = segmentLengthById.get(pitchDivider.startAnchor.segmentId);
-      const endLengthMm = segmentLengthById.get(pitchDivider.endAnchor.segmentId);
+      const startSegment = featureSegmentsById.get(pitchDivider.startAnchor.segmentId);
+      const endSegment = featureSegmentsById.get(pitchDivider.endAnchor.segmentId);
+      const startLengthMm = startSegment?.lengthMm;
+      const endLengthMm = endSegment?.lengthMm;
       if (
         !startSegment ||
         !endSegment ||

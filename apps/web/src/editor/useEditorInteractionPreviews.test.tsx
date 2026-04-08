@@ -1,4 +1,5 @@
 import type { LayoutSegment } from "@fence-estimator/contracts";
+import { buildFeatureHostSurfaces } from "@fence-estimator/rules-engine";
 import { describe, expect, it } from "vitest";
 
 import { defaultFenceSpec } from "./constants.js";
@@ -349,6 +350,112 @@ describe("useEditorInteractionPreviews", () => {
     expect(result.basketballPostPreview?.segment.id).toBe("s1");
     expect(result.basketballPostPreview?.facing).toBe("RIGHT");
     expect(result.basketballPostPreview?.offsetMm).toBe(3000);
+  });
+
+  it("treats the goal-unit mouth as blocked while keeping the side and rear attachable", () => {
+    const goalSegments: LayoutSegment[] = [
+      { id: "host", start: { x: 0, y: 0 }, end: { x: 12000, y: 0 }, spec }
+    ];
+    const goalUnitPlacements = [
+      {
+        id: "goal-1",
+        segmentId: "host",
+        centerOffsetMm: 5000,
+        side: "LEFT" as const,
+        widthMm: 3000,
+        depthMm: 1200,
+        goalHeightMm: 3000 as const
+      }
+    ];
+    const hostSurfaces = buildFeatureHostSurfaces(goalSegments, goalUnitPlacements);
+    const sideStart = hostSurfaces.hostSegments.find(
+      (segment: LayoutSegment) => segment.id === "goal-1::side-start"
+    );
+    expect(sideStart).toBeDefined();
+
+    const blockedGate = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: goalSegments,
+        featureHostSegments: hostSurfaces.hostSegments,
+        goalUnitOpeningsBySegmentId: hostSurfaces.goalUnitOpeningsBySegmentId,
+        interactionMode: "GATE",
+        pointerWorld: { x: 5000, y: 10 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: [],
+        placedBasketballPostVisuals: [],
+        placedGoalUnitVisuals: hostSurfaces.resolvedGoalUnits,
+        drawChainStart: null
+      })
+    );
+
+    expect(blockedGate.gatePreview).toBeNull();
+
+    const blockedBasketball = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: goalSegments,
+        featureHostSegments: hostSurfaces.hostSegments,
+        goalUnitOpeningsBySegmentId: hostSurfaces.goalUnitOpeningsBySegmentId,
+        interactionMode: "BASKETBALL_POST",
+        pointerWorld: { x: 5000, y: 10 },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 1200,
+        placedGateVisuals: [],
+        placedBasketballPostVisuals: [],
+        placedGoalUnitVisuals: hostSurfaces.resolvedGoalUnits,
+        drawChainStart: null
+      })
+    );
+
+    expect(blockedBasketball.basketballPostPreview).toBeNull();
+
+    const sideGate = renderHookServer(() =>
+      useEditorInteractionPreviews({
+        segments: goalSegments,
+        featureHostSegments: hostSurfaces.hostSegments,
+        goalUnitOpeningsBySegmentId: hostSurfaces.goalUnitOpeningsBySegmentId,
+        interactionMode: "GATE",
+        pointerWorld: {
+          x: (sideStart!.start.x + sideStart!.end.x) / 2 + 20,
+          y: (sideStart!.start.y + sideStart!.end.y) / 2
+        },
+        drawStart: null,
+        rectangleStart: null,
+        drawAnchorNodes: [],
+        disableSnap: false,
+        viewScale: 1,
+        recessAlignmentAnchors: [],
+        recessWidthMm: 1600,
+        recessDepthMm: 900,
+        recessSide: "AUTO",
+        gateType: "SINGLE_LEAF",
+        customGateWidthMm: 900,
+        placedGateVisuals: [],
+        placedBasketballPostVisuals: [],
+        placedGoalUnitVisuals: hostSurfaces.resolvedGoalUnits,
+        drawChainStart: null
+      })
+    );
+
+    expect(sideGate.gatePreview?.segment.id).toBe("goal-1::side-start");
   });
 
   it("shows gate and basketball post alignment previews while dragging in select mode", () => {

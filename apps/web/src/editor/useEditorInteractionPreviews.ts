@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { getSegmentPostOffsets } from "@fence-estimator/rules-engine";
+import type { SegmentOpeningSpan } from "@fence-estimator/rules-engine";
 import type {
   BasketballArmLengthMm,
   GateType,
@@ -48,6 +49,10 @@ import {
   snapOffsetToAnchorAlongSegment
 } from "./recess";
 import { resolveFloodlightColumnNormal } from "./segmentTopology";
+import {
+  doesRangeOverlapGoalUnitOpening,
+  isOffsetBlockedByGoalUnitOpening,
+} from "./goalUnitOpenings";
 import type {
   BasketballPostInsertionPreview,
   DrawNodeSnapPreview,
@@ -73,6 +78,8 @@ import type {
 
 interface EditorInteractionPreviewsOptions {
   segments: LayoutSegment[];
+  featureHostSegments?: LayoutSegment[];
+  goalUnitOpeningsBySegmentId?: ReadonlyMap<string, readonly SegmentOpeningSpan[]>;
   lineSnapSegments?: LayoutSegment[];
   interactionMode: InteractionMode;
   pointerWorld: PointMm | null;
@@ -187,7 +194,8 @@ function findNearestProjectedSegment(
   point: PointMm,
   segments: LayoutSegment[],
   maxDistanceMm: number,
-  predicate?: (segment: LayoutSegment) => boolean
+  predicate?: (segment: LayoutSegment) => boolean,
+  offsetValidator?: (segment: LayoutSegment, offsetMm: number) => boolean
 ): {
   segment: LayoutSegment;
   offsetMm: number;
@@ -211,6 +219,9 @@ function findNearestProjectedSegment(
     if (projection.distanceMm > maxDistanceMm) {
       continue;
     }
+    if (offsetValidator && !offsetValidator(segment, projection.offsetMm)) {
+      continue;
+    }
     if (!best || projection.distanceMm < best.distanceMm) {
       best = {
         segment,
@@ -224,8 +235,52 @@ function findNearestProjectedSegment(
   return best;
 }
 
+function findProjectedSegments(
+  point: PointMm,
+  segments: LayoutSegment[],
+  maxDistanceMm: number,
+  predicate?: (segment: LayoutSegment) => boolean,
+  offsetValidator?: (segment: LayoutSegment, offsetMm: number) => boolean
+): Array<{
+  segment: LayoutSegment;
+  offsetMm: number;
+  distanceMm: number;
+  signedDistanceMm: number;
+}> {
+  const candidates: Array<{
+    segment: LayoutSegment;
+    offsetMm: number;
+    distanceMm: number;
+    signedDistanceMm: number;
+  }> = [];
+
+  for (const segment of segments) {
+    if (predicate && !predicate(segment)) {
+      continue;
+    }
+    const projection = projectPointOntoSegment(point, segment);
+    if (projection.distanceMm > maxDistanceMm) {
+      continue;
+    }
+    if (offsetValidator && !offsetValidator(segment, projection.offsetMm)) {
+      continue;
+    }
+    candidates.push({
+      segment,
+      offsetMm: projection.offsetMm,
+      distanceMm: projection.distanceMm,
+      signedDistanceMm: projection.signedDistanceMm
+    });
+  }
+
+  candidates.sort((left, right) => left.distanceMm - right.distanceMm);
+  return candidates;
+}
+
 export function useEditorInteractionPreviews({
   segments,
+  featureHostSegments = segments,
+  goalUnitOpeningsBySegmentId = new Map<string, readonly SegmentOpeningSpan[]>(),
   lineSnapSegments = [],
   interactionMode,
   pointerWorld,
@@ -270,6 +325,11 @@ export function useEditorInteractionPreviews({
   const requestedGateWidthMm = useMemo(
     () => resolveGateWidthMm(gateType, customGateWidthMm),
     [customGateWidthMm, gateType]
+  );
+  const isAttachableOffset = useCallback(
+    (segment: LayoutSegment, offsetMm: number) =>
+      !isOffsetBlockedByGoalUnitOpening(segment.id, offsetMm, goalUnitOpeningsBySegmentId),
+    [goalUnitOpeningsBySegmentId]
   );
 
   const buildSnappedGatePreview = useCallback(
@@ -330,6 +390,16 @@ export function useEditorInteractionPreviews({
       if (!preview) {
         return null;
       }
+      if (
+        doesRangeOverlapGoalUnitOpening(
+          segment.id,
+          preview.startOffsetMm,
+          preview.endOffsetMm,
+          goalUnitOpeningsBySegmentId
+        )
+      ) {
+        return null;
+      }
       const previewWithSnap = {
         ...preview,
         snapMeta
@@ -345,7 +415,7 @@ export function useEditorInteractionPreviews({
         }
       };
     },
-    [placedGateVisuals]
+    [goalUnitOpeningsBySegmentId, placedGateVisuals]
   );
 
   const buildSnappedBasketballPostPreview = useCallback(
@@ -464,7 +534,7 @@ export function useEditorInteractionPreviews({
       vectorsByNode.set(key, [vector]);
     }
 
-    for (const segment of segments) {
+    for (const segment of featureHostSegments) {
       addVector(segment.start, { x: segment.end.x - segment.start.x, y: segment.end.y - segment.start.y });
       addVector(segment.end, { x: segment.start.x - segment.end.x, y: segment.start.y - segment.end.y });
     }
@@ -474,7 +544,7 @@ export function useEditorInteractionPreviews({
         .filter(([, vectors]) => classifyIncidentNode(vectors) === "CORNER")
         .map(([key]) => key)
     );
-  }, [segments]);
+  }, [featureHostSegments]);
 
   const buildSnappedFloodlightColumnPreview = useCallback(
     (
@@ -555,7 +625,13 @@ export function useEditorInteractionPreviews({
           : signedDistanceMm >= 0
             ? "LEFT"
             : "RIGHT";
-      const normal = resolveFloodlightColumnNormal(segment, segmentLengthMm, snappedOffsetMm, facing, segments);
+      const normal = resolveFloodlightColumnNormal(
+        segment,
+        segmentLengthMm,
+        snappedOffsetMm,
+        facing,
+        featureHostSegments
+      );
       if (!normal) {
         return null;
       }
@@ -583,7 +659,7 @@ export function useEditorInteractionPreviews({
         }
       };
     },
-    [cornerNodeKeys, placedFloodlightColumnVisuals, segments]
+    [cornerNodeKeys, featureHostSegments, placedFloodlightColumnVisuals]
   );
 
   const resolveRecessLikePreview = useCallback(
@@ -681,7 +757,13 @@ export function useEditorInteractionPreviews({
 
   const resolvePitchDividerAnchorPreview = useCallback(
     (worldPoint: PointMm): PitchDividerAnchorPreview | null => {
-      const best = findNearestProjectedSegment(worldPoint, segments, pitchDividerPointerSnapMm);
+      const best = findNearestProjectedSegment(
+        worldPoint,
+        featureHostSegments,
+        pitchDividerPointerSnapMm,
+        undefined,
+        isAttachableOffset
+      );
       if (!best) {
         return null;
       }
@@ -700,7 +782,7 @@ export function useEditorInteractionPreviews({
         snapMeta
       };
     },
-    [pitchDividerPointerSnapMm, segments]
+    [featureHostSegments, isAttachableOffset, pitchDividerPointerSnapMm]
   );
 
   const buildPitchDividerSpanPreview = useCallback(
@@ -784,13 +866,16 @@ export function useEditorInteractionPreviews({
         isConnectedToPending: boolean;
       }> = [];
 
-      for (const segment of segments) {
+      for (const segment of featureHostSegments) {
         const projection = projectPointOntoSegment(worldPoint, segment);
         if (projection.distanceMm > sideNettingPostSnapMm) {
           continue;
         }
 
         for (const offsetMm of getSegmentPostOffsets(segment)) {
+          if (!isAttachableOffset(segment, offsetMm)) {
+            continue;
+          }
           const point = interpolateAlongSegment(segment, offsetMm);
           const distanceToPointerMm = distanceMm(worldPoint, point);
           if (distanceToPointerMm > sideNettingPostSnapMm) {
@@ -825,7 +910,13 @@ export function useEditorInteractionPreviews({
 
       return candidates[0]?.anchor ?? null;
     },
-    [buildSideNettingRangePreview, pendingSideNettingStart, segments, sideNettingPostSnapMm]
+    [
+      buildSideNettingRangePreview,
+      featureHostSegments,
+      isAttachableOffset,
+      pendingSideNettingStart,
+      sideNettingPostSnapMm
+    ]
   );
 
   const resolveDrawPoint = useCallback(
@@ -999,41 +1090,51 @@ export function useEditorInteractionPreviews({
     if (interactionMode !== "GATE" || !pointerWorld) {
       return null;
     }
-
-    let best: { segment: LayoutSegment; offsetMm: number; distanceMm: number } | null = null;
-    for (const segment of segments) {
-      const projection = projectPointOntoSegment(pointerWorld, segment);
-      if (projection.distanceMm > gatePointerSnapMm) {
-        continue;
-      }
-      if (!best || projection.distanceMm < best.distanceMm) {
-        best = {
-          segment,
-          offsetMm: projection.offsetMm,
-          distanceMm: projection.distanceMm
-        };
+    const candidates = findProjectedSegments(
+      pointerWorld,
+      featureHostSegments,
+      gatePointerSnapMm,
+      undefined,
+      isAttachableOffset
+    );
+    for (const candidate of candidates) {
+      const preview = buildSnappedGatePreview(candidate.segment, candidate.offsetMm, requestedGateWidthMm);
+      if (preview) {
+        return preview;
       }
     }
-
-    if (!best) {
-      return null;
-    }
-
-    return buildSnappedGatePreview(best.segment, best.offsetMm, requestedGateWidthMm);
-  }, [buildSnappedGatePreview, gatePointerSnapMm, interactionMode, pointerWorld, requestedGateWidthMm, segments]);
+    return null;
+  }, [
+    buildSnappedGatePreview,
+    featureHostSegments,
+    gatePointerSnapMm,
+    interactionMode,
+    isAttachableOffset,
+    pointerWorld,
+    requestedGateWidthMm
+  ]);
 
   const selectDragGatePreview = useMemo(() => {
     if (interactionMode !== "SELECT" || !pointerWorld || !activeGateDragId) {
       return null;
     }
     const activeGate = placedGateVisualById.get(activeGateDragId);
-    const activeSegment = activeGate ? segments.find((segment) => segment.id === activeGate.segmentId) : null;
+    const activeSegment = activeGate
+      ? featureHostSegments.find((segment) => segment.id === activeGate.segmentId)
+      : null;
     if (!activeGate || !activeSegment) {
       return null;
     }
     const projection = projectPointOntoSegment(pointerWorld, activeSegment);
     return buildSnappedGatePreview(activeSegment, projection.offsetMm, activeGate.widthMm, activeGate.id);
-  }, [activeGateDragId, buildSnappedGatePreview, interactionMode, placedGateVisualById, pointerWorld, segments]);
+  }, [
+    activeGateDragId,
+    buildSnappedGatePreview,
+    featureHostSegments,
+    interactionMode,
+    placedGateVisualById,
+    pointerWorld
+  ]);
 
   const gatePreview = selectDragGatePreview ?? placementGatePreview;
   const activeDraggedGateType = activeGateDragId ? placedGateVisualById.get(activeGateDragId)?.gateType ?? null : null;
@@ -1061,14 +1162,15 @@ export function useEditorInteractionPreviews({
     (worldPoint: PointMm): BasketballPostInsertionPreview | null => {
       const best = findNearestProjectedSegment(
         worldPoint,
-        segments,
+        featureHostSegments,
         basketballPostPointerSnapMm,
         (segment) => {
           const fenceHeightMm = getFenceHeightMm(segment);
           return basketballPlacementType === "DEDICATED_POST"
             ? fenceHeightMm === 3000 || fenceHeightMm === 4000
             : fenceHeightMm >= 3000;
-        }
+        },
+        isAttachableOffset
       );
 
       if (!best) {
@@ -1077,7 +1179,13 @@ export function useEditorInteractionPreviews({
 
       return buildSnappedBasketballPostPreview(best.segment, best.offsetMm, best.signedDistanceMm);
     },
-    [basketballPlacementType, basketballPostPointerSnapMm, buildSnappedBasketballPostPreview, segments]
+    [
+      basketballPlacementType,
+      basketballPostPointerSnapMm,
+      buildSnappedBasketballPostPreview,
+      featureHostSegments,
+      isAttachableOffset
+    ]
   );
 
   const placementBasketballPostPreview = useMemo(() => {
@@ -1093,7 +1201,7 @@ export function useEditorInteractionPreviews({
     }
     const activeBasketballPost = placedBasketballPostVisualById.get(activeBasketballPostDragId);
     const activeSegment = activeBasketballPost
-      ? segments.find((segment) => segment.id === activeBasketballPost.segmentId)
+      ? featureHostSegments.find((segment) => segment.id === activeBasketballPost.segmentId)
       : null;
     if (!activeBasketballPost || !activeSegment) {
       return null;
@@ -1112,36 +1220,32 @@ export function useEditorInteractionPreviews({
     interactionMode,
     placedBasketballPostVisualById,
     pointerWorld,
-    segments
+    featureHostSegments
   ]);
 
   const basketballPostPreview = selectDragBasketballPostPreview ?? placementBasketballPostPreview;
 
   const resolveFloodlightColumnPreview = useCallback(
     (worldPoint: PointMm): FloodlightColumnInsertionPreview | null => {
-      let best: { segment: LayoutSegment; offsetMm: number; distanceMm: number; signedDistanceMm: number } | null = null;
-      for (const segment of segments) {
-        const projection = projectPointOntoSegment(worldPoint, segment);
-        if (projection.distanceMm > floodlightColumnPointerSnapMm) {
-          continue;
-        }
-        if (!best || projection.distanceMm < best.distanceMm) {
-          best = {
-            segment,
-            offsetMm: projection.offsetMm,
-            distanceMm: projection.distanceMm,
-            signedDistanceMm: projection.signedDistanceMm
-          };
-        }
-      }
-
+      const best = findNearestProjectedSegment(
+        worldPoint,
+        featureHostSegments,
+        floodlightColumnPointerSnapMm,
+        undefined,
+        isAttachableOffset
+      );
       if (!best) {
         return null;
       }
 
       return buildSnappedFloodlightColumnPreview(best.segment, best.offsetMm, best.signedDistanceMm);
     },
-    [buildSnappedFloodlightColumnPreview, floodlightColumnPointerSnapMm, segments]
+    [
+      buildSnappedFloodlightColumnPreview,
+      featureHostSegments,
+      floodlightColumnPointerSnapMm,
+      isAttachableOffset
+    ]
   );
 
   const placementFloodlightColumnPreview = useMemo(() => {
@@ -1157,7 +1261,7 @@ export function useEditorInteractionPreviews({
     }
     const activeFloodlightColumn = placedFloodlightColumnVisualById.get(activeFloodlightColumnDragId);
     const activeSegment = activeFloodlightColumn
-      ? segments.find((segment) => segment.id === activeFloodlightColumn.segmentId)
+      ? featureHostSegments.find((segment) => segment.id === activeFloodlightColumn.segmentId)
       : null;
     if (!activeFloodlightColumn || !activeSegment) {
       return null;
@@ -1176,7 +1280,7 @@ export function useEditorInteractionPreviews({
     interactionMode,
     placedFloodlightColumnVisualById,
     pointerWorld,
-    segments
+    featureHostSegments
   ]);
 
   const floodlightColumnPreview = selectDragFloodlightColumnPreview ?? placementFloodlightColumnPreview;
@@ -1185,7 +1289,13 @@ export function useEditorInteractionPreviews({
     if (interactionMode !== "KICKBOARD" || !pointerWorld) {
       return null;
     }
-    const best = findNearestProjectedSegment(pointerWorld, segments, hoverSegmentSnapMm);
+    const best = findNearestProjectedSegment(
+      pointerWorld,
+      featureHostSegments,
+      hoverSegmentSnapMm,
+      undefined,
+      isAttachableOffset
+    );
     if (!best) {
       return null;
     }
@@ -1193,11 +1303,17 @@ export function useEditorInteractionPreviews({
       segment: best.segment,
       snapMeta: buildSnapMeta("SEGMENT", "Fence line")
     };
-  }, [hoverSegmentSnapMm, interactionMode, pointerWorld, segments]);
+  }, [featureHostSegments, hoverSegmentSnapMm, interactionMode, isAttachableOffset, pointerWorld]);
 
   const resolveSideNettingSegmentPreview = useCallback(
     (worldPoint: PointMm): SegmentAttachmentPreview | null => {
-      const best = findNearestProjectedSegment(worldPoint, segments, hoverSegmentSnapMm);
+      const best = findNearestProjectedSegment(
+        worldPoint,
+        featureHostSegments,
+        hoverSegmentSnapMm,
+        undefined,
+        isAttachableOffset
+      );
       if (!best) {
         return null;
       }
@@ -1206,7 +1322,7 @@ export function useEditorInteractionPreviews({
         snapMeta: buildSnapMeta("SEGMENT", "Fence line")
       };
     },
-    [hoverSegmentSnapMm, segments]
+    [featureHostSegments, hoverSegmentSnapMm, isAttachableOffset]
   );
 
   const sideNettingSegmentPreview = useMemo<SegmentAttachmentPreview | null>(() => {

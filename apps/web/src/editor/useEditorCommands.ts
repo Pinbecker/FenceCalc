@@ -16,6 +16,7 @@ import type {
   PointMm,
   SideNettingAttachment
 } from "@fence-estimator/contracts";
+import type { SegmentOpeningSpan } from "@fence-estimator/rules-engine";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { formatMetersInputFromMm } from "../formatters";
@@ -103,6 +104,8 @@ interface UseEditorCommandsOptions {
   commitLayoutBatch?: () => void;
   segments?: LayoutSegment[];
   segmentsById: Map<string, LayoutSegment>;
+  featureHostSegmentsById?: Map<string, LayoutSegment>;
+  goalUnitOpeningsBySegmentId?: ReadonlyMap<string, readonly SegmentOpeningSpan[]>;
   resolvedGateById: Map<string, ResolvedGatePlacement>;
   resolvedBasketballPostById: Map<string, ResolvedBasketballPostPlacement>;
   resolvedFloodlightColumnById?: Map<string, ResolvedFloodlightColumnPlacement>;
@@ -198,6 +201,8 @@ export function useEditorCommands({
   beginLayoutBatch = () => undefined,
   commitLayoutBatch = () => undefined,
   segmentsById,
+  featureHostSegmentsById = segmentsById,
+  goalUnitOpeningsBySegmentId = new Map<string, readonly SegmentOpeningSpan[]>(),
   resolvedGateById,
   resolvedBasketballPostById,
   resolvedFloodlightColumnById = new Map(),
@@ -428,10 +433,16 @@ export function useEditorCommands({
         return;
       }
       applyGatePlacements((previous) =>
-        moveGatePlacementCollection(previous, gateId, deltaAlongMm, segmentsById)
+        moveGatePlacementCollection(
+          previous,
+          gateId,
+          deltaAlongMm,
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
+        )
       );
     },
-    [applyGatePlacements, segmentsById]
+    [applyGatePlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const moveGateToPreview = useCallback(
@@ -442,11 +453,12 @@ export function useEditorCommands({
           gateId,
           preview.startOffsetMm,
           preview.endOffsetMm,
-          segmentsById
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
         )
       );
     },
-    [applyGatePlacements, segmentsById]
+    [applyGatePlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const startSelectedGateDrag = useCallback(
@@ -484,10 +496,16 @@ export function useEditorCommands({
         return;
       }
       applyBasketballPostPlacements((previous) =>
-        moveBasketballPostPlacementCollection(previous, basketballPostId, deltaAlongMm, segmentsById)
+        moveBasketballPostPlacementCollection(
+          previous,
+          basketballPostId,
+          deltaAlongMm,
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
+        )
       );
     },
-    [applyBasketballPostPlacements, segmentsById]
+    [applyBasketballPostPlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const moveBasketballPostToPreview = useCallback(
@@ -505,11 +523,12 @@ export function useEditorCommands({
           ),
           basketballPostId,
           preview.offsetMm,
-          segmentsById
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
         )
       );
     },
-    [applyBasketballPostPlacements, segmentsById]
+    [applyBasketballPostPlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const startSelectedBasketballPostDrag = useCallback(
@@ -547,10 +566,16 @@ export function useEditorCommands({
         return;
       }
       applyFloodlightColumnPlacements((previous) =>
-        moveFloodlightColumnPlacementCollection(previous, floodlightColumnId, deltaAlongMm, segmentsById)
+        moveFloodlightColumnPlacementCollection(
+          previous,
+          floodlightColumnId,
+          deltaAlongMm,
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
+        )
       );
     },
-    [applyFloodlightColumnPlacements, segmentsById]
+    [applyFloodlightColumnPlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const moveFloodlightColumnToPreview = useCallback(
@@ -568,11 +593,12 @@ export function useEditorCommands({
           ),
           floodlightColumnId,
           preview.offsetMm,
-          segmentsById
+          featureHostSegmentsById,
+          goalUnitOpeningsBySegmentId
         )
       );
     },
-    [applyFloodlightColumnPlacements, segmentsById]
+    [applyFloodlightColumnPlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
 
   const startSelectedFloodlightColumnDrag = useCallback(

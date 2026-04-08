@@ -101,6 +101,17 @@ export interface ResolvedSideNettingAttachment {
   placement: SideNettingAttachment;
 }
 
+export interface SegmentOpeningSpan {
+  startOffsetMm: number;
+  endOffsetMm: number;
+}
+
+export interface FeatureHostSurfaces {
+  hostSegments: LayoutSegment[];
+  goalUnitOpeningsBySegmentId: Map<string, SegmentOpeningSpan[]>;
+  resolvedGoalUnits: ResolvedGoalUnitPlacement[];
+}
+
 export interface OppositeBasketballPairCandidate {
   segmentId: string;
   offsetMm: number;
@@ -321,13 +332,55 @@ export function buildGoalUnitEstimateSegments(goalUnit: ResolvedGoalUnitPlacemen
   ];
 }
 
+export function buildFeatureHostSurfaces(
+  segments: LayoutSegment[],
+  placements: GoalUnitPlacement[],
+): FeatureHostSurfaces {
+  const segmentsById = new Map(segments.map((segment) => [segment.id, segment] as const));
+  const resolvedGoalUnits = resolveGoalUnitPlacements(segmentsById, placements);
+  const goalUnitOpeningsBySegmentId = new Map<string, SegmentOpeningSpan[]>();
+
+  for (const goalUnit of resolvedGoalUnits) {
+    const bucket = goalUnitOpeningsBySegmentId.get(goalUnit.segmentId);
+    const opening = {
+      startOffsetMm: goalUnit.startOffsetMm,
+      endOffsetMm: goalUnit.endOffsetMm,
+    };
+    if (bucket) {
+      bucket.push(opening);
+    } else {
+      goalUnitOpeningsBySegmentId.set(goalUnit.segmentId, [opening]);
+    }
+  }
+
+  return {
+    hostSegments: [
+      ...segments,
+      ...resolvedGoalUnits.flatMap((goalUnit) => buildGoalUnitEstimateSegments(goalUnit)),
+    ],
+    goalUnitOpeningsBySegmentId,
+    resolvedGoalUnits,
+  };
+}
+
 export function resolveBasketballFeaturePlacements(
   segmentsById: Map<string, LayoutSegment>,
-  placements: BasketballFeaturePlacement[]
+  placements: BasketballFeaturePlacement[],
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): ResolvedBasketballFeaturePlacement[] {
   return placements.flatMap((placement) => {
       const segment = segmentsById.get(placement.segmentId);
       if (!segment) {
+        return [];
+      }
+      const blockedOpenings = openingsBySegmentId.get(placement.segmentId) ?? [];
+      if (
+        blockedOpenings.some(
+          (opening) =>
+            placement.offsetMm >= opening.startOffsetMm - OFFSET_EPSILON_MM &&
+            placement.offsetMm <= opening.endOffsetMm + OFFSET_EPSILON_MM
+        )
+      ) {
         return [];
       }
       const axes = getSegmentAxes(segment);

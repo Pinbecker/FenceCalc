@@ -191,6 +191,98 @@ describe("contracts schemas", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts feature attachments on goal-unit enclosure host segments", () => {
+    const result = layoutModelSchema.safeParse({
+      segments: [
+        {
+          id: "host",
+          start: { x: 0, y: 0 },
+          end: { x: 12000, y: 0 },
+          spec: {
+            system: "TWIN_BAR",
+            height: "3m",
+            twinBarVariant: "STANDARD"
+          }
+        }
+      ],
+      goalUnits: [
+        {
+          id: "goal-1",
+          segmentId: "host",
+          centerOffsetMm: 5000,
+          side: "LEFT",
+          widthMm: 3000,
+          depthMm: 1200,
+          goalHeightMm: 3000
+        }
+      ],
+      gates: [
+        {
+          id: "gate-side",
+          segmentId: "goal-1::side-start",
+          startOffsetMm: 50,
+          endOffsetMm: 1150,
+          gateType: "SINGLE_LEAF"
+        }
+      ],
+      basketballPosts: [
+        {
+          id: "bb-side",
+          segmentId: "goal-1::rear-start",
+          offsetMm: 750,
+          facing: "LEFT",
+          type: "DEDICATED_POST",
+          mountingMode: "PROJECTING_ARM",
+          armLengthMm: 1800
+        }
+      ],
+      floodlightColumns: [
+        {
+          id: "fc-side",
+          segmentId: "goal-1::side-end",
+          offsetMm: 600,
+          facing: "RIGHT",
+          heightMm: 6000
+        }
+      ],
+      kickboards: [
+        {
+          id: "kb-side",
+          segmentId: "goal-1::rear-end",
+          sectionHeightMm: 200,
+          thicknessMm: 50,
+          profile: "SQUARE",
+          boardLengthMm: 2500
+        }
+      ],
+      sideNettings: [
+        {
+          id: "net-side",
+          segmentId: "goal-1::rear-end",
+          additionalHeightMm: 2000,
+          startOffsetMm: 0,
+          endOffsetMm: 1500,
+          extendedPostInterval: 3
+        }
+      ],
+      pitchDividers: [
+        {
+          id: "divider-side",
+          startAnchor: {
+            segmentId: "goal-1::side-start",
+            offsetMm: 600
+          },
+          endAnchor: {
+            segmentId: "goal-1::side-end",
+            offsetMm: 600
+          }
+        }
+      ]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("rejects owner role creation through the admin user schema", () => {
     const result = userCreateRequestSchema.safeParse({
       displayName: "Jane Doe",

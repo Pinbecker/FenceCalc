@@ -9,9 +9,9 @@ import type {
 } from "@fence-estimator/contracts";
 import type { PitchDividerPlacement, SideNettingAttachment } from "@fence-estimator/contracts";
 import {
+  buildFeatureHostSurfaces,
   buildDerivedFenceTopology,
   estimateDrawingLayout,
-  resolveGoalUnitPlacements,
   resolveKickboardAttachments,
   resolvePitchDividerPlacements,
   resolveSideNettingAttachments
@@ -115,33 +115,50 @@ export function useEditorDerivedState({
   freezeOptimization = false
 }: EditorDerivedStateOptions) {
   const segmentsById = useMemo(() => buildSegmentMap(segments), [segments]);
-  const resolvedGoalUnits = useMemo(
-    () => resolveGoalUnitPlacements(segmentsById, goalUnitPlacements),
-    [goalUnitPlacements, segmentsById]
+  const featureHostSurfaces = useMemo(
+    () => buildFeatureHostSurfaces(segments, goalUnitPlacements),
+    [goalUnitPlacements, segments]
+  );
+  const resolvedGoalUnits = featureHostSurfaces.resolvedGoalUnits;
+  const featureHostSegments = featureHostSurfaces.hostSegments;
+  const goalUnitOpeningsBySegmentId = featureHostSurfaces.goalUnitOpeningsBySegmentId;
+  const featureHostSegmentsById = useMemo(
+    () => buildSegmentMap(featureHostSegments),
+    [featureHostSegments]
   );
   const resolvedKickboards = useMemo(
-    () => resolveKickboardAttachments(segmentsById, kickboardAttachments, resolvedGoalUnits),
-    [kickboardAttachments, resolvedGoalUnits, segmentsById]
+    () => resolveKickboardAttachments(featureHostSegmentsById, kickboardAttachments, resolvedGoalUnits),
+    [featureHostSegmentsById, kickboardAttachments, resolvedGoalUnits]
   );
   const resolvedPitchDividers = useMemo(
-    () => resolvePitchDividerPlacements(segmentsById, pitchDividerPlacements),
-    [pitchDividerPlacements, segmentsById]
+    () => resolvePitchDividerPlacements(featureHostSegmentsById, pitchDividerPlacements),
+    [featureHostSegmentsById, pitchDividerPlacements]
   );
   const resolvedSideNettings = useMemo(
-    () => resolveSideNettingAttachments(segmentsById, sideNettingAttachments),
-    [segmentsById, sideNettingAttachments]
+    () => resolveSideNettingAttachments(featureHostSegmentsById, sideNettingAttachments),
+    [featureHostSegmentsById, sideNettingAttachments]
   );
   const resolvedGatePlacements = useMemo(
-    () => resolveGatePlacements(segmentsById, gatePlacements),
-    [gatePlacements, segmentsById]
+    () => resolveGatePlacements(featureHostSegmentsById, gatePlacements, goalUnitOpeningsBySegmentId),
+    [featureHostSegmentsById, gatePlacements, goalUnitOpeningsBySegmentId]
   );
   const resolvedBasketballPostPlacements = useMemo(
-    () => resolveBasketballPostPlacements(segmentsById, basketballPostPlacements),
-    [basketballPostPlacements, segmentsById]
+    () =>
+      resolveBasketballPostPlacements(
+        featureHostSegmentsById,
+        basketballPostPlacements,
+        goalUnitOpeningsBySegmentId
+      ),
+    [basketballPostPlacements, featureHostSegmentsById, goalUnitOpeningsBySegmentId]
   );
   const resolvedFloodlightColumnPlacements = useMemo(
-    () => resolveFloodlightColumnPlacements(segmentsById, floodlightColumnPlacements),
-    [floodlightColumnPlacements, segmentsById]
+    () =>
+      resolveFloodlightColumnPlacements(
+        featureHostSegmentsById,
+        floodlightColumnPlacements,
+        goalUnitOpeningsBySegmentId
+      ),
+    [featureHostSegmentsById, floodlightColumnPlacements, goalUnitOpeningsBySegmentId]
   );
   const resolvedGateById = useMemo(
     () => buildResolvedGateMap(resolvedGatePlacements),
@@ -358,12 +375,16 @@ export function useEditorDerivedState({
     [canvasWidth, viewScale]
   );
   return {
+    activeHeightOptions,
     connectivity,
     drawAnchorNodes,
     editorSummary,
     estimate,
     estimateSegments,
+    featureHostSegments,
+    featureHostSegmentsById,
     gatesBySegmentId,
+    goalUnitOpeningsBySegmentId,
     highlightableOptimizationPlans,
     oppositeGateGuides,
     placedGateVisuals,
@@ -385,7 +406,6 @@ export function useEditorDerivedState({
     selectedPlanVisual,
     selectedSegment,
     visualPosts,
-    visibleSegmentLabelKeys,
-    activeHeightOptions
+    visibleSegmentLabelKeys
   };
 }

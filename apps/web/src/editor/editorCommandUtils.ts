@@ -10,6 +10,7 @@ import type {
   PointMm,
   SideNettingAttachment
 } from "@fence-estimator/contracts";
+import type { SegmentOpeningSpan } from "@fence-estimator/rules-engine";
 import { distanceMm } from "@fence-estimator/geometry";
 
 import { DRAW_INCREMENT_MM, MIN_SEGMENT_MM, quantize } from "./constants";
@@ -21,6 +22,10 @@ import {
   samePointApprox
 } from "./editorMath";
 import { buildRecessReplacementSegments } from "./recess";
+import {
+  doesRangeOverlapSegmentOpenings,
+  isOffsetWithinSegmentOpenings
+} from "./goalUnitOpenings";
 import type { RecessInsertionPreview, ResolvedGatePlacement, SegmentConnectivity } from "./types";
 
 interface RecessReplacementPathSegment {
@@ -145,7 +150,8 @@ function resolveNearestGateStartOffsetMm(
   previous: GatePlacement[],
   target: GatePlacement,
   proposedStartOffsetMm: number,
-  segmentLengthMm: number
+  segmentLengthMm: number,
+  blockedOpenings: readonly SegmentOpeningSpan[] = []
 ): number | null {
   const widthMm = target.endOffsetMm - target.startOffsetMm;
   if (widthMm < DRAW_INCREMENT_MM) {
@@ -158,9 +164,24 @@ function resolveNearestGateStartOffsetMm(
     return null;
   }
 
-  const peers = previous
-    .filter((placement) => placement.segmentId === target.segmentId && placement.id !== target.id)
-    .sort((left, right) => left.startOffsetMm - right.startOffsetMm);
+  const forbiddenIntervals = [
+    ...previous
+      .filter((placement) => placement.segmentId === target.segmentId && placement.id !== target.id)
+      .map((placement) => ({
+        startMm: placement.startOffsetMm - widthMm,
+        endMm: placement.endOffsetMm
+      })),
+    ...blockedOpenings.map((opening) => ({
+      startMm: opening.startOffsetMm - widthMm,
+      endMm: opening.endOffsetMm
+    }))
+  ]
+    .map((interval) => ({
+      startMm: Math.max(minStartMm, interval.startMm),
+      endMm: Math.min(maxStartMm, interval.endMm)
+    }))
+    .filter((interval) => interval.endMm >= interval.startMm)
+    .sort((left, right) => left.startMm - right.startMm);
 
   const roundedProposalMm = Math.round(proposedStartOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
   let bestStartMm: number | null = null;
@@ -182,9 +203,9 @@ function resolveNearestGateStartOffsetMm(
     }
   }
 
-  for (const peer of peers) {
-    considerInterval(cursorMm, Math.min(maxStartMm, peer.startOffsetMm - widthMm));
-    cursorMm = Math.max(cursorMm, peer.endOffsetMm);
+  for (const interval of forbiddenIntervals) {
+    considerInterval(cursorMm, Math.min(maxStartMm, interval.startMm));
+    cursorMm = Math.max(cursorMm, interval.endMm);
   }
   considerInterval(cursorMm, maxStartMm);
 
@@ -195,7 +216,8 @@ function resolveNearestBasketballPostOffsetMm(
   previous: BasketballPostPlacement[],
   target: BasketballPostPlacement,
   proposedOffsetMm: number,
-  segmentLengthMm: number
+  segmentLengthMm: number,
+  blockedOpenings: readonly SegmentOpeningSpan[] = []
 ): number {
   const clampedProposalMm = Math.max(0, Math.min(segmentLengthMm, proposedOffsetMm));
   const roundedProposalMm = Math.round(clampedProposalMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
@@ -205,7 +227,10 @@ function resolveNearestBasketballPostOffsetMm(
       .map((placement) => Math.round(placement.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
   );
 
-  if (!occupiedOffsets.has(roundedProposalMm)) {
+  if (
+    !occupiedOffsets.has(roundedProposalMm) &&
+    !isOffsetWithinSegmentOpenings(roundedProposalMm, blockedOpenings)
+  ) {
     return roundedProposalMm;
   }
 
@@ -223,7 +248,7 @@ function resolveNearestBasketballPostOffsetMm(
       if (candidateMm < 0 || candidateMm > segmentLengthMm) {
         continue;
       }
-      if (occupiedOffsets.has(candidateMm)) {
+      if (occupiedOffsets.has(candidateMm) || isOffsetWithinSegmentOpenings(candidateMm, blockedOpenings)) {
         continue;
       }
       return candidateMm;
@@ -237,7 +262,8 @@ function resolveNearestFloodlightColumnOffsetMm(
   previous: FloodlightColumnPlacement[],
   target: FloodlightColumnPlacement,
   proposedOffsetMm: number,
-  segmentLengthMm: number
+  segmentLengthMm: number,
+  blockedOpenings: readonly SegmentOpeningSpan[] = []
 ): number {
   const clampedProposalMm = Math.max(0, Math.min(segmentLengthMm, proposedOffsetMm));
   const roundedProposalMm = Math.round(clampedProposalMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
@@ -247,7 +273,10 @@ function resolveNearestFloodlightColumnOffsetMm(
       .map((placement) => Math.round(placement.offsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM)
   );
 
-  if (!occupiedOffsets.has(roundedProposalMm)) {
+  if (
+    !occupiedOffsets.has(roundedProposalMm) &&
+    !isOffsetWithinSegmentOpenings(roundedProposalMm, blockedOpenings)
+  ) {
     return roundedProposalMm;
   }
 
@@ -265,7 +294,7 @@ function resolveNearestFloodlightColumnOffsetMm(
       if (candidateMm < 0 || candidateMm > segmentLengthMm) {
         continue;
       }
-      if (occupiedOffsets.has(candidateMm)) {
+      if (occupiedOffsets.has(candidateMm) || isOffsetWithinSegmentOpenings(candidateMm, blockedOpenings)) {
         continue;
       }
       return candidateMm;
@@ -481,7 +510,8 @@ export function moveGatePlacementCollection(
   previous: GatePlacement[],
   gateId: string,
   deltaAlongMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): GatePlacement[] {
   const gateIndex = previous.findIndex((placement) => placement.id === gateId);
   if (gateIndex < 0) {
@@ -498,7 +528,14 @@ export function moveGatePlacementCollection(
 
   const segmentLengthMm = distanceMm(segment.start, segment.end);
   const widthMm = target.endOffsetMm - target.startOffsetMm;
-  const nextStartMm = resolveNearestGateStartOffsetMm(previous, target, target.startOffsetMm + deltaAlongMm, segmentLengthMm);
+  const blockedOpenings = openingsBySegmentId.get(target.segmentId) ?? [];
+  const nextStartMm = resolveNearestGateStartOffsetMm(
+    previous,
+    target,
+    target.startOffsetMm + deltaAlongMm,
+    segmentLengthMm,
+    blockedOpenings
+  );
   if (nextStartMm === null) {
     return previous;
   }
@@ -513,6 +550,15 @@ export function moveGatePlacementCollection(
     segmentLengthMm
   );
   if (!normalized) {
+    return previous;
+  }
+  if (
+    doesRangeOverlapSegmentOpenings(
+      normalized.startOffsetMm,
+      normalized.endOffsetMm,
+      blockedOpenings
+    )
+  ) {
     return previous;
   }
   if (
@@ -537,7 +583,8 @@ export function moveGatePlacementCollectionToOffsets(
   gateId: string,
   nextStartOffsetMm: number,
   nextEndOffsetMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): GatePlacement[] {
   const gateIndex = previous.findIndex((placement) => placement.id === gateId);
   if (gateIndex < 0) {
@@ -558,11 +605,13 @@ export function moveGatePlacementCollectionToOffsets(
     return previous;
   }
   const proposedCenterOffsetMm = (nextStartOffsetMm + nextEndOffsetMm) / 2;
+  const blockedOpenings = openingsBySegmentId.get(target.segmentId) ?? [];
   const clampedStartMm = resolveNearestGateStartOffsetMm(
     previous,
     target,
     proposedCenterOffsetMm - widthMm / 2,
-    segmentLengthMm
+    segmentLengthMm,
+    blockedOpenings
   );
   if (clampedStartMm === null) {
     return previous;
@@ -576,6 +625,15 @@ export function moveGatePlacementCollectionToOffsets(
     segmentLengthMm
   );
   if (!normalized) {
+    return previous;
+  }
+  if (
+    doesRangeOverlapSegmentOpenings(
+      normalized.startOffsetMm,
+      normalized.endOffsetMm,
+      blockedOpenings
+    )
+  ) {
     return previous;
   }
   if (
@@ -599,7 +657,8 @@ export function moveBasketballPostPlacementCollection(
   previous: BasketballPostPlacement[],
   basketballPostId: string,
   deltaAlongMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): BasketballPostPlacement[] {
   const target = previous.find((placement) => placement.id === basketballPostId);
   if (!target) {
@@ -615,7 +674,8 @@ export function moveBasketballPostPlacementCollection(
     previous,
     target,
     target.offsetMm + deltaAlongMm,
-    segmentLengthMm
+    segmentLengthMm,
+    openingsBySegmentId.get(target.segmentId) ?? []
   );
   if (Math.abs(nextOffsetMm - target.offsetMm) < 0.001) {
     return previous;
@@ -635,7 +695,8 @@ export function moveBasketballPostPlacementCollectionToOffset(
   previous: BasketballPostPlacement[],
   basketballPostId: string,
   nextOffsetMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): BasketballPostPlacement[] {
   const target = previous.find((placement) => placement.id === basketballPostId);
   if (!target) {
@@ -650,7 +711,8 @@ export function moveBasketballPostPlacementCollectionToOffset(
     previous,
     target,
     nextOffsetMm,
-    segmentLengthMm
+    segmentLengthMm,
+    openingsBySegmentId.get(target.segmentId) ?? []
   );
   if (Math.abs(resolvedOffsetMm - target.offsetMm) < 0.001) {
     return previous;
@@ -669,7 +731,8 @@ export function moveFloodlightColumnPlacementCollection(
   previous: FloodlightColumnPlacement[],
   floodlightColumnId: string,
   deltaAlongMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): FloodlightColumnPlacement[] {
   const target = previous.find((placement) => placement.id === floodlightColumnId);
   if (!target) {
@@ -685,7 +748,8 @@ export function moveFloodlightColumnPlacementCollection(
     previous,
     target,
     target.offsetMm + deltaAlongMm,
-    segmentLengthMm
+    segmentLengthMm,
+    openingsBySegmentId.get(target.segmentId) ?? []
   );
   if (Math.abs(nextOffsetMm - target.offsetMm) < 0.001) {
     return previous;
@@ -705,7 +769,8 @@ export function moveFloodlightColumnPlacementCollectionToOffset(
   previous: FloodlightColumnPlacement[],
   floodlightColumnId: string,
   nextOffsetMm: number,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
+  openingsBySegmentId: ReadonlyMap<string, readonly SegmentOpeningSpan[]> = new Map()
 ): FloodlightColumnPlacement[] {
   const target = previous.find((placement) => placement.id === floodlightColumnId);
   if (!target) {
@@ -720,7 +785,8 @@ export function moveFloodlightColumnPlacementCollectionToOffset(
     previous,
     target,
     nextOffsetMm,
-    segmentLengthMm
+    segmentLengthMm,
+    openingsBySegmentId.get(target.segmentId) ?? []
   );
   if (Math.abs(resolvedOffsetMm - target.offsetMm) < 0.001) {
     return previous;

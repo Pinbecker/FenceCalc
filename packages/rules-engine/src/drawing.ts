@@ -11,12 +11,14 @@ import { distanceMm, pointKey } from "@fence-estimator/geometry";
 
 import { estimateLayout, resolveEstimatedPosts } from "./estimate.js";
 import {
+  buildFeatureHostSurfaces,
   buildBasketballReplacementOffsetsBySegmentId,
   buildGoalUnitEstimateSegments,
   findOppositeBasketballPairCandidate,
   getSegmentIntermediatePostOffsets,
-  resolveBasketballFeaturePlacements,
+  type SegmentOpeningSpan,
   resolveGoalUnitPlacements,
+  resolveBasketballFeaturePlacements,
   resolveKickboardAttachments,
   resolvePitchDividerPlacements,
   resolveSideNettingAttachments
@@ -24,11 +26,6 @@ import {
 
 const MIN_SEGMENT_MM = 50;
 const DRAW_INCREMENT_MM = 50;
-
-interface OpeningSpan {
-  startOffsetMm: number;
-  endOffsetMm: number;
-}
 
 function interpolateAlongSegment(segment: LayoutSegment, offsetMm: number): PointMm {
   const lengthMm = distanceMm(segment.start, segment.end);
@@ -60,16 +57,26 @@ function clampInlineFeatureOffset(offsetMm: number, segmentLengthMm: number): nu
   return Math.max(0, Math.min(segmentLengthMm, offsetMm));
 }
 
-function isOffsetWithinOpening(offsetMm: number, openings: OpeningSpan[]): boolean {
+function isOffsetWithinOpening(offsetMm: number, openings: SegmentOpeningSpan[]): boolean {
   const epsilon = 0.001;
   return openings.some(
     (opening) => offsetMm >= opening.startOffsetMm - epsilon && offsetMm <= opening.endOffsetMm + epsilon
   );
 }
 
+function doesRangeOverlapOpening(
+  startOffsetMm: number,
+  endOffsetMm: number,
+  openings: SegmentOpeningSpan[]
+): boolean {
+  return openings.some(
+    (opening) => Math.max(startOffsetMm, opening.startOffsetMm) < Math.min(endOffsetMm, opening.endOffsetMm)
+  );
+}
+
 function buildSegmentRuns(
   segment: LayoutSegment,
-  openings: OpeningSpan[],
+  openings: SegmentOpeningSpan[],
   replacementOffsetsMm: number[]
 ): Array<{ start: PointMm; end: PointMm }> {
   const segmentLengthMm = distanceMm(segment.start, segment.end);
@@ -115,7 +122,7 @@ export interface DerivedFenceTopology {
 function clampGatePlacementToSegment(
   placement: GatePlacement,
   segmentLengthMm: number
-): OpeningSpan | null {
+): SegmentOpeningSpan | null {
   if (segmentLengthMm < MIN_SEGMENT_MM * 2 + DRAW_INCREMENT_MM) {
     return null;
   }
@@ -502,31 +509,25 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
     }
   }
 
-  const segmentsById = new Map(layout.segments.map((segment) => [segment.id, segment] as const));
-  const resolvedGoalUnits = resolveGoalUnitPlacements(segmentsById, layout.goalUnits ?? []);
-  const goalUnitOpeningsBySegmentId = new Map<string, OpeningSpan[]>();
-  for (const goalUnit of resolvedGoalUnits) {
-    const bucket = goalUnitOpeningsBySegmentId.get(goalUnit.segmentId);
-    const opening = {
-      startOffsetMm: goalUnit.startOffsetMm,
-      endOffsetMm: goalUnit.endOffsetMm
-    };
-    if (bucket) {
-      bucket.push(opening);
-    } else {
-      goalUnitOpeningsBySegmentId.set(goalUnit.segmentId, [opening]);
-    }
-  }
+  const { hostSegments, goalUnitOpeningsBySegmentId, resolvedGoalUnits } = buildFeatureHostSurfaces(
+    layout.segments,
+    layout.goalUnits ?? [],
+  );
+  const hostSegmentsById = new Map(hostSegments.map((segment) => [segment.id, segment] as const));
 
   const basketballFeatures = layout.basketballFeatures ?? layout.basketballPosts ?? [];
-  const resolvedBasketballFeatures = resolveBasketballFeaturePlacements(segmentsById, basketballFeatures);
+  const resolvedBasketballFeatures = resolveBasketballFeaturePlacements(
+    hostSegmentsById,
+    basketballFeatures,
+    goalUnitOpeningsBySegmentId
+  );
   const basketballReplacementOffsetsBySegmentId = buildBasketballReplacementOffsetsBySegmentId(resolvedBasketballFeatures);
 
   const derived: LayoutSegment[] = [];
   const replacementNodeKeys = new Set<string>();
   const segmentSplitOffsetsBySegmentId = new Map<string, number[]>();
 
-  for (const segment of layout.segments) {
+  for (const segment of hostSegments) {
     const segmentLengthMm = distanceMm(segment.start, segment.end);
     if (segmentLengthMm <= 0) {
       continue;
@@ -534,13 +535,21 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
 
     const gateOpenings = (gatesBySegmentId.get(segment.id) ?? [])
       .map((placement) => clampGatePlacementToSegment(placement, segmentLengthMm))
-      .filter((opening): opening is OpeningSpan => opening !== null);
+      .filter((opening): opening is SegmentOpeningSpan => opening !== null)
+      .filter(
+        (opening) => !doesRangeOverlapOpening(
+          opening.startOffsetMm,
+          opening.endOffsetMm,
+          goalUnitOpeningsBySegmentId.get(segment.id) ?? []
+        )
+      );
     const goalOpenings = goalUnitOpeningsBySegmentId.get(segment.id) ?? [];
     const openings = [...gateOpenings, ...goalOpenings].sort((left, right) => left.startOffsetMm - right.startOffsetMm);
 
     const floodlightOffsetsMm = (layout.floodlightColumns ?? [])
       .filter((placement): placement is FloodlightColumnPlacement => placement.segmentId === segment.id)
-      .map((placement) => clampInlineFeatureOffset(placement.offsetMm, segmentLengthMm));
+      .map((placement) => clampInlineFeatureOffset(placement.offsetMm, segmentLengthMm))
+      .filter((offsetMm) => !isOffsetWithinOpening(offsetMm, goalOpenings));
     const basketballReplacementOffsetsMm = basketballReplacementOffsetsBySegmentId.get(segment.id) ?? [];
     const replacementOffsetsMm = dedupeSortedOffsets(
       [...floodlightOffsetsMm, ...basketballReplacementOffsetsMm].sort((left, right) => left - right)
@@ -581,7 +590,6 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
 
   resolvedGoalUnits.forEach((goalUnit) => {
     replacementNodeKeys.add(pointKey(goalUnit.rearCenterPoint));
-    derived.push(...buildGoalUnitEstimateSegments(goalUnit));
   });
 
   return {
@@ -591,9 +599,9 @@ export function buildDerivedFenceTopology(layout: LayoutModel): DerivedFenceTopo
     featureQuantities: buildFeatureQuantities({
       goalUnits: resolvedGoalUnits,
       basketballFeatures: resolvedBasketballFeatures,
-      kickboards: resolveKickboardAttachments(segmentsById, layout.kickboards ?? [], resolvedGoalUnits),
-      pitchDividers: resolvePitchDividerPlacements(segmentsById, layout.pitchDividers ?? []),
-      sideNettings: resolveSideNettingAttachments(segmentsById, layout.sideNettings ?? [])
+      kickboards: resolveKickboardAttachments(hostSegmentsById, layout.kickboards ?? [], resolvedGoalUnits),
+      pitchDividers: resolvePitchDividerPlacements(hostSegmentsById, layout.pitchDividers ?? []),
+      sideNettings: resolveSideNettingAttachments(hostSegmentsById, layout.sideNettings ?? [])
     })
   };
 }
