@@ -62,7 +62,16 @@ interface StoredLayoutShape {
   basketballPosts?: LayoutModel["basketballPosts"] | undefined;
   floodlightColumns?: LayoutModel["floodlightColumns"] | undefined;
   goalUnits?: LayoutModel["goalUnits"] | undefined;
-  kickboards?: LayoutModel["kickboards"] | undefined;
+  kickboards?:
+    | Array<{
+        id: string;
+        segmentId: string;
+        sectionHeightMm: number;
+        thicknessMm?: number | undefined;
+        profile: string;
+        boardLengthMm?: number | undefined;
+      }>
+    | undefined;
   pitchDividers?: LayoutModel["pitchDividers"] | undefined;
   sideNettings?:
     | Array<{
@@ -420,7 +429,14 @@ function buildStoredLayout(layout: StoredLayoutShape): LayoutModel {
     basketballPosts: layout.basketballPosts ?? [],
     floodlightColumns: layout.floodlightColumns ?? [],
     goalUnits: layout.goalUnits ?? [],
-    kickboards: layout.kickboards ?? [],
+    kickboards: (layout.kickboards ?? []).map((kickboard) => ({
+      id: kickboard.id,
+      segmentId: kickboard.segmentId,
+      sectionHeightMm: kickboard.sectionHeightMm,
+      thicknessMm: kickboard.thicknessMm ?? 50,
+      profile: kickboard.profile,
+      boardLengthMm: kickboard.boardLengthMm ?? 2500,
+    })),
     pitchDividers: layout.pitchDividers ?? [],
     sideNettings: (layout.sideNettings ?? []).map((sideNetting) => ({
       id: sideNetting.id,
@@ -495,6 +511,7 @@ function normalizeJobCommercialInputs(inputs: unknown): JobCommercialInputs {
       clearSpoilsRatePerHole:
         parsed.data.clearSpoilsRatePerHole ??
         buildDefaultJobCommercialInputs().clearSpoilsRatePerHole,
+      externalCornersEnabled: parsed.data.externalCornersEnabled ?? true,
     };
   }
   return buildDefaultJobCommercialInputs();

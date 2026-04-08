@@ -13,8 +13,9 @@ import type {
 } from "@fence-estimator/contracts";
 
 import type { InteractionMode } from "./editor/types";
+import type { EditorGoalUnitOption, EditorKickboardOption } from "./editor/pricingEditorOptions";
 
-/* ──────────────────────────── Tool definitions ──────────────────────────── */
+/* Tool definitions */
 
 interface ToolDef {
   id: InteractionMode;
@@ -32,13 +33,13 @@ const TOOLS: ToolDef[] = [
   { id: "GATE", label: "Gate", shortcut: "G", icon: "gate", hasParams: true },
   { id: "GOAL_UNIT", label: "Goal Unit", shortcut: "U", icon: "goal", hasParams: true },
   { id: "BASKETBALL_POST", label: "Basketball", shortcut: "B", icon: "basketball", hasParams: true },
-  { id: "FLOODLIGHT_COLUMN", label: "Floodlight", shortcut: "F", icon: "floodlight", hasParams: false },
+  { id: "FLOODLIGHT_COLUMN", label: "Floodlight", shortcut: "F", icon: "floodlight", hasParams: true },
   { id: "KICKBOARD", label: "Kickboard", shortcut: "K", icon: "kickboard", hasParams: true },
   { id: "PITCH_DIVIDER", label: "Pitch Divider", shortcut: "P", icon: "divider", hasParams: false },
   { id: "SIDE_NETTING", label: "Side Netting", shortcut: "N", icon: "netting", hasParams: true },
 ];
 
-/* ──────────────────────────── SVG Icon set ──────────────────────────── */
+/* SVG Icon set */
 
 function ToolIcon({ icon, size = 18 }: { icon: string; size?: number }) {
   const s = size;
@@ -128,7 +129,7 @@ function ToolIcon({ icon, size = 18 }: { icon: string; size?: number }) {
   }
 }
 
-/* ──────────────────────────── Flyout wrappers ──────────────────────────── */
+/* Flyout wrappers */
 
 function FlyoutPanel(props: { children: React.ReactNode; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -157,7 +158,7 @@ function FlyoutPanel(props: { children: React.ReactNode; onClose: () => void }) 
   );
 }
 
-/* ──────────────────────────── Props ──────────────────────────── */
+/* Props */
 
 export interface EditorToolPaletteProps {
   isReadOnly?: boolean;
@@ -170,19 +171,23 @@ export interface EditorToolPaletteProps {
   recessDepthInputM: string;
   goalUnitWidthMm: GoalUnitWidthMm;
   goalUnitHeightMm: GoalUnitHeightMm;
+  goalUnitHasBasketballPost: boolean;
   basketballPlacementType: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST";
   basketballArmLengthMm: BasketballArmLengthMm;
   kickboardSectionHeightMm: KickboardSectionHeightMm;
   kickboardProfile: KickboardProfile;
+  kickboardThicknessMm: number;
+  kickboardBoardLengthMm: number;
+  floodlightColumnHeightMm: number;
   sideNettingHeightMm: number;
   gateType: GateType;
   customGateWidthInputM: string;
   recessWidthOptionsMm: readonly number[];
   recessDepthOptionsMm: readonly number[];
-  goalUnitWidthOptionsMm: readonly GoalUnitWidthMm[];
-  goalUnitHeightOptionsMm: readonly GoalUnitHeightMm[];
+  goalUnitOptions: readonly EditorGoalUnitOption[];
   basketballArmLengthOptionsMm: readonly BasketballArmLengthMm[];
-  kickboardSectionHeightOptionsMm: readonly KickboardSectionHeightMm[];
+  kickboardOptions: readonly EditorKickboardOption[];
+  floodlightColumnHeightOptionsMm: readonly number[];
   sideNettingHeightOptionsMm: readonly number[];
   gateWidthOptionsMm: readonly number[];
   formatLengthMm: (value: number) => string;
@@ -194,18 +199,22 @@ export interface EditorToolPaletteProps {
   onNormalizeRecessInputs: () => void;
   onSetGoalUnitWidthMm: (value: GoalUnitWidthMm) => void;
   onSetGoalUnitHeightMm: (value: GoalUnitHeightMm) => void;
+  onSetGoalUnitHasBasketballPost: (value: boolean) => void;
   onSetGateType: (type: GateType) => void;
   onSetBasketballPlacementType: (value: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST") => void;
   onSetBasketballArmLengthMm: (value: BasketballArmLengthMm) => void;
   onSetKickboardSectionHeightMm: (value: KickboardSectionHeightMm) => void;
   onSetKickboardProfile: (value: KickboardProfile) => void;
+  onSetKickboardThicknessMm: (value: number) => void;
+  onSetKickboardBoardLengthMm: (value: number) => void;
+  onSetFloodlightColumnHeightMm: (value: number) => void;
   onSetSideNettingHeightMm: (value: number) => void;
   onCustomGateWidthInputChange: (value: string) => void;
   onNormalizeGateInputs: () => void;
   onSetActiveSpec: (updater: (previous: FenceSpec) => FenceSpec) => void;
 }
 
-/* ──────────────────────────── Component ──────────────────────────── */
+/* Component */
 
 export function EditorToolPalette({
   isReadOnly = false,
@@ -218,19 +227,23 @@ export function EditorToolPalette({
   recessDepthInputM,
   goalUnitWidthMm,
   goalUnitHeightMm,
+  goalUnitHasBasketballPost,
   basketballPlacementType,
   basketballArmLengthMm,
   kickboardSectionHeightMm,
   kickboardProfile,
+  kickboardThicknessMm,
+  kickboardBoardLengthMm,
+  floodlightColumnHeightMm,
   sideNettingHeightMm,
   gateType,
   customGateWidthInputM,
   recessWidthOptionsMm,
   recessDepthOptionsMm,
-  goalUnitWidthOptionsMm,
-  goalUnitHeightOptionsMm,
+  goalUnitOptions,
   basketballArmLengthOptionsMm,
-  kickboardSectionHeightOptionsMm,
+  kickboardOptions,
+  floodlightColumnHeightOptionsMm,
   sideNettingHeightOptionsMm,
   gateWidthOptionsMm,
   formatLengthMm,
@@ -242,11 +255,15 @@ export function EditorToolPalette({
   onNormalizeRecessInputs,
   onSetGoalUnitWidthMm,
   onSetGoalUnitHeightMm,
+  onSetGoalUnitHasBasketballPost,
   onSetGateType,
   onSetBasketballPlacementType,
   onSetBasketballArmLengthMm,
   onSetKickboardSectionHeightMm,
   onSetKickboardProfile,
+  onSetKickboardThicknessMm,
+  onSetKickboardBoardLengthMm,
+  onSetFloodlightColumnHeightMm,
   onSetSideNettingHeightMm,
   onCustomGateWidthInputChange,
   onNormalizeGateInputs,
@@ -257,6 +274,8 @@ export function EditorToolPalette({
 
   const isLegacyRollFormDrawing = activeSpec.system === "ROLL_FORM";
   const fenceColorSwatch = getSegmentColor(activeSpec);
+  const selectedGoalUnitKey = `${goalUnitWidthMm}:${goalUnitHeightMm}:${goalUnitHasBasketballPost ? "basketball" : "plain"}`;
+  const selectedKickboardKey = `${kickboardSectionHeightMm}:${kickboardThicknessMm}:${kickboardProfile}:${kickboardBoardLengthMm}`;
 
   const selectTool = useCallback(
     (mode: InteractionMode) => {
@@ -490,20 +509,21 @@ export function EditorToolPalette({
         <FlyoutPanel onClose={closeFlyout}>
           <div className="flyout-heading">Goal Unit</div>
           <label className="flyout-field">
-            <span>Width</span>
-            <select value={goalUnitWidthMm}
-              onChange={(event) => onSetGoalUnitWidthMm(Number(event.target.value) as GoalUnitWidthMm)}>
-              {goalUnitWidthOptionsMm.map((value) => (
-                <option key={value} value={value}>{formatLengthMm(value)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flyout-field">
-            <span>Height</span>
-            <select value={goalUnitHeightMm}
-              onChange={(event) => onSetGoalUnitHeightMm(Number(event.target.value) as GoalUnitHeightMm)}>
-              {goalUnitHeightOptionsMm.map((value) => (
-                <option key={value} value={value}>{formatLengthMm(value)}</option>
+            <span>Variant</span>
+            <select
+              value={selectedGoalUnitKey}
+              onChange={(event) => {
+                const nextOption = goalUnitOptions.find((option) => option.key === event.target.value);
+                if (!nextOption) {
+                  return;
+                }
+                onSetGoalUnitWidthMm(nextOption.widthMm);
+                onSetGoalUnitHeightMm(nextOption.goalHeightMm);
+                onSetGoalUnitHasBasketballPost(nextOption.hasBasketballPost);
+              }}
+            >
+              {goalUnitOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
               ))}
             </select>
           </label>
@@ -525,7 +545,7 @@ export function EditorToolPalette({
             <label className="flyout-field">
               <span>Arm Length</span>
               <select value={basketballArmLengthMm}
-                onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value) as BasketballArmLengthMm)}>
+                onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value))}>
                 {basketballArmLengthOptionsMm.map((value) => (
                   <option key={value} value={value}>{formatLengthMm(value)}</option>
                 ))}
@@ -535,24 +555,44 @@ export function EditorToolPalette({
         </FlyoutPanel>
       ) : null}
 
+      {openFlyout === "FLOODLIGHT_COLUMN" ? (
+        <FlyoutPanel onClose={closeFlyout}>
+          <div className="flyout-heading">Floodlight Column</div>
+          <label className="flyout-field">
+            <span>Column height</span>
+            <select
+              value={floodlightColumnHeightMm}
+              onChange={(event) => onSetFloodlightColumnHeightMm(Number(event.target.value))}
+            >
+              {floodlightColumnHeightOptionsMm.map((value) => (
+                <option key={value} value={value}>{formatLengthMm(value)}</option>
+              ))}
+            </select>
+          </label>
+        </FlyoutPanel>
+      ) : null}
+
       {openFlyout === "KICKBOARD" ? (
         <FlyoutPanel onClose={closeFlyout}>
           <div className="flyout-heading">Kickboard</div>
           <label className="flyout-field">
-            <span>Section</span>
-            <select value={kickboardSectionHeightMm}
-              onChange={(event) => onSetKickboardSectionHeightMm(Number(event.target.value) as KickboardSectionHeightMm)}>
-              {kickboardSectionHeightOptionsMm.map((value) => (
-                <option key={value} value={value}>{value} × 50</option>
+            <span>Variant</span>
+            <select
+              value={selectedKickboardKey}
+              onChange={(event) => {
+                const nextOption = kickboardOptions.find((option) => option.key === event.target.value);
+                if (!nextOption) {
+                  return;
+                }
+                onSetKickboardSectionHeightMm(nextOption.sectionHeightMm);
+                onSetKickboardThicknessMm(nextOption.thicknessMm);
+                onSetKickboardProfile(nextOption.profile);
+                onSetKickboardBoardLengthMm(nextOption.boardLengthMm);
+              }}
+            >
+              {kickboardOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
               ))}
-            </select>
-          </label>
-          <label className="flyout-field">
-            <span>Profile</span>
-            <select value={kickboardProfile}
-              onChange={(event) => onSetKickboardProfile(event.target.value as KickboardProfile)}>
-              <option value="SQUARE">Square</option>
-              <option value="CHAMFERED">Chamfered</option>
             </select>
           </label>
         </FlyoutPanel>

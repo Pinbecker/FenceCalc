@@ -81,6 +81,24 @@ export function getRevisionLabel(drawing: Pick<DrawingSummary, "revisionNumber">
   return drawing.revisionNumber === 0 ? "Original" : `REV ${drawing.revisionNumber}`;
 }
 
+export function countDrawingRevisions(
+  drawings: Array<Pick<DrawingSummary, "revisionNumber">>,
+): number {
+  return drawings.filter((drawing) => drawing.revisionNumber > 0).length;
+}
+
+export function getRevisionCountFromDrawingCount(drawingCount: number): number {
+  return Math.max(drawingCount - 1, 0);
+}
+
+export function formatRevisionCount(revisionCount: number): string {
+  return `${revisionCount} revision${revisionCount === 1 ? "" : "s"}`;
+}
+
+export function formatRevisionCountFromDrawingCount(drawingCount: number): string {
+  return formatRevisionCount(getRevisionCountFromDrawingCount(drawingCount));
+}
+
 function compareWorkspaceDrawings(left: DrawingSummary, right: DrawingSummary): number {
   if (left.revisionNumber !== right.revisionNumber) {
     return left.revisionNumber - right.revisionNumber;
@@ -197,7 +215,7 @@ export function buildCustomerWorkspaceCards(
         drawings: workspaceDrawings,
         rootDrawing,
         latestRevision,
-        revisionCount: workspaceDrawings.length,
+        revisionCount: countDrawingRevisions(workspaceDrawings),
         lastActivityAtIso:
           latestRevision?.updatedAtIso ?? workspace.lastActivityAtIso ?? workspace.updatedAtIso,
       };

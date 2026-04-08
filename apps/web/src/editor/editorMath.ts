@@ -391,7 +391,10 @@ export function sameBasketballPostPlacement(
     left.id === right.id &&
     left.segmentId === right.segmentId &&
     left.offsetMm === right.offsetMm &&
-    left.facing === right.facing
+    left.facing === right.facing &&
+    (left.type ?? "DEDICATED_POST") === (right.type ?? "DEDICATED_POST") &&
+    (left.mountingMode ?? "PROJECTING_ARM") === (right.mountingMode ?? "PROJECTING_ARM") &&
+    (left.armLengthMm ?? null) === (right.armLengthMm ?? null)
   );
 }
 
@@ -424,7 +427,8 @@ export function sameFloodlightColumnPlacement(
     left.id === right.id &&
     left.segmentId === right.segmentId &&
     left.offsetMm === right.offsetMm &&
-    left.facing === right.facing
+    left.facing === right.facing &&
+    (left.heightMm ?? 6000) === (right.heightMm ?? 6000)
   );
 }
 
@@ -457,7 +461,8 @@ export function sameGoalUnitPlacement(left: GoalUnitPlacement, right: GoalUnitPl
     left.side === right.side &&
     left.widthMm === right.widthMm &&
     left.depthMm === right.depthMm &&
-    left.goalHeightMm === right.goalHeightMm
+    left.goalHeightMm === right.goalHeightMm &&
+    (left.hasBasketballPost ?? false) === (right.hasBasketballPost ?? false)
   );
 }
 
@@ -604,6 +609,16 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
         future: []
       };
     }
+    case "COMMIT_BATCH": {
+      if (sameLayoutModel(action.baseline, state.present)) {
+        return state;
+      }
+      return {
+        past: [...state.past, action.baseline],
+        present: state.present,
+        future: []
+      };
+    }
     case "UNDO": {
       const previous = state.past[state.past.length - 1];
       if (!previous) {
@@ -641,9 +656,20 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
         return state;
       }
       return {
-        past: [...state.past, state.present],
+        past: state.past,
         present: action.layout,
-        future: []
+        future: state.future
+      };
+    }
+    case "SET_APPLY": {
+      const next = action.updater(state.present);
+      if (sameLayoutModel(state.present, next)) {
+        return state;
+      }
+      return {
+        past: state.past,
+        present: next,
+        future: state.future
       };
     }
     default:

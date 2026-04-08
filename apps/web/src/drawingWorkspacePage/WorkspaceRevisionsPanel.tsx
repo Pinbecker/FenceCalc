@@ -35,7 +35,7 @@ export function WorkspaceRevisionsPanel({
     <section className="portal-surface-card portal-job-primary-card">
       <div className="portal-section-heading">
         <div>
-          <span className="portal-section-kicker">Workspace revisions</span>
+          <span className="portal-section-kicker">Drawing history</span>
         </div>
         <button
           type="button"
@@ -51,7 +51,7 @@ export function WorkspaceRevisionsPanel({
           <p className="portal-empty-copy">No drawings are available in this workspace.</p>
         ) : null}
         {drawings.map((drawing) => {
-          const isLatestRevision = drawing.id === activeLatestDrawing?.id;
+          const isLatestDrawing = drawing.id === activeLatestDrawing?.id;
           const isEstimateOpen = isEstimateVisible && activeDrawing?.id === drawing.id;
           const drawingQuote = latestQuoteByDrawingId.get(drawing.id) ?? null;
           return (
@@ -76,7 +76,7 @@ export function WorkspaceRevisionsPanel({
                     <span>{drawing.name}</span>
                   </div>
                   <div className="portal-customer-drawing-card-badges">
-                    {isLatestRevision ? (
+                    {isLatestDrawing ? (
                       <span className="portal-customer-drawing-badge">Latest</span>
                     ) : null}
                     <span className={`portal-customer-drawing-badge drawing-status-${drawing.status.toLowerCase()}`}>

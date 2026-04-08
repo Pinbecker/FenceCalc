@@ -122,6 +122,7 @@ describe("buildOptimization3DScene", () => {
       widthMm: 3000,
       depthMm: 1200,
       goalHeightMm: 3000,
+      hasBasketballPost: true,
       enclosureHeightMm: 3000,
       entryPoint: { x: 3550, y: 0 },
       exitPoint: { x: 6550, y: 0 },
@@ -139,7 +140,8 @@ describe("buildOptimization3DScene", () => {
         side: "LEFT",
         widthMm: 3000,
         depthMm: 1200,
-        goalHeightMm: 3000
+        goalHeightMm: 3000,
+        hasBasketballPost: true
       }
     };
     const kickboard: ResolvedKickboardAttachment = {

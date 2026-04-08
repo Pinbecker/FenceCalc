@@ -6,7 +6,7 @@ import {
   type CustomerSummary,
 } from "@fence-estimator/contracts";
 
-import { buildDrawingWorkspaceQuery } from "./drawingWorkspace";
+import { buildDrawingWorkspaceQuery, countDrawingRevisions } from "./drawingWorkspace";
 import type { PortalRoute } from "./useHashRoute";
 import { WorkspaceEditDetailsModal } from "./drawingWorkspacePage/WorkspaceEditDetailsModal";
 import { WorkspaceEstimatePanel } from "./drawingWorkspacePage/WorkspaceEstimatePanel";
@@ -330,7 +330,7 @@ export function DrawingWorkspacePage({
             ? DRAWING_STATUS_LABELS[activeLatestDrawing.status]
             : workspace.stage.replaceAll("_", " ")
         }
-        revisionCount={Math.max(activeDrawingChain.length - 1, 0)}
+        revisionCount={countDrawingRevisions(activeDrawingChain)}
         openTaskCount={taskState.openTaskCount}
         lastActivityLabel={formatTimestamp(activeLatestDrawing?.updatedAtIso ?? workspace.updatedAtIso)}
         canDeleteWorkspace={canDeleteWorkspace}
@@ -405,12 +405,16 @@ export function DrawingWorkspacePage({
           ancillaryItems={estimateState.ancillaryItems}
           materialSections={estimateState.materialSections}
           labourSections={estimateState.labourSections}
+          externalCornersEnabled={estimateState.externalCornersEnabled}
           onCloseEstimate={closeDrawingEstimate}
           onGenerateQuotePdf={() => void estimateState.handleGenerateQuotePdf()}
           onAddAncillaryItem={estimateState.handleAddAncillaryItem}
           onUpdateAncillaryItem={estimateState.handleUpdateAncillaryItem}
           onRemoveAncillaryItem={estimateState.handleRemoveAncillaryItem}
           onManualEntryChange={estimateState.handleManualEntryChange}
+          onExternalCornersEnabledChange={(enabled) =>
+            void estimateState.handleExternalCornersEnabledChange(enabled)
+          }
         />
       ) : null}
 

@@ -149,6 +149,7 @@ describe("buildEditorSummaryData", () => {
           widthMm: 3000,
           depthMm: 1200,
           goalHeightMm: 3000,
+          hasBasketballPost: false,
           enclosureHeightMm: 3000,
           entryPoint: { x: 1500, y: 0 },
           exitPoint: { x: 4500, y: 0 },
@@ -166,7 +167,8 @@ describe("buildEditorSummaryData", () => {
             side: "LEFT",
             widthMm: 3000,
             depthMm: 1200,
-            goalHeightMm: 3000
+            goalHeightMm: 3000,
+            hasBasketballPost: false
           }
         }
       ],

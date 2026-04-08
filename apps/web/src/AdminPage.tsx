@@ -8,6 +8,7 @@ import type {
   DrawingWorkspaceSummary,
 } from "@fence-estimator/contracts";
 import type { AuditLogQueryOptions } from "./apiClient";
+import { formatRevisionCountFromDrawingCount } from "./drawingWorkspace";
 
 type AuditCategoryFilter = "ALL" | AuditEntityType;
 
@@ -385,8 +386,7 @@ export function AdminPage({
                 <div>
                   <strong>{workspace.name}</strong>
                   <span>
-                    {workspace.customerName} · {workspace.drawingCount} revision
-                    {workspace.drawingCount !== 1 ? "s" : ""} · Updated{" "}
+                    {workspace.customerName} · {formatRevisionCountFromDrawingCount(workspace.drawingCount)} · Updated{" "}
                     {formatTimestamp(workspace.updatedAtIso)}
                   </span>
                 </div>

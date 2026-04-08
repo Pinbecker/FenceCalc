@@ -78,6 +78,7 @@ export interface UseWorkspaceEstimateResult {
   ancillaryItems: AncillaryEstimateItem[];
   materialSections: ReturnType<typeof buildEstimateDisplaySections>;
   labourSections: ReturnType<typeof buildEstimateDisplaySections>;
+  externalCornersEnabled: boolean;
   handleAddAncillaryItem: () => void;
   handleUpdateAncillaryItem: (
     itemId: string,
@@ -86,6 +87,7 @@ export interface UseWorkspaceEstimateResult {
   ) => void;
   handleRemoveAncillaryItem: (itemId: string) => void;
   handleManualEntryChange: (code: string, quantity: number) => void;
+  handleExternalCornersEnabledChange: (enabled: boolean) => Promise<void>;
   handleGenerateQuotePdf: () => Promise<void>;
   handleOpenSavedQuotePdf: (quote: QuoteRecord) => void;
 }
@@ -121,7 +123,11 @@ export function useWorkspaceEstimate({
   }, [ancillaryItems, basePricedEstimate, manualEntries]);
 
   const workbook = pricedEstimate?.workbook ?? null;
-  const commercialInputs = useMemo(() => buildCommercialInputs(pricedEstimate), [pricedEstimate]);
+  const externalCornersEnabled = workspace?.commercialInputs.externalCornersEnabled ?? true;
+  const commercialInputs = useMemo(
+    () => buildCommercialInputs(pricedEstimate, workspace?.commercialInputs ?? null),
+    [pricedEstimate, workspace?.commercialInputs],
+  );
   const commercialInputsKey = useMemo(
     () => serializeCommercialInputs(commercialInputs),
     [commercialInputs],
@@ -218,7 +224,6 @@ export function useWorkspaceEstimate({
 
     return () => globalThis.clearTimeout(timer);
   }, [
-    commercialInputs,
     commercialInputsKey,
     setErrorMessage,
     setWorkspace,
@@ -250,6 +255,41 @@ export function useWorkspaceEstimate({
   const handleManualEntryChange = useCallback((code: string, quantity: number) => {
     setManualEntries((current) => upsertManualEntry(current, code, quantity));
   }, []);
+
+  const handleExternalCornersEnabledChange = useCallback(
+    async (enabled: boolean) => {
+      if (!workspace?.id) {
+        return;
+      }
+      const nextCommercialInputs = {
+        ...(commercialInputs ?? workspace.commercialInputs),
+        externalCornersEnabled: enabled,
+      };
+      setIsSavingControls(true);
+      setErrorMessage(null);
+      try {
+        const updated = await updateDrawingWorkspace(workspace.id, {
+          commercialInputs: nextCommercialInputs,
+        });
+        setWorkspace(updated);
+        if (activeDrawing && isEstimateVisible) {
+          setBasePricedEstimate(await getDrawingWorkspaceEstimate(workspace.id, activeDrawing.id));
+        }
+      } catch (error) {
+        setErrorMessage((error as Error).message);
+      } finally {
+        setIsSavingControls(false);
+      }
+    },
+    [
+      activeDrawing,
+      commercialInputs,
+      isEstimateVisible,
+      setErrorMessage,
+      setWorkspace,
+      workspace,
+    ],
+  );
 
   const handleGenerateQuotePdf = useCallback(async () => {
     if (!workspace || !activeDrawing || !activeDrawingRecord || !pricedEstimate) {
@@ -378,10 +418,12 @@ export function useWorkspaceEstimate({
     ancillaryItems,
     materialSections,
     labourSections,
+    externalCornersEnabled,
     handleAddAncillaryItem,
     handleUpdateAncillaryItem,
     handleRemoveAncillaryItem,
     handleManualEntryChange,
+    handleExternalCornersEnabledChange,
     handleGenerateQuotePdf,
     handleOpenSavedQuotePdf,
   };

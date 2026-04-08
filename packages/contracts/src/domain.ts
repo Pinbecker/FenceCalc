@@ -67,11 +67,11 @@ export const SIDE_NETTING_EXTENDED_POST_INTERVAL = 3;
 export const PITCH_DIVIDER_MAX_SPAN_MM = 70000;
 export const PITCH_DIVIDER_SUPPORT_INTERVAL_MM = 15000;
 
-export type GoalUnitWidthMm = (typeof GOAL_UNIT_WIDTHS_MM)[number];
-export type GoalUnitHeightMm = (typeof GOAL_UNIT_HEIGHTS_MM)[number];
-export type BasketballArmLengthMm = (typeof BASKETBALL_ARM_LENGTHS_MM)[number];
-export type KickboardSectionHeightMm = (typeof KICKBOARD_SECTION_HEIGHTS_MM)[number];
-export type KickboardProfile = "SQUARE" | "CHAMFERED";
+export type GoalUnitWidthMm = number;
+export type GoalUnitHeightMm = number;
+export type BasketballArmLengthMm = number;
+export type KickboardSectionHeightMm = number;
+export type KickboardProfile = string;
 export type BasketballFeatureType =
   | "DEDICATED_POST"
   | "MOUNTED_TO_EXISTING_POST"
@@ -91,6 +91,7 @@ export interface GoalUnitPlacement {
   widthMm: GoalUnitWidthMm;
   depthMm: number;
   goalHeightMm: GoalUnitHeightMm;
+  hasBasketballPost?: boolean | undefined;
 }
 
 export interface BasketballFeaturePlacement {
@@ -113,15 +114,16 @@ export interface FloodlightColumnPlacement {
   segmentId: string;
   offsetMm: number;
   facing: InlineFeatureFacing;
+  heightMm?: number | undefined;
 }
 
 export interface KickboardAttachment {
   id: string;
   segmentId: string;
   sectionHeightMm: KickboardSectionHeightMm;
-  thicknessMm: 50;
+  thicknessMm: number;
   profile: KickboardProfile;
-  boardLengthMm: 2500;
+  boardLengthMm: number;
 }
 
 export interface PitchDividerPlacement {
@@ -412,6 +414,7 @@ export interface JobCommercialInputs {
   markupUnits?: number | undefined;
   hardDig?: boolean | undefined;
   clearSpoils?: boolean | undefined;
+  externalCornersEnabled?: boolean | undefined;
 }
 export type DrawingWorkspaceCommercialInputs = JobCommercialInputs;
 

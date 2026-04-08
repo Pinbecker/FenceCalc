@@ -12,7 +12,10 @@ import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
 import { requireAdminRole, requireAuth } from "../authorization.js";
 import { normalizeLayout } from "../estimateSupport.js";
-import { mergeDrawingWorkspaceCommercialManualEntries } from "../drawingWorkspaceEstimateSupport.js";
+import {
+  buildDrawingWorkspaceEstimateOptions,
+  mergeDrawingWorkspaceCommercialManualEntries,
+} from "../drawingWorkspaceEstimateSupport.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
@@ -172,7 +175,8 @@ export function registerDrawingRoutes({ app, config, repository, writeLimiter }:
         drawing,
         pricingConfig,
         [],
-        workspace ? mergeDrawingWorkspaceCommercialManualEntries(workspace.commercialInputs) : []
+        workspace ? mergeDrawingWorkspaceCommercialManualEntries(workspace.commercialInputs) : [],
+        workspace ? buildDrawingWorkspaceEstimateOptions(workspace.commercialInputs) : {},
       )
     });
   });

@@ -1,4 +1,4 @@
-import { useCallback, useReducer } from "react";
+import { useCallback, useRef, useReducer } from "react";
 import type {
   BasketballPostPlacement,
   FloodlightColumnPlacement,
@@ -30,9 +30,37 @@ export function useEditorLayoutHistory() {
     present: createEmptyLayout(),
     future: []
   } satisfies HistoryState);
+  const activeBatchBaselineRef = useRef<LayoutModel | null>(null);
+  const activeBatchDepthRef = useRef(0);
 
   const applyLayout = useCallback((updater: (previous: LayoutModel) => LayoutModel) => {
+    if (activeBatchBaselineRef.current) {
+      dispatchHistory({ type: "SET_APPLY", updater });
+      return;
+    }
     dispatchHistory({ type: "APPLY", updater });
+  }, []);
+
+  const beginLayoutBatch = useCallback(() => {
+    if (activeBatchDepthRef.current === 0) {
+      activeBatchBaselineRef.current = history.present;
+    }
+    activeBatchDepthRef.current += 1;
+  }, [history.present]);
+
+  const commitLayoutBatch = useCallback(() => {
+    if (activeBatchDepthRef.current <= 0) {
+      return;
+    }
+    activeBatchDepthRef.current -= 1;
+    if (activeBatchDepthRef.current > 0) {
+      return;
+    }
+    const baseline = activeBatchBaselineRef.current;
+    activeBatchBaselineRef.current = null;
+    if (baseline) {
+      dispatchHistory({ type: "COMMIT_BATCH", baseline });
+    }
   }, []);
 
   const applySegments = useCallback(
@@ -73,14 +101,20 @@ export function useEditorLayoutHistory() {
   );
 
   const resetLayout = useCallback((layout: LayoutModel) => {
+    activeBatchBaselineRef.current = null;
+    activeBatchDepthRef.current = 0;
     dispatchHistory({ type: "RESET", layout });
   }, []);
 
   const undoLayout = useCallback(() => {
+    activeBatchBaselineRef.current = null;
+    activeBatchDepthRef.current = 0;
     dispatchHistory({ type: "UNDO" });
   }, []);
 
   const redoLayout = useCallback(() => {
+    activeBatchBaselineRef.current = null;
+    activeBatchDepthRef.current = 0;
     dispatchHistory({ type: "REDO" });
   }, []);
 
@@ -104,6 +138,8 @@ export function useEditorLayoutHistory() {
     applyGatePlacements,
     applyBasketballPostPlacements,
     applyFloodlightColumnPlacements,
+    beginLayoutBatch,
+    commitLayoutBatch,
     resetLayout,
     undoLayout,
     redoLayout

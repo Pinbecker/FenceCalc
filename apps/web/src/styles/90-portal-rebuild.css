@@ -1726,56 +1726,181 @@ svg.drawing-preview {
 
 .pricing-rate-group-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
 }
 
 .pricing-rate-group-card {
   display: grid;
-  gap: 12px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(27, 44, 62, 0.12);
+  background:
+    linear-gradient(135deg, rgba(248, 245, 237, 0.98), rgba(255, 255, 255, 0.96) 42%),
+    #fff;
+  box-shadow: 0 18px 42px rgba(38, 54, 72, 0.08);
 }
 
 .pricing-rate-group-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(27, 44, 62, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(181, 107, 70, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.74);
+}
+
+.pricing-rate-group-title {
+  display: grid;
+  gap: 5px;
 }
 
 .pricing-rate-group-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: clamp(18px, 2vw, 22px);
   color: #13202f;
 }
 
-.pricing-rate-group-head > span {
+.pricing-rate-group-title p {
+  margin: 0;
   font-size: 12px;
   color: rgba(22, 44, 66, 0.7);
 }
 
-.pricing-rate-table {
+.pricing-rate-group-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pricing-add-button,
+.pricing-fixed-badge {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.pricing-add-button {
+  border: 1px solid rgba(36, 88, 74, 0.24);
+  background: #24584a;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(36, 88, 74, 0.18);
+  cursor: pointer;
+}
+
+.pricing-add-button:hover {
+  background: #1f4d41;
+}
+
+.pricing-fixed-badge {
+  border: 1px solid rgba(27, 44, 62, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(32, 47, 43, 0.62);
+}
+
+.pricing-add-panel {
+  display: grid;
+  gap: 14px;
+  margin: 16px 20px 4px;
+  padding: 16px;
+  border: 1px solid rgba(36, 88, 74, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(232, 244, 235, 0.92), rgba(255, 252, 246, 0.92)),
+    #fbfff8;
+}
+
+.pricing-add-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.pricing-add-copy strong {
+  color: #13202f;
+  font-size: 15px;
+}
+
+.pricing-add-copy span {
+  color: rgba(40, 60, 84, 0.7);
+  font-size: 13px;
+}
+
+.pricing-add-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.pricing-add-field {
   display: grid;
   gap: 6px;
+  color: rgba(40, 60, 84, 0.72);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pricing-add-field-wide {
+  grid-column: span 2;
+}
+
+.pricing-add-field input,
+.pricing-add-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(18, 42, 66, 0.13);
+  border-radius: 10px;
+  background: #fff;
+  color: #13202f;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.pricing-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pricing-rate-table {
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px 20px;
+  overflow-x: auto;
 }
 
 .pricing-rate-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(64px, 0.46fr) minmax(96px, 0.72fr) minmax(
-      96px,
-      0.72fr
-    );
+  grid-template-columns: minmax(280px, 1fr) 90px 130px 130px 116px;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(18, 42, 66, 0.08);
-  border-radius: 10px;
-  background: rgba(248, 251, 255, 0.78);
+  gap: 12px;
+  min-width: 760px;
+  padding: 12px 14px;
+  border: 1px solid rgba(18, 42, 66, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .pricing-rate-head {
   background: transparent;
   border: 0;
-  padding: 0 2px 4px;
+  min-width: 760px;
+  padding: 0 14px 2px;
 }
 
 .pricing-rate-head span {
@@ -1791,7 +1916,7 @@ svg.drawing-preview {
 }
 
 .pricing-rate-copy strong {
-  font-size: 13px;
+  font-size: 13.5px;
   color: #13202f;
 }
 
@@ -1806,13 +1931,15 @@ svg.drawing-preview {
   color: #13202f;
 }
 
-.pricing-rate-row input {
-  min-height: 32px;
-  padding: 7px 9px;
+.pricing-rate-row input,
+.pricing-rate-row select {
+  min-height: 36px;
+  padding: 8px 10px;
   border: 1px solid rgba(18, 42, 66, 0.12);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   color: #13202f;
+  font-weight: 700;
 }
 
 .pricing-rate-placeholder {
@@ -1884,6 +2011,11 @@ svg.drawing-preview {
   background: rgba(242, 246, 250, 0.9);
 }
 
+.estimate-control-copy {
+  margin: 6px 0 0;
+  max-width: 720px;
+}
+
 .workbook-toggle-field {
   align-content: start;
 }
@@ -1892,6 +2024,12 @@ svg.drawing-preview {
   width: 18px;
   min-height: 18px;
   justify-self: start;
+}
+
+.workbook-toggle-field small {
+  color: rgba(40, 60, 84, 0.62);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .workbook-sheet-stack {
@@ -3308,6 +3446,39 @@ svg.drawing-preview {
   .workbook-table-row,
   .pricing-rate-row {
     grid-template-columns: 1fr;
+  }
+
+  .pricing-rate-row,
+  .pricing-rate-head {
+    min-width: 0;
+  }
+
+  .pricing-rate-table {
+    overflow: visible;
+    padding: 12px;
+  }
+
+  .pricing-rate-group-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pricing-rate-group-actions,
+  .pricing-add-actions {
+    justify-content: stretch;
+  }
+
+  .pricing-add-button,
+  .pricing-add-actions > * {
+    width: 100%;
+  }
+
+  .pricing-add-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-add-field-wide {
+    grid-column: auto;
   }
 
   .pricing-table-head,

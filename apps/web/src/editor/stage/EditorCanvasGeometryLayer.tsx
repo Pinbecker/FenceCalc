@@ -346,25 +346,29 @@ function renderGoalUnitPlan(goalUnit: ResolvedGoalUnitPlacement, scale: number) 
         dash={[14 / scale, 10 / scale]}
         lineCap="round"
       />
-      <Circle
-        x={goalUnit.rearCenterPoint.x}
-        y={goalUnit.rearCenterPoint.y}
-        radius={7 / scale}
-        fill="#0a3447"
-        stroke="#effcff"
-        strokeWidth={detailWidth}
-      />
-      <Line
-        points={[
-          goalUnit.rearCenterPoint.x,
-          goalUnit.rearCenterPoint.y,
-          goalUnit.rearCenterPoint.x + basketballNormal.x * 280,
-          goalUnit.rearCenterPoint.y + basketballNormal.y * 280
-        ]}
-        stroke="#ffb769"
-        strokeWidth={detailWidth}
-        lineCap="round"
-      />
+      {goalUnit.hasBasketballPost ? (
+        <>
+          <Circle
+            x={goalUnit.rearCenterPoint.x}
+            y={goalUnit.rearCenterPoint.y}
+            radius={7 / scale}
+            fill="#0a3447"
+            stroke="#effcff"
+            strokeWidth={detailWidth}
+          />
+          <Line
+            points={[
+              goalUnit.rearCenterPoint.x,
+              goalUnit.rearCenterPoint.y,
+              goalUnit.rearCenterPoint.x + basketballNormal.x * 280,
+              goalUnit.rearCenterPoint.y + basketballNormal.y * 280
+            ]}
+            stroke="#ffb769"
+            strokeWidth={detailWidth}
+            lineCap="round"
+          />
+        </>
+      ) : null}
     </Group>
   );
 }

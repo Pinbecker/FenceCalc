@@ -39,6 +39,7 @@ type TerminalPostType = "end" | "inlineJoin" | "corner" | "junction";
 
 interface EstimateLayoutOptions {
   excludedNodeKeys?: Set<string>;
+  externalCornersEnabled?: boolean;
 }
 
 export interface EstimatedPostInstance {
@@ -465,7 +466,8 @@ export function estimateLayout(layout: LayoutModel, options: EstimateLayoutOptio
         continue;
       }
 
-      const isInternal = isCcw ? turn < 0 : turn > 0;
+      const isGeometryExternal = isCcw ? turn < 0 : turn > 0;
+      const isInternal = options.externalCornersEnabled === false || !isGeometryExternal;
       const heightKey = String(nodes.get(currentKey)?.maxHeightMm ?? 0);
       const bucket = ensureCornerHeightBucket(heightKey);
       bucket.total += 1;

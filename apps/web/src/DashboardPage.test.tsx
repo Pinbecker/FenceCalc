@@ -177,7 +177,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Front perimeter");
     expect(html).toContain("Cleveland Land Services");
     expect(html).toContain("Drawing preview for Front perimeter");
-    expect(html).toContain("1 revision");
+    expect(html).toContain("0 revisions");
     expect(html).not.toContain("Signed in");
     expect(html).not.toContain("Access");
   });

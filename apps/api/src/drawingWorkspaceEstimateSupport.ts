@@ -65,5 +65,13 @@ export function mergeDrawingWorkspaceCommercialManualEntries(
   return [...nonCommercialEntries, ...buildDrawingWorkspaceCommercialManualEntries(inputs)];
 }
 
+export function buildDrawingWorkspaceEstimateOptions(inputs: DrawingWorkspaceCommercialInputs): {
+  externalCornersEnabled: boolean;
+} {
+  return {
+    externalCornersEnabled: inputs.externalCornersEnabled ?? true,
+  };
+}
+
 export const buildJobCommercialManualEntries = buildDrawingWorkspaceCommercialManualEntries;
 export const mergeJobCommercialManualEntries = mergeDrawingWorkspaceCommercialManualEntries;

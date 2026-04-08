@@ -30,6 +30,7 @@ export interface ResolvedGoalUnitPlacement {
   widthMm: GoalUnitPlacement["widthMm"];
   depthMm: number;
   goalHeightMm: GoalUnitPlacement["goalHeightMm"];
+  hasBasketballPost: boolean;
   enclosureHeightMm: GoalUnitPlacement["goalHeightMm"];
   entryPoint: PointMm;
   exitPoint: PointMm;
@@ -149,28 +150,22 @@ function getFenceHeightMm(spec: FenceSpec): number {
 }
 
 function heightMmToFenceHeightKey(heightMm: number): FenceHeightKey {
-  switch (heightMm) {
-    case 1200:
-      return "1.2m";
-    case 1800:
-      return "1.8m";
-    case 2000:
-      return "2m";
-    case 2400:
-      return "2.4m";
-    case 3000:
-      return "3m";
-    case 4000:
-      return "4m";
-    case 4500:
-      return "4.5m";
-    case 5000:
-      return "5m";
-    case 6000:
-      return "6m";
-    default:
-      throw new Error(`Unsupported fence height ${heightMm}mm`);
+  const supportedHeights: Array<{ heightMm: number; key: FenceHeightKey }> = [
+    { heightMm: 1200, key: "1.2m" },
+    { heightMm: 1800, key: "1.8m" },
+    { heightMm: 2000, key: "2m" },
+    { heightMm: 2400, key: "2.4m" },
+    { heightMm: 3000, key: "3m" },
+    { heightMm: 4000, key: "4m" },
+    { heightMm: 4500, key: "4.5m" },
+    { heightMm: 5000, key: "5m" },
+    { heightMm: 6000, key: "6m" },
+  ];
+  const stockHeight = supportedHeights.find((candidate) => heightMm <= candidate.heightMm);
+  if (!stockHeight) {
+    throw new Error(`Unsupported fence height ${heightMm}mm`);
   }
+  return stockHeight.key;
 }
 
 function buildSpecAtHeight(spec: FenceSpec, heightMm: number): FenceSpec {
@@ -266,6 +261,8 @@ export function resolveGoalUnitPlacements(
         y: exitPoint.y + normal.y * placement.depthMm
       };
 
+      const enclosureSpec = buildSpecAtHeight(segment.spec, placement.goalHeightMm);
+
       return [{
         id: placement.id,
         segmentId: placement.segmentId,
@@ -275,7 +272,8 @@ export function resolveGoalUnitPlacements(
         widthMm: placement.widthMm,
         depthMm: placement.depthMm,
         goalHeightMm: placement.goalHeightMm,
-        enclosureHeightMm: placement.goalHeightMm,
+        hasBasketballPost: placement.hasBasketballPost ?? false,
+        enclosureHeightMm: getFenceHeightMm(enclosureSpec),
         entryPoint,
         exitPoint,
         recessEntryPoint,
@@ -287,7 +285,7 @@ export function resolveGoalUnitPlacements(
         tangent: axes.tangent,
         normal,
         spec: segment.spec,
-        enclosureSpec: buildSpecAtHeight(segment.spec, placement.goalHeightMm),
+        enclosureSpec,
         placement
       } satisfies ResolvedGoalUnitPlacement];
     })

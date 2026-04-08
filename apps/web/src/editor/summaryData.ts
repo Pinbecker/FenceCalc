@@ -263,7 +263,7 @@ export function buildEditorSummaryData(input: {
     >((map, kickboard) => {
       const savedBoards = savedGroundPanelsBySegmentId.get(kickboard.segmentId) ?? 0;
       const adjustedBoardCount = Math.max(0, kickboard.boardCount - savedBoards);
-      const key = `${kickboard.placement.sectionHeightMm}:${kickboard.placement.profile}`;
+      const key = `${kickboard.placement.sectionHeightMm}:${kickboard.placement.thicknessMm}:${kickboard.placement.profile}:${kickboard.placement.boardLengthMm}`;
       const existing = map.get(key);
       const label = `${kickboard.placement.sectionHeightMm} x ${kickboard.placement.thicknessMm} ${kickboard.placement.profile.toLowerCase()} kickboards`;
       if (existing) {
@@ -305,7 +305,7 @@ export function buildEditorSummaryData(input: {
   const featureRowsByKind = {
     goalUnits: input.resolvedGoalUnits
       .map((goalUnit) => ({
-        label: `Goal unit ${goalUnit.widthMm / 1000}m x ${goalUnit.goalHeightMm / 1000}m`,
+        label: `Goal unit ${goalUnit.widthMm / 1000}m x ${goalUnit.goalHeightMm / 1000}m${goalUnit.hasBasketballPost ? " with basketball post" : ""}`,
         value: "1 item",
       }))
       .sort((left, right) => left.label.localeCompare(right.label, "en-GB", { numeric: true })),

@@ -177,6 +177,7 @@ describe("AdminPage", () => {
 
     expect(html).toContain("Archived workspaces");
     expect(html).toContain("North boundary");
+    expect(html).toContain("1 revision");
     expect(html).toContain("Restore workspace");
     expect(html).toContain("Delete permanently");
   });

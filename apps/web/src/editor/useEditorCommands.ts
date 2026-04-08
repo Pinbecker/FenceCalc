@@ -99,6 +99,8 @@ interface UseEditorCommandsOptions {
   applyGatePlacements: (updater: (previous: GatePlacement[]) => GatePlacement[]) => void;
   applyBasketballPostPlacements: (updater: (previous: BasketballPostPlacement[]) => BasketballPostPlacement[]) => void;
   applyFloodlightColumnPlacements?: (updater: (previous: FloodlightColumnPlacement[]) => FloodlightColumnPlacement[]) => void;
+  beginLayoutBatch?: () => void;
+  commitLayoutBatch?: () => void;
   segments?: LayoutSegment[];
   segmentsById: Map<string, LayoutSegment>;
   resolvedGateById: Map<string, ResolvedGatePlacement>;
@@ -109,12 +111,16 @@ interface UseEditorCommandsOptions {
   isReadOnly?: boolean;
   interactionMode: InteractionMode;
   goalUnitDepthMm?: number;
-  goalUnitHeightMm?: 3000 | 4000;
+  goalUnitHasBasketballPost?: boolean;
+  goalUnitHeightMm?: number;
   gateType: GateType;
   basketballPlacementType?: "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST";
-  basketballArmLengthMm?: 1200 | 1800;
-  kickboardSectionHeightMm?: 200 | 225 | 250;
-  kickboardProfile?: "SQUARE" | "CHAMFERED";
+  basketballArmLengthMm?: number;
+  kickboardSectionHeightMm?: number;
+  kickboardProfile?: string;
+  kickboardThicknessMm?: number;
+  kickboardBoardLengthMm?: number;
+  floodlightColumnHeightMm?: number;
   sideNettingHeightMm?: number;
   pendingPitchDividerStart?: PitchDividerAnchorPreview | null;
   drawStart: PointMm | null;
@@ -189,6 +195,8 @@ export function useEditorCommands({
   applyGatePlacements,
   applyBasketballPostPlacements,
   applyFloodlightColumnPlacements = () => undefined,
+  beginLayoutBatch = () => undefined,
+  commitLayoutBatch = () => undefined,
   segmentsById,
   resolvedGateById,
   resolvedBasketballPostById,
@@ -198,12 +206,16 @@ export function useEditorCommands({
   isReadOnly = false,
   interactionMode,
   goalUnitDepthMm = 1200,
+  goalUnitHasBasketballPost = false,
   goalUnitHeightMm = 3000,
   gateType,
   basketballPlacementType = "DEDICATED_POST",
   basketballArmLengthMm = 1800,
   kickboardSectionHeightMm = 200,
   kickboardProfile = "SQUARE",
+  kickboardThicknessMm = 50,
+  kickboardBoardLengthMm = 2500,
+  floodlightColumnHeightMm = 6000,
   sideNettingHeightMm = 2000,
   pendingPitchDividerStart = null,
   drawStart,
@@ -397,6 +409,8 @@ export function useEditorCommands({
       if (!pointer) {
         return;
       }
+      commitLayoutBatch();
+      beginLayoutBatch();
       setActiveSegmentDrag({
         segmentId,
         lastPointer: toWorld(pointer)
@@ -405,7 +419,7 @@ export function useEditorCommands({
       setActiveBasketballPostDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [beginLayoutBatch, commitLayoutBatch, interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveGateAlongSegment = useCallback(
@@ -451,6 +465,8 @@ export function useEditorCommands({
       if (!pointer) {
         return;
       }
+      commitLayoutBatch();
+      beginLayoutBatch();
       setActiveGateDrag({
         gateId,
         lastPointer: toWorld(pointer)
@@ -459,7 +475,7 @@ export function useEditorCommands({
       setActiveBasketballPostDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [beginLayoutBatch, commitLayoutBatch, interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveBasketballPostAlongSegment = useCallback(
@@ -512,6 +528,8 @@ export function useEditorCommands({
       if (!pointer) {
         return;
       }
+      commitLayoutBatch();
+      beginLayoutBatch();
       setActiveBasketballPostDrag({
         basketballPostId,
         lastPointer: toWorld(pointer)
@@ -520,7 +538,7 @@ export function useEditorCommands({
       setActiveSegmentDrag(null);
       setActiveFloodlightColumnDrag(null);
     },
-    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [beginLayoutBatch, commitLayoutBatch, interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const moveFloodlightColumnAlongSegment = useCallback(
@@ -573,6 +591,8 @@ export function useEditorCommands({
       if (!pointer) {
         return;
       }
+      commitLayoutBatch();
+      beginLayoutBatch();
       setActiveFloodlightColumnDrag({
         floodlightColumnId,
         lastPointer: toWorld(pointer)
@@ -581,7 +601,7 @@ export function useEditorCommands({
       setActiveSegmentDrag(null);
       setActiveBasketballPostDrag(null);
     },
-    [interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
+    [beginLayoutBatch, commitLayoutBatch, interactionMode, isReadOnly, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag, stageRef, toWorld]
   );
 
   const startOrCommitDrawing = useCallback(
@@ -771,9 +791,10 @@ export function useEditorCommands({
           segmentId: preview.segment.id,
           centerOffsetMm: (preview.startOffsetMm + preview.endOffsetMm) / 2,
           side: preview.side,
-          widthMm: preview.widthMm as GoalUnitPlacement["widthMm"],
+          widthMm: preview.widthMm,
           depthMm: goalUnitDepthMm,
-          goalHeightMm: goalUnitHeightMm
+          goalHeightMm: goalUnitHeightMm,
+          hasBasketballPost: goalUnitHasBasketballPost
         };
         const nextStartOffsetMm = nextGoalUnit.centerOffsetMm - nextGoalUnit.widthMm / 2;
         const nextEndOffsetMm = nextGoalUnit.centerOffsetMm + nextGoalUnit.widthMm / 2;
@@ -807,6 +828,7 @@ export function useEditorCommands({
     [
       applyLayout,
       goalUnitDepthMm,
+      goalUnitHasBasketballPost,
       goalUnitHeightMm,
       setDrawChainStart,
       setDrawStart,
@@ -867,7 +889,8 @@ export function useEditorCommands({
           id: crypto.randomUUID(),
           segmentId: preview.segment.id,
           offsetMm: preview.offsetMm,
-          facing: preview.facing
+          facing: preview.facing,
+          heightMm: floodlightColumnHeightMm
         };
         const next = previous.filter(
           (placement) =>
@@ -887,6 +910,7 @@ export function useEditorCommands({
     },
     [
       applyFloodlightColumnPlacements,
+      floodlightColumnHeightMm,
       setDrawChainStart,
       setDrawStart,
       setSelectedBasketballPostId,
@@ -903,9 +927,9 @@ export function useEditorCommands({
           id: crypto.randomUUID(),
           segmentId: preview.segment.id,
           sectionHeightMm: kickboardSectionHeightMm,
-          thicknessMm: 50,
+          thicknessMm: kickboardThicknessMm,
           profile: kickboardProfile,
-          boardLengthMm: 2500
+          boardLengthMm: kickboardBoardLengthMm
         };
         const kickboards = (previous.kickboards ?? []).filter((attachment) => attachment.segmentId !== nextKickboard.segmentId);
         kickboards.push(nextKickboard);
@@ -916,7 +940,7 @@ export function useEditorCommands({
         };
       });
     },
-    [applyLayout, kickboardProfile, kickboardSectionHeightMm]
+    [applyLayout, kickboardBoardLengthMm, kickboardProfile, kickboardSectionHeightMm, kickboardThicknessMm]
   );
 
   const applySideNettingAttachment = useCallback(
@@ -1188,6 +1212,7 @@ export function useEditorCommands({
       const basketballPost = resolvedBasketballPostById.get(activeBasketballPostDrag.basketballPostId);
       if (!basketballPost) {
         setActiveBasketballPostDrag(null);
+        commitLayoutBatch();
         setPointerWorld(world);
         return;
       }
@@ -1225,6 +1250,7 @@ export function useEditorCommands({
       const floodlightColumn = resolvedFloodlightColumnById.get(activeFloodlightColumnDrag.floodlightColumnId);
       if (!floodlightColumn) {
         setActiveFloodlightColumnDrag(null);
+        commitLayoutBatch();
         setPointerWorld(world);
         return;
       }
@@ -1262,6 +1288,7 @@ export function useEditorCommands({
       const gate = resolvedGateById.get(activeGateDrag.gateId);
       if (!gate) {
         setActiveGateDrag(null);
+        commitLayoutBatch();
         setPointerWorld(world);
         return;
       }
@@ -1324,6 +1351,7 @@ export function useEditorCommands({
     basketballPostPreview,
     floodlightColumnPreview,
     gatePreview,
+    commitLayoutBatch,
     isReadOnly,
     isPanning,
     moveBasketballPostAlongSegment,
@@ -1347,12 +1375,31 @@ export function useEditorCommands({
   ]);
 
   const onStageMouseUp = useCallback((): void => {
+    const hadActiveDrag =
+      activeSegmentDrag !== null ||
+      activeGateDrag !== null ||
+      activeBasketballPostDrag !== null ||
+      activeFloodlightColumnDrag !== null;
     setActiveSegmentDrag(null);
     setActiveGateDrag(null);
     setActiveBasketballPostDrag(null);
     setActiveFloodlightColumnDrag(null);
+    if (hadActiveDrag) {
+      commitLayoutBatch();
+    }
     endPan();
-  }, [endPan, setActiveBasketballPostDrag, setActiveFloodlightColumnDrag, setActiveGateDrag, setActiveSegmentDrag]);
+  }, [
+    activeBasketballPostDrag,
+    activeFloodlightColumnDrag,
+    activeGateDrag,
+    activeSegmentDrag,
+    commitLayoutBatch,
+    endPan,
+    setActiveBasketballPostDrag,
+    setActiveFloodlightColumnDrag,
+    setActiveGateDrag,
+    setActiveSegmentDrag
+  ]);
 
   const onStageWheel = useCallback(
     (event: KonvaEventObject<WheelEvent>): void => {

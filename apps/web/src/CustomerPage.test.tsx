@@ -145,7 +145,9 @@ describe("CustomerPage", () => {
     expect(html).toContain("Drawing workspaces");
     expect(html).toContain("Edit profile");
     expect(html).toContain("Open workspace");
-    expect(html).toContain("Original");
+    expect(html).toContain("Current drawing: Original");
+    expect(html).toContain("0 revisions");
+    expect(html).not.toContain(">Original</button>");
     expect(html).toContain("Additional contacts");
     expect(html).toContain("Bob Smith");
     expect(html).toContain("bob@example.com");

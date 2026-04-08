@@ -68,10 +68,12 @@ export type DraggablePanel = "controls" | "itemCounts" | "postKey" | "tutorial";
 
 export type HistoryAction =
   | { type: "APPLY"; updater: (layout: LayoutModel) => LayoutModel }
+  | { type: "COMMIT_BATCH"; baseline: LayoutModel }
   | { type: "UNDO" }
   | { type: "REDO" }
   | { type: "RESET"; layout: LayoutModel }
-  | { type: "SET"; layout: LayoutModel };
+  | { type: "SET"; layout: LayoutModel }
+  | { type: "SET_APPLY"; updater: (layout: LayoutModel) => LayoutModel };
 
 export type InteractionMode =
   | "DRAW"
@@ -175,7 +177,7 @@ export interface BasketballPostInsertionPreview {
 
 export interface GoalUnitInsertionPreview extends RecessInsertionPreview {
   widthMm: number;
-  goalHeightMm: 3000 | 4000;
+  goalHeightMm: number;
 }
 
 export interface SegmentAttachmentPreview {

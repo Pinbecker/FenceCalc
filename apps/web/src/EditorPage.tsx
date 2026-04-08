@@ -5,6 +5,12 @@ import { EditorDrawingSaveModal } from "./EditorDrawingSaveModal";
 import { EditorLengthEditor } from "./EditorLengthEditor";
 import { EditorMenuBar } from "./EditorMenuBar";
 import { EditorWorkspaceShell } from "./EditorWorkspaceShell";
+import { getPricingConfig } from "./apiClient";
+import {
+  DEFAULT_EDITOR_PRICING_OPTIONS,
+  buildEditorPricingOptions,
+  type EditorPricingOptions,
+} from "./editor/pricingEditorOptions";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorDerivedState } from "./editor/useEditorDerivedState";
 import { useEditorInteractionPreviews } from "./editor/useEditorInteractionPreviews";
@@ -19,23 +25,18 @@ import {
   chooseGridStep,
   useEditorCanvasViewport,
   useElementSize,
-  BASKETBALL_ARM_LENGTH_OPTIONS_MM,
   formatHeightLabelFromMm,
   formatLengthMm,
   formatMetersInputFromMm,
   GATE_WIDTH_OPTIONS_MM,
-  GOAL_UNIT_HEIGHT_OPTIONS_MM,
-  GOAL_UNIT_WIDTH_OPTIONS_MM,
   getSegmentColor,
   INITIAL_VISIBLE_WIDTH_MM,
-  KICKBOARD_SECTION_HEIGHT_OPTIONS_MM,
   MAX_SCALE,
   MIN_SCALE,
   RECESS_DEPTH_OPTIONS_MM,
   RECESS_INPUT_STEP_M,
   RECESS_WIDTH_OPTIONS_MM,
   ROLL_FORM_HEIGHT_OPTIONS,
-  SIDE_NETTING_HEIGHT_OPTIONS_MM,
   TWIN_BAR_HEIGHT_OPTIONS,
   useEditorKeyboardShortcuts,
 } from "./editor";
@@ -67,6 +68,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const [isItemCountsVisible, setIsItemCountsVisible] = useState(false);
   const [isPostKeyVisible, setIsPostKeyVisible] = useState(false);
   const [drawingModalMode, setDrawingModalMode] = useState<"saveAs" | null>(null);
+  const [editorPricingOptions, setEditorPricingOptions] = useState<EditorPricingOptions>(
+    DEFAULT_EDITOR_PRICING_OPTIONS,
+  );
   const {
     currentLayout,
     segments,
@@ -84,12 +88,100 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyGatePlacements,
     applyBasketballPostPlacements,
     applyFloodlightColumnPlacements,
+    beginLayoutBatch,
+    commitLayoutBatch,
     resetLayout,
     undoLayout,
     redoLayout,
   } = useEditorLayoutHistory();
   const shellState = useEditorShellState();
   const selectionState = useEditorSelectionState(shellState.interactionMode);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const pricingConfig = await getPricingConfig();
+        if (!cancelled) {
+          setEditorPricingOptions(buildEditorPricingOptions(pricingConfig.workbook));
+        }
+      } catch {
+        if (!cancelled) {
+          setEditorPricingOptions(DEFAULT_EDITOR_PRICING_OPTIONS);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const firstKickboardOption = editorPricingOptions.kickboardOptions[0];
+    if (
+      firstKickboardOption &&
+      !editorPricingOptions.kickboardOptions.some(
+        (option) =>
+          option.sectionHeightMm === shellState.kickboardSectionHeightMm &&
+          option.thicknessMm === shellState.kickboardThicknessMm &&
+          option.profile === shellState.kickboardProfile &&
+          option.boardLengthMm === shellState.kickboardBoardLengthMm,
+      )
+    ) {
+      shellState.setKickboardSectionHeightMm(firstKickboardOption.sectionHeightMm);
+      shellState.setKickboardThicknessMm(firstKickboardOption.thicknessMm);
+      shellState.setKickboardProfile(firstKickboardOption.profile);
+      shellState.setKickboardBoardLengthMm(firstKickboardOption.boardLengthMm);
+    }
+    const firstGoalUnitOption = editorPricingOptions.goalUnitOptions[0];
+    if (
+      firstGoalUnitOption &&
+      !editorPricingOptions.goalUnitOptions.some(
+        (option) =>
+          option.widthMm === shellState.goalUnitWidthMm &&
+          option.goalHeightMm === shellState.goalUnitHeightMm &&
+          option.hasBasketballPost === shellState.goalUnitHasBasketballPost,
+      )
+    ) {
+      shellState.setGoalUnitWidthMm(firstGoalUnitOption.widthMm);
+      shellState.setGoalUnitHeightMm(firstGoalUnitOption.goalHeightMm);
+      shellState.setGoalUnitHasBasketballPost(firstGoalUnitOption.hasBasketballPost);
+    }
+    const firstBasketballArm = editorPricingOptions.basketballArmLengthOptionsMm[0];
+    if (firstBasketballArm && !editorPricingOptions.basketballArmLengthOptionsMm.includes(shellState.basketballArmLengthMm)) {
+      shellState.setBasketballArmLengthMm(firstBasketballArm);
+    }
+    const firstFloodlightHeight = editorPricingOptions.floodlightColumnHeightOptionsMm[0];
+    if (firstFloodlightHeight && !editorPricingOptions.floodlightColumnHeightOptionsMm.includes(shellState.floodlightColumnHeightMm)) {
+      shellState.setFloodlightColumnHeightMm(firstFloodlightHeight);
+    }
+    const firstSideNettingHeight = editorPricingOptions.sideNettingHeightOptionsMm[0];
+    if (firstSideNettingHeight && !editorPricingOptions.sideNettingHeightOptionsMm.includes(shellState.sideNettingHeightMm)) {
+      shellState.setSideNettingHeightMm(firstSideNettingHeight);
+    }
+  }, [
+    editorPricingOptions,
+    shellState.basketballArmLengthMm,
+    shellState.floodlightColumnHeightMm,
+    shellState.goalUnitHasBasketballPost,
+    shellState.goalUnitHeightMm,
+    shellState.goalUnitWidthMm,
+    shellState.kickboardBoardLengthMm,
+    shellState.kickboardProfile,
+    shellState.kickboardSectionHeightMm,
+    shellState.kickboardThicknessMm,
+    shellState.setBasketballArmLengthMm,
+    shellState.setFloodlightColumnHeightMm,
+    shellState.setGoalUnitHasBasketballPost,
+    shellState.setGoalUnitHeightMm,
+    shellState.setGoalUnitWidthMm,
+    shellState.setKickboardBoardLengthMm,
+    shellState.setKickboardProfile,
+    shellState.setKickboardSectionHeightMm,
+    shellState.setKickboardThicknessMm,
+    shellState.setSideNettingHeightMm,
+    shellState.sideNettingHeightMm,
+  ]);
   const isOptimizationFrozen =
     isEndpointDragActive ||
     selectionState.activeSegmentDrag !== null ||
@@ -350,6 +442,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     applyGatePlacements,
     applyBasketballPostPlacements,
     applyFloodlightColumnPlacements,
+    beginLayoutBatch,
+    commitLayoutBatch,
     segments,
     segmentsById,
     resolvedGateById,
@@ -360,12 +454,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isReadOnly: isQuotedViewOnly,
     interactionMode,
     goalUnitDepthMm: shellState.goalUnitDepthMm,
+    goalUnitHasBasketballPost: shellState.goalUnitHasBasketballPost,
     goalUnitHeightMm: shellState.goalUnitHeightMm,
     gateType: shellState.gateType,
     basketballPlacementType: shellState.basketballPlacementType,
     basketballArmLengthMm: shellState.basketballArmLengthMm,
     kickboardSectionHeightMm: shellState.kickboardSectionHeightMm,
     kickboardProfile: shellState.kickboardProfile,
+    kickboardThicknessMm: shellState.kickboardThicknessMm,
+    kickboardBoardLengthMm: shellState.kickboardBoardLengthMm,
+    floodlightColumnHeightMm: shellState.floodlightColumnHeightMm,
     sideNettingHeightMm: shellState.sideNettingHeightMm,
     pendingPitchDividerStart: shellState.pendingPitchDividerStart,
     drawStart: selectionState.drawStart,
@@ -646,20 +744,24 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       recessDepthInputM: shellState.recessDepthInputM,
       goalUnitWidthMm: shellState.goalUnitWidthMm,
       goalUnitHeightMm: shellState.goalUnitHeightMm,
+      goalUnitHasBasketballPost: shellState.goalUnitHasBasketballPost,
       basketballPlacementType: shellState.basketballPlacementType,
       basketballArmLengthMm: shellState.basketballArmLengthMm,
       kickboardSectionHeightMm: shellState.kickboardSectionHeightMm,
       kickboardProfile: shellState.kickboardProfile,
+      kickboardThicknessMm: shellState.kickboardThicknessMm,
+      kickboardBoardLengthMm: shellState.kickboardBoardLengthMm,
+      floodlightColumnHeightMm: shellState.floodlightColumnHeightMm,
       sideNettingHeightMm: shellState.sideNettingHeightMm,
       gateType: shellState.gateType,
       customGateWidthInputM: shellState.customGateWidthInputM,
       recessWidthOptionsMm: RECESS_WIDTH_OPTIONS_MM,
       recessDepthOptionsMm: RECESS_DEPTH_OPTIONS_MM,
-      goalUnitWidthOptionsMm: GOAL_UNIT_WIDTH_OPTIONS_MM,
-      goalUnitHeightOptionsMm: GOAL_UNIT_HEIGHT_OPTIONS_MM,
-      basketballArmLengthOptionsMm: BASKETBALL_ARM_LENGTH_OPTIONS_MM,
-      kickboardSectionHeightOptionsMm: KICKBOARD_SECTION_HEIGHT_OPTIONS_MM,
-      sideNettingHeightOptionsMm: SIDE_NETTING_HEIGHT_OPTIONS_MM,
+      goalUnitOptions: editorPricingOptions.goalUnitOptions,
+      basketballArmLengthOptionsMm: editorPricingOptions.basketballArmLengthOptionsMm,
+      floodlightColumnHeightOptionsMm: editorPricingOptions.floodlightColumnHeightOptionsMm,
+      kickboardOptions: editorPricingOptions.kickboardOptions,
+      sideNettingHeightOptionsMm: editorPricingOptions.sideNettingHeightOptionsMm,
       gateWidthOptionsMm: GATE_WIDTH_OPTIONS_MM,
       formatLengthMm,
       formatMetersInputFromMm,
@@ -675,11 +777,15 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onNormalizeRecessInputs: normalizeRecessInputs,
       onSetGoalUnitWidthMm: shellState.setGoalUnitWidthMm,
       onSetGoalUnitHeightMm: shellState.setGoalUnitHeightMm,
+      onSetGoalUnitHasBasketballPost: shellState.setGoalUnitHasBasketballPost,
       onSetGateType: shellState.setGateType,
       onSetBasketballPlacementType: shellState.setBasketballPlacementType,
       onSetBasketballArmLengthMm: shellState.setBasketballArmLengthMm,
       onSetKickboardSectionHeightMm: shellState.setKickboardSectionHeightMm,
       onSetKickboardProfile: shellState.setKickboardProfile,
+      onSetKickboardThicknessMm: shellState.setKickboardThicknessMm,
+      onSetKickboardBoardLengthMm: shellState.setKickboardBoardLengthMm,
+      onSetFloodlightColumnHeightMm: shellState.setFloodlightColumnHeightMm,
       onSetSideNettingHeightMm: shellState.setSideNettingHeightMm,
       onCustomGateWidthInputChange,
       onNormalizeGateInputs: normalizeGateInputs,
@@ -782,6 +888,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         if (isQuotedViewOnly) {
           return;
         }
+        commitLayoutBatch();
+        beginLayoutBatch();
         setIsEndpointDragActive(true);
       },
       onEndSegmentEndpointDrag: () => {
@@ -789,6 +897,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
           return;
         }
         setIsEndpointDragActive(false);
+        commitLayoutBatch();
       },
       onSelectGate: (gateId: string) => {
         selectionState.setSelectedSegmentId(null);

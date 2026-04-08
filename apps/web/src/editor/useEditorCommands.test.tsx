@@ -130,6 +130,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
   const updatePan = vi.fn(() => false);
   const endPan = vi.fn();
   const zoomAtPointer = vi.fn();
+  const beginLayoutBatch = vi.fn();
+  const commitLayoutBatch = vi.fn();
   const toWorld = vi.fn((point: { x: number; y: number }) => ({ x: point.x, y: point.y }));
   const resolveDrawPoint = vi.fn((point: PointMm) => ({
     point: { x: Math.round(point.x / 100) * 100, y: Math.round(point.y / 100) * 100 },
@@ -217,6 +219,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         applyGatePlacements,
         applyBasketballPostPlacements,
         applyFloodlightColumnPlacements,
+        beginLayoutBatch,
+        commitLayoutBatch,
         segmentsById,
         resolvedGateById,
         resolvedBasketballPostById,
@@ -284,6 +288,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
 
   return {
     beginPan,
+    beginLayoutBatch,
+    commitLayoutBatch,
     endPan,
     get commands() {
       return commands;
@@ -707,7 +713,8 @@ describe("useEditorCommands", () => {
         id: "88888888-8888-4888-8888-888888888888",
         segmentId: "s1",
         offsetMm: 2500,
-        facing: "RIGHT"
+        facing: "RIGHT",
+        heightMm: 6000
       }
     ]);
 

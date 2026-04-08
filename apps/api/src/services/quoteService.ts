@@ -8,7 +8,10 @@ import { buildDefaultPricingConfig } from "@fence-estimator/contracts";
 import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
 import { writeAuditLog } from "../auditLogSupport.js";
-import { mergeDrawingWorkspaceCommercialManualEntries } from "../drawingWorkspaceEstimateSupport.js";
+import {
+  buildDrawingWorkspaceEstimateOptions,
+  mergeDrawingWorkspaceCommercialManualEntries,
+} from "../drawingWorkspaceEstimateSupport.js";
 import type { AppRepository } from "../repository.js";
 
 interface QuoteActorContext {
@@ -135,7 +138,13 @@ export async function createQuoteForDrawing(
         authenticated.company.id,
         authenticated.user.id,
         createdAtIso,
-        buildPricedEstimate(drawing, pricingConfig, ancillaryItems, mergedManualEntries),
+        buildPricedEstimate(
+          drawing,
+          pricingConfig,
+          ancillaryItems,
+          mergedManualEntries,
+          buildDrawingWorkspaceEstimateOptions(workspace.commercialInputs),
+        ),
       ),
     );
 
@@ -198,7 +207,13 @@ export async function createQuoteForDrawingWorkspace(
         authenticated.company.id,
         authenticated.user.id,
         createdAtIso,
-        buildPricedEstimate(drawing, pricingConfig, ancillaryItems, mergedManualEntries),
+        buildPricedEstimate(
+          drawing,
+          pricingConfig,
+          ancillaryItems,
+          mergedManualEntries,
+          buildDrawingWorkspaceEstimateOptions(workspace.commercialInputs),
+        ),
       ),
     );
 

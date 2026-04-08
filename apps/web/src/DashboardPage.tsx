@@ -14,6 +14,7 @@ import { listCompanyDrawingTasks } from "./apiClient";
 import {
   buildTaskWorkspaceNavigationQuery,
   buildWorkspaceNavigationQuery,
+  formatRevisionCountFromDrawingCount,
 } from "./drawingWorkspace";
 import { formatTaskDate, getTaskDueLabel, getTaskDueTone } from "./taskPresentation";
 import type { PortalRoute } from "./useHashRoute";
@@ -218,7 +219,7 @@ export function DashboardPage({
                     {WORKSPACE_STATUS_LABELS[workspace.stage]}
                   </span>
                   <span className="portal-dashboard-row-version">
-                    {workspace.drawingCount} revision{workspace.drawingCount === 1 ? "" : "s"}
+                    {formatRevisionCountFromDrawingCount(workspace.drawingCount)}
                   </span>
                   <span className="portal-dashboard-row-cta">Open</span>
                 </div>

@@ -21,6 +21,9 @@ const DEFAULT_GOAL_UNIT_HEIGHT_MM: GoalUnitHeightMm = 3000;
 const DEFAULT_GOAL_UNIT_DEPTH_MM = 1200;
 const DEFAULT_BASKETBALL_ARM_LENGTH_MM: BasketballArmLengthMm = 1800;
 const DEFAULT_KICKBOARD_SECTION_HEIGHT_MM: KickboardSectionHeightMm = 200;
+const DEFAULT_KICKBOARD_THICKNESS_MM = 50;
+const DEFAULT_KICKBOARD_BOARD_LENGTH_MM = 2500;
+const DEFAULT_FLOODLIGHT_COLUMN_HEIGHT_MM = 6000;
 const DEFAULT_SIDE_NETTING_HEIGHT_MM = 2000;
 
 const INITIAL_PANEL_OFFSETS: Record<DraggablePanel, PanelOffset> = {
@@ -40,11 +43,15 @@ export function useEditorShellState() {
   const [recessSide, setRecessSide] = useState<RecessSidePreference>("AUTO");
   const [goalUnitWidthMm, setGoalUnitWidthMm] = useState<GoalUnitWidthMm>(DEFAULT_GOAL_UNIT_WIDTH_MM);
   const [goalUnitHeightMm, setGoalUnitHeightMm] = useState<GoalUnitHeightMm>(DEFAULT_GOAL_UNIT_HEIGHT_MM);
+  const [goalUnitHasBasketballPost, setGoalUnitHasBasketballPost] = useState(false);
   const [goalUnitDepthMm] = useState<number>(DEFAULT_GOAL_UNIT_DEPTH_MM);
   const [basketballPlacementType, setBasketballPlacementType] = useState<"DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST">("DEDICATED_POST");
   const [basketballArmLengthMm, setBasketballArmLengthMm] = useState<BasketballArmLengthMm>(DEFAULT_BASKETBALL_ARM_LENGTH_MM);
   const [kickboardSectionHeightMm, setKickboardSectionHeightMm] = useState<KickboardSectionHeightMm>(DEFAULT_KICKBOARD_SECTION_HEIGHT_MM);
   const [kickboardProfile, setKickboardProfile] = useState<KickboardProfile>("SQUARE");
+  const [kickboardThicknessMm, setKickboardThicknessMm] = useState<number>(DEFAULT_KICKBOARD_THICKNESS_MM);
+  const [kickboardBoardLengthMm, setKickboardBoardLengthMm] = useState<number>(DEFAULT_KICKBOARD_BOARD_LENGTH_MM);
+  const [floodlightColumnHeightMm, setFloodlightColumnHeightMm] = useState<number>(DEFAULT_FLOODLIGHT_COLUMN_HEIGHT_MM);
   const [sideNettingHeightMm, setSideNettingHeightMm] = useState<number>(DEFAULT_SIDE_NETTING_HEIGHT_MM);
   const [pendingPitchDividerStart, setPendingPitchDividerStart] = useState<PitchDividerAnchorPreview | null>(null);
   const [pendingSideNettingStart, setPendingSideNettingStart] = useState<PitchDividerAnchorPreview | null>(null);
@@ -69,11 +76,15 @@ export function useEditorShellState() {
     recessSide,
     goalUnitWidthMm,
     goalUnitHeightMm,
+    goalUnitHasBasketballPost,
     goalUnitDepthMm,
     basketballPlacementType,
     basketballArmLengthMm,
     kickboardSectionHeightMm,
     kickboardProfile,
+    kickboardThicknessMm,
+    kickboardBoardLengthMm,
+    floodlightColumnHeightMm,
     sideNettingHeightMm,
     pendingPitchDividerStart,
     pendingSideNettingStart,
@@ -95,10 +106,14 @@ export function useEditorShellState() {
     setRecessSide,
     setGoalUnitWidthMm,
     setGoalUnitHeightMm,
+    setGoalUnitHasBasketballPost,
     setBasketballPlacementType,
     setBasketballArmLengthMm,
     setKickboardSectionHeightMm,
     setKickboardProfile,
+    setKickboardThicknessMm,
+    setKickboardBoardLengthMm,
+    setFloodlightColumnHeightMm,
     setSideNettingHeightMm,
     setPendingPitchDividerStart,
     setPendingSideNettingStart,

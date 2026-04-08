@@ -81,7 +81,7 @@ describe("buildEstimateFromDrawing", () => {
 
     expect(panelsGroup?.rows.some((row) => row.quantity === 2)).toBe(true);
     expect(panelsGroup?.subtotalCost).toBeGreaterThan(0);
-    expect(floodlightGroup?.rows.find((row) => row.itemCode === "MAT_FLOODLIGHT_COLUMN")?.quantity).toBe(1);
+    expect(floodlightGroup?.rows.find((row) => row.itemCode === "MAT_FLOODLIGHT_COLUMN_6000")?.quantity).toBe(1);
     expect(basketballGroup?.rows.find((row) => row.itemCode === "MAT_BASKETBALL_DEDICATED_1200")?.quantity).toBe(1);
     expect(result.groups.map((group) => group.key)).toContain("commercial");
     expect(result.totals.totalCost).toBeGreaterThan(0);

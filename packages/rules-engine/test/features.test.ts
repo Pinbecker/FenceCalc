@@ -43,10 +43,19 @@ describe("feature helpers", () => {
         widthMm: 3000,
         depthMm: 1200,
         goalHeightMm: 4000
+      },
+      {
+        id: "goal-custom",
+        segmentId: "host",
+        centerOffsetMm: 10500,
+        side: "RIGHT",
+        widthMm: 1000,
+        depthMm: 1200,
+        goalHeightMm: 4200
       }
     ]);
 
-    expect(placements.map((placement) => placement.enclosureHeightMm)).toEqual([3000, 4000]);
+    expect(placements.map((placement) => placement.enclosureHeightMm)).toEqual([3000, 4000, 4500]);
   });
 
   it("finds an opposite basketball pair candidate on the opposite fence line", () => {

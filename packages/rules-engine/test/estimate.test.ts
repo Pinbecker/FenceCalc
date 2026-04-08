@@ -48,7 +48,7 @@ describe("estimateLayout", () => {
     expect(result.corners.unclassified).toBe(1);
   });
 
-  it("classifies rectangle corners as external", () => {
+  it("classifies rectangle corners as internal", () => {
     const layout: LayoutModel = {
       segments: [
         {
@@ -80,8 +80,130 @@ describe("estimateLayout", () => {
 
     const result = estimateLayout(layout);
     expect(result.corners.total).toBe(4);
-    expect(result.corners.external).toBe(4);
-    expect(result.corners.internal).toBe(0);
+    expect(result.corners.internal).toBe(4);
+    expect(result.corners.external).toBe(0);
+    expect(result.corners.unclassified).toBe(0);
+  });
+
+  it("classifies the front corners of a recess as external", () => {
+    const layout: LayoutModel = {
+      segments: [
+        {
+          id: "s1",
+          start: { x: 0, y: 0 },
+          end: { x: 12000, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s2",
+          start: { x: 12000, y: 0 },
+          end: { x: 12000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s3",
+          start: { x: 12000, y: 9000 },
+          end: { x: 8000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s4",
+          start: { x: 8000, y: 9000 },
+          end: { x: 8000, y: 6000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s5",
+          start: { x: 8000, y: 6000 },
+          end: { x: 4000, y: 6000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s6",
+          start: { x: 4000, y: 6000 },
+          end: { x: 4000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s7",
+          start: { x: 4000, y: 9000 },
+          end: { x: 0, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s8",
+          start: { x: 0, y: 9000 },
+          end: { x: 0, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        }
+      ]
+    };
+
+    const result = estimateLayout(layout);
+    expect(result.corners.total).toBe(8);
+    expect(result.corners.internal).toBe(6);
+    expect(result.corners.external).toBe(2);
+    expect(result.corners.unclassified).toBe(0);
+  });
+
+  it("can collapse external corners back into internal corners", () => {
+    const layout: LayoutModel = {
+      segments: [
+        {
+          id: "s1",
+          start: { x: 0, y: 0 },
+          end: { x: 12000, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s2",
+          start: { x: 12000, y: 0 },
+          end: { x: 12000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s3",
+          start: { x: 12000, y: 9000 },
+          end: { x: 8000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s4",
+          start: { x: 8000, y: 9000 },
+          end: { x: 8000, y: 6000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s5",
+          start: { x: 8000, y: 6000 },
+          end: { x: 4000, y: 6000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s6",
+          start: { x: 4000, y: 6000 },
+          end: { x: 4000, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s7",
+          start: { x: 4000, y: 9000 },
+          end: { x: 0, y: 9000 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        },
+        {
+          id: "s8",
+          start: { x: 0, y: 9000 },
+          end: { x: 0, y: 0 },
+          spec: { system: "TWIN_BAR", height: "2m" }
+        }
+      ]
+    };
+
+    const result = estimateLayout(layout, { externalCornersEnabled: false });
+    expect(result.corners.total).toBe(8);
+    expect(result.corners.internal).toBe(8);
+    expect(result.corners.external).toBe(0);
     expect(result.corners.unclassified).toBe(0);
   });
 
@@ -349,7 +471,8 @@ describe("estimateLayout", () => {
     const result = estimateDrawingLayout(layout);
 
     expect(result.corners.total).toBe(3);
-    expect(result.corners.external).toBe(3);
+    expect(result.corners.internal).toBe(3);
+    expect(result.corners.external).toBe(0);
     expect(result.posts.total).toBe(11);
   });
 });

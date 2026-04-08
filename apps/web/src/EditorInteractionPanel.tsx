@@ -309,7 +309,7 @@ export function EditorInteractionPanel({
         <>
           <label>
             Goal Unit Width
-            <select value={goalUnitWidthMm} onChange={(event) => onSetGoalUnitWidthMm(Number(event.target.value) as GoalUnitWidthMm)}>
+            <select value={goalUnitWidthMm} onChange={(event) => onSetGoalUnitWidthMm(Number(event.target.value))}>
               {goalUnitWidthOptionsMm.map((value) => (
                 <option key={value} value={value}>
                   {formatLengthMm(value)}
@@ -319,7 +319,7 @@ export function EditorInteractionPanel({
           </label>
           <label>
             Goal Unit Height
-            <select value={goalUnitHeightMm} onChange={(event) => onSetGoalUnitHeightMm(Number(event.target.value) as GoalUnitHeightMm)}>
+            <select value={goalUnitHeightMm} onChange={(event) => onSetGoalUnitHeightMm(Number(event.target.value))}>
               {goalUnitHeightOptionsMm.map((value) => (
                 <option key={value} value={value}>
                   {formatLengthMm(value)}
@@ -396,7 +396,7 @@ export function EditorInteractionPanel({
           {basketballPlacementType === "DEDICATED_POST" ? (
             <label>
               Arm Length
-              <select value={basketballArmLengthMm} onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value) as BasketballArmLengthMm)}>
+              <select value={basketballArmLengthMm} onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value))}>
                 {basketballArmLengthOptionsMm.map((value) => (
                   <option key={value} value={value}>
                     {formatLengthMm(value)}
@@ -433,7 +433,7 @@ export function EditorInteractionPanel({
         <>
           <label>
             Kickboard Section
-            <select value={kickboardSectionHeightMm} onChange={(event) => onSetKickboardSectionHeightMm(Number(event.target.value) as KickboardSectionHeightMm)}>
+            <select value={kickboardSectionHeightMm} onChange={(event) => onSetKickboardSectionHeightMm(Number(event.target.value))}>
               {kickboardSectionHeightOptionsMm.map((value) => (
                 <option key={value} value={value}>
                   {value} x 50
@@ -443,7 +443,7 @@ export function EditorInteractionPanel({
           </label>
           <label>
             Profile
-            <select value={kickboardProfile} onChange={(event) => onSetKickboardProfile(event.target.value as KickboardProfile)}>
+            <select value={kickboardProfile} onChange={(event) => onSetKickboardProfile(event.target.value)}>
               <option value="SQUARE">Square</option>
               <option value="CHAMFERED">Chamfered</option>
             </select>

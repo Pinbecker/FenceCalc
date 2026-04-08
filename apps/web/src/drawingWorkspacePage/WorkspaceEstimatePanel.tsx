@@ -30,6 +30,7 @@ interface WorkspaceEstimatePanelProps {
   ancillaryItems: AncillaryEstimateItem[];
   materialSections: EstimateDisplaySections;
   labourSections: EstimateDisplaySections;
+  externalCornersEnabled: boolean;
   onCloseEstimate: () => void;
   onGenerateQuotePdf: () => void;
   onAddAncillaryItem: () => void;
@@ -40,6 +41,7 @@ interface WorkspaceEstimatePanelProps {
   ) => void;
   onRemoveAncillaryItem: (itemId: string) => void;
   onManualEntryChange: (code: string, quantity: number) => void;
+  onExternalCornersEnabledChange: (enabled: boolean) => void;
 }
 
 export function WorkspaceEstimatePanel({
@@ -53,12 +55,14 @@ export function WorkspaceEstimatePanel({
   ancillaryItems,
   materialSections,
   labourSections,
+  externalCornersEnabled,
   onCloseEstimate,
   onGenerateQuotePdf,
   onAddAncillaryItem,
   onUpdateAncillaryItem,
   onRemoveAncillaryItem,
   onManualEntryChange,
+  onExternalCornersEnabledChange,
 }: WorkspaceEstimatePanelProps) {
   return (
     <>
@@ -67,10 +71,9 @@ export function WorkspaceEstimatePanel({
           <div>
             <span className="portal-section-kicker">Estimate</span>
             <h2>{`${activeDrawing.name} (${getRevisionLabel(activeDrawing)})`}</h2>
-            <p className="portal-empty-copy" style={{ margin: "6px 0 0" }}>
-              {isSavingControls
-                ? "Saving workspace defaults..."
-                : "Changes here save automatically. Labour days are calculated from the labour total divided by the labour day value, then rounded up."}
+            <p className="portal-empty-copy estimate-control-copy">
+              Changes here save automatically. Labour days are calculated from the labour total
+              divided by the labour day value, then rounded up.
             </p>
           </div>
           <div className="portal-header-actions">
@@ -196,6 +199,18 @@ export function WorkspaceEstimatePanel({
                   )
                 }
               />
+            </label>
+            <label className="workbook-toggle-field">
+              <span>External corners</span>
+              <input
+                type="checkbox"
+                checked={externalCornersEnabled}
+                disabled={isSavingControls}
+                onChange={(event) => onExternalCornersEnabledChange(event.target.checked)}
+              />
+              <small>
+                Switch off to treat every classified corner as an internal corner in this estimate.
+              </small>
             </label>
             <label>
               <span>Hole count</span>

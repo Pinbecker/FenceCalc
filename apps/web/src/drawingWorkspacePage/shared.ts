@@ -102,6 +102,7 @@ export function buildInitialManualEntries(
 
 export function buildCommercialInputs(
   pricedEstimate: PricedEstimateResult | null,
+  currentInputs: DrawingWorkspaceCommercialInputs | null = null,
 ): DrawingWorkspaceCommercialInputs | null {
   const workbook = pricedEstimate?.workbook;
   if (!workbook) {
@@ -121,9 +122,30 @@ export function buildCommercialInputs(
     clearSpoilsRatePerHole: workbook.settings.clearSpoilsRatePerHole,
     hardDig: (workbook.settings.hardDigRatePerHole ?? 0) > 0,
     clearSpoils: (workbook.settings.clearSpoilsRatePerHole ?? 0) > 0,
+    externalCornersEnabled: currentInputs?.externalCornersEnabled ?? true,
   };
 }
 
-export function serializeCommercialInputs(inputs: DrawingWorkspaceCommercialInputs | null): string | null {
-  return inputs ? JSON.stringify(inputs) : null;
+export function serializeCommercialInputs(
+  inputs: DrawingWorkspaceCommercialInputs | null,
+): string | null {
+  if (!inputs) {
+    return null;
+  }
+
+  return JSON.stringify({
+    labourOverheadPercent: inputs.labourOverheadPercent,
+    labourDayValue: inputs.labourDayValue,
+    travelLodgePerDay: inputs.travelLodgePerDay,
+    travelDays: inputs.travelDays,
+    markupRate: inputs.markupRate,
+    markupUnits: inputs.markupUnits,
+    distributionCharge: inputs.distributionCharge,
+    concretePricePerCube: inputs.concretePricePerCube,
+    hardDig: inputs.hardDig,
+    clearSpoils: inputs.clearSpoils,
+    hardDigRatePerHole: inputs.hardDigRatePerHole,
+    clearSpoilsRatePerHole: inputs.clearSpoilsRatePerHole,
+    externalCornersEnabled: inputs.externalCornersEnabled ?? true,
+  });
 }

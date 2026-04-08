@@ -1,16 +1,11 @@
 import { z } from "zod";
 import {
-  BASKETBALL_ARM_LENGTHS_MM,
   DRAWING_STATUSES,
   FENCE_HEIGHT_KEYS,
-  GOAL_UNIT_HEIGHTS_MM,
-  GOAL_UNIT_WIDTHS_MM,
   JOB_STAGES,
-  KICKBOARD_SECTION_HEIGHTS_MM,
   PITCH_DIVIDER_MAX_SPAN_MM,
   ROLL_FORM_HEIGHT_KEYS,
   SIDE_NETTING_EXTENDED_POST_INTERVAL,
-  SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM,
   TWIN_BAR_HEIGHT_KEYS,
 } from "./domain.js";
 import { PRICING_ITEM_CATEGORIES } from "./estimating.js";
@@ -20,24 +15,7 @@ import {
   PRICING_WORKBOOK_SHEETS,
 } from "./pricingWorkbook.js";
 
-const goalUnitWidthMmSchema = z.union([
-  z.literal(GOAL_UNIT_WIDTHS_MM[0]),
-  z.literal(GOAL_UNIT_WIDTHS_MM[1]),
-  z.literal(GOAL_UNIT_WIDTHS_MM[2]),
-]);
-const goalUnitHeightMmSchema = z.union([
-  z.literal(GOAL_UNIT_HEIGHTS_MM[0]),
-  z.literal(GOAL_UNIT_HEIGHTS_MM[1]),
-]);
-const basketballArmLengthMmSchema = z.union([
-  z.literal(BASKETBALL_ARM_LENGTHS_MM[0]),
-  z.literal(BASKETBALL_ARM_LENGTHS_MM[1]),
-]);
-const kickboardSectionHeightMmSchema = z.union([
-  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[0]),
-  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[1]),
-  z.literal(KICKBOARD_SECTION_HEIGHTS_MM[2]),
-]);
+const editorDimensionMmSchema = z.number().finite().positive().max(50_000);
 
 export const pointMmSchema = z.object({
   x: z.number().finite(),
@@ -108,9 +86,10 @@ export const goalUnitPlacementSchema = z.object({
   segmentId: z.string().min(1),
   centerOffsetMm: z.number().finite().nonnegative(),
   side: inlineFeatureFacingSchema,
-  widthMm: goalUnitWidthMmSchema,
+  widthMm: editorDimensionMmSchema,
   depthMm: z.number().finite().positive(),
-  goalHeightMm: goalUnitHeightMmSchema,
+  goalHeightMm: editorDimensionMmSchema,
+  hasBasketballPost: z.boolean().default(false),
 });
 export const basketballFeaturePlacementSchema = z
   .object({
@@ -124,7 +103,7 @@ export const basketballFeaturePlacementSchema = z
     mountingMode: z
       .enum(["PROJECTING_ARM", "POST_MOUNTED", "GOAL_UNIT_REAR_CENTER"])
       .default("PROJECTING_ARM"),
-    armLengthMm: basketballArmLengthMmSchema.optional(),
+    armLengthMm: editorDimensionMmSchema.optional(),
     pairedFeatureId: z.string().min(1).nullable().optional(),
     replacesIntermediatePost: z.boolean().default(true),
     goalUnitId: z.string().min(1).nullable().optional(),
@@ -179,14 +158,15 @@ export const floodlightColumnPlacementSchema = z.object({
   segmentId: z.string().min(1),
   offsetMm: z.number().finite().nonnegative(),
   facing: inlineFeatureFacingSchema,
+  heightMm: editorDimensionMmSchema.default(6000),
 });
 export const kickboardAttachmentSchema = z.object({
   id: z.string().min(1),
   segmentId: z.string().min(1),
-  sectionHeightMm: kickboardSectionHeightMmSchema,
-  thicknessMm: z.literal(50),
-  profile: z.enum(["SQUARE", "CHAMFERED"]),
-  boardLengthMm: z.literal(2500),
+  sectionHeightMm: editorDimensionMmSchema,
+  thicknessMm: editorDimensionMmSchema.default(50),
+  profile: z.string().trim().min(1).max(80),
+  boardLengthMm: editorDimensionMmSchema.default(2500),
 });
 export const segmentAnchorSchema = z.object({
   segmentId: z.string().min(1),
@@ -200,7 +180,7 @@ export const pitchDividerPlacementSchema = z.object({
 export const sideNettingAttachmentSchema = z.object({
   id: z.string().min(1),
   segmentId: z.string().min(1),
-  additionalHeightMm: z.number().finite().positive().max(SIDE_NETTING_MAX_ADDITIONAL_HEIGHT_MM),
+  additionalHeightMm: editorDimensionMmSchema,
   startOffsetMm: z.number().finite().nonnegative().optional(),
   endOffsetMm: z.number().finite().nonnegative().optional(),
   extendedPostInterval: z.literal(SIDE_NETTING_EXTENDED_POST_INTERVAL),
@@ -1037,6 +1017,7 @@ export const jobCommercialInputsSchema = z.object({
   markupUnits: z.number().finite().min(0).optional(),
   hardDig: z.boolean().optional(),
   clearSpoils: z.boolean().optional(),
+  externalCornersEnabled: z.boolean().optional(),
 });
 export const drawingWorkspaceCommercialInputsSchema = jobCommercialInputsSchema;
 

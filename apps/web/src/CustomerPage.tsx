@@ -14,6 +14,7 @@ import { DrawingPreview } from "./DrawingPreview";
 import {
   buildCustomerWorkspaceCards,
   buildWorkspaceNavigationQuery,
+  formatRevisionCount,
   getRevisionLabel,
 } from "./drawingWorkspace";
 import type { PortalRoute } from "./useHashRoute";
@@ -523,11 +524,11 @@ export function CustomerPage({
                   <div className="portal-customer-drawing-card-head">
                     <div className="portal-customer-drawing-card-copy">
                       <h3>{card.workspace.name}</h3>
-                      <span>Latest revision: {getRevisionLabel(latestRevision)}</span>
+                      <span>Current drawing: {getRevisionLabel(latestRevision)}</span>
                     </div>
                     <div className="portal-customer-drawing-card-badges">
                       <span className="portal-customer-drawing-badge">
-                        {card.revisionCount} revision{card.revisionCount === 1 ? "" : "s"}
+                        {formatRevisionCount(card.revisionCount)}
                       </span>
                       {card.workspace.isArchived ? (
                         <span className="portal-customer-drawing-badge is-archived">Archived</span>
@@ -542,21 +543,6 @@ export function CustomerPage({
                     <span>{formatMoney(card.workspace.latestQuoteTotal ?? null)}</span>
                     <span>{card.workspace.openTaskCount} open tasks</span>
                     <span>Updated {formatTimestamp(card.lastActivityAtIso)}</span>
-                  </div>
-
-                  <div className="portal-customer-drawing-card-meta">
-                    {card.drawings.map((drawing) => (
-                      <button
-                        type="button"
-                        key={drawing.id}
-                        className="portal-text-button"
-                        onClick={() =>
-                          openDrawingWorkspace(card.workspace, { drawingId: drawing.id })
-                        }
-                      >
-                        {getRevisionLabel(drawing)}
-                      </button>
-                    ))}
                   </div>
 
                   <div className="portal-customer-drawing-card-footer">

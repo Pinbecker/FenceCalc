@@ -20,6 +20,14 @@ export type InstallLiftLevel = (typeof INSTALL_LIFT_LEVELS)[number];
 
 export const PRICING_WORKBOOK_RATE_MODES = ["MONEY", "REFERENCE", "VOLUME_PER_UNIT"] as const;
 export type PricingWorkbookRateMode = (typeof PRICING_WORKBOOK_RATE_MODES)[number];
+type PricingPostType =
+  | "end"
+  | "intermediate"
+  | "cornerInternal"
+  | "cornerExternal"
+  | "junction"
+  | "inlineJoin";
+type DefaultPostRateKey = "end" | "intermediate" | "corner" | "junction" | "inlineJoin";
 
 export const COMMERCIAL_LABOUR_DAY_VALUE_CODE = "COMMERCIAL_LABOUR_DAY_VALUE";
 export const COMMERCIAL_TRAVEL_LODGE_PER_DAY_CODE = "COMMERCIAL_TRAVEL_LODGE_PER_DAY";
@@ -221,7 +229,7 @@ const DEFAULT_PANEL_LABOUR_RATE: Record<string, number> = {
   "3000:FIRST:SUPER_REBOUND": 10.5,
 };
 
-const DEFAULT_POST_MATERIAL_RATE: Record<string, Partial<Record<"end" | "intermediate" | "corner" | "junction" | "inlineJoin", number>>> = {
+const DEFAULT_POST_MATERIAL_RATE: Record<string, Partial<Record<DefaultPostRateKey, number>>> = {
   "1200": { end: 39.21, intermediate: 42.57, corner: 71.53, junction: 45, inlineJoin: 45 },
   "1800": { end: 43, intermediate: 45, corner: 78, junction: 47, inlineJoin: 47 },
   "2000": { end: 44, intermediate: 46, corner: 86.59, junction: 48, inlineJoin: 48 },
@@ -233,7 +241,7 @@ const DEFAULT_POST_MATERIAL_RATE: Record<string, Partial<Record<"end" | "interme
   "6000": { end: 128, intermediate: 134, corner: 228, junction: 140, inlineJoin: 140 },
 };
 
-const DEFAULT_POST_LABOUR_RATE: Record<string, Partial<Record<"end" | "intermediate" | "corner" | "junction" | "inlineJoin", number>>> = {
+const DEFAULT_POST_LABOUR_RATE: Record<string, Partial<Record<DefaultPostRateKey, number>>> = {
   "1200": { end: 5.38, intermediate: 5.38, corner: 6.9, junction: 5.7, inlineJoin: 5.7 },
   "1800": { end: 5.38, intermediate: 5.38, corner: 6.9, junction: 5.7, inlineJoin: 5.7 },
   "2000": { end: 5.38, intermediate: 5.38, corner: 6.9, junction: 5.7, inlineJoin: 5.7 },
@@ -324,12 +332,24 @@ function getPanelLabourRate(panelHeightMm: number, lift: InstallLiftLevel, varia
   return DEFAULT_PANEL_LABOUR_RATE[`${panelHeightMm}:${lift}:${variant}`] ?? 0;
 }
 
-function getPostMaterialRate(heightMm: number, postType: "end" | "intermediate" | "corner" | "junction" | "inlineJoin"): number {
-  return DEFAULT_POST_MATERIAL_RATE[String(heightMm)]?.[postType] ?? 0;
+function getDefaultPostRateKey(postType: PricingPostType): DefaultPostRateKey {
+  return postType === "cornerInternal" || postType === "cornerExternal" ? "corner" : postType;
 }
 
-function getPostLabourRate(heightMm: number, postType: "end" | "intermediate" | "corner" | "junction" | "inlineJoin"): number {
-  return DEFAULT_POST_LABOUR_RATE[String(heightMm)]?.[postType] ?? 0;
+function getPostCodeSuffix(postType: PricingPostType): string {
+  return postType === "cornerInternal"
+    ? "CORNER_INTERNAL"
+    : postType === "cornerExternal"
+      ? "CORNER_EXTERNAL"
+      : postType.toUpperCase();
+}
+
+function getPostMaterialRate(heightMm: number, postType: PricingPostType): number {
+  return DEFAULT_POST_MATERIAL_RATE[String(heightMm)]?.[getDefaultPostRateKey(postType)] ?? 0;
+}
+
+function getPostLabourRate(heightMm: number, postType: PricingPostType): number {
+  return DEFAULT_POST_LABOUR_RATE[String(heightMm)]?.[getDefaultPostRateKey(postType)] ?? 0;
 }
 
 function buildFenceRows(): PricingWorkbookRow[] {
@@ -386,18 +406,28 @@ function buildFenceRows(): PricingWorkbookRow[] {
       );
     }
 
-    for (const postType of ["end", "intermediate", "corner", "junction", "inlineJoin"] as const) {
+    for (const postType of [
+      "end",
+      "intermediate",
+      "cornerInternal",
+      "cornerExternal",
+      "junction",
+      "inlineJoin",
+    ] as const) {
       const label =
         postType === "end"
           ? "End posts"
           : postType === "intermediate"
             ? "Intermediate posts"
-            : postType === "corner"
-              ? "Corner posts"
-              : postType === "junction"
-                ? "Junction posts"
-                : "Inline join posts";
+            : postType === "cornerInternal"
+              ? "Internal corner posts"
+              : postType === "cornerExternal"
+                ? "External corner posts"
+                : postType === "junction"
+                  ? "Junction posts"
+                  : "Inline join posts";
       const quantityKey = `post:${heightMm}:${postType}:count`;
+      const codeSuffix = getPostCodeSuffix(postType);
       rows.push(
         ...buildPairRows({
           pairKey: `post:${heightMm}:${postType}`,
@@ -406,9 +436,9 @@ function buildFenceRows(): PricingWorkbookRow[] {
           category: "POSTS",
           ...group,
           quantityKey,
-          materialCode: `MAT_POST_${heightMm}_${postType.toUpperCase()}`,
+          materialCode: `MAT_POST_${heightMm}_${codeSuffix}`,
           materialRate: getPostMaterialRate(heightMm, postType),
-          labourCode: `LAB_POST_${heightMm}_${postType.toUpperCase()}`,
+          labourCode: `LAB_POST_${heightMm}_${codeSuffix}`,
           labourRate: getPostLabourRate(heightMm, postType),
           concreteQuantityKey: `post:${heightMm}:${postType}:concrete-m3`,
           holeQuantityKey: `post:${heightMm}:${postType}:holes`,
@@ -520,19 +550,20 @@ function buildBasketballRows(): PricingWorkbookRow[] {
 
 function buildFloodlightRows(): PricingWorkbookRow[] {
   const group = getFeatureGroup("floodlight-columns", "Floodlight columns");
+  const heightMm = 6000;
   return buildPairRows({
-    pairKey: "floodlight:column",
-    label: "Floodlight columns",
+    pairKey: `floodlight:column:${heightMm}`,
+    label: `Floodlight column ${heightMm / 1000}m`,
     unit: "column",
     category: "FLOODLIGHT_COLUMNS",
     ...group,
-    quantityKey: "floodlight:column:count",
-    materialCode: "MAT_FLOODLIGHT_COLUMN",
+    quantityKey: `floodlight:column:${heightMm}:count`,
+    materialCode: `MAT_FLOODLIGHT_COLUMN_${heightMm}`,
     materialRate: 481,
-    labourCode: "LAB_FLOODLIGHT_COLUMN",
+    labourCode: `LAB_FLOODLIGHT_COLUMN_${heightMm}`,
     labourRate: 100,
-    concreteQuantityKey: "floodlight:column:concrete-m3",
-    holeQuantityKey: "floodlight:column:holes",
+    concreteQuantityKey: `floodlight:column:${heightMm}:concrete-m3`,
+    holeQuantityKey: `floodlight:column:${heightMm}:holes`,
   });
 }
 
@@ -541,18 +572,20 @@ function buildKickboardRows(): PricingWorkbookRow[] {
   const group = getFeatureGroup("kickboards", "Kickboards");
   for (const sectionHeightMm of KICKBOARD_SECTION_HEIGHTS_MM) {
     for (const profile of ["SQUARE", "CHAMFERED"] as const) {
-      const quantityKey = `kickboard:${sectionHeightMm}:${profile}:boards`;
+      const thicknessMm = 50;
+      const boardLengthMm = 2500;
+      const quantityKey = `kickboard:${sectionHeightMm}:${thicknessMm}:${profile}:${boardLengthMm}:boards`;
       rows.push(
         ...buildPairRows({
-          pairKey: `kickboard:${sectionHeightMm}:${profile}`,
-          label: `${sectionHeightMm}mm ${profile.toLowerCase()} kickboards`,
+          pairKey: `kickboard:${sectionHeightMm}:${thicknessMm}:${profile}:${boardLengthMm}`,
+          label: `${sectionHeightMm} x ${thicknessMm} ${profile.toLowerCase()} kickboards`,
           unit: "board",
           category: "KICKBOARDS",
           ...group,
           quantityKey,
-          materialCode: `MAT_KICKBOARD_${sectionHeightMm}_${profile}`,
+          materialCode: `MAT_KICKBOARD_${sectionHeightMm}_${thicknessMm}_${profile}_${boardLengthMm}`,
           materialRate: 13.25,
-          labourCode: `LAB_KICKBOARD_${sectionHeightMm}_${profile}`,
+          labourCode: `LAB_KICKBOARD_${sectionHeightMm}_${thicknessMm}_${profile}_${boardLengthMm}`,
           labourRate: 2.25,
         }),
       );
@@ -667,6 +700,7 @@ export function buildDefaultJobCommercialInputs(): JobCommercialInputs {
     clearSpoils: false,
     hardDigRatePerHole: workbook.settings.hardDigRatePerHole ?? 0,
     clearSpoilsRatePerHole: workbook.settings.clearSpoilsRatePerHole ?? 0,
+    externalCornersEnabled: true,
   };
 }
 
@@ -706,6 +740,47 @@ export function mergePricingWorkbookWithTemplate(
   const rowsByCode = new Map(
     workbook.sections.flatMap((section) => section.rows.map((row) => [row.code, row] as const)),
   );
+  const templateCodes = new Set(template.sections.flatMap((section) => section.rows.map((row) => row.code)));
+  const legacyReplacementCodes = new Map<string, string>([
+    ["MAT_FLOODLIGHT_COLUMN_6000", "MAT_FLOODLIGHT_COLUMN"],
+    ["LAB_FLOODLIGHT_COLUMN_6000", "LAB_FLOODLIGHT_COLUMN"],
+    ["MAT_KICKBOARD_200_50_SQUARE_2500", "MAT_KICKBOARD_200_SQUARE"],
+    ["LAB_KICKBOARD_200_50_SQUARE_2500", "LAB_KICKBOARD_200_SQUARE"],
+    ["MAT_KICKBOARD_200_50_CHAMFERED_2500", "MAT_KICKBOARD_200_CHAMFERED"],
+    ["LAB_KICKBOARD_200_50_CHAMFERED_2500", "LAB_KICKBOARD_200_CHAMFERED"],
+    ["MAT_KICKBOARD_225_50_SQUARE_2500", "MAT_KICKBOARD_225_SQUARE"],
+    ["LAB_KICKBOARD_225_50_SQUARE_2500", "LAB_KICKBOARD_225_SQUARE"],
+    ["MAT_KICKBOARD_225_50_CHAMFERED_2500", "MAT_KICKBOARD_225_CHAMFERED"],
+    ["LAB_KICKBOARD_225_50_CHAMFERED_2500", "LAB_KICKBOARD_225_CHAMFERED"],
+    ["MAT_KICKBOARD_250_50_SQUARE_2500", "MAT_KICKBOARD_250_SQUARE"],
+    ["LAB_KICKBOARD_250_50_SQUARE_2500", "LAB_KICKBOARD_250_SQUARE"],
+    ["MAT_KICKBOARD_250_50_CHAMFERED_2500", "MAT_KICKBOARD_250_CHAMFERED"],
+    ["LAB_KICKBOARD_250_50_CHAMFERED_2500", "LAB_KICKBOARD_250_CHAMFERED"],
+  ]);
+  for (const heightMm of TWIN_BAR_HEIGHT_KEYS.map((heightKey) => Math.round(Number.parseFloat(heightKey) * 1000))) {
+    legacyReplacementCodes.set(`MAT_POST_${heightMm}_CORNER_INTERNAL`, `MAT_POST_${heightMm}_CORNER`);
+    legacyReplacementCodes.set(`MAT_POST_${heightMm}_CORNER_EXTERNAL`, `MAT_POST_${heightMm}_CORNER`);
+    legacyReplacementCodes.set(`LAB_POST_${heightMm}_CORNER_INTERNAL`, `LAB_POST_${heightMm}_CORNER`);
+    legacyReplacementCodes.set(`LAB_POST_${heightMm}_CORNER_EXTERNAL`, `LAB_POST_${heightMm}_CORNER`);
+  }
+  const legacyCodesReplacedByTemplate = new Set(legacyReplacementCodes.values());
+  const customRows = workbook.sections.flatMap((section) =>
+    section.rows.filter((row) => !templateCodes.has(row.code) && !legacyCodesReplacedByTemplate.has(row.code)),
+  );
+
+  const mergedSections = template.sections.map((section) => ({
+    ...section,
+    rows: section.rows.map((row) => {
+      const saved = rowsByCode.get(row.code) ?? rowsByCode.get(legacyReplacementCodes.get(row.code) ?? "");
+      return saved ? { ...row, rate: saved.rate } : row;
+    }),
+  }));
+
+  for (const customRow of customRows) {
+    const targetSectionKey = customRow.code.startsWith("LAB_") ? "labour-installables" : "materials-installables";
+    const targetSection = mergedSections.find((section) => section.key === targetSectionKey);
+    targetSection?.rows.push(customRow);
+  }
 
   return {
     settings: {
@@ -717,12 +792,6 @@ export function mergePricingWorkbookWithTemplate(
       clearSpoilsRatePerHole:
         workbook.settings.clearSpoilsRatePerHole ?? template.settings.clearSpoilsRatePerHole,
     },
-    sections: template.sections.map((section) => ({
-      ...section,
-      rows: section.rows.map((row) => {
-        const saved = rowsByCode.get(row.code);
-        return saved ? { ...row, rate: saved.rate } : row;
-      }),
-    })),
+    sections: mergedSections,
   };
 }

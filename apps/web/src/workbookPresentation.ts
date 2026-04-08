@@ -17,6 +17,7 @@ export interface PricingRateEditorRow {
   labourCode?: string | undefined;
   materialSettingKey?: NumericPricingSettingKey | undefined;
   notes?: string | undefined;
+  isCustom?: boolean | undefined;
 }
 
 export interface PricingRateGroup {
@@ -109,8 +110,10 @@ export function buildPricingRateGroups(workbook: PricingWorkbookConfig): Pricing
           unit: row.unit,
           materialRate: null,
           labourRate: null,
+          isCustom: row.code.includes("_CUSTOM_") || pairKey.startsWith("custom:"),
           ...(row.notes ? { notes: row.notes } : {}),
         };
+      existing.isCustom = existing.isCustom || row.code.includes("_CUSTOM_") || pairKey.startsWith("custom:");
       if (section.sheet === "MATERIALS") {
         existing.materialRate = row.rate;
         existing.materialCode = row.code;
@@ -298,7 +301,7 @@ function parseDisplayBucketMeta(row: EstimateWorkbookRow): DisplayBucketMeta {
   }
 
   const postMatch = row.code.match(
-    /^(?:MAT|LAB)_POST_(\d+)_(END|INTERMEDIATE|CORNER|JUNCTION|INLINEJOIN)$/,
+    /^(?:MAT|LAB)_POST_(\d+)_(END|INTERMEDIATE|CORNER_INTERNAL|CORNER_EXTERNAL|JUNCTION|INLINEJOIN)$/,
   );
   if (postMatch) {
     const [, heightMmRaw, postType] = postMatch;
@@ -308,11 +311,13 @@ function parseDisplayBucketMeta(row: EstimateWorkbookRow): DisplayBucketMeta {
         ? 10
         : postType === "INTERMEDIATE"
           ? 20
-          : postType === "CORNER"
+          : postType === "CORNER_INTERNAL"
             ? 30
-            : postType === "JUNCTION"
-              ? 40
-              : 50;
+            : postType === "CORNER_EXTERNAL"
+              ? 35
+              : postType === "JUNCTION"
+                ? 40
+                : 50;
     return {
       bucketKey: `height-${heightMm}-posts`,
       bucketTitle: `${formatFenceHeightLabel(heightMm)} posts & gates`,
@@ -336,9 +341,9 @@ function parseDisplayBucketMeta(row: EstimateWorkbookRow): DisplayBucketMeta {
     };
   }
 
-  const kickboardMatch = row.code.match(/^(?:MAT|LAB)_KICKBOARD_(\d+)_(SQUARE|CHAMFERED)$/);
+  const kickboardMatch = row.code.match(/^(?:MAT|LAB)_KICKBOARD_(\d+)_(?:(\d+)_)?([^_]+)(?:_(\d+))?$/);
   if (kickboardMatch) {
-    const [, sectionHeightMmRaw, profile] = kickboardMatch;
+    const [, sectionHeightMmRaw, , profile] = kickboardMatch;
     const sectionHeightMm = Number(sectionHeightMmRaw);
     return {
       bucketKey: row.presentation?.groupKey ?? "kickboards",

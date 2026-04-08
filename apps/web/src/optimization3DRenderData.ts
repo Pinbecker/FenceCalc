@@ -741,6 +741,10 @@ export function buildOptimization3DRenderData(
       0.1
     );
 
+    if (!goalUnit.hasBasketballPost) {
+      continue;
+    }
+
     const armHeightMm = Math.max(goalMouthHeightMm + 350, goalUnit.enclosureHeightMm - 260);
     pushSegmentStroke(
       `${goalUnit.key}-basketball-post`,

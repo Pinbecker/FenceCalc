@@ -1,6 +1,7 @@
 import type {
   AncillaryEstimateItem,
   DrawingRecord,
+  EstimateResult,
   EstimateGroup,
   EstimateRow,
   EstimateWarning,
@@ -43,6 +44,7 @@ import {
   resolvePitchDividerPlacements,
   resolveSideNettingAttachments,
 } from "./features.js";
+import { estimateDrawingLayout } from "./drawing.js";
 
 interface GroupBucket {
   key: string;
@@ -76,9 +78,54 @@ function getWorkbookConfig(pricingConfig: PricingConfigRecord): PricingWorkbookC
   );
 }
 
-function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
+interface WorkbookEstimateOptions {
+  externalCornersEnabled?: boolean | undefined;
+}
+
+function applyExternalCornerMode(
+  estimate: EstimateResult,
+  options: WorkbookEstimateOptions = {},
+): EstimateResult {
+  if (options.externalCornersEnabled !== false) {
+    return estimate;
+  }
+
+  const byHeightMm = Object.fromEntries(
+    Object.entries(estimate.corners.byHeightMm ?? {}).map(([heightMm, bucket]) => [
+      heightMm,
+      {
+        ...bucket,
+        internal: bucket.internal + bucket.external,
+        external: 0,
+      },
+    ]),
+  );
+
+  return {
+    ...estimate,
+    corners: {
+      ...estimate.corners,
+      internal: estimate.corners.internal + estimate.corners.external,
+      external: 0,
+      byHeightMm,
+    },
+  };
+}
+
+function getCornerPricingBreakdown(
+  drawing: DrawingRecord,
+  options: WorkbookEstimateOptions = {},
+): EstimateResult["corners"] {
+  return applyExternalCornerMode(estimateDrawingLayout(drawing.layout), options).corners;
+}
+
+function buildCatalogQuantityMap(
+  drawing: DrawingRecord,
+  options: WorkbookEstimateOptions = {},
+): Map<string, number> {
   const quantities = new Map<string, number>();
   const segmentsById = new Map(drawing.layout.segments.map((segment) => [segment.id, segment] as const));
+  const cornerPricingBreakdown = getCornerPricingBreakdown(drawing, options);
 
   for (const segment of drawing.layout.segments) {
     if (segment.spec.system !== "TWIN_BAR") {
@@ -108,7 +155,7 @@ function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
     const concretePerHoleM3 = fenceHeightKey
       ? calculateConcreteVolumeFromDimensionsMm(getConcreteRuleForHeight(fenceHeightKey))
       : 0;
-    for (const postType of ["end", "intermediate", "corner", "junction", "inlineJoin"] as const) {
+    for (const postType of ["end", "intermediate", "junction", "inlineJoin"] as const) {
       const count = bucket[postType] ?? 0;
       incrementQuantity(quantities, `post:${heightMm}:${postType}:count`, count);
       incrementQuantity(quantities, `post:${heightMm}:${postType}:holes`, count);
@@ -118,6 +165,38 @@ function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
         count * concretePerHoleM3,
       );
       incrementQuantity(quantities, "holes:total", count);
+    }
+
+    const cornerCount = bucket.corner ?? 0;
+    const cornerBucket = cornerPricingBreakdown.byHeightMm?.[heightMm];
+    const classifiedCornerCount =
+      (cornerBucket?.internal ?? 0) + (cornerBucket?.external ?? 0) + (cornerBucket?.unclassified ?? 0);
+    const unclassifiedCornerCount =
+      (cornerBucket?.unclassified ?? 0) + Math.max(0, cornerCount - classifiedCornerCount);
+    const internalCornerCount =
+      cornerBucket ? cornerBucket.internal + unclassifiedCornerCount : cornerCount;
+    const externalCornerCount = cornerBucket?.external ?? 0;
+
+    incrementQuantity(quantities, `post:${heightMm}:corner:count`, cornerCount);
+    incrementQuantity(quantities, `post:${heightMm}:corner:holes`, cornerCount);
+    incrementQuantity(
+      quantities,
+      `post:${heightMm}:corner:concrete-m3`,
+      cornerCount * concretePerHoleM3,
+    );
+    incrementQuantity(quantities, "holes:total", cornerCount);
+
+    for (const [cornerType, count] of [
+      ["cornerInternal", internalCornerCount],
+      ["cornerExternal", externalCornerCount],
+    ] as const) {
+      incrementQuantity(quantities, `post:${heightMm}:${cornerType}:count`, count);
+      incrementQuantity(quantities, `post:${heightMm}:${cornerType}:holes`, count);
+      incrementQuantity(
+        quantities,
+        `post:${heightMm}:${cornerType}:concrete-m3`,
+        count * concretePerHoleM3,
+      );
     }
   }
 
@@ -151,7 +230,9 @@ function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
   for (const goalUnit of resolvedGoalUnits) {
     incrementQuantity(
       quantities,
-      `goal-unit:${goalUnit.widthMm}:${goalUnit.goalHeightMm}:count`,
+      goalUnit.hasBasketballPost
+        ? `goal-unit:${goalUnit.widthMm}:${goalUnit.goalHeightMm}:basketball:count`
+        : `goal-unit:${goalUnit.widthMm}:${goalUnit.goalHeightMm}:count`,
       1,
     );
   }
@@ -184,16 +265,19 @@ function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
     incrementQuantity(quantities, "basketball:goal-unit-integrated:count", 1);
   }
 
-  const floodlightCount = drawing.layout.floodlightColumns?.length ?? 0;
-  if (floodlightCount > 0) {
-    incrementQuantity(quantities, "floodlight:column:count", floodlightCount);
-    incrementQuantity(quantities, "floodlight:column:holes", floodlightCount);
-    incrementQuantity(
-      quantities,
-      "floodlight:column:concrete-m3",
-      floodlightCount * calculateConcreteVolumeFromDimensionsMm(FLOODLIGHT_COLUMN_BASE_MM),
-    );
-    incrementQuantity(quantities, "holes:total", floodlightCount);
+  const floodlightColumns = drawing.layout.floodlightColumns ?? [];
+  if (floodlightColumns.length > 0) {
+    for (const floodlightColumn of floodlightColumns) {
+      const heightMm = Math.round(floodlightColumn.heightMm ?? 6000);
+      incrementQuantity(quantities, `floodlight:column:${heightMm}:count`, 1);
+      incrementQuantity(quantities, `floodlight:column:${heightMm}:holes`, 1);
+      incrementQuantity(
+        quantities,
+        `floodlight:column:${heightMm}:concrete-m3`,
+        calculateConcreteVolumeFromDimensionsMm(FLOODLIGHT_COLUMN_BASE_MM),
+      );
+      incrementQuantity(quantities, "holes:total", 1);
+    }
   }
 
   const resolvedKickboards = resolveKickboardAttachments(
@@ -211,7 +295,7 @@ function buildCatalogQuantityMap(drawing: DrawingRecord): Map<string, number> {
   for (const kickboard of kickboardsByAttachmentId.values()) {
     incrementQuantity(
       quantities,
-      `kickboard:${kickboard.placement.sectionHeightMm}:${kickboard.placement.profile}:boards`,
+      `kickboard:${kickboard.placement.sectionHeightMm}:${kickboard.placement.thicknessMm}:${kickboard.placement.profile}:${kickboard.placement.boardLengthMm}:boards`,
       kickboard.boardCount,
     );
   }
@@ -550,6 +634,7 @@ export function buildWorkbookPricedEstimate(
   pricingConfig: PricingConfigRecord,
   ancillaryItems: AncillaryEstimateItem[] = [],
   manualEntries: EstimateWorkbookManualEntry[] = [],
+  options: WorkbookEstimateOptions = {},
 ): PricedEstimateResult {
   const workbookConfig = getWorkbookConfig(pricingConfig);
   const manualEntryMap = new Map(manualEntries.map((entry) => [entry.code, entry.quantity] as const));
@@ -586,7 +671,7 @@ export function buildWorkbookPricedEstimate(
         0,
     ),
   };
-  const quantityMap = buildCatalogQuantityMap(drawing);
+  const quantityMap = buildCatalogQuantityMap(drawing, options);
 
   const sections: EstimateWorkbookSection[] = workbookConfig.sections.map((section) => {
     const rows = section.rows.map((row) =>

@@ -91,6 +91,49 @@ describe("historyReducer", () => {
     expect(redone.present.basketballPosts).toHaveLength(1);
   });
 
+  it("commits streamed edits as one undoable history entry", () => {
+    const initialState: HistoryState = {
+      past: [],
+      present: buildEmptyLayout(),
+      future: []
+    };
+    const baseline = initialState.present;
+
+    const movedOnce = historyReducer(initialState, {
+      type: "SET_APPLY",
+      updater: (layout) => ({
+        ...layout,
+        gates: [
+          {
+            id: "gate-1",
+            segmentId: "segment-1",
+            startOffsetMm: 250,
+            endOffsetMm: 450,
+            gateType: "SINGLE_LEAF"
+          }
+        ]
+      })
+    });
+    const movedAgain = historyReducer(movedOnce, {
+      type: "SET_APPLY",
+      updater: (layout) => ({
+        ...layout,
+        gates: (layout.gates ?? []).map((gate) => ({
+          ...gate,
+          startOffsetMm: 300,
+          endOffsetMm: 500
+        }))
+      })
+    });
+    const committed = historyReducer(movedAgain, { type: "COMMIT_BATCH", baseline });
+
+    expect(committed.present.gates?.[0]).toMatchObject({ startOffsetMm: 300, endOffsetMm: 500 });
+    expect(committed.past).toEqual([baseline]);
+
+    const undone = historyReducer(committed, { type: "UNDO" });
+    expect(undone.present.gates).toEqual([]);
+  });
+
   it("resets history when loading a new document", () => {
     const dirtyState: HistoryState = {
       past: [

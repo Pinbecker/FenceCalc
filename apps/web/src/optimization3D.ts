@@ -76,6 +76,7 @@ export interface Optimization3DGoalUnit {
   rearCenterPoint: PointMm;
   normal: { x: number; y: number };
   enclosureHeightMm: number;
+  hasBasketballPost: boolean;
 }
 
 export interface Optimization3DKickboard {
@@ -84,7 +85,7 @@ export interface Optimization3DKickboard {
   end: PointMm;
   heightMm: number;
   thicknessMm: number;
-  profile: "SQUARE" | "CHAMFERED";
+  profile: string;
 }
 
 export interface Optimization3DPitchDivider {
@@ -161,7 +162,7 @@ interface VisualLayer {
 const BASKETBALL_POST_HEIGHT_MM = 3250;
 const BASKETBALL_POST_ARM_LENGTH_MM = 1800;
 const BASKETBALL_POST_HOOP_RADIUS_MM = 180;
-const FLOODLIGHT_COLUMN_HEIGHT_MM = 6000;
+const DEFAULT_FLOODLIGHT_COLUMN_HEIGHT_MM = 6000;
 const FLOODLIGHT_BAR_WIDTH_MM = 840;
 const TWIN_BAR_LOW_PANEL_TOP_RAIL_DIAMETER_MM = 60;
 const TWIN_BAR_LOW_PANEL_TOP_RAIL_CENTER_HEIGHT_MM = 1170;
@@ -360,7 +361,7 @@ function buildBasketballPosts(
     point: placement.point,
     normal: placement.normal,
     heightMm: BASKETBALL_POST_HEIGHT_MM,
-    armLengthMm: BASKETBALL_POST_ARM_LENGTH_MM,
+    armLengthMm: placement.armLengthMm ?? BASKETBALL_POST_ARM_LENGTH_MM,
     hoopRadiusMm: BASKETBALL_POST_HOOP_RADIUS_MM
   }));
 }
@@ -372,7 +373,7 @@ function buildFloodlightColumns(
     key: placement.key,
     point: placement.point,
     normal: placement.normal,
-    heightMm: FLOODLIGHT_COLUMN_HEIGHT_MM,
+    heightMm: placement.placement.heightMm ?? DEFAULT_FLOODLIGHT_COLUMN_HEIGHT_MM,
     barWidthMm: FLOODLIGHT_BAR_WIDTH_MM
   }));
 }
@@ -386,7 +387,8 @@ function buildGoalUnits(placements: ResolvedGoalUnitPlacement[]): Optimization3D
     recessExitPoint: placement.recessExitPoint,
     rearCenterPoint: placement.rearCenterPoint,
     normal: placement.normal,
-    enclosureHeightMm: placement.enclosureHeightMm
+    enclosureHeightMm: placement.enclosureHeightMm,
+    hasBasketballPost: placement.hasBasketballPost
   }));
 }
 
