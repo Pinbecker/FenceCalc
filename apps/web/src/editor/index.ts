@@ -55,12 +55,13 @@ export {
 } from "./constants.js";
 export {
   buildCanvasGrid,
+  fitViewportToWorldBounds,
   buildVisibleBounds,
   screenToWorld,
   useEditorCanvasViewport,
   zoomViewportAtPointer
 } from "./canvasViewport.js";
-export type { GridLine, ScreenPoint, Viewport, VisibleBounds } from "./canvasViewport.js";
+export type { GridLine, ScreenPoint, Viewport, VisibleBounds, WorldBounds } from "./canvasViewport.js";
 export {
   buildOppositeGateGuides,
   buildScaleBar,

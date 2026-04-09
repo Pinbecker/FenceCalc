@@ -86,8 +86,12 @@ describe("useEditorKeyboardShortcuts", () => {
     listeners.keydown?.(createEvent("KeyX"));
     listeners.keydown?.(createEvent("KeyR"));
     listeners.keydown?.(createEvent("KeyG"));
+    listeners.keydown?.(createEvent("KeyU"));
     listeners.keydown?.(createEvent("KeyB"));
     listeners.keydown?.(createEvent("KeyF"));
+    listeners.keydown?.(createEvent("KeyK"));
+    listeners.keydown?.(createEvent("KeyP"));
+    listeners.keydown?.(createEvent("KeyN"));
     listeners.keydown?.(createEvent("Space"));
     listeners.keydown?.(createEvent("ShiftLeft"));
     listeners.keydown?.(createEvent("Delete"));
@@ -106,8 +110,12 @@ describe("useEditorKeyboardShortcuts", () => {
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(3, "RECTANGLE");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(4, "RECESS");
     expect(options.setInteractionMode).toHaveBeenNthCalledWith(5, "GATE");
-    expect(options.setInteractionMode).toHaveBeenNthCalledWith(6, "BASKETBALL_POST");
-    expect(options.setInteractionMode).toHaveBeenNthCalledWith(7, "FLOODLIGHT_COLUMN");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(6, "GOAL_UNIT");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(7, "BASKETBALL_POST");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(8, "FLOODLIGHT_COLUMN");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(9, "KICKBOARD");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(10, "PITCH_DIVIDER");
+    expect(options.setInteractionMode).toHaveBeenNthCalledWith(11, "SIDE_NETTING");
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(true);
     expect(options.setIsSpacePressed).toHaveBeenCalledWith(false);
     expect(options.setDisableSnap).toHaveBeenCalledWith(true);

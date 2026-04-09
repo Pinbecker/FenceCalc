@@ -24,8 +24,12 @@ export function renderFloodlightColumnSymbol(
     accent: string;
     opacity?: number;
   },
-  keyOverride?: string
+  keyOverride?: string,
+  options?: {
+    simplified?: boolean;
+  }
 ) {
+  const simplified = options?.simplified ?? false;
   const key = keyOverride ?? floodlightColumn.key;
   const poleHalfWidth = 145;
   const poleHalfHeight = 480;
@@ -65,6 +69,34 @@ export function renderFloodlightColumnSymbol(
     lampBarHalfWidth * 0.56,
     lampBarOffset + lightHousingInset
   );
+  const simplifiedTip = toWorldPoint(floodlightColumn.point, across, forward, 0, 640);
+
+  if (simplified) {
+    return (
+      <>
+        <Line
+          key={`${key}-simplified-pole`}
+          points={[floodlightColumn.point.x, floodlightColumn.point.y, simplifiedTip.x, simplifiedTip.y]}
+          stroke={palette.stroke}
+          strokeWidth={2.4 / scale}
+          lineCap="round"
+          opacity={palette.opacity ?? 1}
+          listening={false}
+        />
+        <Circle
+          key={`${key}-simplified-lamp`}
+          x={simplifiedTip.x}
+          y={simplifiedTip.y}
+          radius={180}
+          fill={palette.accent}
+          stroke={palette.stroke}
+          strokeWidth={1.4 / scale}
+          opacity={palette.opacity ?? 1}
+          listening={false}
+        />
+      </>
+    );
+  }
 
   return (
     <>

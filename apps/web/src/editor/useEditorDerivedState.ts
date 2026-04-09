@@ -273,9 +273,9 @@ export function useEditorDerivedState({
   );
   const drawAnchorNodes = useMemo(
     () =>
-      visualPosts
-        .filter((post) => post.kind === "END" || post.kind === "CORNER")
-        .map((post) => post.point),
+      Array.from(
+        new Map(visualPosts.map((post) => [`${post.point.x}:${post.point.y}`, post.point] as const)).values(),
+      ),
     [visualPosts]
   );
   const postTypeCounts = useMemo(

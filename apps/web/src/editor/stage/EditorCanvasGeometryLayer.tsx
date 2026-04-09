@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Circle, Group, Layer, Line, Rect, RegularPolygon } from "react-konva";
 import { distanceMm } from "@fence-estimator/geometry";
+import type { PointMm } from "@fence-estimator/contracts";
 import type {
   ResolvedGoalUnitPlacement,
   ResolvedKickboardAttachment,
@@ -9,15 +11,33 @@ import type {
 
 import { formatLengthMm } from "../../formatters";
 import {
+  DRAW_INCREMENT_MM,
   HANDLE_RADIUS_PX,
   LABEL_FONT_SIZE_PX,
+  NODE_SNAP_DISTANCE_PX,
   POST_SYMBOL_RADIUS_PX,
   SEGMENT_SELECTED_STROKE_PX,
   SEGMENT_STROKE_PX,
   getSegmentColor,
   quantize
 } from "../constants";
+import {
+  ACCESSORY_HALO,
+  BASKETBALL_POST,
+  FLOODLIGHT_COLUMN,
+  GATE_PALETTES,
+  HOVER,
+  POST,
+  SELECTION,
+  SEGMENT_HALO,
+  SEGMENT_LABEL,
+  getDetailLevel,
+  shouldShowGateDetail,
+  shouldShowMinorLabels,
+  shouldShowPosts,
+} from "../colorTokens";
 import { getBasketballPostArmEnd, renderBasketballPostSymbol } from "../basketballPostGeometry";
+import { findNearestNode, snapToAxisGuide } from "../editorMath";
 import { renderFloodlightColumnSymbol } from "../floodlightColumnGeometry";
 import { renderGateSymbol } from "../gateGeometry";
 import type { VisualPost } from "../types";
@@ -26,6 +46,9 @@ import type { EditorCanvasStageProps } from "./types";
 
 type EditorCanvasGeometryLayerProps = Pick<
   EditorCanvasStageProps,
+  | "disableSnap"
+  | "drawAnchorNodes"
+  | "activeSegmentDrag"
   | "gatesBySegmentId"
   | "goalUnitVisuals"
   | "interactionMode"
@@ -58,135 +81,27 @@ type EditorCanvasGeometryLayerProps = Pick<
   | "selectedGateId"
   | "selectedPlanVisual"
   | "selectedSegmentId"
+  | "selectedSegmentIds"
   | "view"
   | "visibleSegmentLabelKeys"
   | "visualPosts"
 >;
 
 function getPlacedGateStyle(gateType: EditorCanvasGeometryLayerProps["placedGateVisuals"][number]["gateType"]) {
-  switch (gateType) {
-    case "DOUBLE_LEAF":
-      return {
-        default: {
-          frameStroke: "#9aca74",
-          leafStroke: "#e7ffd0",
-          swingStroke: "#7ab542",
-          markerFill: "#f2ffe4",
-          labelColor: "#edffd7"
-        },
-        hover: {
-          frameStroke: "#c7efaf",
-          leafStroke: "#f4ffe5",
-          swingStroke: "#a8dc6d",
-          markerFill: "#fbfff5",
-          labelColor: "#f6ffe7"
-        },
-        selected: {
-          frameStroke: "#e0ffc7",
-          leafStroke: "#fbffe8",
-          swingStroke: "#c3ef83",
-          markerFill: "#ffffff",
-          labelColor: "#fcffe9"
-        }
-      };
-    case "CUSTOM":
-      return {
-        default: {
-          frameStroke: "#c78fe8",
-          leafStroke: "#f8e6ff",
-          swingStroke: "#c169d5",
-          markerFill: "#fff1ff",
-          labelColor: "#ffeaff"
-        },
-        hover: {
-          frameStroke: "#dfb8f5",
-          leafStroke: "#fdf2ff",
-          swingStroke: "#d88ae8",
-          markerFill: "#fff9ff",
-          labelColor: "#fff2ff"
-        },
-        selected: {
-          frameStroke: "#f0d5ff",
-          leafStroke: "#fff5ff",
-          swingStroke: "#e8a8f3",
-          markerFill: "#ffffff",
-          labelColor: "#fff7ff"
-        }
-      };
-    default:
-      return {
-        default: {
-          frameStroke: "#7fcaf3",
-          leafStroke: "#fff0c6",
-          swingStroke: "#efaa54",
-          markerFill: "#effbff",
-          labelColor: "#fff4d6"
-        },
-        hover: {
-          frameStroke: "#b3e3fb",
-          leafStroke: "#fff7dd",
-          swingStroke: "#f4c173",
-          markerFill: "#f9feff",
-          labelColor: "#fff9e5"
-        },
-        selected: {
-          frameStroke: "#d7f1ff",
-          leafStroke: "#fffbe8",
-          swingStroke: "#ffd08a",
-          markerFill: "#ffffff",
-          labelColor: "#fffdf0"
-        }
-      };
-  }
+  return (GATE_PALETTES[gateType] ?? GATE_PALETTES.DEFAULT)!;
 }
 
 function getPlacedBasketballPostStyle(state: "default" | "hover" | "selected") {
-  if (state === "selected") {
-    return {
-      stroke: "#fff3cb",
-      accent: "#ffd27a",
-      fill: "#ff9c48",
-      halo: "#ffe3a4"
-    };
-  }
-  if (state === "hover") {
-    return {
-      stroke: "#ffe0bc",
-      accent: "#ffc567",
-      fill: "#f08c3f",
-      halo: "#ffc987"
-    };
-  }
   return {
-    stroke: "#3b2414",
-    accent: "#ffb24d",
-    fill: "#e77c2f",
-    halo: null
+    ...BASKETBALL_POST[state],
+    halo: state === "selected" ? ACCESSORY_HALO.selected : state === "hover" ? ACCESSORY_HALO.hover : null,
   };
 }
 
 function getPlacedFloodlightColumnStyle(state: "default" | "hover" | "selected") {
-  if (state === "selected") {
-    return {
-      stroke: "#fff7d6",
-      fill: "#f3c94d",
-      accent: "#fff6bf",
-      halo: "#ffe89a"
-    };
-  }
-  if (state === "hover") {
-    return {
-      stroke: "#fff2b8",
-      fill: "#eeb63b",
-      accent: "#fff2a0",
-      halo: "#ffd86e"
-    };
-  }
   return {
-    stroke: "#7a4c00",
-    fill: "#d89a00",
-    accent: "#ffe36c",
-    halo: null
+    ...FLOODLIGHT_COLUMN[state],
+    halo: state === "selected" ? ACCESSORY_HALO.selected : state === "hover" ? ACCESSORY_HALO.hover : null,
   };
 }
 
@@ -210,9 +125,71 @@ function offsetSegmentLabel(
   };
 }
 
-function renderPostSymbol(post: VisualPost, scale: number) {
-  const size = POST_SYMBOL_RADIUS_PX / scale;
-  const strokeWidth = 1.35 / scale;
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getPostScreenRadiusPx(post: VisualPost, scale: number) {
+  const normalizedScale = clamp((scale - 0.012) / 0.15, 0, 1);
+  const minRadiusPx =
+    post.kind === "INTERMEDIATE"
+      ? 2.6
+      : post.kind === "CORNER" || post.kind === "GATE"
+        ? 2.15
+        : post.kind === "END"
+          ? 2.05
+          : 1.85;
+  const maxRadiusPx =
+    post.kind === "INTERMEDIATE"
+      ? POST_SYMBOL_RADIUS_PX * 1.22
+      : post.kind === "CORNER"
+        ? POST_SYMBOL_RADIUS_PX * 1.18
+        : post.kind === "GATE"
+          ? POST_SYMBOL_RADIUS_PX * 1.02
+          : post.kind === "END"
+            ? POST_SYMBOL_RADIUS_PX * 1.08
+            : post.kind === "JUNCTION"
+              ? POST_SYMBOL_RADIUS_PX * 1.02
+              : POST_SYMBOL_RADIUS_PX * 0.96;
+
+  return minRadiusPx + normalizedScale * (maxRadiusPx - minRadiusPx);
+}
+
+function renderPostSymbol(post: VisualPost, scale: number, detailLevel: ReturnType<typeof getDetailLevel>) {
+  const simplifiedLevel = detailLevel !== "full";
+  const size = getPostScreenRadiusPx(post, scale) / scale;
+  const strokeWidthPx =
+    detailLevel === "full" ? 1.25 : detailLevel === "reduced" ? 0.95 : detailLevel === "overview" ? 0.72 : 0.58;
+  const strokeWidth =
+    (post.kind === "INTERMEDIATE" && detailLevel !== "full" ? strokeWidthPx * 0.82 : strokeWidthPx) / scale;
+  const opacity =
+    post.kind === "INTERMEDIATE"
+      ? detailLevel === "full"
+        ? 0.98
+        : detailLevel === "reduced"
+          ? 0.92
+          : detailLevel === "overview"
+            ? 0.86
+            : 0.8
+      : detailLevel === "schematic"
+        ? 0.88
+        : 1;
+
+  if (simplifiedLevel) {
+    return (
+      <Circle
+        key={post.key}
+        x={post.point.x}
+        y={post.point.y}
+        radius={post.kind === "INTERMEDIATE" ? size * 0.92 : size}
+        fill={POST.fill[post.kind]}
+        stroke={POST.stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        listening={false}
+      />
+    );
+  }
 
   if (post.kind === "INTERMEDIATE") {
     return (
@@ -222,9 +199,10 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         y={post.point.y - size}
         width={size * 2}
         height={size * 2}
-        fill="#94b8b4"
-        stroke="#14201e"
+        fill={POST.fill.INTERMEDIATE}
+        stroke={POST.stroke}
         strokeWidth={strokeWidth}
+        opacity={opacity}
         listening={false}
       />
     );
@@ -239,9 +217,10 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         sides={4}
         radius={size * 1.2}
         rotation={45}
-        fill="#b78f6f"
-        stroke="#14201e"
+        fill={POST.fill.CORNER}
+        stroke={POST.stroke}
         strokeWidth={strokeWidth}
+        opacity={opacity}
         listening={false}
       />
     );
@@ -256,9 +235,10 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         sides={3}
         radius={size * 1.35}
         rotation={180}
-        fill="#8c9fb1"
-        stroke="#14201e"
+        fill={POST.fill.JUNCTION}
+        stroke={POST.stroke}
         strokeWidth={strokeWidth}
+        opacity={opacity}
         listening={false}
       />
     );
@@ -272,9 +252,10 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         y={post.point.y}
         sides={6}
         radius={size * 1.1}
-        fill="#a9b4bd"
-        stroke="#14201e"
+        fill={POST.fill.INLINE_JOIN}
+        stroke={POST.stroke}
         strokeWidth={strokeWidth}
+        opacity={opacity}
         listening={false}
       />
     );
@@ -287,10 +268,11 @@ function renderPostSymbol(post: VisualPost, scale: number) {
         x={post.point.x}
         y={post.point.y}
         sides={4}
-        radius={size * 1.25}
-        fill="#c4a66f"
-        stroke="#14201e"
+        radius={size}
+        fill={POST.fill.GATE}
+        stroke={POST.stroke}
         strokeWidth={strokeWidth}
+        opacity={opacity}
         listening={false}
       />
     );
@@ -302,12 +284,36 @@ function renderPostSymbol(post: VisualPost, scale: number) {
       x={post.point.x}
       y={post.point.y}
       radius={size * 1.1}
-      fill="#d3c5aa"
-      stroke="#14201e"
+      fill={POST.fill.END}
+      stroke={POST.stroke}
       strokeWidth={strokeWidth}
+      opacity={opacity}
       listening={false}
     />
   );
+}
+
+function resolveEndpointDragPoint(
+  point: PointMm,
+  anchorPoint: PointMm,
+  drawAnchorNodes: PointMm[],
+  scale: number,
+  disableSnap: boolean,
+) {
+  const axisSnapDistanceMm = Math.min(800, 16 / scale);
+  const nodeSnapDistanceMm = Math.min(900, NODE_SNAP_DISTANCE_PX / scale);
+  const candidate = quantize(point);
+
+  if (disableSnap) {
+    return candidate;
+  }
+
+  const snapNodes = drawAnchorNodes.filter(
+    (node) => !(Math.abs(node.x - anchorPoint.x) <= DRAW_INCREMENT_MM * 0.25 && Math.abs(node.y - anchorPoint.y) <= DRAW_INCREMENT_MM * 0.25),
+  );
+  const guided = snapToAxisGuide(anchorPoint, candidate, snapNodes, axisSnapDistanceMm);
+  const nearestNode = findNearestNode(guided.point, snapNodes, nodeSnapDistanceMm);
+  return nearestNode ? quantize(nearestNode) : quantize(guided.point);
 }
 
 function renderGoalUnitPlan(goalUnit: ResolvedGoalUnitPlacement, scale: number) {
@@ -508,6 +514,9 @@ function buildSegmentRunsWithOpenings(
 }
 
 export function EditorCanvasGeometryLayer({
+  disableSnap,
+  drawAnchorNodes,
+  activeSegmentDrag,
   gatesBySegmentId,
   goalUnitVisuals = [],
   interactionMode,
@@ -540,18 +549,61 @@ export function EditorCanvasGeometryLayer({
   selectedGateId,
   selectedPlanVisual,
   selectedSegmentId,
+  selectedSegmentIds,
   view,
   visibleSegmentLabelKeys,
   visualPosts
 }: EditorCanvasGeometryLayerProps) {
+  const detailLevel = getDetailLevel(view.scale);
+  const canShowPosts = shouldShowPosts(detailLevel);
+  const canShowMinorLabels = shouldShowMinorLabels(detailLevel);
+  const canShowGateSwing = shouldShowGateDetail(detailLevel);
+  const visiblePosts = canShowPosts ? visualPosts : [];
+  const forcedVisibleSegmentLabelKeys = useMemo(() => {
+    const forcedKeys = new Set<string>();
+    if (!activeSegmentDrag) {
+      return forcedKeys;
+    }
+
+    const baselineLengthBySegmentId = new Map(
+      activeSegmentDrag.baselineSegments.map((segment) => [
+        segment.id,
+        Math.round(distanceMm(segment.start, segment.end)),
+      ] as const),
+    );
+
+    for (const segment of segments) {
+      const labels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
+      if (labels.length === 0) {
+        continue;
+      }
+      const baselineLengthMm = baselineLengthBySegmentId.get(segment.id);
+      const currentLengthMm = Math.round(distanceMm(segment.start, segment.end));
+      const isDraggedSegment = activeSegmentDrag.segmentIds.includes(segment.id);
+      const lengthChanged =
+        baselineLengthMm !== undefined && Math.abs(currentLengthMm - baselineLengthMm) >= 1;
+      if (!isDraggedSegment && !lengthChanged) {
+        continue;
+      }
+      labels.forEach((label) => {
+        forcedKeys.add(label.key);
+      });
+    }
+
+    return forcedKeys;
+  }, [activeSegmentDrag, segmentLengthLabelsBySegmentId, segments]);
+
   return (
     <Layer>
       {pitchDividerVisuals.map((pitchDivider) => renderPitchDividerPlan(pitchDivider, view.scale))}
-      {visualPosts.map((post) => renderPostSymbol(post, view.scale))}
+      {visiblePosts.map((post) => renderPostSymbol(post, view.scale, detailLevel))}
       {segments.map((segment) => {
-        const isSelected = segment.id === selectedSegmentId;
+        const isSelected =
+          selectedSegmentIds.includes(segment.id) ||
+          (selectedSegmentIds.length === 0 && segment.id === selectedSegmentId);
         const isHovered = segment.id === hoveredSegmentId;
         const lengthLabels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
+        const hasForcedVisibleLabels = lengthLabels.some((label) => forcedVisibleSegmentLabelKeys.has(label.key));
         const segmentGoalUnits = goalUnitVisuals.filter((goalUnit) => goalUnit.segmentId === segment.id);
         const gateSpans = gatesBySegmentId.get(segment.id) ?? [];
         const segmentRuns = buildSegmentRunsWithOpenings(
@@ -567,7 +619,7 @@ export function EditorCanvasGeometryLayer({
               <>
                 <Line
                   points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
-                  stroke={isSelected ? "rgba(255, 218, 137, 0.58)" : "rgba(108, 225, 249, 0.52)"}
+                  stroke={isSelected ? SEGMENT_HALO.selected.outer : SEGMENT_HALO.hover.outer}
                   opacity={0.9}
                   strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 14) / view.scale}
                   lineCap="round"
@@ -576,7 +628,7 @@ export function EditorCanvasGeometryLayer({
                 />
                 <Line
                   points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
-                  stroke={isSelected ? "#ffe1a1" : "#9fe7f8"}
+                  stroke={isSelected ? SEGMENT_HALO.selected.inner : SEGMENT_HALO.hover.inner}
                   opacity={0.95}
                   strokeWidth={(SEGMENT_SELECTED_STROKE_PX + 5) / view.scale}
                   lineCap="round"
@@ -626,7 +678,7 @@ export function EditorCanvasGeometryLayer({
                 if (interactionMode !== "SELECT") {
                   return;
                 }
-                onSelectSegment(segment.id);
+                onSelectSegment(segment.id, event.evt?.shiftKey === true ? { append: true } : undefined);
               }}
               onTap={() => {
                 if (interactionMode !== "SELECT") {
@@ -636,7 +688,7 @@ export function EditorCanvasGeometryLayer({
               }}
             />
             {lengthLabels.map((label) =>
-              visibleSegmentLabelKeys.has(label.key) ? (
+              visibleSegmentLabelKeys.has(label.key) || forcedVisibleSegmentLabelKeys.has(label.key) ? (
                 <Group
                   key={`segment-label-${label.key}`}
                   listening={interactionMode === "SELECT"}
@@ -655,9 +707,21 @@ export function EditorCanvasGeometryLayer({
                     y: label.y,
                     text: label.text,
                     scale: view.scale,
-                    fill: isSelected ? "rgba(58, 48, 25, 0.84)" : "rgba(15, 23, 24, 0.74)",
-                    stroke: isSelected ? "rgba(255, 216, 134, 0.28)" : "rgba(227, 238, 241, 0.14)",
-                    textColor: isSelected ? "#ffe3ad" : isHovered ? "#f4fbfd" : "#dce7ea",
+                    fill: isSelected
+                      ? SEGMENT_LABEL.selected.fill
+                      : isHovered
+                        ? SEGMENT_LABEL.hover.fill
+                        : SEGMENT_LABEL.default.fill,
+                    stroke: isSelected
+                      ? SEGMENT_LABEL.selected.stroke
+                      : isHovered
+                        ? SEGMENT_LABEL.hover.stroke
+                        : SEGMENT_LABEL.default.stroke,
+                    textColor: isSelected
+                      ? SEGMENT_LABEL.selected.textColor
+                      : isHovered
+                        ? SEGMENT_LABEL.hover.textColor
+                        : SEGMENT_LABEL.default.textColor,
                     fontSizePx: LABEL_FONT_SIZE_PX,
                     minWidthPx: 48
                   })}
@@ -681,25 +745,49 @@ export function EditorCanvasGeometryLayer({
                   ...offsetSegmentLabel(segment.start, segment.end, view.scale, 18),
                   text: formatLengthMm(distanceMm(segment.start, segment.end)),
                   scale: view.scale,
-                  fill: isSelected ? "rgba(58, 48, 25, 0.84)" : "rgba(15, 23, 24, 0.74)",
-                  stroke: isSelected ? "rgba(255, 216, 134, 0.28)" : "rgba(227, 238, 241, 0.14)",
-                  textColor: isSelected ? "#ffe3ad" : isHovered ? "#f4fbfd" : "#dce7ea",
+                  fill: isSelected
+                    ? SEGMENT_LABEL.selected.fill
+                    : isHovered
+                      ? SEGMENT_LABEL.hover.fill
+                      : SEGMENT_LABEL.default.fill,
+                  stroke: isSelected
+                    ? SEGMENT_LABEL.selected.stroke
+                    : isHovered
+                      ? SEGMENT_LABEL.hover.stroke
+                      : SEGMENT_LABEL.default.stroke,
+                  textColor: isSelected
+                    ? SEGMENT_LABEL.selected.textColor
+                    : isHovered
+                      ? SEGMENT_LABEL.hover.textColor
+                      : SEGMENT_LABEL.default.textColor,
                   fontSizePx: LABEL_FONT_SIZE_PX,
                   minWidthPx: 44
                 })}
               </Group>
             ) : null}
-            {interactionMode === "SELECT" && isSelected ? (
+            {interactionMode === "SELECT" && isSelected && selectedSegmentIds.length <= 1 ? (
               <>
                 <Circle
                   x={segment.start.x}
                   y={segment.start.y}
                   radius={HANDLE_RADIUS_PX / view.scale}
-                  fill="#f0d08b"
+                  fill={SELECTION.handleFill}
+                  stroke={SELECTION.handleStroke}
+                  strokeWidth={1.8 / view.scale}
                   draggable
                   onDragStart={onStartSegmentEndpointDrag}
                   onDragMove={(event) => {
-                    onUpdateSegmentEndpoint(segment.id, "start", quantize({ x: event.target.x(), y: event.target.y() }));
+                    const snappedPoint = resolveEndpointDragPoint(
+                      { x: event.target.x(), y: event.target.y() },
+                      segment.end,
+                      drawAnchorNodes,
+                      view.scale,
+                      disableSnap,
+                    );
+                    if (typeof event.target.position === "function") {
+                      event.target.position(snappedPoint);
+                    }
+                    onUpdateSegmentEndpoint(segment.id, "start", snappedPoint);
                   }}
                   onDragEnd={onEndSegmentEndpointDrag}
                 />
@@ -707,11 +795,23 @@ export function EditorCanvasGeometryLayer({
                   x={segment.end.x}
                   y={segment.end.y}
                   radius={HANDLE_RADIUS_PX / view.scale}
-                  fill="#f0d08b"
+                  fill={SELECTION.handleFill}
+                  stroke={SELECTION.handleStroke}
+                  strokeWidth={1.8 / view.scale}
                   draggable
                   onDragStart={onStartSegmentEndpointDrag}
                   onDragMove={(event) => {
-                    onUpdateSegmentEndpoint(segment.id, "end", quantize({ x: event.target.x(), y: event.target.y() }));
+                    const snappedPoint = resolveEndpointDragPoint(
+                      { x: event.target.x(), y: event.target.y() },
+                      segment.start,
+                      drawAnchorNodes,
+                      view.scale,
+                      disableSnap,
+                    );
+                    if (typeof event.target.position === "function") {
+                      event.target.position(snappedPoint);
+                    }
+                    onUpdateSegmentEndpoint(segment.id, "end", snappedPoint);
                   }}
                   onDragEnd={onEndSegmentEndpointDrag}
                 />
@@ -755,7 +855,8 @@ export function EditorCanvasGeometryLayer({
                 fill: basketballPostStyle.fill,
                 opacity: selectedPlanVisual ? 0.88 : 1
               },
-              `basketball-post-${basketballPost.key}`
+              `basketball-post-${basketballPost.key}`,
+              { simplified: detailLevel !== "full" }
             )}
             {interactionMode === "SELECT" ? (
               <>
@@ -768,13 +869,16 @@ export function EditorCanvasGeometryLayer({
                   hitStrokeWidth={24 / view.scale}
                   lineCap="round"
                   onMouseDown={(event) => {
-                    if (event.evt.button !== 0) {
+                    if (event.evt.button !== 0 || !isBasketballPostSelected) {
                       return;
                     }
                     event.cancelBubble = true;
                     onStartBasketballPostDrag(basketballPost.id);
                   }}
                   onTouchStart={(event) => {
+                    if (!isBasketballPostSelected) {
+                      return;
+                    }
                     event.cancelBubble = true;
                     onStartBasketballPostDrag(basketballPost.id);
                   }}
@@ -795,13 +899,16 @@ export function EditorCanvasGeometryLayer({
                   opacity={0.001}
                   listening
                   onMouseDown={(event) => {
-                    if (event.evt.button !== 0) {
+                    if (event.evt.button !== 0 || !isBasketballPostSelected) {
                       return;
                     }
                     event.cancelBubble = true;
                     onStartBasketballPostDrag(basketballPost.id);
                   }}
                   onTouchStart={(event) => {
+                    if (!isBasketballPostSelected) {
+                      return;
+                    }
                     event.cancelBubble = true;
                     onStartBasketballPostDrag(basketballPost.id);
                   }}
@@ -850,7 +957,8 @@ export function EditorCanvasGeometryLayer({
                 accent: floodlightColumnStyle.accent,
                 opacity: selectedPlanVisual ? 0.88 : 1
               },
-              `floodlight-column-${floodlightColumn.key}`
+              `floodlight-column-${floodlightColumn.key}`,
+              { simplified: detailLevel !== "full" }
             )}
             {interactionMode === "SELECT" ? (
               <Circle
@@ -861,13 +969,16 @@ export function EditorCanvasGeometryLayer({
                 opacity={0.001}
                 listening
                 onMouseDown={(event) => {
-                  if (event.evt.button !== 0) {
+                  if (event.evt.button !== 0 || !isFloodlightColumnSelected) {
                     return;
                   }
                   event.cancelBubble = true;
                   onStartFloodlightColumnDrag(floodlightColumn.id);
                 }}
                 onTouchStart={(event) => {
+                  if (!isFloodlightColumnSelected) {
+                    return;
+                  }
                   event.cancelBubble = true;
                   onStartFloodlightColumnDrag(floodlightColumn.id);
                 }}
@@ -889,8 +1000,10 @@ export function EditorCanvasGeometryLayer({
         const isGateHovered = interactionMode === "SELECT" && gateVisual.id === hoveredGateId;
         const palette = getPlacedGateStyle(gateVisual.gateType);
         const gateStyle = isGateSelected ? palette.selected : isGateHovered ? palette.hover : palette.default;
-        const gateHaloColor = isGateSelected ? "#ffe3a4" : isGateHovered ? "#bfeeff" : null;
+        const gateHaloColor = isGateSelected ? SELECTION.outline : isGateHovered ? HOVER.outline : null;
         const gateHaloRadius = Math.max(14, Math.min(22, gateVisual.widthMm * 0.01)) / view.scale;
+        const gateLabel =
+          isGateSelected || isGateHovered || canShowMinorLabels ? `Gate ${formatLengthMm(gateVisual.widthMm)}` : null;
 
         return (
           <Group key={`gate-group-${gateVisual.id}`}>
@@ -916,8 +1029,9 @@ export function EditorCanvasGeometryLayer({
                 labelColor: gateStyle.labelColor,
                 opacity: selectedPlanVisual ? 0.88 : 1
               },
-              `Gate ${formatLengthMm(gateVisual.widthMm)}`,
-              `gate-${gateVisual.key}`
+              gateLabel,
+              `gate-${gateVisual.key}`,
+              { showSwingArcs: canShowGateSwing }
             )}
             {interactionMode === "SELECT" ? (
               <Line
@@ -929,13 +1043,16 @@ export function EditorCanvasGeometryLayer({
                 hitStrokeWidth={24 / view.scale}
                 lineCap="round"
                 onMouseDown={(event) => {
-                  if (event.evt.button !== 0) {
+                  if (event.evt.button !== 0 || !isGateSelected) {
                     return;
                   }
                   event.cancelBubble = true;
                   onStartGateDrag(gateVisual.id);
                 }}
                 onTouchStart={(event) => {
+                  if (!isGateSelected) {
+                    return;
+                  }
                   event.cancelBubble = true;
                   onStartGateDrag(gateVisual.id);
                 }}

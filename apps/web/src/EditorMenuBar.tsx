@@ -32,6 +32,9 @@ interface EditorMenuBarProps {
   isItemCountsVisible: boolean;
   isPostKeyVisible: boolean;
   isOptimizationVisible: boolean;
+  isGridVisible: boolean;
+  isSnapDisabled: boolean;
+  canFitView: boolean;
   onSetCurrentDrawingName: (name: string) => void;
   onChangeDrawingStatus: (status: DrawingStatus) => void;
   onSaveDrawing: () => void;
@@ -41,6 +44,10 @@ interface EditorMenuBarProps {
   onRedo: () => void;
   onDeleteSelection: () => void;
   onClearLayout: () => void;
+  onFitView: () => void;
+  onResetView: () => void;
+  onToggleGrid: () => void;
+  onToggleSnap: () => void;
   onToggleItemCounts: () => void;
   onTogglePostKey: () => void;
   onToggleOptimization: () => void;
@@ -60,10 +67,16 @@ type MenuId = "file" | "edit" | "view" | null;
 
 function useMenuDismiss(onDismiss: () => void, isOpen: boolean) {
   useEffect(() => {
-    if (!isOpen) return;
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onDismiss();
+    if (!isOpen) {
+      return;
     }
+
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onDismiss();
+      }
+    }
+
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onDismiss]);
@@ -90,6 +103,9 @@ export function EditorMenuBar({
   isItemCountsVisible,
   isPostKeyVisible,
   isOptimizationVisible,
+  isGridVisible,
+  isSnapDisabled,
+  canFitView,
   onSetCurrentDrawingName,
   onChangeDrawingStatus,
   onSaveDrawing,
@@ -99,6 +115,10 @@ export function EditorMenuBar({
   onRedo,
   onDeleteSelection,
   onClearLayout,
+  onFitView,
+  onResetView,
+  onToggleGrid,
+  onToggleSnap,
   onToggleItemCounts,
   onTogglePostKey,
   onToggleOptimization,
@@ -111,13 +131,14 @@ export function EditorMenuBar({
   onNavigatePricing,
   onNavigateAdmin,
   canNavigateEstimate,
-  estimateTitle
+  estimateTitle,
 }: EditorMenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
-  const readOnlyTitle = "Quoted drawings open in view-only mode. Create a new revision from the drawing workspace to continue.";
+  const readOnlyTitle =
+    "Quoted drawings open in view-only mode. Create a new revision from the drawing workspace to continue.";
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
@@ -126,15 +147,19 @@ export function EditorMenuBar({
   useMenuDismiss(closeAll, openMenu !== null);
 
   useEffect(() => {
-    if (!openMenu) return;
+    if (!openMenu) {
+      return;
+    }
+
     function handleClick(event: MouseEvent) {
       if (barRef.current && !barRef.current.contains(event.target as Node)) {
         closeAll();
       }
     }
+
     window.addEventListener("mousedown", handleClick);
     return () => window.removeEventListener("mousedown", handleClick);
-  }, [openMenu, closeAll]);
+  }, [closeAll, openMenu]);
 
   useEffect(() => {
     if (isEditingName && nameInputRef.current) {
@@ -221,17 +246,42 @@ export function EditorMenuBar({
           </button>
           {openMenu === "edit" ? (
             <div className="menu-bar-panel" role="menu">
-              <button type="button" role="menuitem" disabled={!canUndo || isReadOnly} onClick={() => menuAction(onUndo)} title={isReadOnly ? readOnlyTitle : undefined}>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canUndo || isReadOnly}
+                onClick={() => menuAction(onUndo)}
+                title={isReadOnly ? readOnlyTitle : undefined}
+              >
                 Undo<em>Ctrl+Z</em>
               </button>
-              <button type="button" role="menuitem" disabled={!canRedo || isReadOnly} onClick={() => menuAction(onRedo)} title={isReadOnly ? readOnlyTitle : undefined}>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canRedo || isReadOnly}
+                onClick={() => menuAction(onRedo)}
+                title={isReadOnly ? readOnlyTitle : undefined}
+              >
                 Redo<em>Ctrl+Y</em>
               </button>
               <div className="menu-bar-divider" />
-              <button type="button" role="menuitem" disabled={!canDeleteSelection || isReadOnly} onClick={() => menuAction(onDeleteSelection)} title={isReadOnly ? readOnlyTitle : undefined}>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canDeleteSelection || isReadOnly}
+                onClick={() => menuAction(onDeleteSelection)}
+                title={isReadOnly ? readOnlyTitle : undefined}
+              >
                 Delete Selection<em>Del</em>
               </button>
-              <button type="button" role="menuitem" className="menu-item-danger" disabled={isReadOnly} title={isReadOnly ? readOnlyTitle : undefined} onClick={() => menuAction(onClearLayout)}>
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item-danger"
+                disabled={isReadOnly}
+                title={isReadOnly ? readOnlyTitle : undefined}
+                onClick={() => menuAction(onClearLayout)}
+              >
                 Clear All
               </button>
             </div>
@@ -248,14 +298,32 @@ export function EditorMenuBar({
           </button>
           {openMenu === "view" ? (
             <div className="menu-bar-panel" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canFitView}
+                onClick={() => menuAction(onFitView)}
+              >
+                Fit to Drawing
+              </button>
+              <button type="button" role="menuitem" onClick={() => menuAction(onResetView)}>
+                Reset View
+              </button>
+              <div className="menu-bar-divider" />
+              <button type="button" role="menuitem" onClick={() => menuAction(onToggleSnap)}>
+                Snap {isSnapDisabled ? "Off" : "On"}
+              </button>
+              <button type="button" role="menuitem" onClick={() => menuAction(onToggleGrid)}>
+                Grid {isGridVisible ? "On" : "Off"}
+              </button>
               <button type="button" role="menuitem" onClick={() => menuAction(onToggleItemCounts)}>
-                {isItemCountsVisible ? "✓ " : ""}Item Counts
+                Item Counts {isItemCountsVisible ? "On" : "Off"}
               </button>
               <button type="button" role="menuitem" onClick={() => menuAction(onTogglePostKey)}>
-                {isPostKeyVisible ? "✓ " : ""}Post Key
+                Post Key {isPostKeyVisible ? "On" : "Off"}
               </button>
               <button type="button" role="menuitem" onClick={() => menuAction(onToggleOptimization)}>
-                {isOptimizationVisible ? "✓ " : ""}Layout Planner
+                Layout Planner {isOptimizationVisible ? "On" : "Off"}
               </button>
             </div>
           ) : null}
@@ -283,9 +351,13 @@ export function EditorMenuBar({
             type="button"
             className="menu-bar-drawing-name"
             onClick={() => {
-              if (session && currentDrawingId && !isReadOnly) setIsEditingName(true);
+              if (session && currentDrawingId && !isReadOnly) {
+                setIsEditingName(true);
+              }
             }}
-            title={isReadOnly ? readOnlyTitle : session && currentDrawingId ? "Click to rename" : drawingTitle}
+            title={
+              isReadOnly ? readOnlyTitle : session && currentDrawingId ? "Click to rename" : drawingTitle
+            }
           >
             {drawingTitle}
           </button>
@@ -313,7 +385,10 @@ export function EditorMenuBar({
                 {currentCustomerName || "No customer selected"}
               </button>
             ) : (
-              <span className="menu-bar-customer-label" title={currentCustomerName || "Open a workspace drawing to select customer"}>
+              <span
+                className="menu-bar-customer-label"
+                title={currentCustomerName || "Open a workspace drawing to select customer"}
+              >
                 {currentCustomerName || "No customer selected"}
               </span>
             )}
@@ -340,6 +415,42 @@ export function EditorMenuBar({
             </select>
           )
         ) : null}
+
+        <div className="menu-bar-quick" aria-label="Editor view controls">
+          <button
+            type="button"
+            className="menu-bar-quick-button"
+            onClick={onFitView}
+            disabled={!canFitView}
+            title={canFitView ? "Fit the drawing into view" : "Add some fence runs to fit the view"}
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            className="menu-bar-quick-button"
+            onClick={onResetView}
+            title="Reset the view to the default framing"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            className={`menu-bar-quick-button${isSnapDisabled ? "" : " is-active"}`}
+            onClick={onToggleSnap}
+            title={isSnapDisabled ? "Turn snapping back on" : "Turn snapping off"}
+          >
+            Snap {isSnapDisabled ? "Off" : "On"}
+          </button>
+          <button
+            type="button"
+            className={`menu-bar-quick-button${isGridVisible ? " is-active" : ""}`}
+            onClick={onToggleGrid}
+            title={isGridVisible ? "Hide the canvas grid" : "Show the canvas grid"}
+          >
+            Grid
+          </button>
+        </div>
       </div>
 
       <div className="menu-bar-right">
@@ -373,7 +484,9 @@ export function EditorMenuBar({
           </nav>
         ) : null}
         {session ? (
-          <span className={`menu-bar-save-pill${isDirty ? " dirty" : ""}${isReadOnly ? " is-read-only" : ""}`}>
+          <span
+            className={`menu-bar-save-pill${isDirty ? " dirty" : ""}${isReadOnly ? " is-read-only" : ""}`}
+          >
             {isReadOnly ? "View only" : isDirty ? "Unsaved" : "Saved"}
           </span>
         ) : null}

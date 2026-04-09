@@ -27,7 +27,25 @@ interface CommandHarnessState {
   activeBasketballPostDrag: { basketballPostId: string; lastPointer: PointMm } | null;
   activeFloodlightColumnDrag: { floodlightColumnId: string; lastPointer: PointMm } | null;
   activeGateDrag: { gateId: string; lastPointer: PointMm } | null;
-  activeSegmentDrag: { segmentId: string; lastPointer: PointMm } | null;
+  activeSegmentDrag: {
+    segmentId: string;
+    segmentIds: string[];
+    selectionKey: string;
+    lastPointer: PointMm;
+    originPointer: PointMm;
+    baselineSegments: LayoutSegment[];
+    referenceSegments: LayoutSegment[];
+    baselineSnapNodes: PointMm[];
+    baselineLineSnapSegments: LayoutSegment[];
+  } | null;
+  segmentDragReference: {
+    segmentId: string;
+    segmentIds: string[];
+    selectionKey: string;
+    baselineSegments: LayoutSegment[];
+    baselineSnapNodes: PointMm[];
+    baselineLineSnapSegments: LayoutSegment[];
+  } | null;
   customGateWidthInputM: string;
   customGateWidthMm: number;
   basketballPostPreview: BasketballPostInsertionPreview | null;
@@ -54,6 +72,8 @@ interface CommandHarnessState {
   selectedLengthInputM: string;
   selectedPlanId: string | null;
   selectedSegmentId: string | null;
+  selectedSegmentIds: string[];
+  suppressNextSegmentClick: boolean;
 }
 
 function buildBaseSegments(): LayoutSegment[] {
@@ -89,6 +109,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     activeFloodlightColumnDrag: null,
     activeGateDrag: null,
     activeSegmentDrag: null,
+    segmentDragReference: null,
     basketballPostPreview: null,
     customGateWidthInputM: formatMetersInputFromMm(1200),
     customGateWidthMm: 1200,
@@ -120,6 +141,8 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
     selectedLengthInputM: "",
     selectedPlanId: null,
     selectedSegmentId: null,
+    selectedSegmentIds: [],
+    suppressNextSegmentClick: false,
     ...overrides
   };
   const stage = {
@@ -221,6 +244,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         applyFloodlightColumnPlacements,
         beginLayoutBatch,
         commitLayoutBatch,
+        segments: state.layout.segments,
         segmentsById,
         resolvedGateById,
         resolvedBasketballPostById,
@@ -230,10 +254,17 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         isReadOnly: state.isReadOnly,
         interactionMode: state.interactionMode,
         gateType: "SINGLE_LEAF",
+        drawAnchorNodes: [
+          { x: 0, y: 0 },
+          { x: 5000, y: 0 },
+          { x: 5000, y: 2500 }
+        ],
+        lineSnapSegments: state.layout.segments,
         drawStart: state.drawStart,
         drawChainStart: state.drawChainStart,
         rectangleStart: state.rectangleStart,
         selectedSegmentId: state.selectedSegmentId,
+        selectedSegmentIds: state.selectedSegmentIds,
         selectedGateId: state.selectedGateId,
         selectedBasketballPostId: state.selectedBasketballPostId,
         selectedFloodlightColumnId: state.selectedFloodlightColumnId,
@@ -241,6 +272,7 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         isSpacePressed: state.isSpacePressed,
         isPanning: state.isPanning,
         activeSegmentDrag: state.activeSegmentDrag,
+        segmentDragReference: state.segmentDragReference,
         activeGateDrag: state.activeGateDrag,
         activeBasketballPostDrag: state.activeBasketballPostDrag,
         activeFloodlightColumnDrag: state.activeFloodlightColumnDrag,
@@ -264,13 +296,16 @@ function createCommandHarness(overrides: Partial<CommandHarnessState> = {}) {
         setDrawChainStart: createStateSetter(state, "drawChainStart"),
         setRectangleStart: createStateSetter(state, "rectangleStart"),
         setSelectedSegmentId: createStateSetter(state, "selectedSegmentId"),
+        setSelectedSegmentIds: createStateSetter(state, "selectedSegmentIds"),
         setSelectedGateId: createStateSetter(state, "selectedGateId"),
         setSelectedBasketballPostId: createStateSetter(state, "selectedBasketballPostId"),
         setSelectedFloodlightColumnId: createStateSetter(state, "selectedFloodlightColumnId"),
+        setSuppressNextSegmentClick: createStateSetter(state, "suppressNextSegmentClick"),
         setSelectedPlanId: createStateSetter(state, "selectedPlanId"),
         setSelectedLengthInputM: createStateSetter(state, "selectedLengthInputM"),
         setIsLengthEditorOpen: createStateSetter(state, "isLengthEditorOpen"),
         setActiveSegmentDrag: createStateSetter(state, "activeSegmentDrag"),
+        setSegmentDragReference: createStateSetter(state, "segmentDragReference"),
         setActiveGateDrag: createStateSetter(state, "activeGateDrag"),
         setActiveBasketballPostDrag: createStateSetter(state, "activeBasketballPostDrag"),
         setActiveFloodlightColumnDrag: createStateSetter(state, "activeFloodlightColumnDrag"),
@@ -346,6 +381,7 @@ describe("useEditorCommands", () => {
 
     expect(harness.state.isLengthEditorOpen).toBe(true);
     expect(harness.state.selectedSegmentId).toBe("s1");
+    expect(harness.state.selectedSegmentIds).toEqual(["s1"]);
     expect(harness.state.selectedLengthInputM).toBe("5.00");
 
     harness.state.selectedLengthInputM = "4.20";
@@ -442,12 +478,14 @@ describe("useEditorCommands", () => {
 
     harness.state.interactionMode = "SELECT";
     harness.state.selectedSegmentId = "s1";
+    harness.state.selectedSegmentIds = ["s1", "s2"];
     harness.state.selectedGateId = "g1";
     harness.state.selectedBasketballPostId = "post-1";
     harness.state.selectedFloodlightColumnId = "column-1";
     harness.rerender();
     harness.commands.onStageMouseDown(createMouseEvent(0, harness.stage));
     expect(harness.state.selectedSegmentId).toBeNull();
+    expect(harness.state.selectedSegmentIds).toEqual([]);
     expect(harness.state.selectedGateId).toBeNull();
     expect(harness.state.selectedBasketballPostId).toBeNull();
     expect(harness.state.selectedFloodlightColumnId).toBeNull();
@@ -556,7 +594,18 @@ describe("useEditorCommands", () => {
     harness.state.activeGateDrag = null;
     harness.state.activeSegmentDrag = {
       segmentId: "s1",
-      lastPointer: { x: 0, y: 0 }
+      segmentIds: ["s1"],
+      selectionKey: "s1",
+      lastPointer: { x: 0, y: 0 },
+      originPointer: { x: 0, y: 0 },
+      baselineSegments: harness.state.layout.segments,
+      referenceSegments: harness.state.layout.segments,
+      baselineSnapNodes: [
+        { x: 0, y: 0 },
+        { x: 5000, y: 0 },
+        { x: 5000, y: 2500 }
+      ],
+      baselineLineSnapSegments: harness.state.layout.segments
     };
     harness.stage.pointer = { x: 0, y: 200 };
     harness.rerender();
@@ -581,6 +630,7 @@ describe("useEditorCommands", () => {
     expect(harness.state.activeSegmentDrag).toBeNull();
     expect(harness.state.activeGateDrag).toBeNull();
     expect(harness.state.activeFloodlightColumnDrag).toBeNull();
+    expect(harness.state.suppressNextSegmentClick).toBe(false);
     expect(harness.endPan).toHaveBeenCalled();
 
     const wheelEvent = createMouseEvent(0, harness.stage);
@@ -761,6 +811,56 @@ describe("useEditorCommands", () => {
     ]);
 
     uuidSpy.mockRestore();
+  });
+
+  it("reuses the original drag baseline while the same selected run keeps moving", () => {
+    const harness = createCommandHarness({
+      interactionMode: "SELECT",
+      selectedSegmentId: "s1",
+      selectedSegmentIds: ["s1"]
+    });
+
+    harness.stage.pointer = { x: 0, y: 0 };
+    harness.rerender();
+    harness.commands.startSelectedSegmentDrag("s1");
+    expect(harness.state.activeSegmentDrag?.baselineSegments[0]?.start).toEqual({ x: 0, y: 0 });
+    expect(harness.state.activeSegmentDrag?.referenceSegments[0]?.start).toEqual({ x: 0, y: 0 });
+
+    harness.stage.pointer = { x: 0, y: 300 };
+    harness.rerender();
+    harness.commands.onStageMouseMove();
+    harness.commands.onStageMouseUp();
+    expect(harness.state.layout.segments[0]?.start).toEqual({ x: 0, y: 300 });
+
+    harness.stage.pointer = { x: 0, y: 300 };
+    harness.rerender();
+    harness.commands.startSelectedSegmentDrag("s1");
+
+    expect(harness.state.activeSegmentDrag?.baselineSegments[0]?.start).toEqual({ x: 0, y: 300 });
+    expect(harness.state.activeSegmentDrag?.referenceSegments[0]?.start).toEqual({ x: 0, y: 0 });
+    expect(harness.state.segmentDragReference?.selectionKey).toBe("s1");
+  });
+
+  it("moves a connected selected segment group together along the dragged run plane", () => {
+    const harness = createCommandHarness({
+      interactionMode: "SELECT",
+      selectedSegmentId: "s1",
+      selectedSegmentIds: ["s1", "s2"]
+    });
+
+    harness.stage.pointer = { x: 0, y: 0 };
+    harness.rerender();
+    harness.commands.startSelectedSegmentDrag("s1");
+
+    expect(harness.state.activeSegmentDrag?.segmentIds).toEqual(["s1", "s2"]);
+
+    harness.stage.pointer = { x: 0, y: 300 };
+    harness.rerender();
+    harness.commands.onStageMouseMove();
+
+    expect(harness.state.layout.segments.find((segment) => segment.id === "s1")?.start).toEqual({ x: 0, y: 300 });
+    expect(harness.state.layout.segments.find((segment) => segment.id === "s2")?.start).toEqual({ x: 5000, y: 300 });
+    expect(harness.state.layout.segments.find((segment) => segment.id === "s2")?.end).toEqual({ x: 5000, y: 2800 });
   });
 
   it("blocks mutating editor commands when the drawing is read only", () => {

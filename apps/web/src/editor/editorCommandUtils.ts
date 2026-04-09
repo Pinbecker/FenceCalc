@@ -26,6 +26,7 @@ import {
   doesRangeOverlapSegmentOpenings,
   isOffsetWithinSegmentOpenings
 } from "./goalUnitOpenings";
+import { projectPointOntoSegment } from "./gateMath";
 import type { RecessInsertionPreview, ResolvedGatePlacement, SegmentConnectivity } from "./types";
 
 interface RecessReplacementPathSegment {
@@ -448,7 +449,16 @@ export function resizeSegmentCollection(
 export function offsetSegmentCollection(
   previous: LayoutSegment[],
   segmentId: string,
-  dragDelta: PointMm
+  dragDelta: PointMm,
+  options: boolean | {
+    segmentIds?: string[];
+    referenceSegments?: LayoutSegment[];
+    snapToIncrement?: boolean;
+    snapNodes?: PointMm[];
+    lineSnapSegments?: LayoutSegment[];
+    originSnapDistanceMm?: number;
+    lineUpSnapDistanceMm?: number;
+  } = false
 ): LayoutSegment[] {
   const target = previous.find((segment) => segment.id === segmentId);
   if (!target) {
@@ -463,25 +473,172 @@ export function offsetSegmentCollection(
     return previous;
   }
   const normal = { x: -tangent.y, y: tangent.x };
-  const offsetMm = dot(dragDelta, normal);
-  if (Math.abs(offsetMm) < 0.01) {
+  const rawOffsetMm = dot(dragDelta, normal);
+  if (Math.abs(rawOffsetMm) < 0.01) {
+    return previous;
+  }
+  const hasAdvancedSnapping = typeof options !== "boolean";
+  const resolvedOptions =
+    typeof options === "boolean"
+      ? { snapToIncrement: options }
+      : options;
+  const segmentIds = resolvedOptions.segmentIds?.length ? resolvedOptions.segmentIds : [segmentId];
+  const movingSegmentIdSet = new Set(segmentIds);
+  const movingSegments = previous.filter((segment) => movingSegmentIdSet.has(segment.id));
+  const referenceSegments = resolvedOptions.referenceSegments ?? previous;
+  const referenceTarget = referenceSegments.find((segment) => segment.id === segmentId) ?? target;
+  const movedPoints = Array.from(
+    new Map(
+      movingSegments.flatMap((segment) => [
+        [pointCoordinateKey(segment.start), segment.start] as const,
+        [pointCoordinateKey(segment.end), segment.end] as const
+      ])
+    ).values()
+  );
+  const lineSnapSources = movingSegments.filter((segment) => {
+    const segmentTangent = normalizeVector({
+      x: segment.end.x - segment.start.x,
+      y: segment.end.y - segment.start.y
+    });
+    return segmentTangent ? Math.abs(Math.abs(dot(segmentTangent, tangent)) - 1) <= 0.04 : false;
+  });
+  const snapToIncrement = resolvedOptions.snapToIncrement ?? false;
+  const snapNodes = resolvedOptions.snapNodes ?? [];
+  const lineSnapSegments = resolvedOptions.lineSnapSegments ?? previous;
+  const segmentLengthMm = distanceMm(target.start, target.end);
+  const tangentialPaddingMm = Math.max(400, Math.min(1200, segmentLengthMm * 0.18));
+  const defaultOriginSnapDistanceMm = Math.max(180, DRAW_INCREMENT_MM * 2);
+  const strongOriginSnapDistanceMm = resolvedOptions.originSnapDistanceMm ?? Math.max(520, DRAW_INCREMENT_MM * 7);
+  const lineUpSnapDistanceMm = resolvedOptions.lineUpSnapDistanceMm ?? Math.max(280, DRAW_INCREMENT_MM * 3.5);
+  let resolvedOffsetMm = rawOffsetMm;
+  let bestSnapDistanceMm = Number.POSITIVE_INFINITY;
+
+  function considerSnapCandidate(
+    candidateOffsetMm: number,
+    candidateDistanceMm: number,
+    maxDistanceMm = lineUpSnapDistanceMm
+  ): void {
+    if (candidateDistanceMm > maxDistanceMm + 0.001) {
+      return;
+    }
+    if (
+      candidateDistanceMm < bestSnapDistanceMm - 0.001 ||
+      (Math.abs(candidateDistanceMm - bestSnapDistanceMm) <= 0.001 &&
+        Math.abs(candidateOffsetMm) < Math.abs(resolvedOffsetMm))
+    ) {
+      resolvedOffsetMm = candidateOffsetMm;
+      bestSnapDistanceMm = candidateDistanceMm;
+    }
+  }
+
+  if (hasAdvancedSnapping) {
+    const originStartOffsetMm = dot(
+      { x: referenceTarget.start.x - target.start.x, y: referenceTarget.start.y - target.start.y },
+      normal,
+    );
+    const originEndOffsetMm = dot(
+      { x: referenceTarget.end.x - target.end.x, y: referenceTarget.end.y - target.end.y },
+      normal,
+    );
+    const originAlignedOffsetMm = (originStartOffsetMm + originEndOffsetMm) / 2;
+    const originSnapDistanceMm =
+      Math.abs(originAlignedOffsetMm) <= DRAW_INCREMENT_MM * 0.25
+        ? defaultOriginSnapDistanceMm
+        : strongOriginSnapDistanceMm;
+    if (Math.abs(originAlignedOffsetMm - rawOffsetMm) <= originSnapDistanceMm) {
+      considerSnapCandidate(
+        originAlignedOffsetMm,
+        Math.abs(originAlignedOffsetMm - rawOffsetMm),
+        originSnapDistanceMm
+      );
+    }
+
+    for (const node of snapNodes) {
+      for (const movedPoint of movedPoints) {
+        const alongTargetMm = dot(
+          { x: node.x - movedPoint.x, y: node.y - movedPoint.y },
+          tangent,
+        );
+        if (alongTargetMm < -tangentialPaddingMm || alongTargetMm > segmentLengthMm + tangentialPaddingMm) {
+          continue;
+        }
+        const nodeAlignedOffsetMm = dot(
+          { x: node.x - movedPoint.x, y: node.y - movedPoint.y },
+          normal,
+        );
+        if (Math.abs(nodeAlignedOffsetMm) <= DRAW_INCREMENT_MM * 0.25) {
+          continue;
+        }
+        considerSnapCandidate(nodeAlignedOffsetMm, Math.abs(nodeAlignedOffsetMm - rawOffsetMm));
+      }
+    }
+
+    for (const segment of lineSnapSegments) {
+      if (movingSegmentIdSet.has(segment.id)) {
+        continue;
+      }
+      const segmentTangent = normalizeVector({
+        x: segment.end.x - segment.start.x,
+        y: segment.end.y - segment.start.y,
+      });
+      if (!segmentTangent || Math.abs(Math.abs(dot(segmentTangent, tangent)) - 1) > 0.04) {
+        continue;
+      }
+
+      for (const movingSegment of lineSnapSources) {
+        const segmentStartAlongMm = dot(
+          { x: segment.start.x - movingSegment.start.x, y: segment.start.y - movingSegment.start.y },
+          tangent,
+        );
+        const segmentEndAlongMm = dot(
+          { x: segment.end.x - movingSegment.start.x, y: segment.end.y - movingSegment.start.y },
+          tangent,
+        );
+        const segmentMinAlongMm = Math.min(segmentStartAlongMm, segmentEndAlongMm);
+        const segmentMaxAlongMm = Math.max(segmentStartAlongMm, segmentEndAlongMm);
+        if (segmentMaxAlongMm < -tangentialPaddingMm || segmentMinAlongMm > segmentLengthMm + tangentialPaddingMm) {
+          continue;
+        }
+
+        const projectedStart = projectPointOntoSegment(movingSegment.start, segment).projected;
+        const projectedEnd = projectPointOntoSegment(movingSegment.end, segment).projected;
+        const projectedStartOffsetMm = dot(
+          { x: projectedStart.x - movingSegment.start.x, y: projectedStart.y - movingSegment.start.y },
+          normal,
+        );
+        const projectedEndOffsetMm = dot(
+          { x: projectedEnd.x - movingSegment.end.x, y: projectedEnd.y - movingSegment.end.y },
+          normal,
+        );
+        if (Math.abs(projectedStartOffsetMm - projectedEndOffsetMm) > lineUpSnapDistanceMm) {
+          continue;
+        }
+        const segmentAlignedOffsetMm = (projectedStartOffsetMm + projectedEndOffsetMm) / 2;
+        if (Math.abs(segmentAlignedOffsetMm) <= DRAW_INCREMENT_MM * 0.25) {
+          continue;
+        }
+        considerSnapCandidate(segmentAlignedOffsetMm, Math.abs(segmentAlignedOffsetMm - rawOffsetMm));
+      }
+    }
+  }
+
+  if (!Number.isFinite(bestSnapDistanceMm) && snapToIncrement) {
+    resolvedOffsetMm = Math.round(rawOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
+  }
+
+  if (Math.abs(resolvedOffsetMm) < 0.01) {
     return previous;
   }
   const projectedDelta = {
-    x: normal.x * offsetMm,
-    y: normal.y * offsetMm
+    x: normal.x * resolvedOffsetMm,
+    y: normal.y * resolvedOffsetMm
   };
-  const movedStartPoint = target.start;
-  const movedEndPoint = target.end;
+  const movedNodeKeys = new Set<string>(movedPoints.map((point) => pointCoordinateKey(point)));
 
   let changed = false;
   const next = previous.map((segment) => {
-    const moveStart =
-      samePointApprox(segment.start, movedStartPoint, 0.1) ||
-      samePointApprox(segment.start, movedEndPoint, 0.1);
-    const moveEnd =
-      samePointApprox(segment.end, movedStartPoint, 0.1) ||
-      samePointApprox(segment.end, movedEndPoint, 0.1);
+    const moveStart = movedNodeKeys.has(pointCoordinateKey(segment.start));
+    const moveEnd = movedNodeKeys.has(pointCoordinateKey(segment.end));
     if (!moveStart && !moveEnd) {
       return segment;
     }
@@ -489,16 +646,16 @@ export function offsetSegmentCollection(
     return {
       ...segment,
       start: moveStart
-        ? {
+        ? quantize({
             x: segment.start.x + projectedDelta.x,
             y: segment.start.y + projectedDelta.y
-          }
+          })
         : segment.start,
       end: moveEnd
-        ? {
+        ? quantize({
             x: segment.end.x + projectedDelta.x,
             y: segment.end.y + projectedDelta.y
-          }
+          })
         : segment.end
     };
   });

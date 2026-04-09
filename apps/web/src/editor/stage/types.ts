@@ -45,6 +45,7 @@ export interface EditorCanvasStageProps {
   interactionMode: InteractionMode;
   gateType: GateType;
   disableSnap: boolean;
+  isGridVisible?: boolean;
   isReadOnly?: boolean;
   isPanning: boolean;
   drawStart: PointMm | null;
@@ -74,10 +75,23 @@ export interface EditorCanvasStageProps {
   hoveredFloodlightColumnId?: string | null;
   hoveredSegmentId: string | null;
   hoveredGateId: string | null;
+  activeSegmentDrag?: {
+    segmentId: string;
+    segmentIds: string[];
+    selectionKey: string;
+    lastPointer: PointMm;
+    originPointer: PointMm;
+    baselineSegments: LayoutSegment[];
+    referenceSegments: LayoutSegment[];
+    baselineSnapNodes: PointMm[];
+    baselineLineSnapSegments: LayoutSegment[];
+  } | null;
   closeLoopPoint: PointMm | null;
+  drawAnchorNodes: PointMm[];
   visualPosts: VisualPost[];
   segments: LayoutSegment[];
   selectedSegmentId: string | null;
+  selectedSegmentIds: string[];
   selectedGateId: string | null;
   selectedBasketballPostId: string | null;
   selectedFloodlightColumnId?: string | null;
@@ -100,7 +114,7 @@ export interface EditorCanvasStageProps {
   onStageDoubleClick: () => void;
   onStageWheel: (event: KonvaEventObject<WheelEvent>) => void;
   onContextMenu: (event: KonvaEventObject<PointerEvent>) => void;
-  onSelectSegment: (segmentId: string) => void;
+  onSelectSegment: (segmentId: string, options?: { append?: boolean }) => void;
   onStartSegmentDrag: (segmentId: string) => void;
   onOpenSegmentLengthEditor: (segmentId: string) => void;
   onUpdateSegmentEndpoint: (segmentId: string, endpoint: "start" | "end", point: PointMm) => void;

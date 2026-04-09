@@ -1,11 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import type { PointMm } from "@fence-estimator/contracts";
+import type { LayoutSegment, PointMm } from "@fence-estimator/contracts";
 
 import type { InteractionMode } from "./types";
 
 export interface ActiveSegmentDragState {
   segmentId: string;
+  segmentIds: string[];
+  selectionKey: string;
   lastPointer: PointMm;
+  originPointer: PointMm;
+  baselineSegments: LayoutSegment[];
+  referenceSegments: LayoutSegment[];
+  baselineSnapNodes: PointMm[];
+  baselineLineSnapSegments: LayoutSegment[];
+}
+
+export interface SegmentDragReferenceState {
+  segmentId: string;
+  segmentIds: string[];
+  selectionKey: string;
+  baselineSegments: LayoutSegment[];
+  baselineSnapNodes: PointMm[];
+  baselineLineSnapSegments: LayoutSegment[];
 }
 
 export interface ActiveGateDragState {
@@ -28,10 +44,13 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
   const [drawChainStart, setDrawChainStart] = useState<PointMm | null>(null);
   const [rectangleStart, setRectangleStart] = useState<PointMm | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [selectedBasketballPostId, setSelectedBasketballPostId] = useState<string | null>(null);
   const [selectedFloodlightColumnId, setSelectedFloodlightColumnId] = useState<string | null>(null);
+  const [suppressNextSegmentClick, setSuppressNextSegmentClick] = useState(false);
   const [activeSegmentDrag, setActiveSegmentDrag] = useState<ActiveSegmentDragState | null>(null);
+  const [segmentDragReference, setSegmentDragReference] = useState<SegmentDragReferenceState | null>(null);
   const [activeGateDrag, setActiveGateDrag] = useState<ActiveGateDragState | null>(null);
   const [activeBasketballPostDrag, setActiveBasketballPostDrag] = useState<ActiveBasketballPostDragState | null>(null);
   const [activeFloodlightColumnDrag, setActiveFloodlightColumnDrag] = useState<ActiveFloodlightColumnDragState | null>(null);
@@ -41,11 +60,14 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
   useEffect(() => {
     if (interactionMode !== "SELECT") {
       setSelectedSegmentId(null);
+      setSelectedSegmentIds([]);
       setSelectedGateId(null);
       setSelectedBasketballPostId(null);
       setSelectedFloodlightColumnId(null);
+      setSuppressNextSegmentClick(false);
       setIsLengthEditorOpen(false);
       setActiveSegmentDrag(null);
+      setSegmentDragReference(null);
       setActiveGateDrag(null);
       setActiveBasketballPostDrag(null);
       setActiveFloodlightColumnDrag(null);
@@ -64,10 +86,13 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setDrawChainStart(null);
     setRectangleStart(null);
     setSelectedSegmentId(null);
+    setSelectedSegmentIds([]);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
     setSelectedFloodlightColumnId(null);
+    setSuppressNextSegmentClick(false);
     setActiveSegmentDrag(null);
+    setSegmentDragReference(null);
     setActiveGateDrag(null);
     setActiveBasketballPostDrag(null);
     setActiveFloodlightColumnDrag(null);
@@ -79,9 +104,12 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setDrawStart(null);
     setDrawChainStart(null);
     setSelectedSegmentId(null);
+    setSelectedSegmentIds([]);
+    setSegmentDragReference(null);
     setSelectedGateId(null);
     setSelectedBasketballPostId(null);
     setSelectedFloodlightColumnId(null);
+    setSuppressNextSegmentClick(false);
   }, []);
 
   return {
@@ -89,10 +117,13 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     drawChainStart,
     rectangleStart,
     selectedSegmentId,
+    selectedSegmentIds,
     selectedGateId,
     selectedBasketballPostId,
     selectedFloodlightColumnId,
+    suppressNextSegmentClick,
     activeSegmentDrag,
+    segmentDragReference,
     activeGateDrag,
     activeBasketballPostDrag,
     activeFloodlightColumnDrag,
@@ -102,10 +133,13 @@ export function useEditorSelectionState(interactionMode: InteractionMode) {
     setDrawChainStart,
     setRectangleStart,
     setSelectedSegmentId,
+    setSelectedSegmentIds,
     setSelectedGateId,
     setSelectedBasketballPostId,
     setSelectedFloodlightColumnId,
+    setSuppressNextSegmentClick,
     setActiveSegmentDrag,
+    setSegmentDragReference,
     setActiveGateDrag,
     setActiveBasketballPostDrag,
     setActiveFloodlightColumnDrag,

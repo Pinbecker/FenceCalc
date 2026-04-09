@@ -61,6 +61,7 @@ export function useEditorShellState() {
     formatMetersInputFromMm(SINGLE_GATE_WIDTH_MM),
   );
   const [disableSnap, setDisableSnap] = useState(false);
+  const [isGridVisible, setIsGridVisible] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isOptimizationInspectorOpen, setIsOptimizationInspectorOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -92,6 +93,7 @@ export function useEditorShellState() {
     customGateWidthMm,
     customGateWidthInputM,
     disableSnap,
+    isGridVisible,
     selectedPlanId,
     isOptimizationInspectorOpen,
     isTutorialOpen,
@@ -121,6 +123,7 @@ export function useEditorShellState() {
     setCustomGateWidthMm,
     setCustomGateWidthInputM,
     setDisableSnap,
+    setIsGridVisible,
     setSelectedPlanId,
     setIsOptimizationInspectorOpen,
     setIsTutorialOpen

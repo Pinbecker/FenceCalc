@@ -20,6 +20,13 @@ export interface VisibleBounds {
   bottom: number;
 }
 
+export interface WorldBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export interface GridLine {
   coordinate: number;
   major: boolean;
@@ -125,6 +132,32 @@ export function zoomViewportAtPointer(
   };
 }
 
+export function fitViewportToWorldBounds(
+  bounds: WorldBounds,
+  canvasWidth: number,
+  canvasHeight: number,
+  minScale: number,
+  maxScale: number,
+  paddingPx = 88,
+): Viewport {
+  const widthMm = Math.max(bounds.maxX - bounds.minX, 1);
+  const heightMm = Math.max(bounds.maxY - bounds.minY, 1);
+  const usableWidthPx = Math.max(canvasWidth - paddingPx * 2, 1);
+  const usableHeightPx = Math.max(canvasHeight - paddingPx * 2, 1);
+  const scale = Math.min(
+    maxScale,
+    Math.max(minScale, Math.min(usableWidthPx / widthMm, usableHeightPx / heightMm)),
+  );
+  const contentWidthPx = widthMm * scale;
+  const contentHeightPx = heightMm * scale;
+
+  return {
+    scale,
+    x: (canvasWidth - contentWidthPx) / 2 - bounds.minX * scale,
+    y: (canvasHeight - contentHeightPx) / 2 - bounds.minY * scale,
+  };
+}
+
 export function useEditorCanvasViewport({
   canvasWidth,
   canvasHeight,
@@ -189,6 +222,16 @@ export function useEditorCanvasViewport({
     restoreView(null);
   }, [restoreView]);
 
+  const fitWorldBounds = useCallback(
+    (bounds: WorldBounds, paddingPx = 88) => {
+      if (canvasWidth <= 0 || canvasHeight <= 0) {
+        return;
+      }
+      setView(fitViewportToWorldBounds(bounds, canvasWidth, canvasHeight, minScale, maxScale, paddingPx));
+    },
+    [canvasHeight, canvasWidth, maxScale, minScale],
+  );
+
   const toWorld = useCallback((pointer: ScreenPoint) => screenToWorld(pointer, view), [view]);
 
   const beginPan = useCallback(
@@ -245,6 +288,7 @@ export function useEditorCanvasViewport({
     setView,
     restoreView,
     resetView,
+    fitWorldBounds,
     pointerWorld,
     setPointerWorld,
     isSpacePressed,

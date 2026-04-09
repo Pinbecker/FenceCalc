@@ -21,13 +21,21 @@ export function renderBasketballPostSymbol(
     fill: string;
     opacity?: number;
   },
-  keyOverride?: string
+  keyOverride?: string,
+  options?: {
+    simplified?: boolean;
+  }
 ) {
+  const simplified = options?.simplified ?? false;
   const key = keyOverride ?? basketballPost.key;
-  const halfSize = 7.5 / scale;
+  const halfSize = (simplified ? 5.25 : 7.5) / scale;
   const strokeWidth = 1.55 / scale;
   const detailWidth = 1.25 / scale;
   const armEnd = getBasketballPostArmEnd(basketballPost);
+  const simplifiedArmEnd = {
+    x: basketballPost.point.x + basketballPost.normal.x * 520,
+    y: basketballPost.point.y + basketballPost.normal.y * 520
+  };
 
   return (
     <Group key={key} listening={false} opacity={style.opacity ?? 1}>
@@ -41,18 +49,25 @@ export function renderBasketballPostSymbol(
         strokeWidth={strokeWidth}
       />
       <Line
-        points={[basketballPost.point.x, basketballPost.point.y, armEnd.x, armEnd.y]}
+        points={[
+          basketballPost.point.x,
+          basketballPost.point.y,
+          simplified ? simplifiedArmEnd.x : armEnd.x,
+          simplified ? simplifiedArmEnd.y : armEnd.y
+        ]}
         stroke={style.accent}
         strokeWidth={detailWidth}
         lineCap="round"
       />
-      <Circle
-        x={armEnd.x}
-        y={armEnd.y}
-        radius={BASKETBALL_POST_HOOP_RADIUS_MM}
-        stroke={style.accent}
-        strokeWidth={detailWidth}
-      />
+      {!simplified ? (
+        <Circle
+          x={armEnd.x}
+          y={armEnd.y}
+          radius={BASKETBALL_POST_HOOP_RADIUS_MM}
+          stroke={style.accent}
+          strokeWidth={detailWidth}
+        />
+      ) : null}
     </Group>
   );
 }

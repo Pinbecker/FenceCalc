@@ -53,32 +53,32 @@ export const SCALE_BAR_CANDIDATES_MM = [
 ];
 
 const TWIN_BAR_STANDARD_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#c8c29b",
-  "1.8m": "#8eaf9d",
-  "2m": "#86aabd",
-  "2.4m": "#998fb5",
-  "3m": "#bf9a8a",
-  "4m": "#c0aa88",
-  "4.5m": "#b28aa2",
-  "5m": "#86b1a8",
-  "6m": "#a8b68b"
+  "1.2m": "#f0e4a4",
+  "1.8m": "#b6e4b5",
+  "2m": "#a9d6ff",
+  "2.4m": "#d4c0ff",
+  "3m": "#ffbfab",
+  "4m": "#ffd6a5",
+  "4.5m": "#f5b7d5",
+  "5m": "#9fe2d5",
+  "6m": "#d7e7a1"
 };
 
 const TWIN_BAR_SUPER_REBOUND_COLORS: Record<(typeof TWIN_BAR_HEIGHT_KEYS)[number], string> = {
-  "1.2m": "#9e8444",
-  "1.8m": "#3d7f62",
-  "2m": "#3d6e92",
-  "2.4m": "#67558f",
-  "3m": "#a16649",
-  "4m": "#b07b3f",
-  "4.5m": "#925775",
-  "5m": "#3e8077",
-  "6m": "#6f8751"
+  "1.2m": "#d4af1f",
+  "1.8m": "#37a64b",
+  "2m": "#2f6bff",
+  "2.4m": "#7a48e8",
+  "3m": "#e36a3b",
+  "4m": "#f08c00",
+  "4.5m": "#c2458b",
+  "5m": "#119d84",
+  "6m": "#86b220"
 };
 
 const ROLL_FORM_COLORS: Record<(typeof ROLL_FORM_HEIGHT_KEYS)[number], string> = {
-  "2m": "#4b8c78",
-  "3m": "#c1a063"
+  "2m": TWIN_BAR_STANDARD_COLORS["2m"],
+  "3m": TWIN_BAR_STANDARD_COLORS["3m"]
 };
 
 export const TWIN_BAR_HEIGHT_OPTIONS: FenceHeightKey[] = [...TWIN_BAR_HEIGHT_KEYS];
@@ -94,38 +94,11 @@ export function defaultFenceSpec(): FenceSpec {
 
 export function getSegmentColor(spec: FenceSpec): string {
   if (spec.system === "ROLL_FORM") {
-    if (spec.height === "2m") {
-      return ROLL_FORM_COLORS["2m"];
-    }
-    if (spec.height === "3m") {
-      return ROLL_FORM_COLORS["3m"];
-    }
-    return "#2fbf71";
+    return ROLL_FORM_COLORS[spec.height as (typeof ROLL_FORM_HEIGHT_KEYS)[number]] ?? TWIN_BAR_STANDARD_COLORS["2m"];
   }
 
   const palette = spec.twinBarVariant === "SUPER_REBOUND" ? TWIN_BAR_SUPER_REBOUND_COLORS : TWIN_BAR_STANDARD_COLORS;
-  switch (spec.height) {
-    case "1.2m":
-      return palette["1.2m"];
-    case "1.8m":
-      return palette["1.8m"];
-    case "2m":
-      return palette["2m"];
-    case "2.4m":
-      return palette["2.4m"];
-    case "3m":
-      return palette["3m"];
-    case "4m":
-      return palette["4m"];
-    case "4.5m":
-      return palette["4.5m"];
-    case "5m":
-      return palette["5m"];
-    case "6m":
-      return palette["6m"];
-    default:
-      return spec.twinBarVariant === "SUPER_REBOUND" ? "#ff8438" : "#4f83ff";
-  }
+  return palette[spec.height as (typeof TWIN_BAR_HEIGHT_KEYS)[number]] ?? TWIN_BAR_STANDARD_COLORS["3m"];
 }
 
 export function parseMetersInputToMm(value: string): number | null {

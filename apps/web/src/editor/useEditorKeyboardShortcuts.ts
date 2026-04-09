@@ -9,7 +9,18 @@ export interface UseEditorKeyboardShortcutsOptions {
   deleteSelectedSegment(this: void): boolean;
   setInteractionMode(
     this: void,
-    mode: "DRAW" | "SELECT" | "RECTANGLE" | "RECESS" | "GATE" | "BASKETBALL_POST" | "FLOODLIGHT_COLUMN"
+    mode:
+      | "DRAW"
+      | "SELECT"
+      | "RECTANGLE"
+      | "RECESS"
+      | "GOAL_UNIT"
+      | "GATE"
+      | "BASKETBALL_POST"
+      | "FLOODLIGHT_COLUMN"
+      | "KICKBOARD"
+      | "PITCH_DIVIDER"
+      | "SIDE_NETTING"
   ): void;
   setIsSpacePressed(this: void, value: boolean): void;
   setDisableSnap(this: void, value: boolean): void;
@@ -78,11 +89,23 @@ export function useEditorKeyboardShortcuts(options: UseEditorKeyboardShortcutsOp
       if (!isModifierPressed && event.code === "KeyG") {
         options.setInteractionMode("GATE");
       }
+      if (!isModifierPressed && event.code === "KeyU") {
+        options.setInteractionMode("GOAL_UNIT");
+      }
       if (!isModifierPressed && event.code === "KeyB") {
         options.setInteractionMode("BASKETBALL_POST");
       }
       if (!isModifierPressed && event.code === "KeyF") {
         options.setInteractionMode("FLOODLIGHT_COLUMN");
+      }
+      if (!isModifierPressed && event.code === "KeyK") {
+        options.setInteractionMode("KICKBOARD");
+      }
+      if (!isModifierPressed && event.code === "KeyP") {
+        options.setInteractionMode("PITCH_DIVIDER");
+      }
+      if (!isModifierPressed && event.code === "KeyN") {
+        options.setInteractionMode("SIDE_NETTING");
       }
       if (event.code === "Space") {
         event.preventDefault();

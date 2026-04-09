@@ -30,7 +30,11 @@ export function renderGateSymbol(
   },
   label: string | null,
   keyOverride?: string,
+  options?: {
+    showSwingArcs?: boolean;
+  },
 ) {
+  const showSwingArcs = options?.showSwingArcs ?? true;
   const postTickHalfMm = Math.max(120, Math.min(260, gate.widthMm * 0.16));
   const strokeWidth = 2.2 / scale;
   const sweepStrokeWidth = 1.35 / scale;
@@ -100,14 +104,16 @@ export function renderGateSymbol(
           strokeWidth={strokeWidth}
           lineCap="round"
         />
-        <Line
-          points={[gate.endPoint.x, gate.endPoint.y, sweepControl.x, sweepControl.y, openTip.x, openTip.y]}
-          stroke={style.swingStroke}
-          strokeWidth={sweepStrokeWidth}
-          dash={[8 / scale, 5 / scale]}
-          bezier
-          lineCap="round"
-        />
+        {showSwingArcs ? (
+          <Line
+            points={[gate.endPoint.x, gate.endPoint.y, sweepControl.x, sweepControl.y, openTip.x, openTip.y]}
+            stroke={style.swingStroke}
+            strokeWidth={sweepStrokeWidth}
+            dash={[8 / scale, 5 / scale]}
+            bezier
+            lineCap="round"
+          />
+        ) : null}
         <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
         {label
           ? renderCanvasLabel({
@@ -193,22 +199,26 @@ export function renderGateSymbol(
         strokeWidth={strokeWidth}
         lineCap="round"
       />
-      <Line
-        points={[gate.centerPoint.x, gate.centerPoint.y, leftSweepControl.x, leftSweepControl.y, leftOpenTip.x, leftOpenTip.y]}
-        stroke={style.swingStroke}
-        strokeWidth={sweepStrokeWidth}
-        dash={[8 / scale, 5 / scale]}
-        bezier
-        lineCap="round"
-      />
-      <Line
-        points={[gate.centerPoint.x, gate.centerPoint.y, rightSweepControl.x, rightSweepControl.y, rightOpenTip.x, rightOpenTip.y]}
-        stroke={style.swingStroke}
-        strokeWidth={sweepStrokeWidth}
-        dash={[8 / scale, 5 / scale]}
-        bezier
-        lineCap="round"
-      />
+      {showSwingArcs ? (
+        <>
+          <Line
+            points={[gate.centerPoint.x, gate.centerPoint.y, leftSweepControl.x, leftSweepControl.y, leftOpenTip.x, leftOpenTip.y]}
+            stroke={style.swingStroke}
+            strokeWidth={sweepStrokeWidth}
+            dash={[8 / scale, 5 / scale]}
+            bezier
+            lineCap="round"
+          />
+          <Line
+            points={[gate.centerPoint.x, gate.centerPoint.y, rightSweepControl.x, rightSweepControl.y, rightOpenTip.x, rightOpenTip.y]}
+            stroke={style.swingStroke}
+            strokeWidth={sweepStrokeWidth}
+            dash={[8 / scale, 5 / scale]}
+            bezier
+            lineCap="round"
+          />
+        </>
+      ) : null}
       <Circle x={gate.startPoint.x} y={gate.startPoint.y} radius={markerRadius} fill={style.markerFill} />
       <Circle x={gate.endPoint.x} y={gate.endPoint.y} radius={markerRadius} fill={style.markerFill} />
       {label

@@ -21,33 +21,35 @@ interface ToolDef {
   id: InteractionMode;
   label: string;
   shortcut: string;
-  icon: string; // single-char emoji or SVG path alias
+  icon: string;
+  group: "core" | "openings" | "features";
   hasParams: boolean;
 }
 
 const TOOLS: ToolDef[] = [
-  { id: "SELECT", label: "Select", shortcut: "S", icon: "cursor", hasParams: false },
-  { id: "DRAW", label: "Draw", shortcut: "D", icon: "pen", hasParams: false },
-  { id: "RECTANGLE", label: "Rectangle", shortcut: "X", icon: "rect", hasParams: false },
-  { id: "RECESS", label: "Recess", shortcut: "R", icon: "recess", hasParams: true },
-  { id: "GATE", label: "Gate", shortcut: "G", icon: "gate", hasParams: true },
-  { id: "GOAL_UNIT", label: "Goal Unit", shortcut: "U", icon: "goal", hasParams: true },
-  { id: "BASKETBALL_POST", label: "Basketball", shortcut: "B", icon: "basketball", hasParams: true },
-  { id: "FLOODLIGHT_COLUMN", label: "Floodlight", shortcut: "F", icon: "floodlight", hasParams: true },
-  { id: "KICKBOARD", label: "Kickboard", shortcut: "K", icon: "kickboard", hasParams: true },
-  { id: "PITCH_DIVIDER", label: "Pitch Divider", shortcut: "P", icon: "divider", hasParams: false },
-  { id: "SIDE_NETTING", label: "Side Netting", shortcut: "N", icon: "netting", hasParams: true },
+  { id: "SELECT", label: "Select", shortcut: "S", icon: "cursor", group: "core", hasParams: false },
+  { id: "DRAW", label: "Draw", shortcut: "D", icon: "pen", group: "core", hasParams: false },
+  { id: "RECTANGLE", label: "Rectangle", shortcut: "X", icon: "rect", group: "core", hasParams: false },
+  { id: "RECESS", label: "Recess", shortcut: "R", icon: "recess", group: "openings", hasParams: true },
+  { id: "GATE", label: "Gate", shortcut: "G", icon: "gate", group: "openings", hasParams: true },
+  { id: "GOAL_UNIT", label: "Goal Unit", shortcut: "U", icon: "goal", group: "openings", hasParams: true },
+  { id: "BASKETBALL_POST", label: "Basketball", shortcut: "B", icon: "basketball", group: "features", hasParams: true },
+  { id: "FLOODLIGHT_COLUMN", label: "Floodlight", shortcut: "F", icon: "floodlight", group: "features", hasParams: true },
+  { id: "KICKBOARD", label: "Kickboard", shortcut: "K", icon: "kickboard", group: "features", hasParams: true },
+  { id: "PITCH_DIVIDER", label: "Pitch Divider", shortcut: "P", icon: "divider", group: "features", hasParams: false },
+  { id: "SIDE_NETTING", label: "Side Netting", shortcut: "N", icon: "netting", group: "features", hasParams: true },
 ];
 
 /* SVG Icon set */
 
-function ToolIcon({ icon, size = 18 }: { icon: string; size?: number }) {
+function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
   const s = size;
   switch (icon) {
     case "cursor":
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 4l7 17 2.5-6.5L20 12z" />
+          <path d="M5 4.5L11.7 19.5l2.15-5.12L19 12.2z" />
+          <path d="M13.2 13.8l4.1 5.2" />
         </svg>
       );
     case "pen":
@@ -81,24 +83,27 @@ function ToolIcon({ icon, size = 18 }: { icon: string; size?: number }) {
     case "goal":
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="5" y="7" width="14" height="10" rx="1" />
-          <line x1="12" y1="7" x2="12" y2="17" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <path d="M5 8h14v8H5z" />
+          <path d="M8 8v8" />
+          <path d="M16 8v8" />
+          <path d="M5 12h14" />
         </svg>
       );
     case "basketball":
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="4" x2="12" y2="20" />
-          <line x1="8" y1="4" x2="16" y2="4" />
-          <rect x="9" y="6" width="6" height="4" rx="1" />
+          <line x1="8" y1="20" x2="8" y2="6" />
+          <line x1="8" y1="7" x2="15.5" y2="7" />
+          <rect x="13.5" y="5.5" width="4.5" height="3.5" rx="0.8" />
+          <circle cx="17.5" cy="12.5" r="1.7" />
         </svg>
       );
     case "floodlight":
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="8" x2="12" y2="20" />
-          <polygon points="8,4 16,4 14,8 10,8" />
+          <line x1="12" y1="9" x2="12" y2="20" />
+          <path d="M8 5h8l-1.4 4h-5.2z" />
+          <line x1="9.2" y1="11.5" x2="14.8" y2="11.5" />
         </svg>
       );
     case "kickboard":
@@ -274,8 +279,14 @@ export function EditorToolPalette({
 
   const isLegacyRollFormDrawing = activeSpec.system === "ROLL_FORM";
   const fenceColorSwatch = getSegmentColor(activeSpec);
+  const availableHeightOptions = activeSpec.system === "TWIN_BAR" ? activeHeightOptions : rollFormHeightOptions;
+  const fenceVariantColors = availableHeightOptions.map((heightOption) =>
+    getSegmentColor({ ...activeSpec, height: heightOption }),
+  );
+  const hasFenceColorVariants = new Set(fenceVariantColors).size > 1;
   const selectedGoalUnitKey = `${goalUnitWidthMm}:${goalUnitHeightMm}:${goalUnitHasBasketballPost ? "basketball" : "plain"}`;
   const selectedKickboardKey = `${kickboardSectionHeightMm}:${kickboardThicknessMm}:${kickboardProfile}:${kickboardBoardLengthMm}`;
+  const activeTool = TOOLS.find((tool) => tool.id === interactionMode) ?? TOOLS[0]!;
 
   const selectTool = useCallback(
     (mode: InteractionMode) => {
@@ -321,6 +332,7 @@ export function EditorToolPalette({
             disabled={isReadOnly}
           >
             <ToolIcon icon={tool.icon} />
+            <kbd>{tool.shortcut}</kbd>
             {tool.hasParams && interactionMode === tool.id ? <span className="tool-btn-arrow">▸</span> : null}
           </button>
         ))}
@@ -344,6 +356,10 @@ export function EditorToolPalette({
         <span className="fence-swatch" style={{ background: fenceColorSwatch }} />
         <span className="fence-label">{activeSpec.height}</span>
       </button>
+      <div className="tool-palette-caption">
+        <strong>{activeTool.label}</strong>
+        <span>{isReadOnly ? "View only" : "Click again for options"}</span>
+      </div>
       {isReadOnly ? <span className="tool-palette-lock">View only</span> : null}
 
       {/* Fence config flyout */}
@@ -413,9 +429,9 @@ export function EditorToolPalette({
               </select>
             </label>
           ) : null}
-          <div className="flyout-legend">
-            {(activeSpec.system === "TWIN_BAR" ? twinBarHeightOptions : rollFormHeightOptions).map(
-              (heightOption) => (
+          {hasFenceColorVariants ? (
+            <div className="flyout-legend">
+              {availableHeightOptions.map((heightOption) => (
                 <div key={heightOption} className="flyout-legend-row">
                   <span
                     className="fence-swatch"
@@ -425,9 +441,11 @@ export function EditorToolPalette({
                   />
                   <span>{heightOption}</span>
                 </div>
-              ),
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="flyout-note">Fence line colour stays consistent across heights and variants.</p>
+          )}
         </FlyoutPanel>
       ) : null}
 

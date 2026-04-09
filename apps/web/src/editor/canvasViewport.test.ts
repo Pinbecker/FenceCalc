@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCanvasGrid, buildVisibleBounds, screenToWorld, zoomViewportAtPointer } from "./canvasViewport.js";
+import {
+  buildCanvasGrid,
+  buildVisibleBounds,
+  fitViewportToWorldBounds,
+  screenToWorld,
+  zoomViewportAtPointer,
+} from "./canvasViewport.js";
 
 describe("canvasViewport", () => {
   it("converts screen coordinates into world coordinates", () => {
@@ -49,5 +55,20 @@ describe("canvasViewport", () => {
     expect(nextViewport.scale).toBeCloseTo(0.54);
     expect(nextViewport.x).toBeCloseTo(97.6);
     expect(nextViewport.y).toBeCloseTo(62.4);
+  });
+
+  it("fits a set of world bounds into the canvas with padding", () => {
+    const nextViewport = fitViewportToWorldBounds(
+      { minX: 1000, minY: 2000, maxX: 9000, maxY: 6000 },
+      1000,
+      800,
+      0.05,
+      3,
+      80,
+    );
+
+    expect(nextViewport.scale).toBeCloseTo(0.105);
+    expect(nextViewport.x).toBeCloseTo(-25);
+    expect(nextViewport.y).toBeCloseTo(-20);
   });
 });

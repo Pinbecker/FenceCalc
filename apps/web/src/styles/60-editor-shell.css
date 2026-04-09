@@ -521,6 +521,46 @@
   gap: 10px;
 }
 
+.menu-bar-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(218, 228, 223, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.menu-bar-quick-button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--shell-ink-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.menu-bar-quick-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-ink);
+}
+
+.menu-bar-quick-button.is-active {
+  background: rgba(88, 116, 110, 0.18);
+  color: var(--shell-ink);
+}
+
+.menu-bar-quick-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
 .menu-bar-drawing-name,
 .menu-bar-name-input {
   max-width: 300px;
@@ -766,6 +806,27 @@
   color: rgba(255, 221, 202, 0.72);
 }
 
+.tool-palette-caption {
+  display: grid;
+  gap: 2px;
+  max-width: 74px;
+  padding-top: 2px;
+  text-align: center;
+}
+
+.tool-palette-caption strong {
+  color: var(--shell-ink);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.tool-palette-caption span {
+  color: var(--shell-ink-muted);
+  font-size: 0.56rem;
+  line-height: 1.35;
+}
+
 .fence-label {
   color: var(--shell-ink);
   font-size: 0.68rem;
@@ -838,6 +899,13 @@
   color: var(--shell-ink-soft);
 }
 
+.flyout-note {
+  margin: 0;
+  color: var(--shell-ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
 .editor-floating-right {
   top: 16px;
   right: 16px;
@@ -887,6 +955,66 @@
 
 .floating-item-counts {
   max-width: 250px;
+}
+
+.floating-selection-panel {
+  width: min(290px, calc(100vw - 32px));
+}
+
+.floating-selection-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.floating-selection-head {
+  display: grid;
+  gap: 3px;
+}
+
+.floating-selection-head strong {
+  color: var(--shell-ink);
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.floating-selection-head span {
+  color: var(--shell-ink-soft);
+  font-size: 0.68rem;
+}
+
+.floating-selection-list {
+  gap: 0;
+}
+
+.floating-selection-hint {
+  margin: 0;
+  color: var(--shell-ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.floating-selection-action {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(106, 138, 131, 0.26);
+  border-radius: 10px;
+  background: rgba(88, 116, 110, 0.14);
+  color: var(--shell-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.floating-selection-action:hover {
+  border-color: rgba(106, 138, 131, 0.38);
+  background: rgba(88, 116, 110, 0.2);
 }
 
 .float-metrics-grid {
@@ -977,6 +1105,60 @@
   background: linear-gradient(180deg, rgba(88, 116, 110, 0.3), rgba(63, 83, 78, 0.28));
   color: var(--shell-ink);
   box-shadow: none;
+}
+
+.scale-bar {
+  left: 20px;
+  bottom: 20px;
+  z-index: 6;
+  min-width: 164px;
+  padding: 10px 12px 12px;
+  border-color: var(--shell-border);
+  border-radius: 18px;
+  background: rgba(14, 20, 19, 0.92);
+  backdrop-filter: var(--shell-blur);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.scale-bar-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.scale-bar-caption {
+  color: var(--shell-ink-soft);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scale-bar-value {
+  color: rgba(246, 238, 226, 0.94);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.scale-bar-track {
+  overflow: hidden;
+}
+
+.scale-bar-line {
+  border-top-color: var(--shell-ink);
+}
+
+.scale-bar .tick {
+  border-left-color: var(--shell-ink);
+}
+
+.scale-bar-labels {
+  margin-top: 6px;
+  color: var(--shell-ink-soft);
 }
 
 .editor-drawing-modal-backdrop {
@@ -1082,6 +1264,10 @@
     gap: 4px;
   }
 
+  .menu-bar-quick {
+    display: none;
+  }
+
   .menu-bar-nav-button {
     height: 28px;
     padding: 0 9px;
@@ -1096,6 +1282,11 @@
   .tool-btn {
     width: 34px;
     height: 34px;
+  }
+
+  .scale-bar {
+    left: 12px;
+    bottom: 12px;
   }
 
   .editor-floating-right {

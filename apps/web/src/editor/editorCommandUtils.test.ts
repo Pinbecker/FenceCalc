@@ -68,6 +68,67 @@ describe("editorCommandUtils", () => {
     expect(offset[1]?.end).toEqual({ x: 1000, y: 1000 });
   });
 
+  it("snaps a moved segment back to its original position and lines it up with nearby nodes and runs", () => {
+    const segments = [
+      createSegment("a", { x: 0, y: 0 }, { x: 1000, y: 0 }),
+      createSegment("b", { x: 1000, y: 0 }, { x: 1000, y: 1000 }),
+      createSegment("c", { x: 0, y: 300 }, { x: 1000, y: 300 }),
+    ];
+
+    const snappedBack = offsetSegmentCollection(segments, "a", { x: 0, y: 40 }, {
+      snapToIncrement: true,
+      snapNodes: [
+        { x: 0, y: 0 },
+        { x: 1000, y: 0 },
+        { x: 0, y: 300 },
+        { x: 1000, y: 300 }
+      ],
+      lineSnapSegments: segments
+    });
+    const snappedToRun = offsetSegmentCollection(segments, "a", { x: 0, y: 260 }, {
+      snapToIncrement: true,
+      snapNodes: [
+        { x: 0, y: 0 },
+        { x: 1000, y: 0 },
+        { x: 0, y: 300 },
+        { x: 1000, y: 300 }
+      ],
+      lineSnapSegments: segments
+    });
+
+    expect(snappedBack[0]?.start).toEqual({ x: 0, y: 0 });
+    expect(snappedBack[0]?.end).toEqual({ x: 1000, y: 0 });
+    expect(snappedToRun[0]?.start).toEqual({ x: 0, y: 300 });
+    expect(snappedToRun[0]?.end).toEqual({ x: 1000, y: 300 });
+    expect(snappedToRun[1]?.start).toEqual({ x: 1000, y: 300 });
+  });
+
+  it("moves a selected connected segment group together when multiple run ids are supplied", () => {
+    const segments = [
+      createSegment("a", { x: 0, y: 0 }, { x: 1000, y: 0 }),
+      createSegment("b", { x: 1000, y: 0 }, { x: 1000, y: 1000 }),
+      createSegment("c", { x: 1000, y: 1000 }, { x: 2000, y: 1000 })
+    ];
+
+    const offset = offsetSegmentCollection(segments, "a", { x: 0, y: 300 }, {
+      segmentIds: ["a", "b"],
+      snapToIncrement: true
+    });
+
+    expect(offset.find((segment) => segment.id === "a")).toMatchObject({
+      start: { x: 0, y: 300 },
+      end: { x: 1000, y: 300 }
+    });
+    expect(offset.find((segment) => segment.id === "b")).toMatchObject({
+      start: { x: 1000, y: 300 },
+      end: { x: 1000, y: 1300 }
+    });
+    expect(offset.find((segment) => segment.id === "c")).toMatchObject({
+      start: { x: 1000, y: 1300 },
+      end: { x: 2000, y: 1000 }
+    });
+  });
+
   it("moves gates to the nearest valid gap without overlapping peers", () => {
     const segment = createSegment("segment-1", { x: 0, y: 0 }, { x: 5000, y: 0 });
     const placements: GatePlacement[] = [

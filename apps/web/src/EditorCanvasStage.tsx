@@ -65,7 +65,9 @@ export function EditorCanvasStage({
             ? props.hoveredBasketballPostId === props.selectedBasketballPostId ||
               props.hoveredFloodlightColumnId === props.selectedFloodlightColumnId ||
               props.hoveredGateId === props.selectedGateId ||
-              props.hoveredSegmentId === props.selectedSegmentId
+              (props.hoveredSegmentId !== null &&
+                (props.selectedSegmentIds.includes(props.hoveredSegmentId) ||
+                  props.hoveredSegmentId === props.selectedSegmentId))
               ? "grab"
               : "pointer"
             : "default";
@@ -102,22 +104,28 @@ export function EditorCanvasStage({
         onWheel={onStageWheel}
         onContextMenu={onContextMenu}
       >
-        <EditorCanvasGridLayer
-          view={view}
-          visibleBounds={props.visibleBounds}
-          verticalLines={props.verticalLines}
-          horizontalLines={props.horizontalLines}
-        />
+        {props.isGridVisible !== false ? (
+          <EditorCanvasGridLayer
+            view={view}
+            visibleBounds={props.visibleBounds}
+            verticalLines={props.verticalLines}
+            horizontalLines={props.horizontalLines}
+          />
+        ) : null}
         <EditorCanvasGeometryLayer
           view={view}
           interactionMode={props.interactionMode}
+          disableSnap={props.disableSnap}
+          drawAnchorNodes={props.drawAnchorNodes}
           visualPosts={props.visualPosts}
           segments={props.segments}
           hoveredBasketballPostId={props.hoveredBasketballPostId}
           hoveredFloodlightColumnId={props.hoveredFloodlightColumnId ?? null}
           hoveredSegmentId={props.hoveredSegmentId}
           hoveredGateId={props.hoveredGateId}
+          activeSegmentDrag={props.activeSegmentDrag ?? null}
           selectedSegmentId={props.selectedSegmentId}
+          selectedSegmentIds={props.selectedSegmentIds}
           selectedGateId={props.selectedGateId}
           selectedBasketballPostId={props.selectedBasketballPostId}
           selectedFloodlightColumnId={props.selectedFloodlightColumnId ?? null}
@@ -172,6 +180,7 @@ export function EditorCanvasStage({
           sideNettingPreview={props.sideNettingPreview ?? null}
           sideNettingSegmentPreview={props.sideNettingSegmentPreview ?? null}
           gatePreviewVisual={props.gatePreviewVisual}
+          activeSegmentDrag={props.activeSegmentDrag ?? null}
           closeLoopPoint={props.closeLoopPoint}
           oppositeGateGuides={props.oppositeGateGuides}
         />
@@ -180,27 +189,6 @@ export function EditorCanvasStage({
 
       <EditorCanvasHud
         scaleBar={props.scaleBar}
-        interactionMode={props.interactionMode}
-        disableSnap={props.disableSnap}
-        isPanning={props.isPanning}
-        hoveredBasketballPostId={props.hoveredBasketballPostId}
-        hoveredFloodlightColumnId={props.hoveredFloodlightColumnId ?? null}
-        hoveredSegmentId={props.hoveredSegmentId}
-        hoveredGateId={props.hoveredGateId}
-        drawStart={props.drawStart}
-        drawSnapLabel={props.drawSnapLabel}
-        closeLoopPoint={props.closeLoopPoint}
-        gatePreview={props.gatePreview}
-        basketballPostPreview={props.basketballPostPreview}
-        floodlightColumnPreview={props.floodlightColumnPreview ?? null}
-        recessPreview={props.recessPreview}
-        goalUnitPreview={props.goalUnitPreview ?? null}
-        kickboardPreview={props.kickboardPreview ?? null}
-        pitchDividerAnchorPreview={props.pitchDividerAnchorPreview ?? null}
-        pitchDividerPreview={props.pitchDividerPreview ?? null}
-        pendingSideNettingStart={props.pendingSideNettingStart ?? null}
-        sideNettingAnchorPreview={props.sideNettingAnchorPreview ?? null}
-        sideNettingPreview={props.sideNettingPreview ?? null}
       />
     </main>
   );

@@ -239,14 +239,13 @@ export type DetailLevel = "full" | "reduced" | "overview" | "schematic";
 
 /**
  * Determine which rendering detail tier to use based on current canvas
- * scale. Each tier progressively hides minor detail so dense drawings
+ * scale. Each tier progressively simplifies minor detail so dense drawings
  * remain legible at low zoom levels.
  *
- *  full      (scale ≥ 0.15)  — all geometry, labels, post shapes
- *  reduced   (0.06 – 0.15)   — simplified posts, gate outlines only
- *  overview  (0.02 – 0.06)   — dots for posts, hide gate arcs,
- *                               hide minor labels
- *  schematic (< 0.02)        — lines only, colour-coded by spec
+ *  full      (scale >= 0.15)  - all geometry, labels, and post shapes
+ *  reduced   (0.06 - 0.15)    - simplified post dots, reduced labels
+ *  overview  (0.02 - 0.06)    - smaller post dots, hide minor labels
+ *  schematic (< 0.02)         - minimum-size post dots and line emphasis
  */
 export function getDetailLevel(scale: number): DetailLevel {
   if (scale >= 0.15) return "full";
@@ -256,17 +255,18 @@ export function getDetailLevel(scale: number): DetailLevel {
 }
 
 /**
- * Should intermediate posts be visible at the current detail level?
+ * Intermediate posts stay visible at every detail level; decluttering is
+ * handled by simplification and size reduction rather than removal.
  */
 export function shouldShowIntermediatePosts(level: DetailLevel): boolean {
-  return level === "full" || level === "reduced";
+  return level === "full" || level === "reduced" || level === "overview" || level === "schematic";
 }
 
 /**
  * Should any post symbols be rendered?
  */
 export function shouldShowPosts(level: DetailLevel): boolean {
-  return level !== "schematic";
+  return level === "full" || level === "reduced" || level === "overview" || level === "schematic";
 }
 
 /**

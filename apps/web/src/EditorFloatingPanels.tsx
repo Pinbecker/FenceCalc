@@ -17,7 +17,17 @@ interface PostTypeCounts {
   GATE: number;
 }
 
+interface SelectionInspector {
+  title: string;
+  subtitle: string;
+  rows: Array<{ label: string; value: string }>;
+  hint?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
 interface EditorFloatingPanelsProps {
+  selectionInspector?: SelectionInspector | null;
   isItemCountsVisible: boolean;
   isPostKeyVisible: boolean;
   postRowsByType: {
@@ -77,6 +87,7 @@ function CountList(props: {
   if (props.rows.length === 0) {
     return <p className="float-muted">{props.empty}</p>;
   }
+
   return (
     <dl className="float-count-list">
       {props.rows.map((row) => (
@@ -90,6 +101,7 @@ function CountList(props: {
 }
 
 export function EditorFloatingPanels({
+  selectionInspector = null,
   isItemCountsVisible,
   isPostKeyVisible,
   postRowsByType,
@@ -105,7 +117,7 @@ export function EditorFloatingPanels({
   fenceRunCount,
   formatHeightLabelFromMm,
   onToggleItemCounts,
-  onTogglePostKey
+  onTogglePostKey,
 }: EditorFloatingPanelsProps) {
   const [isItemsExpanded, setIsItemsExpanded] = useState(false);
   const totalPostCount =
@@ -120,12 +132,47 @@ export function EditorFloatingPanels({
 
   return (
     <>
-      {/* ── Floating Item Counts ── */}
+      {selectionInspector ? (
+        <div className="floating-panel floating-selection-panel">
+          <div className="floating-panel-header">
+            <span className="floating-panel-title">Selection</span>
+          </div>
+          <div className="floating-selection-body">
+            <div className="floating-selection-head">
+              <strong>{selectionInspector.title}</strong>
+              <span>{selectionInspector.subtitle}</span>
+            </div>
+            <dl className="float-count-list floating-selection-list">
+              {selectionInspector.rows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {selectionInspector.hint ? (
+              <p className="floating-selection-hint">{selectionInspector.hint}</p>
+            ) : null}
+            {selectionInspector.actionLabel && selectionInspector.onAction ? (
+              <button
+                type="button"
+                className="floating-selection-action"
+                onClick={selectionInspector.onAction}
+              >
+                {selectionInspector.actionLabel}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {isItemCountsVisible ? (
         <div className="floating-panel floating-item-counts">
           <div className="floating-panel-header">
             <span className="floating-panel-title">Item Counts</span>
-            <button type="button" className="floating-panel-close" onClick={onToggleItemCounts} title="Hide">×</button>
+            <button type="button" className="floating-panel-close" onClick={onToggleItemCounts} title="Hide">
+              ×
+            </button>
           </div>
           <div className="float-metrics-grid">
             <FloatingMiniMetric label="Posts" value={totalPostCount} />
@@ -158,26 +205,47 @@ export function EditorFloatingPanels({
                     { label: "Corner", value: postTypeCounts.CORNER },
                     { label: "Junction", value: postTypeCounts.JUNCTION },
                     { label: "Inline Join", value: postTypeCounts.INLINE_JOIN },
-                    { label: "Gate", value: postTypeCounts.GATE }
+                    { label: "Gate", value: postTypeCounts.GATE },
                   ].filter((row) => row.value > 0)}
                 />
               </div>
               <div className="float-count-group">
                 <h4>End Posts</h4>
-                <CountList empty="None" rows={postRowsByType.end.map((r) => ({ label: formatHeightLabelFromMm(r.heightMm), value: r.count }))} />
+                <CountList
+                  empty="None"
+                  rows={postRowsByType.end.map((row) => ({
+                    label: formatHeightLabelFromMm(row.heightMm),
+                    value: row.count,
+                  }))}
+                />
               </div>
               <div className="float-count-group">
                 <h4>Intermediate Posts</h4>
-                <CountList empty="None" rows={postRowsByType.intermediate.map((r) => ({ label: formatHeightLabelFromMm(r.heightMm), value: r.count }))} />
+                <CountList
+                  empty="None"
+                  rows={postRowsByType.intermediate.map((row) => ({
+                    label: formatHeightLabelFromMm(row.heightMm),
+                    value: row.count,
+                  }))}
+                />
               </div>
               <div className="float-count-group">
                 <h4>Corners / Junctions</h4>
                 <CountList
                   empty="None"
                   rows={[
-                    ...postRowsByType.corner.map((r) => ({ label: `Corner ${formatHeightLabelFromMm(r.heightMm)}`, value: r.count })),
-                    ...postRowsByType.junction.map((r) => ({ label: `Junction ${formatHeightLabelFromMm(r.heightMm)}`, value: r.count })),
-                    ...postRowsByType.inlineJoin.map((r) => ({ label: `Inline ${formatHeightLabelFromMm(r.heightMm)}`, value: r.count }))
+                    ...postRowsByType.corner.map((row) => ({
+                      label: `Corner ${formatHeightLabelFromMm(row.heightMm)}`,
+                      value: row.count,
+                    })),
+                    ...postRowsByType.junction.map((row) => ({
+                      label: `Junction ${formatHeightLabelFromMm(row.heightMm)}`,
+                      value: row.count,
+                    })),
+                    ...postRowsByType.inlineJoin.map((row) => ({
+                      label: `Inline ${formatHeightLabelFromMm(row.heightMm)}`,
+                      value: row.count,
+                    })),
                   ]}
                 />
               </div>
@@ -187,25 +255,46 @@ export function EditorFloatingPanels({
                   empty="No gates."
                   rows={[
                     { label: "Total", value: gateCounts.total },
-                    ...gateCountsByHeight.single.map((r) => ({ label: `Single leaf ${r.height}`, value: r.count })),
-                    ...gateCountsByHeight.double.map((r) => ({ label: `Double leaf ${r.height}`, value: r.count })),
-                    ...gateCountsByHeight.custom.map((r) => ({ label: `Custom ${r.height}`, value: r.count }))
-                  ].filter((r) => r.value > 0)}
+                    ...gateCountsByHeight.single.map((row) => ({
+                      label: `Single leaf ${row.height}`,
+                      value: row.count,
+                    })),
+                    ...gateCountsByHeight.double.map((row) => ({
+                      label: `Double leaf ${row.height}`,
+                      value: row.count,
+                    })),
+                    ...gateCountsByHeight.custom.map((row) => ({
+                      label: `Custom ${row.height}`,
+                      value: row.count,
+                    })),
+                  ].filter((row) => row.value > 0)}
                 />
               </div>
               <div className="float-count-group">
                 <h4>Basketball Posts</h4>
-                <CountList empty="None" rows={[
-                  { label: "Total", value: basketballPostCount },
-                  ...basketballPostCountsByHeight.map((r) => ({ label: r.height, value: r.count }))
-                ].filter((r) => r.value > 0)} />
+                <CountList
+                  empty="None"
+                  rows={[
+                    { label: "Total", value: basketballPostCount },
+                    ...basketballPostCountsByHeight.map((row) => ({
+                      label: row.height,
+                      value: row.count,
+                    })),
+                  ].filter((row) => row.value > 0)}
+                />
               </div>
               <div className="float-count-group">
                 <h4>Floodlight Columns</h4>
-                <CountList empty="None" rows={[
-                  { label: "Total", value: floodlightColumnCount },
-                  ...floodlightColumnCountsByHeight.map((r) => ({ label: r.height, value: r.count }))
-                ].filter((r) => r.value > 0)} />
+                <CountList
+                  empty="None"
+                  rows={[
+                    { label: "Total", value: floodlightColumnCount },
+                    ...floodlightColumnCountsByHeight.map((row) => ({
+                      label: row.height,
+                      value: row.count,
+                    })),
+                  ].filter((row) => row.value > 0)}
+                />
               </div>
               <div className="float-count-group">
                 <h4>Goal Units</h4>
@@ -227,7 +316,10 @@ export function EditorFloatingPanels({
                 <h4>Fence Heights (Std / SR)</h4>
                 <CountList
                   empty="No twin bar fence."
-                  rows={twinBarFenceRows.map((r) => ({ label: r.height, value: `${r.standard} / ${r.superRebound}` }))}
+                  rows={twinBarFenceRows.map((row) => ({
+                    label: row.height,
+                    value: `${row.standard} / ${row.superRebound}`,
+                  }))}
                 />
               </div>
             </div>
@@ -235,12 +327,13 @@ export function EditorFloatingPanels({
         </div>
       ) : null}
 
-      {/* ── Floating Post Key ── */}
       {isPostKeyVisible ? (
         <div className="floating-panel floating-post-key">
           <div className="floating-panel-header">
             <span className="floating-panel-title">Post Key</span>
-            <button type="button" className="floating-panel-close" onClick={onTogglePostKey} title="Hide">×</button>
+            <button type="button" className="floating-panel-close" onClick={onTogglePostKey} title="Hide">
+              ×
+            </button>
           </div>
           <div className="post-key-compact">
             <div className="post-key-row">

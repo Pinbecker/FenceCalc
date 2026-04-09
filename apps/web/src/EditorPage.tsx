@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
+import type { LayoutSegment } from "@fence-estimator/contracts";
+import { distanceMm } from "@fence-estimator/geometry";
 
 import { EditorDrawingSaveModal } from "./EditorDrawingSaveModal";
 import { EditorLengthEditor } from "./EditorLengthEditor";
@@ -33,6 +35,7 @@ import {
   INITIAL_VISIBLE_WIDTH_MM,
   MAX_SCALE,
   MIN_SCALE,
+  pointCoordinateKey,
   RECESS_DEPTH_OPTIONS_MM,
   RECESS_INPUT_STEP_M,
   RECESS_WIDTH_OPTIONS_MM,
@@ -59,6 +62,73 @@ interface EditorPageProps {
       | "login",
     query?: Record<string, string>,
   ) => void;
+}
+
+function normalizeSelectedSegmentIds(
+  selectedSegmentIds: string[],
+  selectedSegmentId: string | null,
+  segmentsById: Map<string, LayoutSegment>
+) {
+  if (selectedSegmentIds.length > 0) {
+    return selectedSegmentIds.filter((segmentId) => segmentsById.has(segmentId));
+  }
+  return selectedSegmentId && segmentsById.has(selectedSegmentId) ? [selectedSegmentId] : [];
+}
+
+function buildConnectedSegmentSelection(
+  currentSelectionIds: string[],
+  segmentId: string,
+  segmentsById: Map<string, LayoutSegment>,
+  append = false
+) {
+  if (!append) {
+    return {
+      selectedIds: [segmentId],
+      primaryId: segmentId
+    };
+  }
+
+  const normalizedCurrentSelection = currentSelectionIds.filter((selectedId) => segmentsById.has(selectedId));
+  if (normalizedCurrentSelection.length === 0 || normalizedCurrentSelection.includes(segmentId)) {
+    return {
+      selectedIds: normalizedCurrentSelection.length > 0 ? normalizedCurrentSelection : [segmentId],
+      primaryId: segmentId
+    };
+  }
+
+  const candidate = segmentsById.get(segmentId);
+  if (!candidate) {
+    return {
+      selectedIds: normalizedCurrentSelection,
+      primaryId: normalizedCurrentSelection[0] ?? segmentId
+    };
+  }
+
+  const selectedNodeKeys = new Set<string>();
+  normalizedCurrentSelection.forEach((selectedId) => {
+    const segment = segmentsById.get(selectedId);
+    if (!segment) {
+      return;
+    }
+    selectedNodeKeys.add(pointCoordinateKey(segment.start));
+    selectedNodeKeys.add(pointCoordinateKey(segment.end));
+  });
+
+  const sharesNode =
+    selectedNodeKeys.has(pointCoordinateKey(candidate.start)) ||
+    selectedNodeKeys.has(pointCoordinateKey(candidate.end));
+
+  if (!sharesNode) {
+    return {
+      selectedIds: [segmentId],
+      primaryId: segmentId
+    };
+  }
+
+  return {
+    selectedIds: [...normalizedCurrentSelection, segmentId],
+    primaryId: segmentId
+  };
 }
 
 export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
@@ -202,6 +272,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     updatePan,
     endPan,
     zoomAtPointer,
+    resetView,
+    fitWorldBounds,
     restoreView,
     toWorld,
     visibleBounds,
@@ -290,6 +362,15 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     canvasWidth,
     freezeOptimization: isOptimizationFrozen,
   });
+  const normalizedSelectedSegmentIds = useMemo(
+    () =>
+      normalizeSelectedSegmentIds(
+        selectionState.selectedSegmentIds,
+        selectionState.selectedSegmentId,
+        segmentsById
+      ),
+    [segmentsById, selectionState.selectedSegmentId, selectionState.selectedSegmentIds]
+  );
   const {
     postRowsByType,
     gateCounts,
@@ -347,6 +428,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setSelectedLengthInputM: selectionState.setSelectedLengthInputM,
     setSelectedPlanId: shellState.setSelectedPlanId,
   });
+
+  useEffect(() => {
+    if (normalizedSelectedSegmentIds.length <= 1) {
+      return;
+    }
+    selectionState.setIsLengthEditorOpen(false);
+  }, [normalizedSelectedSegmentIds.length, selectionState.setIsLengthEditorOpen]);
 
   const {
     activeDrawNodeSnap,
@@ -473,17 +561,22 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     floodlightColumnHeightMm: shellState.floodlightColumnHeightMm,
     sideNettingHeightMm: shellState.sideNettingHeightMm,
     pendingPitchDividerStart: shellState.pendingPitchDividerStart,
+    drawAnchorNodes,
+    lineSnapSegments: estimateSegments,
     drawStart: selectionState.drawStart,
     drawChainStart: selectionState.drawChainStart,
     rectangleStart: selectionState.rectangleStart,
     selectedSegmentId: selectionState.selectedSegmentId,
+    selectedSegmentIds: selectionState.selectedSegmentIds,
     selectedGateId: selectionState.selectedGateId,
     selectedBasketballPostId: selectionState.selectedBasketballPostId,
     selectedFloodlightColumnId: selectionState.selectedFloodlightColumnId,
     selectedLengthInputM: selectionState.selectedLengthInputM,
+    disableSnap: shellState.disableSnap,
     isSpacePressed,
     isPanning,
     activeSegmentDrag: selectionState.activeSegmentDrag,
+    segmentDragReference: selectionState.segmentDragReference,
     activeGateDrag: selectionState.activeGateDrag,
     activeBasketballPostDrag: selectionState.activeBasketballPostDrag,
     activeFloodlightColumnDrag: selectionState.activeFloodlightColumnDrag,
@@ -518,13 +611,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     setDrawChainStart: selectionState.setDrawChainStart,
     setRectangleStart: selectionState.setRectangleStart,
     setSelectedSegmentId: selectionState.setSelectedSegmentId,
+    setSelectedSegmentIds: selectionState.setSelectedSegmentIds,
     setSelectedGateId: selectionState.setSelectedGateId,
     setSelectedBasketballPostId: selectionState.setSelectedBasketballPostId,
     setSelectedFloodlightColumnId: selectionState.setSelectedFloodlightColumnId,
+    setSuppressNextSegmentClick: selectionState.setSuppressNextSegmentClick,
     setSelectedPlanId: shellState.setSelectedPlanId,
     setSelectedLengthInputM: selectionState.setSelectedLengthInputM,
     setIsLengthEditorOpen: selectionState.setIsLengthEditorOpen,
     setActiveSegmentDrag: selectionState.setActiveSegmentDrag,
+    setSegmentDragReference: selectionState.setSegmentDragReference,
     setActiveGateDrag: selectionState.setActiveGateDrag,
     setActiveBasketballPostDrag: selectionState.setActiveBasketballPostDrag,
     setActiveFloodlightColumnDrag: selectionState.setActiveFloodlightColumnDrag,
@@ -611,6 +707,92 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     shellState.setInteractionMode,
   ]);
 
+  const handleSelectSegment = useCallback(
+    (segmentId: string, options?: { append?: boolean }) => {
+      if (selectionState.suppressNextSegmentClick) {
+        selectionState.setSuppressNextSegmentClick(false);
+        return;
+      }
+      const nextSelection = buildConnectedSegmentSelection(
+        normalizedSelectedSegmentIds,
+        segmentId,
+        segmentsById,
+        options?.append ?? false
+      );
+      selectionState.setSelectedSegmentId(nextSelection.primaryId);
+      selectionState.setSelectedSegmentIds(nextSelection.selectedIds);
+      selectionState.setSelectedGateId(null);
+      selectionState.setSelectedBasketballPostId(null);
+      selectionState.setSelectedFloodlightColumnId(null);
+      selectionState.setDrawStart(null);
+      if (nextSelection.selectedIds.length !== 1 || nextSelection.primaryId !== selectionState.selectedSegmentId) {
+        selectionState.setIsLengthEditorOpen(false);
+      }
+      selectionState.setSuppressNextSegmentClick(false);
+    },
+    [
+      normalizedSelectedSegmentIds,
+      segmentsById,
+      selectionState.selectedSegmentId,
+      selectionState.setSuppressNextSegmentClick,
+      selectionState.setDrawStart,
+      selectionState.setIsLengthEditorOpen,
+      selectionState.setSelectedBasketballPostId,
+      selectionState.setSelectedFloodlightColumnId,
+      selectionState.setSelectedGateId,
+      selectionState.setSelectedSegmentId,
+      selectionState.setSelectedSegmentIds,
+      selectionState.suppressNextSegmentClick,
+    ]
+  );
+
+  const handleStartSegmentDrag = useCallback(
+    (segmentId: string) => {
+      selectionState.setSelectedSegmentId(segmentId);
+      selectionState.setSelectedSegmentIds(
+        normalizedSelectedSegmentIds.includes(segmentId) ? normalizedSelectedSegmentIds : [segmentId]
+      );
+      selectionState.setSelectedGateId(null);
+      selectionState.setSelectedBasketballPostId(null);
+      selectionState.setSelectedFloodlightColumnId(null);
+      selectionState.setIsLengthEditorOpen(false);
+      selectionState.setSuppressNextSegmentClick(false);
+      startSelectedSegmentDrag(segmentId);
+    },
+    [
+      normalizedSelectedSegmentIds,
+      selectionState.setIsLengthEditorOpen,
+      selectionState.setSelectedBasketballPostId,
+      selectionState.setSelectedFloodlightColumnId,
+      selectionState.setSelectedGateId,
+      selectionState.setSelectedSegmentId,
+      selectionState.setSelectedSegmentIds,
+      selectionState.setSuppressNextSegmentClick,
+      startSelectedSegmentDrag,
+    ]
+  );
+
+  const handleOpenSegmentLengthEditor = useCallback(
+    (segmentId: string) => {
+      selectionState.setSelectedSegmentId(segmentId);
+      selectionState.setSelectedSegmentIds([segmentId]);
+      selectionState.setSelectedGateId(null);
+      selectionState.setSelectedBasketballPostId(null);
+      selectionState.setSelectedFloodlightColumnId(null);
+      selectionState.setSuppressNextSegmentClick(false);
+      openLengthEditor(segmentId);
+    },
+    [
+      openLengthEditor,
+      selectionState.setSelectedBasketballPostId,
+      selectionState.setSelectedFloodlightColumnId,
+      selectionState.setSelectedGateId,
+      selectionState.setSelectedSegmentId,
+      selectionState.setSelectedSegmentIds,
+      selectionState.setSuppressNextSegmentClick,
+    ]
+  );
+
   const {
     canManageAdmin,
     canManagePricing,
@@ -638,7 +820,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const canDeleteSelection =
     !isQuotedViewOnly &&
     interactionMode === "SELECT" &&
-    (!!selectionState.selectedSegmentId ||
+    (normalizedSelectedSegmentIds.length > 0 ||
+      !!selectionState.selectedSegmentId ||
       !!selectionState.selectedGateId ||
       !!selectionState.selectedBasketballPostId ||
       !!selectionState.selectedFloodlightColumnId);
@@ -654,6 +837,180 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     () => shellState.setIsOptimizationInspectorOpen((c: boolean) => !c),
     [shellState],
   );
+  const fitViewToDrawing = useCallback(() => {
+    const points = [
+      ...currentLayout.segments.flatMap((segment) => [segment.start, segment.end]),
+      ...resolvedGoalUnits.flatMap((goalUnit) => [
+        goalUnit.entryPoint,
+        goalUnit.exitPoint,
+        goalUnit.recessEntryPoint,
+        goalUnit.recessExitPoint,
+        goalUnit.rearCenterPoint,
+      ]),
+      ...resolvedKickboards.flatMap((kickboard) => [kickboard.start, kickboard.end]),
+      ...resolvedPitchDividers.flatMap((pitchDivider) => [
+        pitchDivider.startPoint,
+        pitchDivider.endPoint,
+        ...pitchDivider.supportPoints,
+      ]),
+      ...resolvedSideNettings.flatMap((sideNetting) => [
+        sideNetting.start,
+        sideNetting.end,
+        ...sideNetting.extendedPostPoints,
+      ]),
+    ];
+    const firstPoint = points[0];
+    if (!firstPoint) {
+      resetView();
+      return;
+    }
+
+    const bounds = points.reduce(
+      (accumulator, point) => ({
+        minX: Math.min(accumulator.minX, point.x),
+        minY: Math.min(accumulator.minY, point.y),
+        maxX: Math.max(accumulator.maxX, point.x),
+        maxY: Math.max(accumulator.maxY, point.y),
+      }),
+      {
+        minX: firstPoint.x,
+        minY: firstPoint.y,
+        maxX: firstPoint.x,
+        maxY: firstPoint.y,
+      },
+    );
+    fitWorldBounds(bounds, 104);
+  }, [
+    currentLayout.segments,
+    fitWorldBounds,
+    resetView,
+    resolvedGoalUnits,
+    resolvedKickboards,
+    resolvedPitchDividers,
+    resolvedSideNettings,
+  ]);
+  const selectionInspector = useMemo(() => {
+    if (normalizedSelectedSegmentIds.length > 1) {
+      const selectedSegments = normalizedSelectedSegmentIds
+        .map((segmentId) => segmentsById.get(segmentId))
+        .filter((segment): segment is LayoutSegment => segment !== undefined);
+      const totalLengthMm = selectedSegments.reduce(
+        (sum, segment) => sum + distanceMm(segment.start, segment.end),
+        0
+      );
+
+      return {
+        title: "Selected Fence Group",
+        subtitle: `${selectedSegments.length} connected runs`,
+        rows: [
+          { label: "Total length", value: formatLengthMm(totalLengthMm) },
+          { label: "Runs", value: selectedSegments.length.toString() },
+          { label: "Primary", value: segmentOrdinalById.get(selectionState.selectedSegmentId ?? "")?.toString() ?? "Run" },
+        ],
+        hint: "Shift-click connected runs, then drag any selected run to move the whole group together.",
+      };
+    }
+
+    if (selectedSegment) {
+      return {
+        title: "Selected Fence Run",
+        subtitle:
+          selectedSegment.spec.system === "ROLL_FORM"
+            ? `Roll Form · ${selectedSegment.spec.height}`
+            : `Twin Bar${selectedSegment.spec.twinBarVariant === "SUPER_REBOUND" ? " SR" : ""} · ${selectedSegment.spec.height}`,
+        rows: [
+          { label: "Length", value: formatLengthMm(distanceMm(selectedSegment.start, selectedSegment.end)) },
+        ],
+        hint: "Drag the run to offset it. Drag an endpoint to reshape and snap against nearby nodes.",
+        actionLabel: "Edit length",
+        onAction: () => openLengthEditor(selectedSegment.id),
+      };
+    }
+
+    if (selectionState.selectedGateId) {
+      const selectedGate = resolvedGateById.get(selectionState.selectedGateId);
+      if (selectedGate) {
+        return {
+          title: "Selected Gate",
+          subtitle:
+            selectedGate.gateType === "DOUBLE_LEAF"
+              ? "Double leaf"
+              : selectedGate.gateType === "CUSTOM"
+                ? "Custom opening"
+                : "Single leaf",
+          rows: [
+            { label: "Width", value: formatLengthMm(selectedGate.widthMm) },
+            { label: "Segment", value: segmentOrdinalById.get(selectedGate.segmentId)?.toString() ?? "Run" },
+            { label: "Offset", value: formatLengthMm(selectedGate.startOffsetMm) },
+          ],
+          hint: "Click once to select, then drag to slide along the host run.",
+        };
+      }
+    }
+
+    if (selectionState.selectedBasketballPostId) {
+      const selectedBasketballPost = resolvedBasketballPostById.get(selectionState.selectedBasketballPostId);
+      if (selectedBasketballPost) {
+        return {
+          title: "Selected Basketball Post",
+          subtitle:
+            selectedBasketballPost.type === "MOUNTED_TO_EXISTING_POST"
+              ? "Mounted to existing post"
+              : "Dedicated post",
+          rows: [
+            { label: "Facing", value: selectedBasketballPost.facing === "LEFT" ? "Left" : "Right" },
+            {
+              label: "Arm",
+              value:
+                selectedBasketballPost.armLengthMm && selectedBasketballPost.armLengthMm > 0
+                  ? formatLengthMm(selectedBasketballPost.armLengthMm)
+                  : "Mounted",
+            },
+            { label: "Offset", value: formatLengthMm(selectedBasketballPost.offsetMm) },
+          ],
+          hint: "Click once to select, then drag to slide to the next valid position.",
+        };
+      }
+    }
+
+    if (selectionState.selectedFloodlightColumnId) {
+      const selectedFloodlightColumn = resolvedFloodlightColumnById.get(selectionState.selectedFloodlightColumnId);
+      if (selectedFloodlightColumn) {
+        return {
+          title: "Selected Floodlight Column",
+          subtitle: "Lighting support",
+          rows: [
+            {
+              label: "Height",
+              value:
+                selectedFloodlightColumn.placement.heightMm !== undefined
+                  ? formatLengthMm(selectedFloodlightColumn.placement.heightMm)
+                  : "Not set",
+            },
+            { label: "Facing", value: selectedFloodlightColumn.facing === "LEFT" ? "Left" : "Right" },
+            { label: "Offset", value: formatLengthMm(selectedFloodlightColumn.offsetMm) },
+          ],
+          hint: "Click once to select, then drag to reposition without colliding with nearby openings.",
+        };
+      }
+    }
+
+    return null;
+  }, [
+    formatLengthMm,
+    openLengthEditor,
+    resolvedBasketballPostById,
+    resolvedFloodlightColumnById,
+    resolvedGateById,
+    normalizedSelectedSegmentIds,
+    segmentOrdinalById,
+    segmentsById,
+    selectedSegment,
+    selectionState.selectedBasketballPostId,
+    selectionState.selectedFloodlightColumnId,
+    selectionState.selectedGateId,
+    selectionState.selectedSegmentId,
+  ]);
   const menuBarProps = {
     session,
     drawingTitle,
@@ -675,6 +1032,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isItemCountsVisible,
     isPostKeyVisible,
     isOptimizationVisible: shellState.isOptimizationInspectorOpen,
+    isGridVisible: shellState.isGridVisible,
+    isSnapDisabled: shellState.disableSnap,
+    canFitView: currentLayout.segments.length > 0,
     onSetCurrentDrawingName: workspace.setCurrentDrawingName,
     onChangeDrawingStatus: (status: Parameters<typeof handleChangeDrawingStatus>[0]) => {
       void handleChangeDrawingStatus(status);
@@ -703,6 +1063,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onDeleteSelection: handleDeleteSelection,
     onClearLayout: handleClearLayout,
+    onFitView: fitViewToDrawing,
+    onResetView: resetView,
+    onToggleGrid: () => shellState.setIsGridVisible((current: boolean) => !current),
+    onToggleSnap: () => shellState.setDisableSnap((current: boolean) => !current),
     onToggleItemCounts: toggleItemCounts,
     onTogglePostKey: togglePostKey,
     onToggleOptimization: toggleOptimization,
@@ -810,6 +1174,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       interactionMode,
       gateType: shellState.gateType,
       disableSnap: shellState.disableSnap,
+      isGridVisible: shellState.isGridVisible,
       isReadOnly: isQuotedViewOnly,
       isPanning,
       drawStart: selectionState.drawStart,
@@ -839,10 +1204,13 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       hoveredFloodlightColumnId,
       hoveredSegmentId,
       hoveredGateId,
+      activeSegmentDrag: selectionState.activeSegmentDrag,
       closeLoopPoint,
+      drawAnchorNodes,
       visualPosts,
       segments,
       selectedSegmentId: selectionState.selectedSegmentId,
+      selectedSegmentIds: normalizedSelectedSegmentIds,
       selectedGateId: selectionState.selectedGateId,
       selectedBasketballPostId: selectionState.selectedBasketballPostId,
       selectedFloodlightColumnId: selectionState.selectedFloodlightColumnId,
@@ -865,25 +1233,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onStageDoubleClick: cancelActiveDrawing,
       onStageWheel,
       onContextMenu,
-      onSelectSegment: (segmentId: string) => {
-        selectionState.setSelectedSegmentId(segmentId);
-        selectionState.setSelectedGateId(null);
-        selectionState.setSelectedBasketballPostId(null);
-        selectionState.setSelectedFloodlightColumnId(null);
-        selectionState.setDrawStart(null);
-      },
-      onStartSegmentDrag: (segmentId: string) => {
-        selectionState.setSelectedGateId(null);
-        selectionState.setSelectedBasketballPostId(null);
-        selectionState.setSelectedFloodlightColumnId(null);
-        startSelectedSegmentDrag(segmentId);
-      },
-      onOpenSegmentLengthEditor: (segmentId: string) => {
-        selectionState.setSelectedGateId(null);
-        selectionState.setSelectedBasketballPostId(null);
-        selectionState.setSelectedFloodlightColumnId(null);
-        openLengthEditor(segmentId);
-      },
+      onSelectSegment: handleSelectSegment,
+      onStartSegmentDrag: handleStartSegmentDrag,
+      onOpenSegmentLengthEditor: handleOpenSegmentLengthEditor,
       onUpdateSegmentEndpoint: (
         segmentId: string,
         endpoint: "start" | "end",
@@ -897,6 +1249,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         }
         commitLayoutBatch();
         beginLayoutBatch();
+        selectionState.setSegmentDragReference(null);
         setIsEndpointDragActive(true);
       },
       onEndSegmentEndpointDrag: () => {
@@ -908,46 +1261,58 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       },
       onSelectGate: (gateId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(gateId);
         selectionState.setSelectedBasketballPostId(null);
         selectionState.setSelectedFloodlightColumnId(null);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
       },
       onStartGateDrag: (gateId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(gateId);
         selectionState.setSelectedBasketballPostId(null);
         selectionState.setSelectedFloodlightColumnId(null);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
         startSelectedGateDrag(gateId);
       },
       onSelectBasketballPost: (basketballPostId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(null);
         selectionState.setSelectedBasketballPostId(basketballPostId);
         selectionState.setSelectedFloodlightColumnId(null);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
       },
       onStartBasketballPostDrag: (basketballPostId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(null);
         selectionState.setSelectedBasketballPostId(basketballPostId);
         selectionState.setSelectedFloodlightColumnId(null);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
         startSelectedBasketballPostDrag(basketballPostId);
       },
       onSelectFloodlightColumn: (floodlightColumnId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(null);
         selectionState.setSelectedBasketballPostId(null);
         selectionState.setSelectedFloodlightColumnId(floodlightColumnId);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
       },
       onStartFloodlightColumnDrag: (floodlightColumnId: string) => {
         selectionState.setSelectedSegmentId(null);
+        selectionState.setSelectedSegmentIds([]);
         selectionState.setSelectedGateId(null);
         selectionState.setSelectedBasketballPostId(null);
         selectionState.setSelectedFloodlightColumnId(floodlightColumnId);
+        selectionState.setSuppressNextSegmentClick(false);
         selectionState.setIsLengthEditorOpen(false);
         startSelectedFloodlightColumnDrag(floodlightColumnId);
       },
@@ -971,6 +1336,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onSelectPlan: shellState.setSelectedPlanId,
     },
     floatingPanelsProps: {
+      selectionInspector,
       isItemCountsVisible,
       isPostKeyVisible,
       postRowsByType,

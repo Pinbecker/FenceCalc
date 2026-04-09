@@ -106,6 +106,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     interactionMode,
     gateType: "SINGLE_LEAF" as const,
     disableSnap: true,
+    isGridVisible: true,
     isPanning: false,
     drawStart: { x: 0, y: 0 },
     rectangleStart: { x: 0, y: 0 },
@@ -164,7 +165,13 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     hoveredBasketballPostId: null,
     hoveredSegmentId: "s1",
     hoveredGateId: "g1",
+    activeSegmentDrag: null,
     closeLoopPoint: { x: 0, y: 0 },
+    drawAnchorNodes: [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 3000 }
+    ],
     visualPosts: [
       { key: "post-end", point: { x: 0, y: 0 }, kind: "END" as const, heightMm: 2400 },
       { key: "post-intermediate", point: { x: 2500, y: 0 }, kind: "INTERMEDIATE" as const, heightMm: 2400 },
@@ -175,6 +182,7 @@ function buildProps(overrides: Partial<Parameters<typeof EditorCanvasStage>[0]> 
     ],
     segments,
     selectedSegmentId: "s1",
+    selectedSegmentIds: ["s1"],
     selectedGateId: "g1",
     selectedBasketballPostId: null,
     gatesBySegmentId: new Map(
@@ -256,8 +264,7 @@ describe("EditorCanvasStage", () => {
     const registry = getKonvaMockRegistry();
 
     expect(html).toContain("Canvas scale bar");
-    expect(html).toContain("<strong>Mode</strong><em>Select</em>");
-    expect(html).toContain("Click select, drag slide");
+    expect(html).toContain("Scale");
     expect(registry.Stage).toHaveLength(1);
     expect(registry.Layer.length).toBeGreaterThanOrEqual(4);
     expect(registry.RegularPolygon.length).toBeGreaterThan(0);
@@ -348,7 +355,7 @@ describe("EditorCanvasStage", () => {
     expect(props.onUpdateSegmentEndpoint).toHaveBeenCalled();
     expect(props.onStartGateDrag).toHaveBeenCalled();
     expect(props.onSelectGate).toHaveBeenCalled();
-    expect(props.onStartBasketballPostDrag).toHaveBeenCalledWith("bp-1");
+    expect(props.onStartBasketballPostDrag).not.toHaveBeenCalled();
     expect(props.onSelectBasketballPost).toHaveBeenCalledWith("bp-1");
   });
 
@@ -407,6 +414,7 @@ describe("EditorCanvasStage", () => {
         {...buildProps({
           interactionMode: "BASKETBALL_POST",
           selectedSegmentId: null,
+          selectedSegmentIds: [],
           selectedGateId: null,
           hoveredSegmentId: null,
           hoveredGateId: null
@@ -421,5 +429,113 @@ describe("EditorCanvasStage", () => {
         .filter((entry) => typeof entry.hitStrokeWidth === "number")
         .every((entry) => entry.listening === false)
     ).toBe(true);
+  });
+
+  it("forces labels visible for runs whose lengths change during a segment drag", () => {
+    const movedSegments: LayoutSegment[] = [
+      { id: "s1", start: { x: 0, y: 300 }, end: { x: 5000, y: 300 }, spec },
+      { id: "s2", start: { x: 5000, y: 300 }, end: { x: 5000, y: 3000 }, spec: { ...spec, system: "ROLL_FORM" } }
+    ];
+
+    renderToStaticMarkup(
+      <EditorCanvasStage
+        {...buildProps({
+          segments: movedSegments,
+          selectedSegmentId: "s1",
+          selectedSegmentIds: ["s1"],
+          activeSegmentDrag: {
+            segmentId: "s1",
+            segmentIds: ["s1"],
+            selectionKey: "s1",
+            lastPointer: { x: 0, y: 300 },
+            originPointer: { x: 0, y: 0 },
+            baselineSegments: buildSegments(),
+            referenceSegments: buildSegments(),
+            baselineSnapNodes: [
+              { x: 0, y: 0 },
+              { x: 5000, y: 0 },
+              { x: 5000, y: 3000 }
+            ],
+            baselineLineSnapSegments: buildSegments()
+          },
+          segmentLengthLabelsBySegmentId: new Map([
+            [
+              "s1",
+              [
+                {
+                  key: "label-s1",
+                  segmentId: "s1",
+                  x: 2500,
+                  y: 180,
+                  text: formatLengthMm(5000),
+                  lengthMm: 5000,
+                  isSelected: true
+                }
+              ]
+            ],
+            [
+              "s2",
+              [
+                {
+                  key: "label-s2",
+                  segmentId: "s2",
+                  x: 5120,
+                  y: 1650,
+                  text: formatLengthMm(2700),
+                  lengthMm: 2700,
+                  isSelected: false
+                }
+              ]
+            ]
+          ]),
+          visibleSegmentLabelKeys: new Set(["label-s1"])
+        })}
+      />
+    );
+
+    const registry = getKonvaMockRegistry();
+    const labels = registry.Text.map((entry) => entry.text).filter((value): value is string => typeof value === "string");
+
+    expect(labels).toContain(formatLengthMm(2700));
+    expect(labels).toContain("Original");
+  });
+
+  it("keeps intermediate posts visible while shrinking them at low zoom", () => {
+    renderToStaticMarkup(<EditorCanvasStage {...buildProps()} />);
+    let registry = getKonvaMockRegistry();
+    const fullDetailIntermediate = registry.Rect.find((entry) => {
+      if (
+        typeof entry.x !== "number" ||
+        typeof entry.y !== "number" ||
+        typeof entry.width !== "number" ||
+        typeof entry.height !== "number"
+      ) {
+        return false;
+      }
+
+      return (
+        Math.abs((entry.x + entry.width / 2) - 2500) < 0.01 &&
+        Math.abs((entry.y + entry.height / 2) - 0) < 0.01
+      );
+    });
+
+    resetKonvaMockRegistry();
+    renderToStaticMarkup(
+      <EditorCanvasStage
+        {...buildProps({
+          view: { x: 12, y: 24, scale: 0.02 },
+        })}
+      />
+    );
+    registry = getKonvaMockRegistry();
+    const overviewIntermediate = registry.Circle.find(
+      (entry) => entry.x === 2500 && entry.y === 0 && typeof entry.radius === "number",
+    );
+
+    expect(fullDetailIntermediate).toBeDefined();
+    expect(overviewIntermediate).toBeDefined();
+    expect(typeof overviewIntermediate?.radius).toBe("number");
+    expect((overviewIntermediate!.radius as number) * 0.02).toBeGreaterThan(1);
+    expect((overviewIntermediate!.radius as number) * 0.02).toBeLessThan(((fullDetailIntermediate!.width as number) / 2) * 0.5);
   });
 });

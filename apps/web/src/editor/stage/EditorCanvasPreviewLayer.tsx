@@ -14,6 +14,7 @@ type EditorCanvasPreviewLayerProps = Pick<
   EditorCanvasStageProps,
   | "axisGuide"
   | "activeDrawNodeSnap"
+  | "activeSegmentDrag"
   | "gateType"
   | "drawHoverSnap"
   | "drawStart"
@@ -262,6 +263,7 @@ function renderTargetSegmentHighlight(
 export function EditorCanvasPreviewLayer({
   axisGuide,
   activeDrawNodeSnap,
+  activeSegmentDrag = null,
   gateType,
   drawHoverSnap,
   drawStart,
@@ -289,6 +291,14 @@ export function EditorCanvasPreviewLayer({
   visibleBounds,
   closeLoopPoint
 }: EditorCanvasPreviewLayerProps) {
+  const activeSegmentDragBaselineSegments = activeSegmentDrag
+    ? activeSegmentDrag.referenceSegments.filter((segment) => activeSegmentDrag.segmentIds.includes(segment.id))
+    : [];
+  const activeSegmentDragBaselineSegment = activeSegmentDrag
+    ? activeSegmentDragBaselineSegments.find((segment) => segment.id === activeSegmentDrag.segmentId) ??
+      activeSegmentDragBaselineSegments[0] ??
+      null
+    : null;
   const recessAxes = recessPreview
     ? deriveSegmentAxes(recessPreview.segment.start, recessPreview.segment.end)
     : null;
@@ -306,6 +316,46 @@ export function EditorCanvasPreviewLayer({
 
   return (
     <Layer>
+      {interactionMode === "SELECT" && activeSegmentDragBaselineSegment ? (
+        <Group
+          key={`segment-drag-origin-${activeSegmentDrag?.selectionKey ?? activeSegmentDragBaselineSegment.id}`}
+          listening={false}
+        >
+          {activeSegmentDragBaselineSegments.map((segment) => (
+            <Line
+              key={`segment-drag-origin-line-${segment.id}`}
+              points={[
+                segment.start.x,
+                segment.start.y,
+                segment.end.x,
+                segment.end.y
+              ]}
+              stroke="rgba(217, 230, 236, 0.72)"
+              strokeWidth={2.2 / view.scale}
+              dash={[12 / view.scale, 8 / view.scale]}
+              lineCap="round"
+              lineJoin="round"
+            />
+          ))}
+          {renderCanvasLabel({
+            keyValue: `segment-drag-origin-label-${activeSegmentDrag?.selectionKey ?? activeSegmentDragBaselineSegment.id}`,
+            ...offsetPoint(
+              midpoint(activeSegmentDragBaselineSegment.start, activeSegmentDragBaselineSegment.end),
+              deriveSegmentAxes(activeSegmentDragBaselineSegment.start, activeSegmentDragBaselineSegment.end).tangent,
+              deriveSegmentAxes(activeSegmentDragBaselineSegment.start, activeSegmentDragBaselineSegment.end).normal,
+              view.scale,
+              24
+            ),
+            text: "Original",
+            scale: view.scale,
+            fill: "rgba(19, 28, 32, 0.84)",
+            textColor: "#e7f0f4",
+            stroke: "rgba(217, 230, 236, 0.24)",
+            fontSizePx: LABEL_FONT_SIZE_PX,
+            minWidthPx: 60
+          })}
+        </Group>
+      ) : null}
       {interactionMode === "RECESS" && recessPreview ? (
         <Group key={`recess-preview-${recessPreview.segment.id}`} listening={false}>
           {renderTargetSegmentHighlight(

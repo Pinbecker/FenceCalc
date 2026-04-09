@@ -21,12 +21,15 @@ const mockSelectionState = {
   drawChainStart: null,
   rectangleStart: null,
   selectedSegmentId: null as string | null,
+  selectedSegmentIds: [] as string[],
   selectedGateId: null as string | null,
   selectedBasketballPostId: null as string | null,
   selectedFloodlightColumnId: null as string | null,
+  suppressNextSegmentClick: false,
   selectedLengthInputM: "",
   isLengthEditorOpen: false,
   activeSegmentDrag: null,
+  segmentDragReference: null,
   activeGateDrag: null,
   activeBasketballPostDrag: null,
   activeFloodlightColumnDrag: null,
@@ -34,12 +37,15 @@ const mockSelectionState = {
   setDrawChainStart: vi.fn(),
   setRectangleStart: vi.fn(),
   setSelectedSegmentId: vi.fn(),
+  setSelectedSegmentIds: vi.fn(),
   setSelectedGateId: vi.fn(),
   setSelectedBasketballPostId: vi.fn(),
   setSelectedFloodlightColumnId: vi.fn(),
+  setSuppressNextSegmentClick: vi.fn(),
   setSelectedLengthInputM: vi.fn(),
   setIsLengthEditorOpen: vi.fn(),
   setActiveSegmentDrag: vi.fn(),
+  setSegmentDragReference: vi.fn(),
   setActiveGateDrag: vi.fn(),
   setActiveBasketballPostDrag: vi.fn(),
   setActiveFloodlightColumnDrag: vi.fn(),
@@ -64,12 +70,14 @@ const mockShellState = {
   floodlightColumnHeightMm: 6000,
   sideNettingHeightMm: 2000,
   pendingPitchDividerStart: null,
+  pendingSideNettingStart: null,
   gateType: "SINGLE_LEAF" as const,
   customGateWidthMm: 1200,
   customGateWidthInputM: "1.20",
   recessWidthInputM: "1.50",
   recessDepthInputM: "1.00",
   disableSnap: false,
+  isGridVisible: true,
   activeSpec: {
     system: "TWIN_BAR" as const,
     height: "2m" as const,
@@ -88,6 +96,7 @@ const mockShellState = {
   setCustomGateWidthMm: vi.fn(),
   setCustomGateWidthInputM: vi.fn(),
   setRecessSide: vi.fn(),
+  setIsGridVisible: vi.fn(),
   setGoalUnitWidthMm: vi.fn(),
   setGoalUnitHeightMm: vi.fn(),
   setBasketballPlacementType: vi.fn(),
@@ -99,6 +108,7 @@ const mockShellState = {
   setFloodlightColumnHeightMm: vi.fn(),
   setSideNettingHeightMm: vi.fn(),
   setPendingPitchDividerStart: vi.fn(),
+  setPendingSideNettingStart: vi.fn(),
   setGateType: vi.fn(),
   setActiveSpec: vi.fn(),
   setIsOptimizationInspectorOpen: vi.fn(),
@@ -286,7 +296,11 @@ const mockDerivedState = {
   oppositeGateGuides: [],
   resolvedBasketballPostPlacements: [],
   resolvedFloodlightColumnPlacements: [],
+  resolvedGoalUnits: [],
+  resolvedKickboards: [],
   resolvedGatePlacements: [],
+  resolvedPitchDividers: [],
+  resolvedSideNettings: [],
   placedGateVisuals: [],
   postTypeCounts: {
     END: 0,
@@ -304,13 +318,27 @@ const mockDerivedState = {
   segmentsById: new Map(),
   selectedComponentClosed: false,
   selectedPlanVisual: null,
-  selectedSegment: null as null | { id: string },
+  selectedSegment: null as null | {
+    id: string;
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    spec: {
+      system: "TWIN_BAR" | "ROLL_FORM";
+      height: "2m";
+      twinBarVariant?: "STANDARD";
+    };
+  },
   visualPosts: [],
   visibleSegmentLabelKeys: new Set()
 };
 
+let latestCanvasStageProps: Record<string, unknown> | null = null;
+
 vi.mock("./EditorCanvasStage", () => ({
-  EditorCanvasStage: () => <div>CanvasStage</div>
+  EditorCanvasStage: (props: Record<string, unknown>) => {
+    latestCanvasStageProps = props;
+    return <div>CanvasStage</div>;
+  }
 }));
 
 vi.mock("./EditorLengthEditor", () => ({
@@ -433,6 +461,7 @@ vi.mock("./editor", () => ({
     zoomAtPointer: vi.fn(),
     restoreView: vi.fn(),
     resetView: vi.fn(),
+    fitWorldBounds: vi.fn(),
     toWorld: vi.fn(),
     visibleBounds: { left: 0, right: 1000, top: 0, bottom: 1000 },
     verticalLines: [],
@@ -470,6 +499,7 @@ import { EditorPage } from "./EditorPage.js";
 describe("EditorPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    latestCanvasStageProps = null;
     mockShellState.interactionMode = "SELECT";
     mockWorkspace.session = baseSession;
     mockWorkspace.customers = [baseCustomer];
@@ -480,10 +510,13 @@ describe("EditorPage", () => {
     mockWorkspace.currentCustomerName = "Cleveland Land Services";
     mockWorkspace.isDirty = false;
     mockSelectionState.selectedSegmentId = null;
+    mockSelectionState.selectedSegmentIds = [];
     mockSelectionState.selectedGateId = null;
     mockSelectionState.selectedBasketballPostId = null;
     mockSelectionState.selectedFloodlightColumnId = null;
+    mockSelectionState.suppressNextSegmentClick = false;
     mockSelectionState.isLengthEditorOpen = false;
+    mockSelectionState.segmentDragReference = null;
     mockDerivedState.selectedSegment = null;
   });
 
@@ -498,6 +531,23 @@ describe("EditorPage", () => {
     expect(html).toContain("CanvasStage");
     expect(html).toContain("FloatingPanels panels:6 runs:3");
     expect(html).toContain("LengthEditorClosed");
+  });
+
+  it("ignores the first segment click after a segment drag release so group selection is preserved", () => {
+    mockSelectionState.suppressNextSegmentClick = true;
+
+    renderToStaticMarkup(<EditorPage initialDrawingId="drawing-1" onNavigate={vi.fn()} />);
+
+    expect(latestCanvasStageProps).not.toBeNull();
+    const onSelectSegment = latestCanvasStageProps?.onSelectSegment as
+      | ((segmentId: string, options?: { append?: boolean }) => void)
+      | undefined;
+
+    onSelectSegment?.("s2");
+
+    expect(mockSelectionState.setSelectedSegmentId).not.toHaveBeenCalled();
+    expect(mockSelectionState.setSelectedSegmentIds).not.toHaveBeenCalled();
+    expect(mockSelectionState.setSuppressNextSegmentClick).toHaveBeenCalledWith(false);
   });
 
   it("renders the guest state with tool palette and no user in menu bar", () => {
@@ -519,7 +569,16 @@ describe("EditorPage", () => {
     mockWorkspace.isDirty = true;
     mockShellState.interactionMode = "RECTANGLE";
     mockSelectionState.isLengthEditorOpen = true;
-    mockDerivedState.selectedSegment = { id: "segment-1" };
+    mockDerivedState.selectedSegment = {
+      id: "segment-1",
+      start: { x: 0, y: 0 },
+      end: { x: 5000, y: 0 },
+      spec: {
+        system: "TWIN_BAR",
+        height: "2m",
+        twinBarVariant: "STANDARD"
+      }
+    };
 
     const html = renderToStaticMarkup(<EditorPage onNavigate={vi.fn()} />);
 
