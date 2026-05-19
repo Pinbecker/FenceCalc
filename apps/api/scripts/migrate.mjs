@@ -45,7 +45,6 @@ const { auditLegacyJobDrawingLinks, migrateLegacyWorkspaceData } = await import(
   "../dist/repository/legacyJobBackfill.js"
 );
 
-const beforeRows = database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all().catch?.(() => []);
 const beforeSet = new Set();
 try {
   const rows = database.prepare("SELECT name FROM schema_migrations ORDER BY id ASC").all();
