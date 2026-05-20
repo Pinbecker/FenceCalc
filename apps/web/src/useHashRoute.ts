@@ -1,90 +1,69 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type PortalRoute =
+export type AppRoute =
   | "login"
   | "dashboard"
-  | "tasks"
-  | "drawings"
   | "customers"
   | "customer"
-  | "job"
+  | "project"
   | "drawing"
   | "editor"
-  | "estimate"
-  | "pricing"
   | "admin";
 
-export interface PortalLocation {
-  route: PortalRoute;
+export interface AppLocation {
+  route: AppRoute;
   query: Record<string, string>;
 }
 
-const DEFAULT_ROUTE: PortalRoute = "dashboard";
-const KNOWN_ROUTES = new Set<PortalRoute>([
+const DEFAULT_ROUTE: AppRoute = "customers";
+const KNOWN_ROUTES = new Set<AppRoute>([
   "login",
   "dashboard",
-  "tasks",
-  "drawings",
   "customers",
   "customer",
-  "job",
+  "project",
   "drawing",
   "editor",
-  "estimate",
-  "pricing",
   "admin",
 ]);
 
-function parseLocation(hash: string): PortalLocation {
+function parseLocation(hash: string): AppLocation {
   const raw = hash.replace(/^#/, "").trim();
   if (!raw) {
     return { route: DEFAULT_ROUTE, query: {} };
   }
-
   const [rawPath = "", rawQuery = ""] = raw.split("?");
-  const nextRoute = rawPath.replace(/^\//, "") as PortalRoute;
+  const nextRoute = rawPath.replace(/^\//, "") as AppRoute;
   const route = KNOWN_ROUTES.has(nextRoute) ? nextRoute : DEFAULT_ROUTE;
   const params = new URLSearchParams(rawQuery);
   const query: Record<string, string> = {};
   for (const [key, value] of params.entries()) {
     query[key] = value;
   }
-
-  return {
-    route,
-    query,
-  };
+  return { route, query };
 }
 
-function buildHash(route: PortalRoute, query?: Record<string, string>): string {
+function buildHash(route: AppRoute, query?: Record<string, string>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) {
-    if (value) {
-      params.set(key, value);
-    }
+    if (value) params.set(key, value);
   }
-
   const queryString = params.toString();
   return `#/${route}${queryString ? `?${queryString}` : ""}`;
 }
 
 export function useHashRoute() {
-  const [location, setLocation] = useState<PortalLocation>(() =>
+  const [location, setLocation] = useState<AppLocation>(() =>
     parseLocation(window.location.hash),
   );
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setLocation(parseLocation(window.location.hash));
-    };
-
+    const handleHashChange = () => setLocation(parseLocation(window.location.hash));
     window.addEventListener("hashchange", handleHashChange);
-    return () => {
-      window.removeEventListener("hashchange", handleHashChange);
-    };
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const navigate = useCallback((route: PortalRoute, query?: Record<string, string>) => {
+  const navigate = useCallback((route: AppRoute, query?: Record<string, string>) => {
     const nextHash = buildHash(route, query);
     if (window.location.hash === nextHash) {
       setLocation(parseLocation(nextHash));
@@ -93,11 +72,5 @@ export function useHashRoute() {
     window.location.hash = nextHash;
   }, []);
 
-  return useMemo(
-    () => ({
-      ...location,
-      navigate,
-    }),
-    [location, navigate],
-  );
+  return useMemo(() => ({ ...location, navigate }), [location, navigate]);
 }

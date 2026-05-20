@@ -1,5 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type { AuthSessionRecord, CompanyRecord, CompanyUserRecord } from "@fence-estimator/contracts";
+import type {
+  AuthSessionRecord,
+  CompanyRecord,
+  CompanyUserRecord,
+} from "@fence-estimator/contracts";
 
 import { hashSessionToken } from "./auth.js";
 import type { AppConfig } from "./config.js";
@@ -12,12 +16,8 @@ export interface AuthenticatedRequestContext {
   user: CompanyUserRecord;
 }
 
-export function userCanManageUsers(user: CompanyUserRecord): boolean {
-  return user.role === "OWNER" || user.role === "ADMIN";
-}
-
-export function userCanManagePricing(user: CompanyUserRecord): boolean {
-  return user.role === "OWNER" || user.role === "ADMIN";
+export function userIsAdmin(user: CompanyUserRecord): boolean {
+  return user.role === "ADMIN";
 }
 
 export async function requireAuth(
@@ -47,7 +47,7 @@ export async function requireAuth(
     sessionId: authenticated.session.id,
     companyId: authenticated.company.id,
     userId: authenticated.user.id,
-    userRole: authenticated.user.role
+    userRole: authenticated.user.role,
   };
 
   return {
@@ -57,14 +57,14 @@ export async function requireAuth(
       userId: authenticated.session.userId,
       createdAtIso: authenticated.session.createdAtIso,
       expiresAtIso: authenticated.session.expiresAtIso,
-      revokedAtIso: authenticated.session.revokedAtIso ?? null
+      revokedAtIso: authenticated.session.revokedAtIso ?? null,
     },
     company: authenticated.company,
-    user: authenticated.user
+    user: authenticated.user,
   };
 }
 
-export async function requireUserManager(
+export async function requireAdmin(
   request: FastifyRequest,
   reply: FastifyReply,
   repository: AppRepository,
@@ -74,49 +74,9 @@ export async function requireUserManager(
   if (!authenticated) {
     return null;
   }
-
-  if (!userCanManageUsers(authenticated.user)) {
-    await reply.code(403).send({ error: "User management requires admin access" });
-    return null;
-  }
-
-  return authenticated;
-}
-
-export async function requirePricingManager(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  repository: AppRepository,
-  config: AppConfig,
-): Promise<AuthenticatedRequestContext | null> {
-  const authenticated = await requireAuth(request, reply, repository, config);
-  if (!authenticated) {
-    return null;
-  }
-
-  if (!userCanManagePricing(authenticated.user)) {
-    await reply.code(403).send({ error: "Pricing configuration requires admin access" });
-    return null;
-  }
-
-  return authenticated;
-}
-
-export async function requireAdminRole(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  repository: AppRepository,
-  config: AppConfig,
-): Promise<AuthenticatedRequestContext | null> {
-  const authenticated = await requireAuth(request, reply, repository, config);
-  if (!authenticated) {
-    return null;
-  }
-
-  if (authenticated.user.role !== "OWNER" && authenticated.user.role !== "ADMIN") {
+  if (!userIsAdmin(authenticated.user)) {
     await reply.code(403).send({ error: "This action requires admin access" });
     return null;
   }
-
   return authenticated;
 }

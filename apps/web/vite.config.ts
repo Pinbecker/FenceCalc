@@ -1,4 +1,6 @@
+import { resolve } from "node:path";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { defineConfig } from "vite";
 
@@ -38,10 +40,14 @@ const sentryPlugin = shouldUploadSourcemaps ? getSentryPlugin() : null;
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     ...(sentryPlugin ? [sentryPlugin] : [])
   ],
   resolve: {
-    alias: workspaceAliases
+    alias: {
+      ...workspaceAliases,
+      "@": resolve(__dirname, "src")
+    }
   },
   server: {
     port: 5173,

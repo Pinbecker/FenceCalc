@@ -1,561 +1,351 @@
 import { randomUUID } from "node:crypto";
-import {
-  type DrawingCanvasViewport,
-  type DrawingRecord,
-  type DrawingStatus,
-  type LayoutModel,
-} from "@fence-estimator/contracts";
 
-import type { AuthenticatedRequestContext } from "../authorization.js";
+import type {
+  DrawingCanvasViewport,
+  DrawingRecord,
+  DrawingRevisionRecord,
+  DrawingRevisionSummary,
+  DrawingSummary,
+  LayoutModel,
+} from "@fence-estimator/contracts";
+import { DRAWING_SCHEMA_VERSION } from "@fence-estimator/contracts";
+import { estimateDrawingLayout, RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
+
 import { writeAuditLog } from "../auditLogSupport.js";
-import { buildEstimate } from "../estimateSupport.js";
+import type { AuthenticatedRequestContext } from "../authorization.js";
+import { buildEstimate, normalizeLayout } from "../estimateSupport.js";
 import type { AppRepository } from "../repository.js";
 
-interface DrawingMutationSuccess {
-  kind: "success";
-  drawing: DrawingRecord;
+function emptyLayout(): LayoutModel {
+  return {
+    segments: [],
+    gates: [],
+    basketballFeatures: [],
+    basketballPosts: [],
+    floodlightColumns: [],
+    goalUnits: [],
+    kickboards: [],
+    pitchDividers: [],
+    sideNettings: [],
+  };
 }
 
-interface DrawingConflict {
-  kind: "conflict";
-  currentVersionNumber: number;
-}
-
-interface DrawingNotFound {
-  kind: "drawing_not_found";
-}
-
-interface DrawingVersionNotFound {
-  kind: "version_not_found";
-}
-
-interface DrawingInvalidLayout {
-  kind: "invalid_layout";
-  message: string;
-}
-
-interface DrawingInvalidCustomer {
-  kind: "invalid_customer";
-  message: string;
-}
-
-interface DrawingQuotedLocked {
-  kind: "quoted_locked";
-  message: string;
-}
-
-export type DrawingMutationResult =
-  | DrawingMutationSuccess
-  | DrawingConflict
-  | DrawingNotFound
-  | DrawingVersionNotFound
-  | DrawingInvalidLayout
-  | DrawingInvalidCustomer
-  | DrawingQuotedLocked;
-
-interface DrawingCreateInput {
+interface CreateDrawingInputData {
+  projectId: string;
   name: string;
-  customerId: string;
-  workspaceId?: string | undefined;
-  parentDrawingId?: string | null | undefined;
-  revisionNumber?: number | undefined;
-  layout: LayoutModel;
-  savedViewport?: DrawingCanvasViewport | null | undefined;
+  initialLayout?: LayoutModel;
+  initialViewport?: DrawingCanvasViewport | null;
 }
 
-interface DrawingUpdateInput {
-  expectedVersionNumber: number;
-  name?: string | undefined;
-  customerId?: string | undefined;
-  workspaceId?: string | null | undefined;
-  layout?: LayoutModel | undefined;
-  savedViewport?: DrawingCanvasViewport | null | undefined;
-}
-
-interface DrawingArchiveInput {
-  archived: boolean;
-  expectedVersionNumber: number;
-}
-
-interface DrawingStatusInput {
-  status: DrawingStatus;
-  expectedVersionNumber: number;
-}
-
-async function resolveCustomerForWrite(repository: AppRepository, companyId: string, customerId: string) {
-  const customer = await repository.getCustomerById(customerId, companyId);
-  if (!customer) {
-    return { kind: "invalid_customer" as const, message: "Customer not found" };
-  }
-  if (customer.isArchived) {
-    return { kind: "invalid_customer" as const, message: "Archived customers cannot be used for new drawing saves" };
-  }
-  return { kind: "success" as const, customer };
-}
-
-async function resolveWorkspaceForWrite(
+export async function listDrawingsForProjectForCompany(
   repository: AppRepository,
-  companyId: string,
-  workspaceId: string,
-) {
-  const workspace = await repository.getDrawingWorkspaceById(workspaceId, companyId);
-  if (!workspace) {
-    return { kind: "invalid_customer" as const, message: "Drawing workspace not found" };
+  context: AuthenticatedRequestContext,
+  projectId: string,
+): Promise<DrawingSummary[]> {
+  const project = await repository.getProjectById(projectId, context.company.id);
+  if (!project) {
+    return [];
   }
-  if (workspace.isArchived) {
-    return {
-      kind: "invalid_customer" as const,
-      message: "Archived drawing workspaces cannot receive new revisions",
-    };
-  }
-  return { kind: "success" as const, workspace };
+  return repository.listDrawingsForProject(projectId, context.company.id);
 }
 
-function getDrawingWorkspaceId(drawing: Pick<DrawingRecord, "workspaceId">): string | null {
-  return drawing.workspaceId ?? null;
+export async function getDrawingForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  drawingId: string,
+): Promise<DrawingRecord | null> {
+  return repository.getDrawingById(drawingId, context.company.id);
 }
 
 export async function createDrawingForCompany(
   repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
-  input: DrawingCreateInput,
-): Promise<DrawingMutationResult> {
-  try {
-    const customerResult = await resolveCustomerForWrite(repository, authenticated.company.id, input.customerId);
-    if (customerResult.kind !== "success") {
-      return customerResult;
-    }
-    const result = buildEstimate(input.layout);
-    const nowIso = new Date().toISOString();
-    let createdDrawingId: string | null = null;
+  context: AuthenticatedRequestContext,
+  input: CreateDrawingInputData,
+): Promise<{ drawing: DrawingRecord; revision: DrawingRevisionRecord } | null> {
+  const project = await repository.getProjectById(input.projectId, context.company.id);
+  if (!project) {
+    return null;
+  }
 
-    await repository.runInTransaction(async () => {
-      const targetWorkspaceId = input.workspaceId ?? null;
-      if (!targetWorkspaceId) {
-        throw new Error("Root drawings must be created through the drawing workspace endpoint.");
-      }
+  const sourceLayout = input.initialLayout ?? emptyLayout();
+  const built = buildEstimate(sourceLayout);
+  const now = new Date().toISOString();
+  const drawingId = randomUUID();
+  const revisionId = randomUUID();
 
-      const workspaceResult = await resolveWorkspaceForWrite(
-        repository,
-        authenticated.company.id,
-        targetWorkspaceId,
-      );
-      if (workspaceResult.kind !== "success") {
-        throw new Error(workspaceResult.message);
-      }
-      if (workspaceResult.workspace.customerId !== customerResult.customer.id) {
-        throw new Error("Selected workspace belongs to a different customer");
-      }
-      const workspaceHasRootDrawing = workspaceResult.workspace.primaryDrawingId !== null;
-      if (workspaceHasRootDrawing && !input.parentDrawingId) {
-        throw new Error("Workspaces can only contain one root drawing. Create a revision from an existing drawing instead.");
-      }
+  const drawing = await repository.createDrawing({
+    drawingId,
+    companyId: context.company.id,
+    projectId: project.id,
+    name: input.name.trim(),
+    initialRevisionId: revisionId,
+    initialLayout: built.layout,
+    initialViewport: input.initialViewport ?? null,
+    initialEstimate: built.estimate,
+    schemaVersion: built.schemaVersion,
+    rulesVersion: built.rulesVersion,
+    createdByUserId: context.user.id,
+    updatedByUserId: context.user.id,
+    createdAtIso: now,
+    updatedAtIso: now,
+  });
 
-      const createdDrawing = await repository.createDrawing({
-        id: randomUUID(),
-        companyId: authenticated.company.id,
-        workspaceId: targetWorkspaceId,
-        jobId: targetWorkspaceId,
-        jobRole: workspaceHasRootDrawing ? "SECONDARY" : "PRIMARY",
-        parentDrawingId: input.parentDrawingId ?? null,
-        revisionNumber: input.revisionNumber ?? 0,
-        name: input.name,
-        customerId: customerResult.customer.id,
-        customerName: customerResult.customer.name,
-        layout: result.layout,
-        savedViewport: input.savedViewport ?? null,
-        estimate: result.estimate,
-        schemaVersion: result.schemaVersion,
-        rulesVersion: result.rulesVersion,
-        createdByUserId: authenticated.user.id,
-        updatedByUserId: authenticated.user.id,
-        createdAtIso: nowIso,
-        updatedAtIso: nowIso
-      });
-      if (!workspaceHasRootDrawing && targetWorkspaceId) {
-        await repository.setDrawingWorkspacePrimaryDrawing({
-          workspaceId: targetWorkspaceId,
-          companyId: authenticated.company.id,
-          drawingId: createdDrawing.id,
-          updatedByUserId: authenticated.user.id,
-          updatedAtIso: nowIso
-        });
-      }
-      createdDrawingId = createdDrawing.id;
-    });
+  const revision = (await repository.getRevisionById(revisionId, context.company.id))!;
 
-    if (!createdDrawingId) {
-      return {
-        kind: "invalid_layout",
-        message: "Drawing could not be created"
-      };
-    }
-    const drawing = await repository.getDrawingById(createdDrawingId, authenticated.company.id);
-    if (!drawing) {
-      return {
-        kind: "drawing_not_found"
-      };
-    }
+  await writeAuditLog(repository, {
+    companyId: context.company.id,
+    actorUserId: context.user.id,
+    entityType: "DRAWING",
+    entityId: drawing.id,
+    action: "DRAWING_CREATED",
+    summary: `${context.user.displayName} created drawing ${drawing.name} in project ${project.name}`,
+    createdAtIso: now,
+  });
+
+  return { drawing, revision };
+}
+
+export async function renameDrawingForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  drawingId: string,
+  name: string,
+): Promise<DrawingRecord | null> {
+  const now = new Date().toISOString();
+  const drawing = await repository.renameDrawing({
+    drawingId,
+    companyId: context.company.id,
+    name: name.trim(),
+    updatedByUserId: context.user.id,
+    updatedAtIso: now,
+  });
+  if (drawing) {
     await writeAuditLog(repository, {
-      companyId: authenticated.company.id,
-      actorUserId: authenticated.user.id,
+      companyId: context.company.id,
+      actorUserId: context.user.id,
       entityType: "DRAWING",
       entityId: drawing.id,
-      action: "DRAWING_CREATED",
-      summary: `${authenticated.user.displayName} created ${drawing.name}`,
-      createdAtIso: nowIso,
-      metadata: { versionNumber: drawing.versionNumber }
+      action: "DRAWING_RENAMED",
+      summary: `${context.user.displayName} renamed drawing to ${drawing.name}`,
+      createdAtIso: now,
     });
-    if (getDrawingWorkspaceId(drawing)) {
-      await writeAuditLog(repository, {
-        companyId: authenticated.company.id,
-        actorUserId: authenticated.user.id,
-        entityType: "WORKSPACE",
-        entityId: getDrawingWorkspaceId(drawing),
-        action: "WORKSPACE_DRAWING_ADDED",
-        summary: `${authenticated.user.displayName} added revision ${drawing.name} to a workspace`,
-        createdAtIso: nowIso,
-        metadata: {
-          drawingId: drawing.id,
-          workspaceId: getDrawingWorkspaceId(drawing),
-        }
-      });
-    }
-
-    return { kind: "success", drawing };
-  } catch (error) {
-    const message = (error as Error).message;
-    if (
-      message === "Drawing workspace not found" ||
-      message === "Archived drawing workspaces cannot receive new revisions" ||
-      message === "Selected workspace belongs to a different customer"
-    ) {
-      return {
-        kind: "invalid_customer",
-        message
-      };
-    }
-    return {
-      kind: "invalid_layout",
-      message
-    };
   }
+  return drawing;
 }
 
-export async function updateDrawingForCompany(
+export async function setDrawingArchivedForCompany(
   repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
+  context: AuthenticatedRequestContext,
   drawingId: string,
-  input: DrawingUpdateInput,
-): Promise<DrawingMutationResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
-  if (!existing) {
-    return { kind: "drawing_not_found" };
-  }
-  const isNameOnlyUpdate =
-    input.name !== undefined &&
-    input.customerId === undefined &&
-    input.layout === undefined &&
-    input.savedViewport === undefined;
-  if (existing.status === "QUOTED" && !isNameOnlyUpdate) {
-    return {
-      kind: "quoted_locked",
-      message: "Quoted drawings are locked. Create a new revision before making changes."
-    };
-  }
-
-  try {
-    const nextCustomer =
-      input.customerId !== undefined
-        ? await resolveCustomerForWrite(repository, authenticated.company.id, input.customerId)
-        : null;
-    if (nextCustomer && nextCustomer.kind !== "success") {
-      return nextCustomer;
-    }
-    const nextLayout = input.layout
-      ? buildEstimate(input.layout)
-      : {
-          layout: existing.layout,
-          estimate: existing.estimate,
-          schemaVersion: existing.schemaVersion,
-          rulesVersion: existing.rulesVersion
-        };
-    const updatedAtIso = new Date().toISOString();
-    const workspaceId = getDrawingWorkspaceId(existing);
-    const nextName = input.name ?? existing.name;
-    const nameChanged = input.name !== undefined && nextName !== existing.name;
-    if (workspaceId && nameChanged) {
-      return {
-        kind: "invalid_layout",
-        message: "Rename the drawing workspace instead of renaming an individual drawing.",
-      };
-    }
-    const nextCustomerId = nextCustomer?.customer.id ?? existing.customerId;
-    const nextCustomerName = nextCustomer?.customer.name ?? existing.customerName;
-    const drawing = await repository.updateDrawing({
-      drawingId: existing.id,
-      companyId: authenticated.company.id,
-      expectedVersionNumber: input.expectedVersionNumber,
-      ...(workspaceId !== null ? { workspaceId, jobId: workspaceId } : {}),
-      ...(existing.jobRole !== undefined ? { jobRole: existing.jobRole } : {}),
-      name: nextName,
-      customerId: nextCustomerId,
-      customerName: nextCustomerName,
-      layout: nextLayout.layout,
-      savedViewport: input.savedViewport ?? existing.savedViewport ?? null,
-      estimate: nextLayout.estimate,
-      schemaVersion: nextLayout.schemaVersion,
-      rulesVersion: nextLayout.rulesVersion,
-      updatedByUserId: authenticated.user.id,
-      updatedAtIso
-    });
-    const persistedDrawing = drawing;
-    if (!persistedDrawing) {
-      const current = await repository.getDrawingById(drawingId, authenticated.company.id);
-      if (!current) {
-        return { kind: "drawing_not_found" };
-      }
-      return { kind: "conflict", currentVersionNumber: current.versionNumber };
-    }
-    await writeAuditLog(repository, {
-      companyId: authenticated.company.id,
-      actorUserId: authenticated.user.id,
-      entityType: "DRAWING",
-      entityId: persistedDrawing.id,
-      action: "DRAWING_UPDATED",
-      summary: `${authenticated.user.displayName} updated ${persistedDrawing.name}`,
-      createdAtIso: persistedDrawing.updatedAtIso,
-      metadata: { versionNumber: persistedDrawing.versionNumber }
-    });
-
-    return { kind: "success", drawing: persistedDrawing };
-  } catch (error) {
-    return {
-      kind: "invalid_layout",
-      message: (error as Error).message
-    };
-  }
-}
-
-export async function setDrawingArchivedStateForCompany(
-  repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
-  drawingId: string,
-  input: DrawingArchiveInput,
-): Promise<DrawingMutationResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
-  if (!existing) {
-    return { kind: "drawing_not_found" };
-  }
-
-  const updatedAtIso = new Date().toISOString();
+  archived: boolean,
+): Promise<DrawingRecord | null> {
+  const now = new Date().toISOString();
   const drawing = await repository.setDrawingArchivedState({
     drawingId,
-    companyId: authenticated.company.id,
-    expectedVersionNumber: input.expectedVersionNumber,
-    archived: input.archived,
-    archivedAtIso: input.archived ? updatedAtIso : null,
-    archivedByUserId: input.archived ? authenticated.user.id : null,
-    updatedAtIso,
-    updatedByUserId: authenticated.user.id
+    companyId: context.company.id,
+    archived,
+    updatedByUserId: context.user.id,
+    updatedAtIso: now,
   });
-  if (!drawing) {
-    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
-    if (!current) {
-      return { kind: "drawing_not_found" };
-    }
-    return { kind: "conflict", currentVersionNumber: current.versionNumber };
+  if (drawing) {
+    await writeAuditLog(repository, {
+      companyId: context.company.id,
+      actorUserId: context.user.id,
+      entityType: "DRAWING",
+      entityId: drawing.id,
+      action: archived ? "DRAWING_ARCHIVED" : "DRAWING_UNARCHIVED",
+      summary: `${context.user.displayName} ${archived ? "archived" : "restored"} drawing ${drawing.name}`,
+      createdAtIso: now,
+    });
   }
-  await writeAuditLog(repository, {
-    companyId: authenticated.company.id,
-    actorUserId: authenticated.user.id,
-    entityType: "DRAWING",
-    entityId: drawing.id,
-    action: input.archived ? "DRAWING_ARCHIVED" : "DRAWING_UNARCHIVED",
-    summary: `${authenticated.user.displayName} ${input.archived ? "archived" : "restored"} ${drawing.name}`,
-    createdAtIso: updatedAtIso
-  });
-
-  return { kind: "success", drawing };
+  return drawing;
 }
-
-export async function restoreDrawingVersionForCompany(
-  repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
-  drawingId: string,
-  versionNumber: number,
-  expectedVersionNumber: number,
-): Promise<DrawingMutationResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
-  if (!existing) {
-    return { kind: "drawing_not_found" };
-  }
-
-  const versions = await repository.listDrawingVersions(drawingId, authenticated.company.id);
-  const version = versions.find((entry) => entry.versionNumber === versionNumber);
-  if (!version) {
-    return { kind: "version_not_found" };
-  }
-
-  const restoredCustomer =
-    version.customerId !== null ? await repository.getCustomerById(version.customerId, authenticated.company.id) : null;
-  const drawing = await repository.restoreDrawingVersion({
-    drawingId,
-    companyId: authenticated.company.id,
-    expectedVersionNumber,
-    versionNumber,
-    customerId: restoredCustomer?.id ?? version.customerId,
-    customerName: restoredCustomer?.name ?? version.customerName,
-    restoredByUserId: authenticated.user.id,
-    restoredAtIso: new Date().toISOString()
-  });
-  if (!drawing) {
-    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
-    if (!current) {
-      return { kind: "drawing_not_found" };
-    }
-    return { kind: "conflict", currentVersionNumber: current.versionNumber };
-  }
-  await writeAuditLog(repository, {
-    companyId: authenticated.company.id,
-    actorUserId: authenticated.user.id,
-    entityType: "DRAWING",
-    entityId: drawing.id,
-    action: "DRAWING_VERSION_RESTORED",
-    summary: `${authenticated.user.displayName} restored version ${versionNumber} of ${drawing.name}`,
-    createdAtIso: drawing.updatedAtIso,
-    metadata: { restoredFromVersion: versionNumber, versionNumber: drawing.versionNumber }
-  });
-
-  return { kind: "success", drawing };
-}
-
-export async function setDrawingStatusForCompany(
-  repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
-  drawingId: string,
-  input: DrawingStatusInput,
-): Promise<DrawingMutationResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
-  if (!existing) {
-    return { kind: "drawing_not_found" };
-  }
-
-  const updatedAtIso = new Date().toISOString();
-  const drawing = await repository.setDrawingStatus({
-    drawingId,
-    companyId: authenticated.company.id,
-    expectedVersionNumber: input.expectedVersionNumber,
-    status: input.status,
-    statusChangedAtIso: updatedAtIso,
-    statusChangedByUserId: authenticated.user.id,
-    updatedAtIso,
-    updatedByUserId: authenticated.user.id
-  });
-  if (!drawing) {
-    const current = await repository.getDrawingById(drawingId, authenticated.company.id);
-    if (!current) {
-      return { kind: "drawing_not_found" };
-    }
-    return { kind: "conflict", currentVersionNumber: current.versionNumber };
-  }
-
-  const previousStatus = existing.status;
-  await writeAuditLog(repository, {
-    companyId: authenticated.company.id,
-    actorUserId: authenticated.user.id,
-    entityType: "DRAWING",
-    entityId: drawing.id,
-    action: "DRAWING_STATUS_CHANGED",
-    summary: `${authenticated.user.displayName} changed ${drawing.name} from ${previousStatus} to ${input.status}`,
-    createdAtIso: updatedAtIso,
-    metadata: { previousStatus, newStatus: input.status }
-  });
-
-  return { kind: "success", drawing };
-}
-
-export type DrawingDeleteResult =
-  | { kind: "success" }
-  | { kind: "drawing_not_found" }
-  | { kind: "not_archived" }
-  | { kind: "not_a_revision" }
-  | { kind: "not_last_revision" };
 
 export async function deleteDrawingForCompany(
   repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
+  context: AuthenticatedRequestContext,
   drawingId: string,
-): Promise<DrawingDeleteResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
+): Promise<boolean> {
+  const existing = await repository.getDrawingById(drawingId, context.company.id);
   if (!existing) {
-    return { kind: "drawing_not_found" };
+    return false;
   }
-  if (!existing.isArchived) {
-    return { kind: "not_archived" };
+  const ok = await repository.deleteDrawing({ drawingId, companyId: context.company.id });
+  if (ok) {
+    await writeAuditLog(repository, {
+      companyId: context.company.id,
+      actorUserId: context.user.id,
+      entityType: "DRAWING",
+      entityId: drawingId,
+      action: "DRAWING_DELETED",
+      summary: `${context.user.displayName} deleted drawing ${existing.name}`,
+      createdAtIso: new Date().toISOString(),
+    });
+  }
+  return ok;
+}
+
+// -----------------------------------------------------------------------------
+// Revisions
+// -----------------------------------------------------------------------------
+
+export async function listRevisionsForDrawingForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  drawingId: string,
+): Promise<DrawingRevisionSummary[]> {
+  return repository.listRevisionsForDrawing(drawingId, context.company.id);
+}
+
+export async function getRevisionForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  revisionId: string,
+): Promise<DrawingRevisionRecord | null> {
+  return repository.getRevisionById(revisionId, context.company.id);
+}
+
+export async function startRevisionForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  drawingId: string,
+  notes: string | null,
+): Promise<DrawingRevisionRecord | null> {
+  const drawing = await repository.getDrawingById(drawingId, context.company.id);
+  if (!drawing) {
+    return null;
+  }
+  const parent = await repository.getRevisionById(drawing.currentRevisionId, context.company.id);
+  if (!parent) {
+    return null;
   }
 
-  await repository.deleteDrawing({
-    drawingId,
-    companyId: authenticated.company.id,
+  const now = new Date().toISOString();
+  const newRevisionId = randomUUID();
+  const newRevisionNumber = drawing.latestRevisionNumber + 1;
+
+  const created = await repository.createRevision({
+    revisionId: newRevisionId,
+    drawingId: drawing.id,
+    companyId: context.company.id,
+    revisionNumber: newRevisionNumber,
+    parentRevisionId: parent.id,
+    notes,
+    layout: parent.layout,
+    savedViewport: parent.savedViewport,
+    estimate: parent.estimate,
+    schemaVersion: parent.schemaVersion,
+    rulesVersion: parent.rulesVersion,
+    createdByUserId: context.user.id,
+    updatedByUserId: context.user.id,
+    createdAtIso: now,
+    updatedAtIso: now,
   });
 
   await writeAuditLog(repository, {
-    companyId: authenticated.company.id,
-    actorUserId: authenticated.user.id,
-    entityType: "DRAWING",
-    entityId: drawingId,
-    action: "DRAWING_DELETED",
-    summary: `${authenticated.user.displayName} permanently deleted drawing ${existing.name}`,
-    createdAtIso: new Date().toISOString(),
+    companyId: context.company.id,
+    actorUserId: context.user.id,
+    entityType: "REVISION",
+    entityId: created.id,
+    action: "REVISION_CREATED",
+    summary: `${context.user.displayName} started revision ${newRevisionNumber} of ${drawing.name}`,
+    createdAtIso: now,
+    metadata: { revisionNumber: newRevisionNumber },
   });
 
-  return { kind: "success" };
+  return created;
+}
+
+interface UpdateRevisionInputData {
+  expectedVersionNumber: number;
+  layout: LayoutModel;
+  savedViewport: DrawingCanvasViewport | null;
+}
+
+export async function saveRevisionForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  revisionId: string,
+  input: UpdateRevisionInputData,
+): Promise<
+  | { kind: "ok"; revision: DrawingRevisionRecord }
+  | { kind: "not_found" }
+  | { kind: "conflict" }
+> {
+  const normalized = normalizeLayout(input.layout);
+  const estimate = estimateDrawingLayout(normalized);
+  const now = new Date().toISOString();
+
+  try {
+    const updated = await repository.updateRevisionLayout({
+      revisionId,
+      companyId: context.company.id,
+      expectedVersionNumber: input.expectedVersionNumber,
+      layout: normalized,
+      savedViewport: input.savedViewport,
+      estimate,
+      schemaVersion: DRAWING_SCHEMA_VERSION,
+      rulesVersion: RULES_ENGINE_VERSION,
+      updatedByUserId: context.user.id,
+      updatedAtIso: now,
+    });
+    if (!updated) {
+      return { kind: "not_found" };
+    }
+    await writeAuditLog(repository, {
+      companyId: context.company.id,
+      actorUserId: context.user.id,
+      entityType: "REVISION",
+      entityId: updated.id,
+      action: "REVISION_UPDATED",
+      summary: `${context.user.displayName} saved revision ${updated.revisionNumber}`,
+      createdAtIso: now,
+    });
+    return { kind: "ok", revision: updated };
+  } catch (error) {
+    if ((error as Error & { code?: string }).code === "VERSION_CONFLICT") {
+      return { kind: "conflict" };
+    }
+    throw error;
+  }
+}
+
+export async function updateRevisionNotesForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  revisionId: string,
+  notes: string | null,
+): Promise<DrawingRevisionRecord | null> {
+  const now = new Date().toISOString();
+  return repository.updateRevisionNotes({
+    revisionId,
+    companyId: context.company.id,
+    notes,
+    updatedByUserId: context.user.id,
+    updatedAtIso: now,
+  });
 }
 
 export async function deleteRevisionForCompany(
   repository: AppRepository,
-  authenticated: AuthenticatedRequestContext,
-  drawingId: string,
-): Promise<DrawingDeleteResult> {
-  const existing = await repository.getDrawingById(drawingId, authenticated.company.id);
+  context: AuthenticatedRequestContext,
+  revisionId: string,
+): Promise<boolean> {
+  const existing = await repository.getRevisionById(revisionId, context.company.id);
   if (!existing) {
-    return { kind: "drawing_not_found" };
+    return false;
   }
-  if (!existing.parentDrawingId) {
-    return { kind: "not_a_revision" };
-  }
-
-  // Check this is the last (most recent) revision of its parent
-  const workspaceId = getDrawingWorkspaceId(existing);
-  if (!workspaceId) {
-    return { kind: "drawing_not_found" };
-  }
-  const siblings = await repository.listDrawingsForWorkspace(workspaceId, authenticated.company.id);
-  const sameParentRevisions = siblings
-    .filter((d) => d.parentDrawingId === existing.parentDrawingId)
-    .sort((a, b) => {
-      if (a.revisionNumber !== b.revisionNumber) {
-        return a.revisionNumber - b.revisionNumber;
-      }
-      return a.createdAtIso.localeCompare(b.createdAtIso);
+  const ok = await repository.deleteRevision({ revisionId, companyId: context.company.id });
+  if (ok) {
+    await writeAuditLog(repository, {
+      companyId: context.company.id,
+      actorUserId: context.user.id,
+      entityType: "REVISION",
+      entityId: revisionId,
+      action: "REVISION_DELETED",
+      summary: `${context.user.displayName} deleted revision ${existing.revisionNumber}`,
+      createdAtIso: new Date().toISOString(),
     });
-  const lastRevision = sameParentRevisions[sameParentRevisions.length - 1];
-  if (!lastRevision || lastRevision.id !== drawingId) {
-    return { kind: "not_last_revision" };
   }
-
-  await repository.deleteDrawing({ drawingId, companyId: authenticated.company.id });
-
-  await writeAuditLog(repository, {
-    companyId: authenticated.company.id,
-    actorUserId: authenticated.user.id,
-    entityType: "DRAWING",
-    entityId: drawingId,
-    action: "DRAWING_DELETED",
-    summary: `${authenticated.user.displayName} deleted revision ${existing.name}`,
-    createdAtIso: new Date().toISOString(),
-  });
-
-  return { kind: "success" };
+  return ok;
 }

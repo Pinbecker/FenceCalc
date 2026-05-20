@@ -2,65 +2,49 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 
-import { auditLegacyJobDrawingLinks } from "./legacyJobBackfill.js";
 import { migrateSqliteDatabase } from "./sqliteSchema.js";
 import { SqliteCustomerStore } from "./sqliteCustomerStore.js";
 import { SqliteDrawingStore } from "./sqliteDrawingStore.js";
-import { SqliteJobStore } from "./sqliteJobStore.js";
 import { SqlitePricingStore } from "./sqlitePricingStore.js";
-import { SqliteQuoteStore } from "./sqliteQuoteStore.js";
+import { SqliteProjectStore } from "./sqliteProjectStore.js";
 import { SqliteSupportStore } from "./sqliteSupportStore.js";
 import { SqliteUserSessionStore } from "./sqliteUserSessionStore.js";
 import type {
   AppRepository,
+  AuditLogQueryOptions,
   BootstrapOwnerAccountInput,
-  CompanyTaskListOptions,
   CreateAuditLogInput,
   CreateCustomerInput,
   CreateDrawingInput,
-  CreateDrawingTaskInput,
-  CreateDrawingWorkspaceInput,
   CreatePasswordResetTokenInput,
-  CreateQuoteInput,
+  CreateProjectInput,
+  CreateRevisionInput,
   CreateSessionInput,
   CreateUserInput,
   DeleteCustomerInput,
-  DeleteDrawingWorkspaceInput,
   DeleteDrawingInput,
-  RestoreDrawingVersionInput,
-  CustomerScope,
-  SetDrawingWorkspacePrimaryDrawingInput,
+  DeleteProjectInput,
+  DeleteRevisionInput,
+  RenameDrawingInput,
+  ScopeFilter,
   SetCustomerArchivedStateInput,
   SetDrawingArchivedStateInput,
-  SetDrawingStatusInput,
-  UpdateDrawingTaskInput,
-  UpdateDrawingWorkspaceInput,
-  UpsertPricingConfigInput,
+  SetProjectArchivedStateInput,
+  SetProjectStatusInput,
   UpdateCustomerInput,
-  UpdateDrawingInput,
+  UpdateProjectInput,
+  UpdateRevisionLayoutInput,
+  UpdateRevisionNotesInput,
+  UpsertPricingConfigInput,
 } from "./types.js";
-
-function formatLegacyChainSummary(
-  chains: Array<{ companyId: string; rootDrawingId: string; jobIds?: string[] }>,
-): string {
-  return chains
-    .slice(0, 3)
-    .map((chain) =>
-      chain.jobIds && chain.jobIds.length > 0
-        ? `${chain.companyId}/${chain.rootDrawingId} [${chain.jobIds.join(", ")}]`
-        : `${chain.companyId}/${chain.rootDrawingId}`,
-    )
-    .join("; ");
-}
 
 export class SqliteAppRepository implements AppRepository {
   private readonly database: Database.Database;
   private readonly userSessions: SqliteUserSessionStore;
   private readonly customers: SqliteCustomerStore;
-  private readonly jobs: SqliteJobStore;
+  private readonly projects: SqliteProjectStore;
   private readonly drawings: SqliteDrawingStore;
   private readonly pricing: SqlitePricingStore;
-  private readonly quotes: SqliteQuoteStore;
   private readonly support: SqliteSupportStore;
   private readonly auditLogRetentionDays: number;
 
@@ -75,39 +59,11 @@ export class SqliteAppRepository implements AppRepository {
     if (!options.skipMigration) {
       migrateSqliteDatabase(this.database);
     }
-    const legacyAudit = auditLegacyJobDrawingLinks(this.database);
-    if (legacyAudit.drawingsMissingCustomer.length > 0) {
-      console.warn(
-        `[workspace-migration] ${legacyAudit.drawingsMissingCustomer.length} drawings are missing customers and still require manual cleanup.`,
-      );
-    }
-    if (legacyAudit.chainsWithMixedCustomers.length > 0) {
-      console.warn(
-        `[workspace-migration] ${legacyAudit.chainsWithMixedCustomers.length} drawing chains span multiple customers and still require manual cleanup: ` +
-          formatLegacyChainSummary(legacyAudit.chainsWithMixedCustomers),
-      );
-    }
-    if (legacyAudit.chainsWithMultipleRealJobs.length > 0) {
-      throw new Error(
-        "Legacy workspace cleanup required before startup. Multiple real jobs are linked to the same drawing chain: " +
-          formatLegacyChainSummary(legacyAudit.chainsWithMultipleRealJobs),
-      );
-    }
-    if (
-      legacyAudit.backfillableChainCount > 0 ||
-      legacyAudit.drawingsMissingJob.length > 0 ||
-      legacyAudit.stalePlaceholderJobCount > 0
-    ) {
-      throw new Error(
-        "Legacy workspace migration required before startup. Run apps/api/scripts/migrate.mjs to normalize workspace links and audit data.",
-      );
-    }
     this.userSessions = new SqliteUserSessionStore(this.database);
     this.customers = new SqliteCustomerStore(this.database);
-    this.jobs = new SqliteJobStore(this.database);
+    this.projects = new SqliteProjectStore(this.database);
     this.drawings = new SqliteDrawingStore(this.database);
     this.pricing = new SqlitePricingStore(this.database);
-    this.quotes = new SqliteQuoteStore(this.database);
     this.support = new SqliteSupportStore(this.database);
     this.auditLogRetentionDays = options.auditLogRetentionDays ?? 365;
   }
@@ -134,30 +90,29 @@ export class SqliteAppRepository implements AppRepository {
     }
   }
 
-  public getUserCount(): Promise<number> {
+  // ----- Identity -----
+
+  public getUserCount() {
     return Promise.resolve(this.userSessions.getUserCount());
   }
-
   public bootstrapOwnerAccount(input: BootstrapOwnerAccountInput) {
     return Promise.resolve(this.userSessions.bootstrapOwnerAccount(input));
   }
-
   public createUser(input: CreateUserInput) {
     return Promise.resolve(this.userSessions.createUser(input));
   }
-
-  public getUserByEmail(email: string) {
-    return Promise.resolve(this.userSessions.getUserByEmail(email));
+  public getCompanyById(companyId: string) {
+    return Promise.resolve(this.userSessions.getCompanyById(companyId));
   }
-
   public getUserById(userId: string, companyId: string) {
     return Promise.resolve(this.userSessions.getUserById(userId, companyId));
   }
-
+  public getUserByEmail(email: string) {
+    return Promise.resolve(this.userSessions.getUserByEmail(email));
+  }
   public listUsers(companyId: string) {
     return Promise.resolve(this.userSessions.listUsers(companyId));
   }
-
   public updateUserPassword(
     userId: string,
     companyId: string,
@@ -167,20 +122,13 @@ export class SqliteAppRepository implements AppRepository {
     this.userSessions.updateUserPassword(userId, companyId, passwordHash, passwordSalt);
     return Promise.resolve();
   }
-
-  public getCompanyById(companyId: string) {
-    return Promise.resolve(this.userSessions.getCompanyById(companyId));
-  }
-
   public createSession(input: CreateSessionInput) {
     return Promise.resolve(this.userSessions.createSession(input));
   }
-
   public revokeSession(tokenHash: string, revokedAtIso: string): Promise<void> {
     this.userSessions.revokeSession(tokenHash, revokedAtIso);
     return Promise.resolve();
   }
-
   public revokeSessionsForUser(
     userId: string,
     companyId: string,
@@ -189,178 +137,14 @@ export class SqliteAppRepository implements AppRepository {
     this.userSessions.revokeSessionsForUser(userId, companyId, revokedAtIso);
     return Promise.resolve();
   }
-
   public getAuthenticatedSession(tokenHash: string) {
     return Promise.resolve(this.userSessions.getAuthenticatedSession(tokenHash));
   }
-
-  public createCustomer(input: CreateCustomerInput) {
-    return Promise.resolve(this.customers.createCustomer(input));
-  }
-
-  public listCustomers(companyId: string, scope: CustomerScope = "ACTIVE", search = "") {
-    return Promise.resolve(this.customers.listCustomers(companyId, scope, search));
-  }
-
-  public getCustomerById(customerId: string, companyId: string) {
-    return Promise.resolve(this.customers.getCustomerById(customerId, companyId));
-  }
-
-  public updateCustomer(input: UpdateCustomerInput) {
-    return Promise.resolve(this.customers.updateCustomer(input));
-  }
-
-  public setCustomerArchivedState(input: SetCustomerArchivedStateInput) {
-    return Promise.resolve(this.customers.setCustomerArchivedState(input));
-  }
-
-  public deleteCustomer(input: DeleteCustomerInput) {
-    return Promise.resolve(this.customers.deleteCustomer(input));
-  }
-
-  public createDrawingWorkspace(input: CreateDrawingWorkspaceInput) {
-    return Promise.resolve(this.jobs.createDrawingWorkspace(input));
-  }
-
-  public listDrawingWorkspaces(
-    companyId: string,
-    scope: CustomerScope = "ACTIVE",
-    search = "",
-    customerId?: string,
-  ) {
-    return Promise.resolve(this.jobs.listDrawingWorkspaces(companyId, scope, search, customerId));
-  }
-
-  public listDrawingWorkspacesForCustomer(customerId: string, companyId: string) {
-    return Promise.resolve(this.jobs.listDrawingWorkspacesForCustomer(customerId, companyId));
-  }
-
-  public getDrawingWorkspaceById(workspaceId: string, companyId: string) {
-    return Promise.resolve(this.jobs.getDrawingWorkspaceById(workspaceId, companyId));
-  }
-
-  public deleteDrawingWorkspace(input: DeleteDrawingWorkspaceInput) {
-    return Promise.resolve(
-      this.jobs.deleteJob({ jobId: input.workspaceId, companyId: input.companyId }),
-    );
-  }
-
-  public updateDrawingWorkspace(input: UpdateDrawingWorkspaceInput) {
-    return Promise.resolve(this.jobs.updateDrawingWorkspace(input));
-  }
-
-  public setDrawingWorkspacePrimaryDrawing(input: SetDrawingWorkspacePrimaryDrawingInput) {
-    return Promise.resolve(
-      this.jobs.setDrawingWorkspacePrimaryDrawing({ ...input, jobId: input.workspaceId }),
-    );
-  }
-
-  public listDrawingWorkspaceTasks(workspaceId: string, companyId: string) {
-    return Promise.resolve(this.jobs.listDrawingWorkspaceTasks(workspaceId, companyId));
-  }
-
-  public listCompanyDrawingTasks(companyId: string, options?: CompanyTaskListOptions) {
-    return Promise.resolve(this.jobs.listCompanyDrawingTasks(companyId, options));
-  }
-
-  public createDrawingTask(input: CreateDrawingTaskInput) {
-    return Promise.resolve(
-      this.jobs.createDrawingTask({
-        ...input,
-        jobId: input.workspaceId,
-        drawingId: input.rootDrawingId,
-      }),
-    );
-  }
-
-  public updateDrawingTask(input: UpdateDrawingTaskInput) {
-    return Promise.resolve(
-      this.jobs.updateDrawingTask({
-        ...input,
-        jobId: input.workspaceId,
-        drawingId: input.rootDrawingId,
-      }),
-    );
-  }
-
-  public deleteDrawingTask(taskId: string, workspaceId: string, companyId: string) {
-    return Promise.resolve(this.jobs.deleteDrawingTask(taskId, workspaceId, companyId));
-  }
-
-  public listDrawingsForCustomer(customerId: string, companyId: string) {
-    return Promise.resolve(this.drawings.listDrawingsForCustomer(customerId, companyId));
-  }
-
-  public listDrawingsForWorkspace(workspaceId: string, companyId: string) {
-    return Promise.resolve(this.drawings.listDrawingsForJob(workspaceId, companyId));
-  }
-
-  public createDrawing(input: CreateDrawingInput) {
-    return Promise.resolve(this.drawings.createDrawing(input));
-  }
-
-  public listDrawings(
-    companyId: string,
-    scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE",
-    search = "",
-  ) {
-    return Promise.resolve(this.drawings.listDrawings(companyId, scope, search));
-  }
-
-  public getDrawingById(drawingId: string, companyId: string) {
-    return Promise.resolve(this.drawings.getDrawingById(drawingId, companyId));
-  }
-
-  public updateDrawing(input: UpdateDrawingInput) {
-    return Promise.resolve(this.drawings.updateDrawing(input));
-  }
-
-  public setDrawingArchivedState(input: SetDrawingArchivedStateInput) {
-    return Promise.resolve(this.drawings.setDrawingArchivedState(input));
-  }
-
-  public setDrawingStatus(input: SetDrawingStatusInput) {
-    return Promise.resolve(this.drawings.setDrawingStatus(input));
-  }
-
-  public deleteDrawing(input: DeleteDrawingInput) {
-    return Promise.resolve(this.drawings.deleteDrawing(input));
-  }
-
-  public listDrawingVersions(drawingId: string, companyId: string) {
-    return Promise.resolve(this.drawings.listDrawingVersions(drawingId, companyId));
-  }
-
-  public restoreDrawingVersion(input: RestoreDrawingVersionInput) {
-    return Promise.resolve(this.drawings.restoreDrawingVersion(input));
-  }
-
-  public createQuote(input: CreateQuoteInput) {
-    return Promise.resolve(this.quotes.createQuote(input));
-  }
-
-  public listQuotesForDrawingWorkspace(workspaceId: string, companyId: string) {
-    return Promise.resolve(this.quotes.listQuotesForJob(workspaceId, companyId));
-  }
-
-  public listQuotesForDrawing(drawingId: string, companyId: string) {
-    return Promise.resolve(this.quotes.listQuotesForDrawing(drawingId, companyId));
-  }
-
-  public getPricingConfig(companyId: string) {
-    return Promise.resolve(this.pricing.getPricingConfig(companyId));
-  }
-
-  public upsertPricingConfig(input: UpsertPricingConfigInput) {
-    return Promise.resolve(this.pricing.upsertPricingConfig(input));
-  }
-
   public createPasswordResetToken(input: CreatePasswordResetTokenInput): Promise<void> {
     this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     this.support.createPasswordResetToken(input);
     return Promise.resolve();
   }
-
   public consumePasswordResetToken(
     tokenHash: string,
     passwordHash: string,
@@ -373,14 +157,111 @@ export class SqliteAppRepository implements AppRepository {
     );
   }
 
+  // ----- Customers -----
+
+  public createCustomer(input: CreateCustomerInput) {
+    return Promise.resolve(this.customers.createCustomer(input));
+  }
+  public listCustomers(companyId: string, scope: ScopeFilter = "ACTIVE", search = "") {
+    return Promise.resolve(this.customers.listCustomers(companyId, scope, search));
+  }
+  public getCustomerById(customerId: string, companyId: string) {
+    return Promise.resolve(this.customers.getCustomerById(customerId, companyId));
+  }
+  public updateCustomer(input: UpdateCustomerInput) {
+    return Promise.resolve(this.customers.updateCustomer(input));
+  }
+  public setCustomerArchivedState(input: SetCustomerArchivedStateInput) {
+    return Promise.resolve(this.customers.setCustomerArchivedState(input));
+  }
+  public deleteCustomer(input: DeleteCustomerInput) {
+    return Promise.resolve(this.customers.deleteCustomer(input));
+  }
+
+  // ----- Projects -----
+
+  public createProject(input: CreateProjectInput) {
+    return Promise.resolve(this.projects.createProject(input));
+  }
+  public listProjects(
+    companyId: string,
+    options: { scope?: ScopeFilter; customerId?: string; search?: string } = {},
+  ) {
+    return Promise.resolve(this.projects.listProjects(companyId, options));
+  }
+  public getProjectById(projectId: string, companyId: string) {
+    return Promise.resolve(this.projects.getProjectById(projectId, companyId));
+  }
+  public updateProject(input: UpdateProjectInput) {
+    return Promise.resolve(this.projects.updateProject(input));
+  }
+  public setProjectStatus(input: SetProjectStatusInput) {
+    return Promise.resolve(this.projects.setProjectStatus(input));
+  }
+  public setProjectArchivedState(input: SetProjectArchivedStateInput) {
+    return Promise.resolve(this.projects.setProjectArchivedState(input));
+  }
+  public deleteProject(input: DeleteProjectInput) {
+    return Promise.resolve(this.projects.deleteProject(input));
+  }
+
+  // ----- Drawings -----
+
+  public createDrawing(input: CreateDrawingInput) {
+    return Promise.resolve(this.drawings.createDrawing(input));
+  }
+  public listDrawingsForProject(projectId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listDrawingsForProject(projectId, companyId));
+  }
+  public getDrawingById(drawingId: string, companyId: string) {
+    return Promise.resolve(this.drawings.getDrawingById(drawingId, companyId));
+  }
+  public renameDrawing(input: RenameDrawingInput) {
+    return Promise.resolve(this.drawings.renameDrawing(input));
+  }
+  public setDrawingArchivedState(input: SetDrawingArchivedStateInput) {
+    return Promise.resolve(this.drawings.setDrawingArchivedState(input));
+  }
+  public deleteDrawing(input: DeleteDrawingInput) {
+    return Promise.resolve(this.drawings.deleteDrawing(input));
+  }
+  public createRevision(input: CreateRevisionInput) {
+    return Promise.resolve(this.drawings.createRevision(input));
+  }
+  public listRevisionsForDrawing(drawingId: string, companyId: string) {
+    return Promise.resolve(this.drawings.listRevisionsForDrawing(drawingId, companyId));
+  }
+  public getRevisionById(revisionId: string, companyId: string) {
+    return Promise.resolve(this.drawings.getRevisionById(revisionId, companyId));
+  }
+  public updateRevisionLayout(input: UpdateRevisionLayoutInput) {
+    return Promise.resolve(this.drawings.updateRevisionLayout(input));
+  }
+  public updateRevisionNotes(input: UpdateRevisionNotesInput) {
+    return Promise.resolve(this.drawings.updateRevisionNotes(input));
+  }
+  public deleteRevision(input: DeleteRevisionInput) {
+    return Promise.resolve(this.drawings.deleteRevision(input));
+  }
+
+  // ----- Pricing -----
+
+  public getPricingConfig(companyId: string) {
+    return Promise.resolve(this.pricing.getPricingConfig(companyId));
+  }
+  public upsertPricingConfig(input: UpsertPricingConfigInput) {
+    return Promise.resolve(this.pricing.upsertPricingConfig(input));
+  }
+
+  // ----- Audit -----
+
   public addAuditLog(input: CreateAuditLogInput) {
     this.support.pruneStaleRecords(input.createdAtIso, this.auditLogRetentionDays);
     return Promise.resolve(this.support.addAuditLog(input));
   }
-
   public listAuditLog(
     companyId: string,
-    options: number | { limit?: number; beforeCreatedAtIso?: string | null } = {},
+    options: number | AuditLogQueryOptions = {},
   ) {
     this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     return Promise.resolve(this.support.listAuditLog(companyId, options));

@@ -49,15 +49,11 @@ interface EditorPageProps {
   onNavigate: (
     route:
       | "dashboard"
-      | "tasks"
-      | "drawings"
       | "customers"
       | "customer"
-      | "job"
+      | "project"
       | "drawing"
       | "editor"
-      | "estimate"
-      | "pricing"
       | "admin"
       | "login",
     query?: Record<string, string>,
@@ -170,7 +166,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     let cancelled = false;
     void (async () => {
       try {
-        const pricingConfig = await getPricingConfig();
+        const { pricingConfig } = await getPricingConfig();
         if (!cancelled) {
           setEditorPricingOptions(buildEditorPricingOptions(pricingConfig.workbook));
         }
@@ -300,8 +296,8 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onRestoreViewport: restoreView,
   });
-  const isQuotedViewOnly = workspace.currentDrawingStatus === "QUOTED";
-  const interactionMode = isQuotedViewOnly ? "SELECT" : shellState.interactionMode;
+  const isQuotedViewOnly = false;
+  const interactionMode = shellState.interactionMode;
 
   const undoSegments = useCallback(() => {
     undoLayout();
@@ -796,12 +792,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
   const {
     canManageAdmin,
     canManagePricing,
-    currentDrawingSummary,
     drawingTitle,
-    handleChangeDrawingStatus,
     handleExportPdf,
     handleOpenCustomers,
-    isChangingStatus,
   } = useEditorPageActions({
     stageRef,
     workspace,
@@ -1021,9 +1014,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     currentCustomerName: workspace.currentCustomerName,
     isDirty: workspace.isDirty,
     isSavingDrawing: workspace.isSavingDrawing,
-    currentDrawingStatus: workspace.currentDrawingStatus ?? currentDrawingSummary?.status ?? null,
     isReadOnly: isQuotedViewOnly,
-    isChangingStatus,
     canManagePricing,
     canManageAdmin,
     canUndo: !isQuotedViewOnly && canUndo,
@@ -1036,9 +1027,6 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isSnapDisabled: shellState.disableSnap,
     canFitView: currentLayout.segments.length > 0,
     onSetCurrentDrawingName: workspace.setCurrentDrawingName,
-    onChangeDrawingStatus: (status: Parameters<typeof handleChangeDrawingStatus>[0]) => {
-      void handleChangeDrawingStatus(status);
-    },
     onSaveDrawing: () => {
       void workspace.saveDrawing();
     },
@@ -1098,7 +1086,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         estimateDrawingId: workspace.currentDrawingId,
       });
     },
-    onNavigatePricing: () => guardedNavigate("pricing"),
+    onNavigatePricing: () => guardedNavigate("admin"),
     onNavigateAdmin: () => guardedNavigate("admin"),
     canNavigateEstimate,
     estimateTitle,

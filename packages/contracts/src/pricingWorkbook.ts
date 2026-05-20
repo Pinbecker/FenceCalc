@@ -1,6 +1,6 @@
 import type {
+  EstimateCommercialInputs,
   FenceHeightKey,
-  JobCommercialInputs,
   TwinBarVariant,
 } from "./domain.js";
 import {
@@ -685,7 +685,7 @@ export function buildDefaultPricingWorkbookConfig(): PricingWorkbookConfig {
   };
 }
 
-export function buildDefaultJobCommercialInputs(): JobCommercialInputs {
+export function buildDefaultEstimateCommercialInputs(): EstimateCommercialInputs {
   const workbook = buildDefaultPricingWorkbookConfig();
   return {
     labourOverheadPercent: workbook.settings.labourOverheadPercent ?? 0,
@@ -703,8 +703,6 @@ export function buildDefaultJobCommercialInputs(): JobCommercialInputs {
     externalCornersEnabled: true,
   };
 }
-
-export const buildDefaultDrawingWorkspaceCommercialInputs = buildDefaultJobCommercialInputs;
 
 export function isManualWorkbookRow(row: PricingWorkbookRow): boolean {
   return row.quantityRule.kind === "MANUAL_ENTRY";

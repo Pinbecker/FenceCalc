@@ -1,635 +1,400 @@
-import Database from "better-sqlite3";
-import {
-  DRAWING_STATUSES,
-  type DrawingRecord,
-  type DrawingSummary,
-  type DrawingVersionRecord,
-  type DrawingVersionSource
+import type Database from "better-sqlite3";
+import type {
+  DrawingRecord,
+  DrawingRevisionRecord,
+  DrawingRevisionSummary,
+  DrawingSummary,
 } from "@fence-estimator/contracts";
 
-import { type DrawingRow, type DrawingVersionRow, toDrawing, toDrawingSummary, toDrawingVersion } from "./shared.js";
+import type {
+  DrawingRevisionRow,
+  DrawingRevisionSummaryRow,
+  DrawingRow,
+  DrawingSummaryRow,
+} from "./shared.js";
+import {
+  serializeEstimate,
+  serializeLayout,
+  serializeViewport,
+  toDrawing,
+  toDrawingRevision,
+  toDrawingRevisionSummary,
+  toDrawingSummary,
+} from "./shared.js";
 import type {
   CreateDrawingInput,
+  CreateRevisionInput,
   DeleteDrawingInput,
-  RestoreDrawingVersionInput,
+  DeleteRevisionInput,
+  RenameDrawingInput,
   SetDrawingArchivedStateInput,
-  SetDrawingStatusInput,
-  UpdateDrawingInput
+  UpdateRevisionLayoutInput,
+  UpdateRevisionNotesInput,
 } from "./types.js";
 
 export class SqliteDrawingStore {
   public constructor(private readonly database: Database.Database) {}
 
-  private insertDrawingVersionSnapshot(
-    drawing: DrawingRecord,
-    source: DrawingVersionSource,
-    createdByUserId: string,
-    createdAtIso: string,
-  ): void {
-    this.database
-      .prepare(
-        `
-          INSERT INTO drawing_versions (
-            id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-      )
-      .run(
-        `${drawing.id}:${drawing.versionNumber}`,
-        drawing.id,
-        drawing.companyId,
-        drawing.schemaVersion,
-        drawing.rulesVersion,
-        drawing.versionNumber,
-        source,
-        drawing.name,
-        drawing.customerId,
-        drawing.customerName,
-        JSON.stringify(drawing.layout),
-        drawing.savedViewport ? JSON.stringify(drawing.savedViewport) : null,
-        JSON.stringify(drawing.estimate),
-        createdByUserId,
-        createdAtIso,
-      );
-  }
-
-  private normalizeDrawingStatus(raw: string): DrawingRecord["status"] {
-    return (DRAWING_STATUSES as readonly string[]).includes(raw) ? (raw as DrawingRecord["status"]) : "DRAFT";
-  }
-
-  private tryReadDrawing(row: DrawingRow): DrawingRecord | null {
-    try {
-      return toDrawing(row);
-    } catch {
-      return null;
-    }
-  }
-
-  private tryReadDrawingVersion(row: DrawingVersionRow): DrawingVersionRecord | null {
-    try {
-      return toDrawingVersion(row);
-    } catch {
-      return null;
-    }
-  }
-
-  private buildContributorMetadata(companyId: string, drawingIds: string[]) {
-    const contributorIdsByDrawingId = new Map<string, Set<string>>();
-    for (const drawingId of drawingIds) {
-      contributorIdsByDrawingId.set(drawingId, new Set());
-    }
-
-    if (drawingIds.length > 0) {
-      const placeholders = drawingIds.map(() => "?").join(", ");
-      const contributorRows = this.database
-        .prepare(
-          `
-            SELECT drawing_id, created_by_user_id
-            FROM drawing_versions
-            WHERE company_id = ? AND drawing_id IN (${placeholders})
-          `,
-        )
-        .all(companyId, ...drawingIds) as Array<{ drawing_id: string; created_by_user_id: string }>;
-
-      for (const row of contributorRows) {
-        const bucket = contributorIdsByDrawingId.get(row.drawing_id);
-        if (bucket) {
-          bucket.add(row.created_by_user_id);
-        }
-      }
-    }
-
-    const userRows = this.database
-      .prepare("SELECT id, display_name FROM users WHERE company_id = ?")
-      .all(companyId) as Array<{ id: string; display_name: string }>;
-    const userDisplayNameById = new Map(userRows.map((row) => [row.id, row.display_name] as const));
-
-    return { contributorIdsByDrawingId, userDisplayNameById };
-  }
-
-  private toSummary(row: DrawingRow, metadata: ReturnType<SqliteDrawingStore["buildContributorMetadata"]>): DrawingSummary {
-    const drawing = this.tryReadDrawing(row);
-    if (!drawing) {
-      throw new Error(`Unable to summarize corrupt drawing ${row.id}`);
-    }
-    const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
-    contributorIds.add(drawing.createdByUserId);
-    contributorIds.add(drawing.updatedByUserId);
-    const contributorUserIds = [...contributorIds];
-
-    return toDrawingSummary(drawing, {
-      createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
-      updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
-      contributorUserIds,
-      contributorDisplayNames: contributorUserIds
-        .map((userId) => metadata.userDisplayNameById.get(userId))
-        .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
-    });
-  }
-
   public createDrawing(input: CreateDrawingInput): DrawingRecord {
-    const revisionNumber = input.revisionNumber ?? 0;
-    const workspaceId = input.workspaceId ?? input.jobId ?? null;
-    const insert = this.database.transaction(() => {
+    const tx = this.database.transaction(() => {
       this.database
         .prepare(
-          `
-            INSERT INTO drawings (
-              id, company_id, job_id, job_role, parent_drawing_id, revision_number, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, schema_version, rules_version, version_number, is_archived, archived_at_iso, archived_by_user_id,
-              created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
+          `INSERT INTO drawings (
+            id, company_id, project_id, name, current_revision_id, latest_revision_number,
+            is_archived, created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
+          ) VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)`,
         )
         .run(
-          input.id,
+          input.drawingId,
           input.companyId,
-          workspaceId,
-          input.jobRole,
-          input.parentDrawingId ?? null,
-          revisionNumber,
+          input.projectId,
           input.name,
-          input.customerId,
-          input.customerName,
-          JSON.stringify(input.layout),
-          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
-          JSON.stringify(input.estimate),
-          input.schemaVersion,
-          input.rulesVersion,
-          1,
-          0,
-          null,
-          null,
+          input.initialRevisionId,
           input.createdByUserId,
           input.updatedByUserId,
           input.createdAtIso,
           input.updatedAtIso,
         );
+
       this.database
         .prepare(
-          `
-            INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
+          `INSERT INTO drawing_revisions (
+            id, drawing_id, company_id, revision_number, parent_revision_id, notes,
+            layout_json, saved_viewport_json, estimate_json,
+            schema_version, rules_version, version_number,
+            created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
+          ) VALUES (?, ?, ?, 1, NULL, NULL, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
         )
         .run(
-          `${input.id}:1`,
-          input.id,
+          input.initialRevisionId,
+          input.drawingId,
           input.companyId,
+          serializeLayout(input.initialLayout),
+          serializeViewport(input.initialViewport),
+          serializeEstimate(input.initialEstimate),
           input.schemaVersion,
           input.rulesVersion,
-          1,
-          "CREATE",
-          input.name,
-          input.customerId,
-          input.customerName,
-          JSON.stringify(input.layout),
-          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
-          JSON.stringify(input.estimate),
           input.createdByUserId,
+          input.updatedByUserId,
           input.createdAtIso,
+          input.updatedAtIso,
         );
     });
-    insert();
+    tx();
     return {
-      ...input,
-      workspaceId,
-      revisionNumber,
-      versionNumber: 1,
-      status: "DRAFT" as const,
+      id: input.drawingId,
+      companyId: input.companyId,
+      projectId: input.projectId,
+      name: input.name,
+      currentRevisionId: input.initialRevisionId,
+      latestRevisionNumber: 1,
       isArchived: false,
-      archivedAtIso: null,
-      archivedByUserId: null,
-      statusChangedAtIso: null,
-      statusChangedByUserId: null
+      createdByUserId: input.createdByUserId,
+      updatedByUserId: input.updatedByUserId,
+      createdAtIso: input.createdAtIso,
+      updatedAtIso: input.updatedAtIso,
     };
   }
 
-  public listDrawings(companyId: string, scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ACTIVE", search = "") {
-    const whereClause =
-      scope === "ACTIVE" ? "AND d.is_archived = 0" : scope === "ARCHIVED" ? "AND d.is_archived = 1" : "";
-    const searchClause = search.trim()
-      ? "AND (lower(d.name) LIKE ? OR lower(COALESCE(c.name, d.customer_name)) LIKE ?)"
-      : "";
-    const params: unknown[] = [companyId];
-    if (search.trim()) {
-      const normalized = `%${search.trim().toLowerCase()}%`;
-      params.push(normalized, normalized);
-    }
+  public listDrawingsForProject(projectId: string, companyId: string): DrawingSummary[] {
     const rows = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.company_id = ? ${whereClause} ${searchClause}
-        ORDER BY d.updated_at_iso DESC
-      `)
-      .all(...params) as DrawingRow[];
-    const metadata = this.buildContributorMetadata(
-      companyId,
-      rows.map((row) => row.id)
-    );
-    return rows.flatMap((row) => {
-      const drawing = this.tryReadDrawing(row);
-      if (!drawing) {
-        return [];
-      }
-      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
-      contributorIds.add(drawing.createdByUserId);
-      contributorIds.add(drawing.updatedByUserId);
-      const contributorUserIds = [...contributorIds];
-
-      return [toDrawingSummary(drawing, {
-        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
-        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
-        contributorUserIds,
-        contributorDisplayNames: contributorUserIds
-          .map((userId) => metadata.userDisplayNameById.get(userId))
-          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
-      })];
-    });
+      .prepare(
+        `SELECT
+           d.*,
+           r.layout_json AS layout_json,
+           u_created.display_name AS created_by_display_name,
+           u_updated.display_name AS updated_by_display_name
+         FROM drawings d
+         LEFT JOIN drawing_revisions r ON r.id = d.current_revision_id
+         LEFT JOIN users u_created ON u_created.id = d.created_by_user_id
+         LEFT JOIN users u_updated ON u_updated.id = d.updated_by_user_id
+         WHERE d.project_id = ? AND d.company_id = ?
+         ORDER BY d.updated_at_iso DESC`,
+      )
+      .all(projectId, companyId) as DrawingSummaryRow[];
+    return rows.map((row) => toDrawingSummary(row));
   }
 
   public getDrawingById(drawingId: string, companyId: string): DrawingRecord | null {
     const row = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.id = ? AND d.company_id = ?
-      `)
+      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
       .get(drawingId, companyId) as DrawingRow | undefined;
-    return row ? this.tryReadDrawing(row) : null;
+    return row ? toDrawing(row) : null;
   }
 
-  public updateDrawing(input: UpdateDrawingInput): DrawingRecord | null {
-    const nextVersionNumber = input.expectedVersionNumber + 1;
-    const workspaceId = input.workspaceId ?? input.jobId ?? null;
-    const update = this.database.transaction(() => {
-      const result = this.database
-        .prepare(
-          `
-            UPDATE drawings
-            SET job_id = ?, job_role = ?, name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ? AND version_number = ?
-          `,
-        )
-        .run(
-          workspaceId,
-          input.jobRole,
-          input.name,
-          input.customerId,
-          input.customerName,
-          JSON.stringify(input.layout),
-          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
-          JSON.stringify(input.estimate),
-          input.schemaVersion,
-          input.rulesVersion,
-          nextVersionNumber,
-          input.updatedByUserId,
-          input.updatedAtIso,
-          input.drawingId,
-          input.companyId,
-          input.expectedVersionNumber,
-        );
-      if (result.changes === 0) {
-        return null;
-      }
-      this.database
-        .prepare(
-          `
-            INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          `${input.drawingId}:${nextVersionNumber}`,
-          input.drawingId,
-          input.companyId,
-          input.schemaVersion,
-          input.rulesVersion,
-          nextVersionNumber,
-          "UPDATE",
-          input.name,
-          input.customerId,
-          input.customerName,
-          JSON.stringify(input.layout),
-          input.savedViewport ? JSON.stringify(input.savedViewport) : null,
-          JSON.stringify(input.estimate),
-          input.updatedByUserId,
-          input.updatedAtIso,
-        );
-      const row = this.database
-        .prepare(`
-          SELECT d.*, c.name AS resolved_customer_name
-          FROM drawings d
-          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-          WHERE d.id = ? AND d.company_id = ?
-        `)
-        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-      return row ? this.tryReadDrawing(row) : null;
-    });
-    return update();
+  public renameDrawing(input: RenameDrawingInput): DrawingRecord | null {
+    const existing = this.getDrawingById(input.drawingId, input.companyId);
+    if (!existing) {
+      return null;
+    }
+    this.database
+      .prepare(
+        "UPDATE drawings SET name = ?, updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
+      )
+      .run(input.name, input.updatedByUserId, input.updatedAtIso, input.drawingId, input.companyId);
+    return {
+      ...existing,
+      name: input.name,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
   }
 
   public setDrawingArchivedState(input: SetDrawingArchivedStateInput): DrawingRecord | null {
-    const update = this.database.transaction(() => {
-      const result = this.database
-        .prepare(
-          `
-            UPDATE drawings
-            SET is_archived = ?, archived_at_iso = ?, archived_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ? AND version_number = ?
-          `,
-        )
-        .run(
-          input.archived ? 1 : 0,
-          input.archived ? input.archivedAtIso : null,
-          input.archived ? input.archivedByUserId : null,
-          input.updatedByUserId,
-          input.updatedAtIso,
-          input.drawingId,
-          input.companyId,
-          input.expectedVersionNumber,
-        );
-      if (result.changes === 0) {
-        return null;
-      }
-
-      const row = this.database
-        .prepare(`
-          SELECT d.*, c.name AS resolved_customer_name
-          FROM drawings d
-          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-          WHERE d.id = ? AND d.company_id = ?
-        `)
-        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-      const drawing = row ? this.tryReadDrawing(row) : null;
-      if (!drawing) {
-        return null;
-      }
-
-      this.insertDrawingVersionSnapshot(drawing, "ARCHIVE", input.updatedByUserId, input.updatedAtIso);
-      return drawing;
-    });
-    return update();
-  }
-
-  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
-    const update = this.database.transaction(() => {
-      const result = this.database
-        .prepare(
-          `
-            UPDATE drawings
-            SET status = ?, status_changed_at_iso = ?, status_changed_by_user_id = ?, version_number = version_number + 1, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ? AND version_number = ?
-          `,
-        )
-        .run(
-          input.status,
-          input.statusChangedAtIso,
-          input.statusChangedByUserId,
-          input.updatedByUserId,
-          input.updatedAtIso,
-          input.drawingId,
-          input.companyId,
-          input.expectedVersionNumber,
-        );
-      if (result.changes === 0) {
-        return null;
-      }
-
-      const row = this.database
-        .prepare(`
-          SELECT d.*, c.name AS resolved_customer_name
-          FROM drawings d
-          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-          WHERE d.id = ? AND d.company_id = ?
-        `)
-        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-      const drawing = row ? this.tryReadDrawing(row) : null;
-      if (!drawing) {
-        return null;
-      }
-
-      this.insertDrawingVersionSnapshot(drawing, "STATUS", input.updatedByUserId, input.updatedAtIso);
-      return drawing;
-    });
-    return update();
-  }
-
-  public listDrawingVersions(drawingId: string, companyId: string): DrawingVersionRecord[] {
-    const rows = this.database
+    const existing = this.getDrawingById(input.drawingId, input.companyId);
+    if (!existing) {
+      return null;
+    }
+    this.database
       .prepare(
-        `
-          SELECT dv.*
-          FROM drawing_versions dv
-          INNER JOIN drawings d ON d.id = dv.drawing_id
-          WHERE dv.drawing_id = ? AND dv.company_id = ? AND d.company_id = ?
-          ORDER BY dv.version_number DESC
-        `,
+        "UPDATE drawings SET is_archived = ?, updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
       )
-      .all(drawingId, companyId, companyId) as DrawingVersionRow[];
-    return rows.flatMap((row) => {
-      const version = this.tryReadDrawingVersion(row);
-      return version ? [version] : [];
-    });
-  }
-
-  public restoreDrawingVersion(input: RestoreDrawingVersionInput): DrawingRecord | null {
-    const version = this.database
-      .prepare("SELECT * FROM drawing_versions WHERE drawing_id = ? AND company_id = ? AND version_number = ?")
-      .get(input.drawingId, input.companyId, input.versionNumber) as DrawingVersionRow | undefined;
-    if (!version) {
-      return null;
-    }
-
-    const restoredVersion = this.tryReadDrawingVersion(version);
-    if (!restoredVersion) {
-      return null;
-    }
-
-    const restoredVersionNumber = input.expectedVersionNumber + 1;
-
-    const restore = this.database.transaction(() => {
-      const result = this.database
-        .prepare(
-          `
-            UPDATE drawings
-            SET name = ?, customer_id = ?, customer_name = ?, layout_json = ?, viewport_json = ?, estimate_json = ?, schema_version = ?, rules_version = ?, version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
-            WHERE id = ? AND company_id = ? AND version_number = ?
-          `,
-        )
-        .run(
-          version.name,
-          input.customerId,
-          input.customerName,
-          version.layout_json,
-          version.viewport_json ?? null,
-          version.estimate_json,
-          restoredVersion.schemaVersion,
-          restoredVersion.rulesVersion,
-          restoredVersionNumber,
-          input.restoredByUserId,
-          input.restoredAtIso,
-          input.drawingId,
-          input.companyId,
-          input.expectedVersionNumber,
-        );
-      if (result.changes === 0) {
-        return null;
-      }
-      this.database
-        .prepare(
-          `
-            INSERT INTO drawing_versions (
-              id, drawing_id, company_id, schema_version, rules_version, version_number, source, name, customer_id, customer_name, layout_json, viewport_json, estimate_json, created_by_user_id, created_at_iso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          `${input.drawingId}:${restoredVersionNumber}`,
-          input.drawingId,
-          input.companyId,
-          restoredVersion.schemaVersion,
-          restoredVersion.rulesVersion,
-          restoredVersionNumber,
-          "RESTORE",
-          version.name,
-          input.customerId,
-          input.customerName,
-          version.layout_json,
-          version.viewport_json ?? null,
-          version.estimate_json,
-          input.restoredByUserId,
-          input.restoredAtIso,
-        );
-      const row = this.database
-        .prepare(`
-          SELECT d.*, c.name AS resolved_customer_name
-          FROM drawings d
-          LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-          WHERE d.id = ? AND d.company_id = ?
-        `)
-        .get(input.drawingId, input.companyId) as DrawingRow | undefined;
-      return row ? this.tryReadDrawing(row) : null;
-    });
-    return restore();
-  }
-
-  public listDrawingsForCustomer(customerId: string, companyId: string): DrawingSummary[] {
-    const rows = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.company_id = ? AND d.customer_id = ?
-        ORDER BY d.updated_at_iso DESC
-      `)
-      .all(companyId, customerId) as DrawingRow[];
-    const metadata = this.buildContributorMetadata(
-      companyId,
-      rows.map((row) => row.id)
-    );
-    return rows.flatMap((row) => {
-      const drawing = this.tryReadDrawing(row);
-      if (!drawing) {
-        return [];
-      }
-      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
-      contributorIds.add(drawing.createdByUserId);
-      contributorIds.add(drawing.updatedByUserId);
-      const contributorUserIds = [...contributorIds];
-      return [toDrawingSummary(drawing, {
-        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
-        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
-        contributorUserIds,
-        contributorDisplayNames: contributorUserIds
-          .map((userId) => metadata.userDisplayNameById.get(userId))
-          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
-      })];
-    });
-  }
-
-  public listDrawingsForJob(jobId: string, companyId: string): DrawingSummary[] {
-    const rows = this.database
-      .prepare(`
-        SELECT d.*, c.name AS resolved_customer_name
-        FROM drawings d
-        LEFT JOIN customers c ON c.id = d.customer_id AND c.company_id = d.company_id
-        WHERE d.company_id = ? AND d.job_id = ?
-        ORDER BY d.updated_at_iso DESC
-      `)
-      .all(companyId, jobId) as DrawingRow[];
-    const metadata = this.buildContributorMetadata(
-      companyId,
-      rows.map((row) => row.id)
-    );
-    return rows.flatMap((row) => {
-      const drawing = this.tryReadDrawing(row);
-      if (!drawing) {
-        return [];
-      }
-      const contributorIds = metadata.contributorIdsByDrawingId.get(drawing.id) ?? new Set<string>();
-      contributorIds.add(drawing.createdByUserId);
-      contributorIds.add(drawing.updatedByUserId);
-      const contributorUserIds = [...contributorIds];
-      return [toDrawingSummary(drawing, {
-        createdByDisplayName: metadata.userDisplayNameById.get(drawing.createdByUserId) ?? "",
-        updatedByDisplayName: metadata.userDisplayNameById.get(drawing.updatedByUserId) ?? "",
-        contributorUserIds,
-        contributorDisplayNames: contributorUserIds
-          .map((userId) => metadata.userDisplayNameById.get(userId))
-          .filter((displayName): displayName is string => typeof displayName === "string" && displayName.length > 0)
-      })];
-    });
+      .run(
+        input.archived ? 1 : 0,
+        input.updatedByUserId,
+        input.updatedAtIso,
+        input.drawingId,
+        input.companyId,
+      );
+    return {
+      ...existing,
+      isArchived: input.archived,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
   }
 
   public deleteDrawing(input: DeleteDrawingInput): boolean {
-    const existing = this.database
-      .prepare("SELECT id, is_archived, job_id FROM drawings WHERE id = ? AND company_id = ?")
-      .get(input.drawingId, input.companyId) as { id: string; is_archived: number; job_id: string | null } | undefined;
+    const result = this.database
+      .prepare("DELETE FROM drawings WHERE id = ? AND company_id = ? AND is_archived = 1")
+      .run(input.drawingId, input.companyId);
+    return result.changes > 0;
+  }
+
+  public createRevision(input: CreateRevisionInput): DrawingRevisionRecord {
+    const tx = this.database.transaction(() => {
+      this.database
+        .prepare(
+          `INSERT INTO drawing_revisions (
+            id, drawing_id, company_id, revision_number, parent_revision_id, notes,
+            layout_json, saved_viewport_json, estimate_json,
+            schema_version, rules_version, version_number,
+            created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.revisionId,
+          input.drawingId,
+          input.companyId,
+          input.revisionNumber,
+          input.parentRevisionId,
+          input.notes,
+          serializeLayout(input.layout),
+          serializeViewport(input.savedViewport),
+          serializeEstimate(input.estimate),
+          input.schemaVersion,
+          input.rulesVersion,
+          input.createdByUserId,
+          input.updatedByUserId,
+          input.createdAtIso,
+          input.updatedAtIso,
+        );
+      this.database
+        .prepare(
+          `UPDATE drawings
+           SET current_revision_id = ?, latest_revision_number = ?,
+               updated_by_user_id = ?, updated_at_iso = ?
+           WHERE id = ? AND company_id = ?`,
+        )
+        .run(
+          input.revisionId,
+          input.revisionNumber,
+          input.updatedByUserId,
+          input.updatedAtIso,
+          input.drawingId,
+          input.companyId,
+        );
+    });
+    tx();
+    return {
+      id: input.revisionId,
+      drawingId: input.drawingId,
+      companyId: input.companyId,
+      revisionNumber: input.revisionNumber,
+      parentRevisionId: input.parentRevisionId,
+      notes: input.notes,
+      layout: input.layout,
+      savedViewport: input.savedViewport,
+      estimate: input.estimate,
+      schemaVersion: input.schemaVersion,
+      rulesVersion: input.rulesVersion,
+      versionNumber: 0,
+      createdByUserId: input.createdByUserId,
+      updatedByUserId: input.updatedByUserId,
+      createdAtIso: input.createdAtIso,
+      updatedAtIso: input.updatedAtIso,
+    };
+  }
+
+  public listRevisionsForDrawing(
+    drawingId: string,
+    companyId: string,
+  ): DrawingRevisionSummary[] {
+    const rows = this.database
+      .prepare(
+        `SELECT
+           r.*,
+           u_created.display_name AS created_by_display_name,
+           u_updated.display_name AS updated_by_display_name
+         FROM drawing_revisions r
+         LEFT JOIN users u_created ON u_created.id = r.created_by_user_id
+         LEFT JOIN users u_updated ON u_updated.id = r.updated_by_user_id
+         WHERE r.drawing_id = ? AND r.company_id = ?
+         ORDER BY r.revision_number DESC`,
+      )
+      .all(drawingId, companyId) as DrawingRevisionSummaryRow[];
+    return rows.map((row) => toDrawingRevisionSummary(row));
+  }
+
+  public getRevisionById(
+    revisionId: string,
+    companyId: string,
+  ): DrawingRevisionRecord | null {
+    const row = this.database
+      .prepare("SELECT * FROM drawing_revisions WHERE id = ? AND company_id = ?")
+      .get(revisionId, companyId) as DrawingRevisionRow | undefined;
+    return row ? toDrawingRevision(row) : null;
+  }
+
+  public updateRevisionLayout(
+    input: UpdateRevisionLayoutInput,
+  ): DrawingRevisionRecord | null {
+    const existing = this.getRevisionById(input.revisionId, input.companyId);
+    if (!existing) {
+      return null;
+    }
+    if (existing.versionNumber !== input.expectedVersionNumber) {
+      const err = new Error("Drawing revision has been modified by another user");
+      (err as Error & { code?: string }).code = "VERSION_CONFLICT";
+      throw err;
+    }
+    const nextVersion = existing.versionNumber + 1;
+    this.database
+      .prepare(
+        `UPDATE drawing_revisions
+         SET layout_json = ?, saved_viewport_json = ?, estimate_json = ?,
+             schema_version = ?, rules_version = ?,
+             version_number = ?, updated_by_user_id = ?, updated_at_iso = ?
+         WHERE id = ? AND company_id = ?`,
+      )
+      .run(
+        serializeLayout(input.layout),
+        serializeViewport(input.savedViewport),
+        serializeEstimate(input.estimate),
+        input.schemaVersion,
+        input.rulesVersion,
+        nextVersion,
+        input.updatedByUserId,
+        input.updatedAtIso,
+        input.revisionId,
+        input.companyId,
+      );
+    this.database
+      .prepare(
+        "UPDATE drawings SET updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
+      )
+      .run(input.updatedByUserId, input.updatedAtIso, existing.drawingId, input.companyId);
+    return {
+      ...existing,
+      layout: input.layout,
+      savedViewport: input.savedViewport,
+      estimate: input.estimate,
+      schemaVersion: input.schemaVersion,
+      rulesVersion: input.rulesVersion,
+      versionNumber: nextVersion,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
+  }
+
+  public updateRevisionNotes(
+    input: UpdateRevisionNotesInput,
+  ): DrawingRevisionRecord | null {
+    const existing = this.getRevisionById(input.revisionId, input.companyId);
+    if (!existing) {
+      return null;
+    }
+    this.database
+      .prepare(
+        "UPDATE drawing_revisions SET notes = ?, updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
+      )
+      .run(
+        input.notes,
+        input.updatedByUserId,
+        input.updatedAtIso,
+        input.revisionId,
+        input.companyId,
+      );
+    return {
+      ...existing,
+      notes: input.notes,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
+  }
+
+  public deleteRevision(input: DeleteRevisionInput): boolean {
+    const existing = this.getRevisionById(input.revisionId, input.companyId);
     if (!existing) {
       return false;
     }
-    const doDelete = this.database.transaction(() => {
-      this.database
-        .prepare("DELETE FROM drawing_versions WHERE drawing_id = ? AND company_id = ?")
-        .run(input.drawingId, input.companyId);
-      this.database
-        .prepare("DELETE FROM drawings WHERE id = ? AND company_id = ?")
-        .run(input.drawingId, input.companyId);
+    if (existing.revisionNumber === 1) {
+      // Cannot delete root revision; that requires deleting the whole drawing.
+      return false;
+    }
+    const drawing = this.database
+      .prepare("SELECT * FROM drawings WHERE id = ? AND company_id = ?")
+      .get(existing.drawingId, input.companyId) as DrawingRow | undefined;
+    if (!drawing) {
+      return false;
+    }
+    if (existing.id !== drawing.current_revision_id) {
+      // Only allow deleting the latest (current) revision.
+      return false;
+    }
 
-      if (existing.job_id) {
-        const remaining = this.database
-          .prepare(`
-            SELECT id
-            FROM drawings
-            WHERE job_id = ? AND company_id = ?
-            ORDER BY updated_at_iso DESC
-          `)
-          .all(existing.job_id, input.companyId) as Array<{ id: string }>;
-
-        if (remaining.length === 0) {
-          this.database.prepare("DELETE FROM job_tasks WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
-          this.database.prepare("DELETE FROM quotes WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
-          this.database.prepare("DELETE FROM jobs WHERE id = ? AND company_id = ?").run(existing.job_id, input.companyId);
-        } else {
-          const nextPrimaryId = remaining[0]?.id ?? null;
-          this.database.prepare("UPDATE drawings SET job_role = 'SECONDARY' WHERE job_id = ? AND company_id = ?").run(existing.job_id, input.companyId);
-          if (nextPrimaryId) {
-            this.database
-              .prepare("UPDATE drawings SET job_role = 'PRIMARY' WHERE id = ? AND job_id = ? AND company_id = ?")
-              .run(nextPrimaryId, existing.job_id, input.companyId);
-          }
-          this.database
-            .prepare("UPDATE jobs SET primary_drawing_id = ? WHERE id = ? AND company_id = ?")
-            .run(nextPrimaryId, existing.job_id, input.companyId);
-        }
+    const tx = this.database.transaction(() => {
+      const fallback = this.database
+        .prepare(
+          `SELECT id, revision_number FROM drawing_revisions
+           WHERE drawing_id = ? AND company_id = ? AND id != ?
+           ORDER BY revision_number DESC LIMIT 1`,
+        )
+        .get(existing.drawingId, input.companyId, existing.id) as
+        | { id: string; revision_number: number }
+        | undefined;
+      if (!fallback) {
+        return false;
       }
+      this.database
+        .prepare("DELETE FROM drawing_revisions WHERE id = ? AND company_id = ?")
+        .run(existing.id, input.companyId);
+      this.database
+        .prepare(
+          `UPDATE drawings
+           SET current_revision_id = ?, latest_revision_number = ?, updated_at_iso = ?
+           WHERE id = ? AND company_id = ?`,
+        )
+        .run(
+          fallback.id,
+          fallback.revision_number,
+          new Date().toISOString(),
+          existing.drawingId,
+          input.companyId,
+        );
+      return true;
     });
-    doDelete();
-    return true;
+    const result = tx();
+    return result === true;
   }
 }

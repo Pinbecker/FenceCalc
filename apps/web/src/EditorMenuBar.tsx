@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AuthSessionEnvelope, DrawingStatus } from "@fence-estimator/contracts";
-import { DRAWING_STATUSES } from "@fence-estimator/contracts";
-
-const DRAWING_STATUS_LABELS: Record<DrawingStatus, string> = {
-  DRAFT: "Draft",
-  QUOTED: "Quoted",
-  WON: "Won",
-  LOST: "Lost",
-  ON_HOLD: "On hold",
-};
+import type { AuthSessionEnvelope } from "@fence-estimator/contracts";
 
 interface EditorMenuBarProps {
   session: AuthSessionEnvelope | null;
@@ -21,9 +12,7 @@ interface EditorMenuBarProps {
   currentCustomerName: string;
   isDirty: boolean;
   isSavingDrawing: boolean;
-  currentDrawingStatus: DrawingStatus | null;
   isReadOnly?: boolean;
-  isChangingStatus: boolean;
   canManagePricing: boolean;
   canManageAdmin: boolean;
   canUndo: boolean;
@@ -36,7 +25,6 @@ interface EditorMenuBarProps {
   isSnapDisabled: boolean;
   canFitView: boolean;
   onSetCurrentDrawingName: (name: string) => void;
-  onChangeDrawingStatus: (status: DrawingStatus) => void;
   onSaveDrawing: () => void;
   onOpenSaveAs: () => void;
   onExportPdf: () => void;
@@ -92,9 +80,7 @@ export function EditorMenuBar({
   currentCustomerName,
   isDirty,
   isSavingDrawing,
-  currentDrawingStatus,
   isReadOnly = false,
-  isChangingStatus,
   canManagePricing,
   canManageAdmin,
   canUndo,
@@ -107,7 +93,6 @@ export function EditorMenuBar({
   isSnapDisabled,
   canFitView,
   onSetCurrentDrawingName,
-  onChangeDrawingStatus,
   onSaveDrawing,
   onOpenSaveAs,
   onExportPdf,
@@ -393,27 +378,6 @@ export function EditorMenuBar({
               </span>
             )}
           </div>
-        ) : null}
-
-        {currentDrawingId && currentDrawingStatus && session ? (
-          isReadOnly ? (
-            <span className="menu-bar-status-badge is-read-only" title={readOnlyTitle}>
-              {DRAWING_STATUS_LABELS[currentDrawingStatus]} · View only
-            </span>
-          ) : (
-            <select
-              className="menu-bar-status-select"
-              value={currentDrawingStatus}
-              disabled={isChangingStatus}
-              onChange={(event) => onChangeDrawingStatus(event.target.value as DrawingStatus)}
-            >
-              {DRAWING_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {DRAWING_STATUS_LABELS[status]}
-                </option>
-              ))}
-            </select>
-          )
         ) : null}
 
         <div className="menu-bar-quick" aria-label="Editor view controls">

@@ -5,6 +5,7 @@
     "rootDir": "../..",
     "baseUrl": "../..",
     "paths": {
+      "@/*": ["apps/web/src/*"],
       "@fence-estimator/contracts": [
         "packages/contracts/src/index.ts"
       ],

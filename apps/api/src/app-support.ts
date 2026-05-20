@@ -1,11 +1,11 @@
 export type { AuthenticatedRequestContext } from "./authorization.js";
-export { requireAuth, requireUserManager, userCanManageUsers } from "./authorization.js";
+export { requireAdmin, requireAuth, userIsAdmin } from "./authorization.js";
 export { writeAuditLog } from "./auditLogSupport.js";
 export { buildEstimate, normalizeLayout } from "./estimateSupport.js";
-export { BuildAppOptions, isAllowedOrigin, type RouteDependencies } from "./routeSupport.js";
+export { isAllowedOrigin, type BuildAppOptions, type RouteDependencies } from "./routeSupport.js";
 export {
   buildClearedSessionCookieHeader,
   buildSessionCookieHeader,
   createSessionEnvelope,
-  readSessionToken
+  readSessionToken,
 } from "./sessionHttp.js";

@@ -1,1 +1,1 @@
-﻿export { buildApp, testRepositoryFactory } from "./buildApp.js";
+export { buildApp } from "./buildApp.js";

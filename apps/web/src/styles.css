@@ -1,11 +1,118 @@
-/* Ordered stylesheet manifest. Preserve import order to preserve cascade behaviour. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
 @import "./styles/00-foundation.css";
-@import "./styles/10-portal-foundation.css";
-@import "./styles/20-portal-layout-refresh.css";
 @import "./styles/30-editor-foundation.css";
-@import "./styles/40-dashboard-drawings.css";
-@import "./styles/50-portal-pages.css";
 @import "./styles/60-editor-shell.css";
-@import "./styles/70-portal-polish.css";
-@import "./styles/80-customers.css";
-@import "./styles/90-portal-rebuild.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border-base);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans:
+    "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.99 0.003 240);
+  --foreground: oklch(0.18 0.015 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.015 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.015 250);
+  --primary: oklch(0.42 0.06 200);
+  --primary-foreground: oklch(0.98 0.005 230);
+  --secondary: oklch(0.96 0.005 240);
+  --secondary-foreground: oklch(0.22 0.015 250);
+  --muted: oklch(0.965 0.004 240);
+  --muted-foreground: oklch(0.5 0.015 250);
+  --accent: oklch(0.95 0.012 230);
+  --accent-foreground: oklch(0.22 0.015 250);
+  --destructive: oklch(0.58 0.21 27);
+  --destructive-foreground: oklch(0.98 0.005 230);
+  --success: oklch(0.62 0.13 155);
+  --success-foreground: oklch(0.98 0.005 230);
+  --warning: oklch(0.78 0.13 75);
+  --warning-foreground: oklch(0.2 0.04 60);
+  --border-base: oklch(0.92 0.006 240);
+  --input: oklch(0.92 0.006 240);
+  --ring: oklch(0.42 0.06 200);
+}
+
+.dark {
+  --background: oklch(0.16 0.01 250);
+  --foreground: oklch(0.96 0.005 240);
+  --card: oklch(0.19 0.012 250);
+  --card-foreground: oklch(0.96 0.005 240);
+  --popover: oklch(0.19 0.012 250);
+  --popover-foreground: oklch(0.96 0.005 240);
+  --primary: oklch(0.74 0.08 200);
+  --primary-foreground: oklch(0.18 0.02 250);
+  --secondary: oklch(0.25 0.013 250);
+  --secondary-foreground: oklch(0.96 0.005 240);
+  --muted: oklch(0.24 0.012 250);
+  --muted-foreground: oklch(0.7 0.012 240);
+  --accent: oklch(0.28 0.015 230);
+  --accent-foreground: oklch(0.96 0.005 240);
+  --destructive: oklch(0.62 0.21 27);
+  --destructive-foreground: oklch(0.98 0.005 230);
+  --success: oklch(0.66 0.13 155);
+  --success-foreground: oklch(0.12 0.02 240);
+  --warning: oklch(0.78 0.13 75);
+  --warning-foreground: oklch(0.18 0.02 250);
+  --border-base: oklch(0.28 0.012 250);
+  --input: oklch(0.28 0.012 250);
+  --ring: oklch(0.6 0.08 200);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body:has(.editor-page) {
+  background: #1a2020;
+}

@@ -1,8 +1,6 @@
 import { z } from "zod";
 import {
-  DRAWING_STATUSES,
   FENCE_HEIGHT_KEYS,
-  JOB_STAGES,
   PITCH_DIVIDER_MAX_SPAN_MM,
   ROLL_FORM_HEIGHT_KEYS,
   SIDE_NETTING_EXTENDED_POST_INTERVAL,
@@ -1099,393 +1097,38 @@ export const passwordSchema = z.string().min(10).max(128);
 export const companyNameSchema = z.string().trim().min(2).max(120);
 export const displayNameSchema = z.string().trim().min(2).max(120);
 export const drawingNameSchema = z.string().trim().min(1).max(160);
-export const jobNameSchema = z.string().trim().min(1).max(160);
-export const customerNameSchema = z.string().trim().min(1).max(160);
-export const customerIdSchema = z.string().trim().min(1).max(120);
-export const customerTextFieldSchema = z.string().trim().max(240);
-export const customerNotesSchema = z.string().trim().max(2_000);
-export const drawingJobRoleSchema = z.enum(["PRIMARY", "SECONDARY"]);
-export const jobStageSchema = z.enum(JOB_STAGES);
-export const drawingWorkspaceStageSchema = jobStageSchema;
-export const jobTaskTitleSchema = z.string().trim().min(1).max(240);
 
-export const jobCommercialInputsSchema = z.object({
-  labourOverheadPercent: z.number().finite().min(0).optional(),
-  labourDayValue: z.number().finite().positive().optional(),
-  travelLodgePerDay: z.number().finite().min(0),
-  markupRate: z.number().finite().min(0),
-  distributionCharge: z.number().finite().min(0),
-  concretePricePerCube: z.number().finite().min(0),
-  hardDigRatePerHole: z.number().finite().min(0).optional(),
-  clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
-  travelDays: z.number().finite().min(0).optional(),
-  markupUnits: z.number().finite().min(0).optional(),
-  hardDig: z.boolean().optional(),
-  clearSpoils: z.boolean().optional(),
-  externalCornersEnabled: z.boolean().optional(),
-});
-export const drawingWorkspaceCommercialInputsSchema = jobCommercialInputsSchema;
+// -----------------------------------------------------------------------------
+// Identity & auth
+// -----------------------------------------------------------------------------
 
-export const taskPrioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
-
-export const jobTaskRecordSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  companyId: z.string().trim().min(1).max(120),
-  jobId: z.string().trim().min(1).max(120),
-  jobName: z.string().trim().max(200),
-  drawingId: z.string().trim().min(1).max(120).nullable(),
-  drawingName: z.string().trim().max(200),
-  revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
-  revisionDrawingName: z.string().trim().max(200).optional(),
-  title: jobTaskTitleSchema,
-  description: z.string().trim().max(2_000),
-  priority: taskPrioritySchema,
-  isCompleted: z.boolean(),
-  assignedUserId: z.string().trim().min(1).max(120).nullable(),
-  assignedUserDisplayName: z.string().trim().max(120),
-  dueAtIso: z.string().datetime().nullable(),
-  completedAtIso: z.string().datetime().nullable(),
-  completedByUserId: z.string().trim().min(1).max(120).nullable(),
-  completedByDisplayName: z.string().trim().max(120),
-  createdByUserId: z.string().trim().min(1).max(120),
-  createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime(),
-});
-
-export const drawingTaskRecordSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  companyId: z.string().trim().min(1).max(120),
-  workspaceId: z.string().trim().min(1).max(120),
-  workspaceName: z.string().trim().max(200),
-  rootDrawingId: z.string().trim().min(1).max(120).nullable(),
-  rootDrawingName: z.string().trim().max(200),
-  revisionDrawingId: z.string().trim().min(1).max(120).nullable(),
-  revisionDrawingName: z.string().trim().max(200),
-  title: jobTaskTitleSchema,
-  description: z.string().trim().max(2_000),
-  priority: taskPrioritySchema,
-  isCompleted: z.boolean(),
-  assignedUserId: z.string().trim().min(1).max(120).nullable(),
-  assignedUserDisplayName: z.string().trim().max(120),
-  dueAtIso: z.string().datetime().nullable(),
-  completedAtIso: z.string().datetime().nullable(),
-  completedByUserId: z.string().trim().min(1).max(120).nullable(),
-  completedByDisplayName: z.string().trim().max(120),
-  createdByUserId: z.string().trim().min(1).max(120),
-  createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime(),
-});
-
-export const jobRecordSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  companyId: z.string().trim().min(1).max(120),
-  customerId: customerIdSchema,
-  customerName: customerNameSchema,
-  name: jobNameSchema,
-  stage: jobStageSchema,
-  primaryDrawingId: z.string().trim().min(1).max(120).nullable(),
-  commercialInputs: jobCommercialInputsSchema,
-  notes: z.string().trim().max(2_000),
-  ownerUserId: z.string().trim().min(1).max(120).nullable(),
-  ownerDisplayName: z.string().trim().max(120),
-  isArchived: z.boolean(),
-  archivedAtIso: z.string().datetime().nullable(),
-  archivedByUserId: z.string().trim().min(1).max(120).nullable(),
-  stageChangedAtIso: z.string().datetime().nullable(),
-  stageChangedByUserId: z.string().trim().min(1).max(120).nullable(),
-  createdByUserId: z.string().trim().min(1).max(120),
-  updatedByUserId: z.string().trim().min(1).max(120),
-  updatedByDisplayName: z.string().trim().max(120),
-  createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime(),
-});
-export const drawingWorkspaceRecordSchema = jobRecordSchema;
-
-export const jobSummarySchema = jobRecordSchema.extend({
-  drawingCount: z.coerce.number().int().min(0),
-  openTaskCount: z.coerce.number().int().min(0),
-  completedTaskCount: z.coerce.number().int().min(0),
-  lastActivityAtIso: z.string().datetime().nullable(),
-  latestQuoteTotal: z.number().finite().min(0).nullable(),
-  latestQuoteCreatedAtIso: z.string().datetime().nullable(),
-  latestEstimateTotal: z.number().finite().min(0).nullable(),
-  primaryDrawingName: z.string().trim().min(1).max(160).nullable(),
-  primaryDrawingUpdatedAtIso: z.string().datetime().nullable(),
-  primaryPreviewLayout: layoutModelSchema.nullable(),
-});
-export const drawingWorkspaceSummarySchema = jobSummarySchema;
-
-export const jobCreateRequestSchema = z.object({
-  customerId: customerIdSchema,
-  name: jobNameSchema,
-  notes: z.string().trim().max(2_000).default(""),
-});
-const drawingWorkspaceInitialDrawingSchema = z.object({
-  layout: layoutModelSchema,
-  savedViewport: drawingCanvasViewportSchema.nullable().optional(),
-});
-export const drawingWorkspaceCreateRequestSchema = jobCreateRequestSchema.extend({
-  initialDrawing: drawingWorkspaceInitialDrawingSchema.optional(),
-});
-
-export const jobUpdateRequestSchema = z
-  .object({
-    name: jobNameSchema.optional(),
-    stage: jobStageSchema.optional(),
-    commercialInputs: jobCommercialInputsSchema.optional(),
-    notes: z.string().trim().max(2_000).optional(),
-    ownerUserId: z.string().trim().min(1).max(120).nullable().optional(),
-    archived: z.boolean().optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.name === undefined &&
-      value.stage === undefined &&
-      value.commercialInputs === undefined &&
-      value.notes === undefined &&
-      value.ownerUserId === undefined &&
-      value.archived === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one job field must be provided",
-      });
-    }
-  });
-export const drawingWorkspaceUpdateRequestSchema = jobUpdateRequestSchema;
-
-export const jobTaskCreateRequestSchema = z.object({
-  title: jobTaskTitleSchema,
-  description: z.string().trim().max(2_000).optional(),
-  priority: taskPrioritySchema.optional(),
-  assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
-  drawingId: z.string().trim().min(1).max(120).nullable().optional(),
-  dueAtIso: z.string().datetime().nullable().optional(),
-});
-export const drawingTaskCreateRequestSchema = z.object({
-  title: jobTaskTitleSchema,
-  description: z.string().trim().max(2_000).optional(),
-  priority: taskPrioritySchema.optional(),
-  assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
-  rootDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
-  revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
-  dueAtIso: z.string().datetime().nullable().optional(),
-});
-
-export const jobTaskUpdateRequestSchema = z
-  .object({
-    title: jobTaskTitleSchema.optional(),
-    description: z.string().trim().max(2_000).optional(),
-    priority: taskPrioritySchema.optional(),
-    assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
-    drawingId: z.string().trim().min(1).max(120).nullable().optional(),
-    dueAtIso: z.string().datetime().nullable().optional(),
-    isCompleted: z.boolean().optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.title === undefined &&
-      value.description === undefined &&
-      value.priority === undefined &&
-      value.assignedUserId === undefined &&
-      value.drawingId === undefined &&
-      value.dueAtIso === undefined &&
-      value.isCompleted === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one task field must be provided",
-      });
-    }
-  });
-export const drawingTaskUpdateRequestSchema = z
-  .object({
-    title: jobTaskTitleSchema.optional(),
-    description: z.string().trim().max(2_000).optional(),
-    priority: taskPrioritySchema.optional(),
-    assignedUserId: z.string().trim().min(1).max(120).nullable().optional(),
-    rootDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
-    revisionDrawingId: z.string().trim().min(1).max(120).nullable().optional(),
-    dueAtIso: z.string().datetime().nullable().optional(),
-    isCompleted: z.boolean().optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.title === undefined &&
-      value.description === undefined &&
-      value.priority === undefined &&
-      value.assignedUserId === undefined &&
-      value.rootDrawingId === undefined &&
-      value.revisionDrawingId === undefined &&
-      value.dueAtIso === undefined &&
-      value.isCompleted === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one task field must be provided",
-      });
-    }
-  });
-
-export const jobPrimaryDrawingUpdateRequestSchema = z.object({
-  drawingId: z.string().trim().min(1).max(120),
-});
-export const drawingWorkspacePrimaryDrawingUpdateRequestSchema =
-  jobPrimaryDrawingUpdateRequestSchema;
-
-export const jobDrawingCreateRequestSchema = z.object({
-  name: drawingNameSchema.optional(),
-  sourceDrawingId: z.string().trim().min(1).max(120).optional(),
-});
-export const drawingWorkspaceDrawingCreateRequestSchema = jobDrawingCreateRequestSchema;
-
-export const jobQuoteCreateRequestSchema = quoteCreateRequestSchema.extend({
-  drawingId: z.string().trim().min(1).max(120).optional(),
-});
-export const drawingWorkspaceQuoteCreateRequestSchema = jobQuoteCreateRequestSchema;
-
-export const customerContactSchema = z.object({
-  name: z.string().trim().max(240).default(""),
-  phone: z.string().trim().max(40).default(""),
-  email: z.string().trim().email().max(320).or(z.literal("")).default(""),
-});
-
-export const customerAdditionalContactsSchema = z.array(customerContactSchema).max(20).default([]);
+export const userRoleSchema = z.enum(["ADMIN", "USER"]);
+export const companyUserRoleSchema = userRoleSchema;
 
 export const registerRequestSchema = z.object({
-  companyName: companyNameSchema,
-  displayName: displayNameSchema,
   email: emailSchema,
   password: passwordSchema,
+  companyName: companyNameSchema,
+  displayName: displayNameSchema,
+  bootstrapSecret: z.string().min(1).max(256).optional(),
 });
 
 export const bootstrapOwnerRequestSchema = registerRequestSchema;
 
-export const companyUserRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
+export const loginRequestSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1).max(256),
+});
 
 export const userCreateRequestSchema = z.object({
-  displayName: displayNameSchema,
   email: emailSchema,
   password: passwordSchema,
-  role: z.enum(["ADMIN", "MEMBER"]),
+  displayName: displayNameSchema,
+  role: userRoleSchema,
 });
 
 export const userPasswordSetRequestSchema = z.object({
   password: passwordSchema,
-});
-
-export const loginRequestSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-});
-
-export const drawingCreateRequestSchema = z.object({
-  name: drawingNameSchema,
-  customerId: customerIdSchema,
-  workspaceId: z.string().trim().min(1).max(120).optional(),
-  layout: layoutModelSchema,
-  savedViewport: drawingCanvasViewportSchema.nullable().optional(),
-});
-
-export const drawingUpdateRequestSchema = z
-  .object({
-    expectedVersionNumber: z.coerce.number().int().min(1),
-    name: drawingNameSchema.optional(),
-    customerId: customerIdSchema.optional(),
-    workspaceId: z.string().trim().min(1).max(120).nullable().optional(),
-    layout: layoutModelSchema.optional(),
-    savedViewport: drawingCanvasViewportSchema.nullable().optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.name === undefined &&
-      value.customerId === undefined &&
-      value.workspaceId === undefined &&
-      value.layout === undefined &&
-      value.savedViewport === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one drawing field must be provided",
-      });
-    }
-  });
-
-export const drawingArchiveRequestSchema = z.object({
-  archived: z.boolean(),
-  expectedVersionNumber: z.coerce.number().int().min(1),
-});
-
-export const drawingStatusSchema = z.enum(DRAWING_STATUSES);
-
-export const drawingStatusUpdateRequestSchema = z.object({
-  status: drawingStatusSchema,
-  expectedVersionNumber: z.coerce.number().int().min(1),
-});
-
-export const customerRecordSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  companyId: z.string().trim().min(1).max(120),
-  name: customerNameSchema,
-  primaryContactName: customerTextFieldSchema,
-  primaryEmail: z.string().trim().email().max(320).or(z.literal("")),
-  primaryPhone: z.string().trim().max(40),
-  additionalContacts: z.array(customerContactSchema).max(20),
-  siteAddress: z.string().trim().max(400),
-  notes: customerNotesSchema,
-  isArchived: z.boolean(),
-  createdByUserId: z.string().trim().min(1).max(120),
-  updatedByUserId: z.string().trim().min(1).max(120),
-  createdAtIso: z.string().datetime(),
-  updatedAtIso: z.string().datetime(),
-});
-
-export const customerSummarySchema = customerRecordSchema.extend({
-  activeDrawingCount: z.coerce.number().int().min(0),
-  archivedDrawingCount: z.coerce.number().int().min(0),
-  lastActivityAtIso: z.string().datetime().nullable(),
-});
-
-export const customerCreateRequestSchema = z.object({
-  name: customerNameSchema,
-  primaryContactName: customerTextFieldSchema.default(""),
-  primaryEmail: z.string().trim().email().max(320).or(z.literal("")).default(""),
-  primaryPhone: z.string().trim().max(40).default(""),
-  additionalContacts: customerAdditionalContactsSchema,
-  siteAddress: z.string().trim().max(400).default(""),
-  notes: customerNotesSchema.default(""),
-});
-
-export const customerUpdateRequestSchema = z
-  .object({
-    name: customerNameSchema.optional(),
-    primaryContactName: customerTextFieldSchema.optional(),
-    primaryEmail: z.string().trim().email().max(320).or(z.literal("")).optional(),
-    primaryPhone: z.string().trim().max(40).optional(),
-    additionalContacts: customerAdditionalContactsSchema.optional(),
-    siteAddress: z.string().trim().max(400).optional(),
-    notes: customerNotesSchema.optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.name === undefined &&
-      value.primaryContactName === undefined &&
-      value.primaryEmail === undefined &&
-      value.primaryPhone === undefined &&
-      value.additionalContacts === undefined &&
-      value.siteAddress === undefined &&
-      value.notes === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one customer field must be provided",
-      });
-    }
-  });
-
-export const customerArchiveRequestSchema = z.object({
-  archived: z.boolean(),
-  cascadeDrawings: z.boolean().default(false),
 });
 
 export const passwordResetRequestSchema = z.object({
@@ -1493,6 +1136,113 @@ export const passwordResetRequestSchema = z.object({
 });
 
 export const passwordResetConfirmSchema = z.object({
-  token: z.string().trim().min(32).max(128),
+  token: z.string().min(1).max(256),
   password: passwordSchema,
+});
+
+// -----------------------------------------------------------------------------
+// Customers
+// -----------------------------------------------------------------------------
+
+export const customerNameSchema = z.string().trim().min(1).max(160);
+export const customerTextFieldSchema = z.string().trim().max(240);
+export const customerNotesSchema = z.string().trim().max(2_000);
+
+export const customerCreateRequestSchema = z.object({
+  name: customerNameSchema,
+  contactName: customerTextFieldSchema.nullish(),
+  contactEmail: customerTextFieldSchema.nullish(),
+  contactPhone: customerTextFieldSchema.nullish(),
+  siteAddress: customerTextFieldSchema.nullish(),
+  notes: customerNotesSchema.nullish(),
+});
+
+export const customerUpdateRequestSchema = z
+  .object({
+    name: customerNameSchema.optional(),
+    contactName: customerTextFieldSchema.nullish(),
+    contactEmail: customerTextFieldSchema.nullish(),
+    contactPhone: customerTextFieldSchema.nullish(),
+    siteAddress: customerTextFieldSchema.nullish(),
+    notes: customerNotesSchema.nullish(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const customerArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
+});
+
+// -----------------------------------------------------------------------------
+// Projects
+// -----------------------------------------------------------------------------
+
+export const projectNameSchema = z.string().trim().min(1).max(160);
+export const projectNotesSchema = z.string().trim().max(2_000);
+export const projectStatusSchema = z.enum([
+  "DRAFT",
+  "QUOTED",
+  "WON",
+  "LOST",
+  "ON_HOLD",
+]);
+
+export const projectCreateRequestSchema = z.object({
+  customerId: z.string().min(1),
+  name: projectNameSchema,
+  notes: projectNotesSchema.nullish(),
+  status: projectStatusSchema.optional(),
+});
+
+export const projectUpdateRequestSchema = z
+  .object({
+    name: projectNameSchema.optional(),
+    notes: projectNotesSchema.nullish(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const projectStatusUpdateRequestSchema = z.object({
+  status: projectStatusSchema,
+});
+
+export const projectArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
+});
+
+// -----------------------------------------------------------------------------
+// Drawings & revisions
+// -----------------------------------------------------------------------------
+
+export const revisionNotesSchema = z.string().trim().max(2_000);
+
+export const drawingCreateRequestSchema = z.object({
+  projectId: z.string().min(1),
+  name: drawingNameSchema,
+  initialLayout: layoutModelSchema.optional(),
+  initialViewport: drawingCanvasViewportSchema.optional(),
+});
+
+export const drawingRenameRequestSchema = z.object({
+  name: drawingNameSchema,
+});
+
+export const drawingArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
+});
+
+export const revisionCreateRequestSchema = z.object({
+  notes: revisionNotesSchema.nullish(),
+});
+
+export const revisionUpdateRequestSchema = z.object({
+  expectedVersionNumber: z.number().int().nonnegative(),
+  layout: layoutModelSchema,
+  savedViewport: drawingCanvasViewportSchema.nullish(),
+});
+
+export const revisionNotesUpdateRequestSchema = z.object({
+  notes: revisionNotesSchema.nullish(),
 });

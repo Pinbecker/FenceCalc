@@ -1,4 +1,4 @@
-import { ApiClientError } from "./apiClient";
+import { ApiError } from "./apiClient";
 
 interface VersionConflictDetails {
   currentVersionNumber?: unknown;
@@ -46,12 +46,12 @@ function formatValidationDetails(details: unknown): string | null {
 }
 
 export function extractApiErrorMessage(error: unknown): string {
-  if (error instanceof ApiClientError) {
-    const validationDetails = formatValidationDetails(error.details);
+  if (error instanceof ApiError) {
+    const validationDetails = formatValidationDetails(error.payload.details);
     if (!validationDetails) {
-      return error.message;
+      return error.payload.error ?? error.message;
     }
-    return `${error.message}: ${validationDetails}`;
+    return `${error.payload.error ?? error.message}: ${validationDetails}`;
   }
   if (error instanceof Error) {
     return error.message;
@@ -60,9 +60,9 @@ export function extractApiErrorMessage(error: unknown): string {
 }
 
 export function extractCurrentVersionNumber(error: unknown): number | null {
-  if (!(error instanceof ApiClientError) || error.status !== 409) {
+  if (!(error instanceof ApiError) || error.status !== 409) {
     return null;
   }
-  const details = error.details as VersionConflictDetails | null;
+  const details = error.payload as VersionConflictDetails | null;
   return typeof details?.currentVersionNumber === "number" ? details.currentVersionNumber : null;
 }

@@ -1,7 +1,7 @@
 ﻿import { z } from "zod";
 import type { AuditLogRecord } from "@fence-estimator/contracts";
 
-import { requireUserManager } from "../authorization.js";
+import { requireAdmin } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
 
 const auditLogQuerySchema = z.object({
@@ -9,7 +9,7 @@ const auditLogQuerySchema = z.object({
   before: z.string().datetime().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
-  entityType: z.enum(["AUTH", "USER", "DRAWING", "QUOTE", "CUSTOMER", "WORKSPACE"]).optional(),
+  entityType: z.enum(["AUTH", "USER", "CUSTOMER", "PROJECT", "DRAWING", "REVISION"]).optional(),
   search: z.string().trim().max(120).optional()
 });
 
@@ -75,7 +75,7 @@ async function listAllAuditLogEntries(
 
 export function registerAuditRoutes({ app, config, repository }: RouteDependencies): void {
   app.get("/api/v1/audit-log", async (request, reply) => {
-    const authenticated = await requireUserManager(request, reply, repository, config);
+    const authenticated = await requireAdmin(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }
@@ -104,7 +104,7 @@ export function registerAuditRoutes({ app, config, repository }: RouteDependenci
   });
 
   app.get("/api/v1/audit-log/export", async (request, reply) => {
-    const authenticated = await requireUserManager(request, reply, repository, config);
+    const authenticated = await requireAdmin(request, reply, repository, config);
     if (!authenticated) {
       return reply;
     }

@@ -5,7 +5,7 @@ import helmet from "@fastify/helmet";
 
 import { loadConfig } from "./config.js";
 import { captureApiException } from "./observability/sentry.js";
-import { InMemoryAppRepository, type AppRepository, SqliteAppRepository } from "./repository.js";
+import { type AppRepository, SqliteAppRepository } from "./repository.js";
 import {
   InMemoryLoginAttemptLimiter,
   InMemoryWriteRequestLimiter,
@@ -77,5 +77,3 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   return app;
 }
-
-export const testRepositoryFactory = (): AppRepository => new InMemoryAppRepository();

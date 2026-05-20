@@ -3,7 +3,6 @@ import type {
   KeyboardEventHandler,
   MouseEventHandler,
   PointerEventHandler,
-  WheelEventHandler
 } from "react";
 
 import { clamp, DEFAULT_ORBIT, type OrbitState } from "./optimization3DRenderData.js";
@@ -22,7 +21,8 @@ export interface Optimization3DStageHandlers {
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
   onPointerCancel: PointerEventHandler<HTMLDivElement>;
-  onWheel: WheelEventHandler<HTMLDivElement>;
+  /** Native wheel handler — must be attached with { passive: false } outside React's event system. */
+  onWheel: (event: WheelEvent) => void;
   onDoubleClick: MouseEventHandler<HTMLDivElement>;
   onContextMenu: MouseEventHandler<HTMLDivElement>;
   onKeyDown: KeyboardEventHandler<HTMLDivElement>;

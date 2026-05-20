@@ -326,7 +326,33 @@ export interface EstimateSnapshot {
 
 export const DRAWING_SCHEMA_VERSION = 1;
 
-export type CompanyUserRole = "OWNER" | "ADMIN" | "MEMBER";
+
+// -----------------------------------------------------------------------------
+// Estimate commercial inputs
+// -----------------------------------------------------------------------------
+
+export interface EstimateCommercialInputs {
+  labourOverheadPercent?: number | undefined;
+  labourDayValue?: number | undefined;
+  travelLodgePerDay: number;
+  markupRate: number;
+  distributionCharge: number;
+  concretePricePerCube: number;
+  hardDigRatePerHole?: number | undefined;
+  clearSpoilsRatePerHole?: number | undefined;
+  travelDays?: number | undefined;
+  markupUnits?: number | undefined;
+  hardDig?: boolean | undefined;
+  clearSpoils?: boolean | undefined;
+  externalCornersEnabled?: boolean | undefined;
+}
+
+// -----------------------------------------------------------------------------
+// Identity & tenancy
+// -----------------------------------------------------------------------------
+
+export const USER_ROLES = ["ADMIN", "USER"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
 
 export interface CompanyRecord {
   id: string;
@@ -339,7 +365,7 @@ export interface CompanyUserRecord {
   companyId: string;
   email: string;
   displayName: string;
-  role: CompanyUserRole;
+  role: UserRole;
   createdAtIso: string;
 }
 
@@ -358,22 +384,19 @@ export interface AuthSessionEnvelope {
   session: AuthSessionRecord;
 }
 
-export interface CustomerContact {
-  name: string;
-  phone: string;
-  email: string;
-}
+// -----------------------------------------------------------------------------
+// Customers
+// -----------------------------------------------------------------------------
 
 export interface CustomerRecord {
   id: string;
   companyId: string;
   name: string;
-  primaryContactName: string;
-  primaryEmail: string;
-  primaryPhone: string;
-  additionalContacts: CustomerContact[];
-  siteAddress: string;
-  notes: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  siteAddress: string | null;
+  notes: string | null;
   isArchived: boolean;
   createdByUserId: string;
   updatedByUserId: string;
@@ -382,196 +405,90 @@ export interface CustomerRecord {
 }
 
 export interface CustomerSummary extends CustomerRecord {
-  activeDrawingCount: number;
-  archivedDrawingCount: number;
+  projectCount: number;
+  activeProjectCount: number;
   lastActivityAtIso: string | null;
 }
 
-export const JOB_STAGES = [
+// -----------------------------------------------------------------------------
+// Projects (replaces DrawingWorkspace / Job)
+// -----------------------------------------------------------------------------
+
+export const PROJECT_STATUSES = [
   "DRAFT",
-  "DESIGNING",
-  "ESTIMATING",
-  "READY_TO_QUOTE",
   "QUOTED",
-  "FOLLOW_UP",
   "WON",
   "LOST",
   "ON_HOLD",
 ] as const;
-export type JobStage = (typeof JOB_STAGES)[number];
-export type DrawingWorkspaceStage = JobStage;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-export interface JobCommercialInputs {
-  labourOverheadPercent?: number | undefined;
-  labourDayValue?: number | undefined;
-  travelLodgePerDay: number;
-  markupRate: number;
-  distributionCharge: number;
-  concretePricePerCube: number;
-  hardDigRatePerHole?: number | undefined;
-  clearSpoilsRatePerHole?: number | undefined;
-  travelDays?: number | undefined;
-  markupUnits?: number | undefined;
-  hardDig?: boolean | undefined;
-  clearSpoils?: boolean | undefined;
-  externalCornersEnabled?: boolean | undefined;
-}
-export type DrawingWorkspaceCommercialInputs = JobCommercialInputs;
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  DRAFT: "Draft",
+  QUOTED: "Quoted",
+  WON: "Won",
+  LOST: "Lost",
+  ON_HOLD: "On hold",
+};
 
-export interface JobRecord {
+export interface ProjectRecord {
   id: string;
   companyId: string;
   customerId: string;
-  customerName: string;
   name: string;
-  stage: JobStage;
-  primaryDrawingId: string | null;
-  commercialInputs: JobCommercialInputs;
-  notes: string;
-  ownerUserId: string | null;
-  ownerDisplayName: string;
+  status: ProjectStatus;
+  notes: string | null;
   isArchived: boolean;
-  archivedAtIso: string | null;
-  archivedByUserId: string | null;
-  stageChangedAtIso: string | null;
-  stageChangedByUserId: string | null;
+  statusChangedAtIso: string | null;
+  statusChangedByUserId: string | null;
   createdByUserId: string;
   updatedByUserId: string;
-  updatedByDisplayName: string;
   createdAtIso: string;
   updatedAtIso: string;
 }
 
-export interface JobSummary extends JobRecord {
-  drawingCount: number;
-  openTaskCount: number;
-  completedTaskCount: number;
-  lastActivityAtIso: string | null;
-  latestQuoteTotal: number | null;
-  latestQuoteCreatedAtIso: string | null;
-  latestEstimateTotal: number | null;
-  primaryDrawingName: string | null;
-  primaryDrawingUpdatedAtIso: string | null;
-  primaryPreviewLayout: LayoutModel | null;
-}
-
-export interface DrawingWorkspaceRecord {
-  id: string;
-  companyId: string;
-  customerId: string;
+export interface ProjectSummary extends ProjectRecord {
   customerName: string;
-  name: string;
-  stage: DrawingWorkspaceStage;
-  primaryDrawingId: string | null;
-  commercialInputs: DrawingWorkspaceCommercialInputs;
-  notes: string;
-  ownerUserId: string | null;
-  ownerDisplayName: string;
-  isArchived: boolean;
-  archivedAtIso: string | null;
-  archivedByUserId: string | null;
-  stageChangedAtIso: string | null;
-  stageChangedByUserId: string | null;
-  createdByUserId: string;
-  updatedByUserId: string;
-  updatedByDisplayName: string;
-  createdAtIso: string;
-  updatedAtIso: string;
-}
-
-export interface DrawingWorkspaceSummary extends DrawingWorkspaceRecord {
   drawingCount: number;
-  openTaskCount: number;
-  completedTaskCount: number;
   lastActivityAtIso: string | null;
-  latestQuoteTotal: number | null;
-  latestQuoteCreatedAtIso: string | null;
-  latestEstimateTotal: number | null;
-  primaryDrawingName: string | null;
-  primaryDrawingUpdatedAtIso: string | null;
-  primaryPreviewLayout: LayoutModel | null;
 }
 
-export type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
-export const TASK_PRIORITIES: readonly TaskPriority[] = [
-  "LOW",
-  "NORMAL",
-  "HIGH",
-  "URGENT",
-] as const;
-
-export interface JobTaskRecord {
-  id: string;
-  companyId: string;
-  jobId: string;
-  jobName: string;
-  drawingId: string | null;
-  drawingName: string;
-  revisionDrawingId?: string | null;
-  revisionDrawingName?: string;
-  title: string;
-  description: string;
-  priority: TaskPriority;
-  isCompleted: boolean;
-  assignedUserId: string | null;
-  assignedUserDisplayName: string;
-  dueAtIso: string | null;
-  completedAtIso: string | null;
-  completedByUserId: string | null;
-  completedByDisplayName: string;
-  createdByUserId: string;
-  createdAtIso: string;
-  updatedAtIso: string;
-}
-
-export interface DrawingTaskRecord {
-  id: string;
-  companyId: string;
-  workspaceId: string;
-  workspaceName: string;
-  rootDrawingId: string | null;
-  rootDrawingName: string;
-  revisionDrawingId: string | null;
-  revisionDrawingName: string;
-  title: string;
-  description: string;
-  priority: TaskPriority;
-  isCompleted: boolean;
-  assignedUserId: string | null;
-  assignedUserDisplayName: string;
-  dueAtIso: string | null;
-  completedAtIso: string | null;
-  completedByUserId: string | null;
-  completedByDisplayName: string;
-  createdByUserId: string;
-  createdAtIso: string;
-  updatedAtIso: string;
-}
-
-export type DrawingJobRole = "PRIMARY" | "SECONDARY";
+// -----------------------------------------------------------------------------
+// Drawings & revisions
+// -----------------------------------------------------------------------------
+//
+// A Drawing is a named design that belongs to a Project.
+// A Drawing has one or more DrawingRevisions. Revision 1 is the root.
+// Starting a new revision forks the layout of the current revision.
+// Only the latest revision is editable; older revisions are read-only history.
 
 export interface DrawingRecord {
   id: string;
   companyId: string;
-  workspaceId?: string | null;
-  jobRole?: DrawingJobRole | null;
-  parentDrawingId?: string | null;
-  revisionNumber: number;
+  projectId: string;
   name: string;
-  customerId: string | null;
-  customerName: string;
+  currentRevisionId: string;
+  latestRevisionNumber: number;
+  isArchived: boolean;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface DrawingRevisionRecord {
+  id: string;
+  drawingId: string;
+  companyId: string;
+  revisionNumber: number;
+  parentRevisionId: string | null;
+  notes: string | null;
   layout: LayoutModel;
-  savedViewport?: DrawingCanvasViewport | null;
+  savedViewport: DrawingCanvasViewport | null;
   estimate: EstimateResult;
   schemaVersion: number;
   rulesVersion: string;
   versionNumber: number;
-  status: DrawingStatus;
-  isArchived: boolean;
-  archivedAtIso: string | null;
-  archivedByUserId: string | null;
-  statusChangedAtIso: string | null;
-  statusChangedByUserId: string | null;
   createdByUserId: string;
   updatedByUserId: string;
   createdAtIso: string;
@@ -581,90 +498,76 @@ export interface DrawingRecord {
 export interface DrawingSummary {
   id: string;
   companyId: string;
-  workspaceId?: string | null;
-  jobRole?: DrawingJobRole | null;
-  parentDrawingId?: string | null;
-  revisionNumber: number;
+  projectId: string;
   name: string;
-  customerId: string | null;
-  customerName: string;
-  previewLayout: LayoutModel;
+  currentRevisionId: string;
+  latestRevisionNumber: number;
   segmentCount: number;
   gateCount: number;
-  schemaVersion: number;
-  rulesVersion: string;
-  versionNumber: number;
-  status: DrawingStatus;
+  previewLayout: LayoutModel;
   isArchived: boolean;
-  archivedAtIso: string | null;
-  archivedByUserId: string | null;
-  statusChangedAtIso: string | null;
-  statusChangedByUserId: string | null;
   createdByUserId: string;
   createdByDisplayName: string;
   updatedByUserId: string;
   updatedByDisplayName: string;
-  contributorUserIds: string[];
-  contributorDisplayNames: string[];
   createdAtIso: string;
   updatedAtIso: string;
 }
 
-export const DRAWING_STATUSES = ["DRAFT", "QUOTED", "WON", "LOST", "ON_HOLD"] as const;
-export type DrawingStatus = (typeof DRAWING_STATUSES)[number];
-
-export type DrawingVersionSource = "CREATE" | "UPDATE" | "RESTORE" | "ARCHIVE" | "STATUS";
-
-export interface DrawingVersionRecord {
+export interface DrawingRevisionSummary {
   id: string;
   drawingId: string;
-  companyId: string;
-  schemaVersion: number;
-  rulesVersion: string;
+  revisionNumber: number;
+  parentRevisionId: string | null;
+  notes: string | null;
+  segmentCount: number;
+  gateCount: number;
   versionNumber: number;
-  source: DrawingVersionSource;
-  name: string;
-  customerId: string | null;
-  customerName: string;
-  layout: LayoutModel;
-  savedViewport?: DrawingCanvasViewport | null;
-  estimate: EstimateResult;
   createdByUserId: string;
+  createdByDisplayName: string;
+  updatedByUserId: string;
+  updatedByDisplayName: string;
   createdAtIso: string;
+  updatedAtIso: string;
 }
 
-export type AuditEntityType = "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "WORKSPACE";
+// -----------------------------------------------------------------------------
+// Audit log (slim)
+// -----------------------------------------------------------------------------
+
+export type AuditEntityType =
+  | "AUTH"
+  | "USER"
+  | "CUSTOMER"
+  | "PROJECT"
+  | "DRAWING"
+  | "REVISION";
+
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
   | "LOGIN_SUCCEEDED"
-  | "PASSWORD_RESET_REQUESTED"
-  | "PASSWORD_RESET_COMPLETED"
   | "SESSION_REVOKED"
   | "USER_CREATED"
   | "USER_PASSWORD_RESET"
-  | "DRAWING_CREATED"
-  | "DRAWING_UPDATED"
-  | "DRAWING_ARCHIVED"
-  | "DRAWING_UNARCHIVED"
-  | "DRAWING_STATUS_CHANGED"
-  | "DRAWING_VERSION_RESTORED"
-  | "QUOTE_CREATED"
-  | "WORKSPACE_CREATED"
-  | "WORKSPACE_UPDATED"
-  | "WORKSPACE_ARCHIVED"
-  | "WORKSPACE_UNARCHIVED"
-  | "WORKSPACE_STAGE_CHANGED"
-  | "WORKSPACE_DRAWING_ADDED"
-  | "WORKSPACE_TASK_CREATED"
-  | "WORKSPACE_TASK_UPDATED"
-  | "WORKSPACE_TASK_DELETED"
-  | "WORKSPACE_DELETED"
   | "CUSTOMER_CREATED"
   | "CUSTOMER_UPDATED"
   | "CUSTOMER_ARCHIVED"
   | "CUSTOMER_UNARCHIVED"
+  | "CUSTOMER_DELETED"
+  | "PROJECT_CREATED"
+  | "PROJECT_UPDATED"
+  | "PROJECT_STATUS_CHANGED"
+  | "PROJECT_ARCHIVED"
+  | "PROJECT_UNARCHIVED"
+  | "PROJECT_DELETED"
+  | "DRAWING_CREATED"
+  | "DRAWING_RENAMED"
+  | "DRAWING_ARCHIVED"
+  | "DRAWING_UNARCHIVED"
   | "DRAWING_DELETED"
-  | "CUSTOMER_DELETED";
+  | "REVISION_CREATED"
+  | "REVISION_UPDATED"
+  | "REVISION_DELETED";
 
 export interface AuditLogRecord {
   id: string;

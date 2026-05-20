@@ -1,26 +1,25 @@
-import { useCallback, useMemo, useState, type RefObject } from "react";
+import { useCallback, useMemo, type RefObject } from "react";
 import type Konva from "konva";
-import type { DrawingStatus, EstimateResult, LayoutModel, LayoutSegment } from "@fence-estimator/contracts";
+import type { EstimateResult, LayoutModel, LayoutSegment, UserRole } from "@fence-estimator/contracts";
 
-import { setDrawingStatus } from "../apiClient";
-import { extractApiErrorMessage } from "../apiErrors";
 import { exportDrawingPdfReport } from "../drawingPdfReport";
-import type { ResolvedBasketballPostPlacement, ResolvedFloodlightColumnPlacement, ResolvedGatePlacement } from "./types";
+import type {
+  ResolvedBasketballPostPlacement,
+  ResolvedFloodlightColumnPlacement,
+  ResolvedGatePlacement,
+} from "./types";
 
 interface EditorPageActionsWorkspace {
   currentDrawingId: string | null;
   currentDrawingName: string;
-  currentDrawingStatus: DrawingStatus | null;
   currentCustomerId: string | null;
   currentCustomerName: string | null;
   isDirty: boolean;
-  refreshDrawings: () => Promise<unknown>;
-  drawings: Array<{ id: string; status: DrawingStatus; versionNumber: number }>;
 }
 
 interface EditorPageActionsSession {
   company: { name: string };
-  user: { displayName: string; role: "OWNER" | "ADMIN" | "MEMBER" };
+  user: { displayName: string; role: UserRole };
 }
 
 interface UseEditorPageActionsOptions {
@@ -48,8 +47,16 @@ interface UseEditorPageActionsOptions {
   resolvedFloodlightColumnPlacements: ResolvedFloodlightColumnPlacement[];
   confirmDiscardChanges: (message: string) => boolean;
   onNavigate: (
-    route: "dashboard" | "tasks" | "drawings" | "customers" | "customer" | "editor" | "estimate" | "pricing" | "admin" | "login",
-    query?: Record<string, string>
+    route:
+      | "dashboard"
+      | "customers"
+      | "customer"
+      | "project"
+      | "drawing"
+      | "editor"
+      | "admin"
+      | "login",
+    query?: Record<string, string>,
   ) => void;
 }
 
@@ -93,39 +100,17 @@ export function useEditorPageActions({
   resolvedBasketballPostPlacements,
   resolvedFloodlightColumnPlacements,
   confirmDiscardChanges,
-  onNavigate
+  onNavigate,
 }: UseEditorPageActionsOptions) {
-  const [isChangingStatus, setIsChangingStatus] = useState(false);
-
-  const currentDrawingSummary = useMemo(
-    () => (workspace.currentDrawingId ? workspace.drawings.find((drawing) => drawing.id === workspace.currentDrawingId) ?? null : null),
-    [workspace.currentDrawingId, workspace.drawings]
+  const drawingTitle = useMemo(
+    () =>
+      workspace.currentDrawingName.trim() ||
+      (workspace.currentDrawingId ? "Untitled drawing" : "Open a drawing"),
+    [workspace.currentDrawingId, workspace.currentDrawingName],
   );
-  const drawingTitle = workspace.currentDrawingName.trim() || (workspace.currentDrawingId ? "Untitled drawing" : "Open a workspace drawing");
-  const canManageAdmin = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
+  const canManageAdmin = session?.user.role === "ADMIN";
   const canManagePricing = canManageAdmin;
   const interactionLabel = getInteractionLabel(interactionMode);
-
-  const handleChangeDrawingStatus = useCallback(
-    async (nextStatus: DrawingStatus) => {
-      if (!workspace.currentDrawingId || !currentDrawingSummary) {
-        return;
-      }
-      if (workspace.currentDrawingStatus === "QUOTED" || currentDrawingSummary.status === "QUOTED") {
-        return;
-      }
-      setIsChangingStatus(true);
-      try {
-        await setDrawingStatus(workspace.currentDrawingId, nextStatus, currentDrawingSummary.versionNumber);
-        await workspace.refreshDrawings();
-      } catch (error) {
-        window.alert(extractApiErrorMessage(error));
-      } finally {
-        setIsChangingStatus(false);
-      }
-    },
-    [currentDrawingSummary, workspace],
-  );
 
   const handleOpenCustomers = useCallback(() => {
     if (!confirmDiscardChanges("Discard unsaved changes before opening the customer directory?")) {
@@ -138,10 +123,11 @@ export function useEditorPageActions({
   const handleExportPdf = useCallback(() => {
     let canvasImageDataUrl: string | null = null;
     try {
-      canvasImageDataUrl = stageRef.current?.toDataURL({
-        pixelRatio: 2,
-        mimeType: "image/png"
-      }) ?? null;
+      canvasImageDataUrl =
+        stageRef.current?.toDataURL({
+          pixelRatio: 2,
+          mimeType: "image/png",
+        }) ?? null;
     } catch {
       canvasImageDataUrl = null;
     }
@@ -161,11 +147,13 @@ export function useEditorPageActions({
       segmentOrdinalById,
       resolvedGatePlacements,
       resolvedBasketballPostPlacements,
-      resolvedFloodlightColumnPlacements
+      resolvedFloodlightColumnPlacements,
     });
 
     if (!opened) {
-      window.alert("The PDF export could not open a new tab. Allow pop-ups for this site and try again.");
+      window.alert(
+        "The PDF export could not open a new tab. Allow pop-ups for this site and try again.",
+      );
     }
   }, [
     currentLayout,
@@ -180,8 +168,14 @@ export function useEditorPageActions({
     stageRef,
     workspace.currentCustomerName,
     workspace.currentDrawingId,
-    workspace.isDirty
+    workspace.isDirty,
   ]);
+
+  const currentDrawingSummary = null as null | { id: string; versionNumber: number };
+  const isChangingStatus = false;
+  const handleChangeDrawingStatus = useCallback(async (_status: string): Promise<void> => {
+    /* no-op: status now lives on the project, not the drawing */
+  }, []);
 
   return {
     canManageAdmin,
@@ -192,6 +186,6 @@ export function useEditorPageActions({
     handleExportPdf,
     handleOpenCustomers,
     interactionLabel,
-    isChangingStatus
+    isChangingStatus,
   };
 }

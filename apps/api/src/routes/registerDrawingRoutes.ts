@@ -1,452 +1,224 @@
-import type { FastifyReply } from "fastify";
-import { z } from "zod";
 import {
-  quoteCreateRequestSchema,
-  buildDefaultPricingConfig,
   drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
-  drawingStatusUpdateRequestSchema,
-  drawingUpdateRequestSchema
+  drawingRenameRequestSchema,
+  revisionCreateRequestSchema,
+  revisionNotesUpdateRequestSchema,
+  revisionUpdateRequestSchema,
+  type LayoutModel,
 } from "@fence-estimator/contracts";
-import { buildPricedEstimate } from "@fence-estimator/rules-engine";
 
-import { requireAdminRole, requireAuth } from "../authorization.js";
-import { normalizeLayout } from "../estimateSupport.js";
-import {
-  buildDrawingWorkspaceEstimateOptions,
-  mergeDrawingWorkspaceCommercialManualEntries,
-} from "../drawingWorkspaceEstimateSupport.js";
+import { requireAdmin, requireAuth } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
   createDrawingForCompany,
   deleteDrawingForCompany,
   deleteRevisionForCompany,
-  restoreDrawingVersionForCompany,
-  setDrawingArchivedStateForCompany,
-  setDrawingStatusForCompany,
-  updateDrawingForCompany
+  getDrawingForCompany,
+  getRevisionForCompany,
+  listDrawingsForProjectForCompany,
+  listRevisionsForDrawingForCompany,
+  renameDrawingForCompany,
+  saveRevisionForCompany,
+  setDrawingArchivedForCompany,
+  startRevisionForCompany,
+  updateRevisionNotesForCompany,
 } from "../services/drawingService.js";
-import { createQuoteForDrawing } from "../services/quoteService.js";
 
-const drawingScopeSchema = z.enum(["ALL", "ACTIVE", "ARCHIVED"]).catch("ACTIVE");
-const drawingRestoreRequestSchema = z.object({
-  versionNumber: z.coerce.number().int().min(1),
-  expectedVersionNumber: z.coerce.number().int().min(1)
-});
+export function registerDrawingRoutes({
+  app,
+  config,
+  repository,
+  writeLimiter,
+}: RouteDependencies): void {
+  // -------- Drawings --------
 
-function sendDrawingMutationFailure(
-  reply: FastifyReply,
-  result:
-    | { kind: "conflict"; currentVersionNumber: number }
-    | { kind: "drawing_not_found" }
-    | { kind: "version_not_found" }
-    | { kind: "invalid_layout"; message: string }
-    | { kind: "invalid_customer"; message: string }
-    | { kind: "quoted_locked"; message: string },
-) {
-  if (result.kind === "conflict") {
-    return reply.code(409).send({
-      error: "Drawing has changed since it was loaded",
-      details: {
-        currentVersionNumber: result.currentVersionNumber
-      }
-    });
-  }
-
-  if (result.kind === "version_not_found") {
-    return reply.code(404).send({ error: "Drawing version not found" });
-  }
-
-  if (result.kind === "invalid_layout") {
-    return reply.code(400).send({
-      error: "Invalid layout configuration",
-      details: result.message
-    });
-  }
-
-  if (result.kind === "invalid_customer") {
-    return reply.code(400).send({
-      error: "Invalid customer selection",
-      details: result.message
-    });
-  }
-
-  if (result.kind === "quoted_locked") {
-    return reply.code(409).send({
-      error: "Quoted drawing is locked",
-      details: result.message
-    });
-  }
-
-  return reply.code(404).send({ error: "Drawing not found" });
-}
-
-export function registerDrawingRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
-  app.get("/api/v1/drawings", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-
-    const scope = drawingScopeSchema.parse((request.query as { scope?: unknown } | undefined)?.scope);
-    const query = (request.query as { search?: unknown } | undefined) ?? {};
-    const search = typeof query.search === "string" ? query.search : "";
-    const drawings = await repository.listDrawings(authenticated.company.id, scope, search);
+  app.get("/api/v1/projects/:projectId/drawings", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { projectId } = request.params as { projectId: string };
+    const drawings = await listDrawingsForProjectForCompany(repository, auth, projectId);
     return reply.code(200).send({ drawings });
   });
 
   app.post("/api/v1/drawings", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`drawing-create:${request.ip}`)) {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    if (!writeLimiter.allow(`drawings:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
-
     const parsed = drawingCreateRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing payload",
-        details: parsed.error.flatten()
-      });
+      return reply
+        .code(400)
+        .send({ error: "Invalid drawing payload", details: parsed.error.flatten() });
     }
-    if (!parsed.data.workspaceId) {
-      return reply.code(400).send({
-        error: "Root drawings must be created through the drawing workspace endpoint"
-      });
-    }
-
-    const result = await createDrawingForCompany(repository, authenticated, {
-      ...parsed.data,
-      layout: normalizeLayout(parsed.data.layout)
+    const result = await createDrawingForCompany(repository, auth, {
+      projectId: parsed.data.projectId,
+      name: parsed.data.name,
+      ...(parsed.data.initialLayout
+        ? { initialLayout: parsed.data.initialLayout as unknown as LayoutModel }
+        : {}),
+      ...(parsed.data.initialViewport ? { initialViewport: parsed.data.initialViewport } : {}),
     });
-    if (result.kind !== "success") {
-      return sendDrawingMutationFailure(reply, result);
+    if (!result) {
+      return reply.code(404).send({ error: "Project not found" });
     }
-
-    return reply.code(201).send({ drawing: result.drawing });
+    return reply.code(201).send({ drawing: result.drawing, revision: result.revision });
   });
 
   app.get("/api/v1/drawings/:id", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const drawing = await repository.getDrawingById(params.id, authenticated.company.id);
-    if (!drawing) {
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const drawing = await getDrawingForCompany(repository, auth, id);
+    if (!drawing) return reply.code(404).send({ error: "Drawing not found" });
     return reply.code(200).send({ drawing });
   });
 
-  app.get("/api/v1/drawings/:id/priced-estimate", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const drawing = await repository.getDrawingById(params.id, authenticated.company.id);
-    if (!drawing) {
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
-
-    const pricingConfig =
-      (await repository.getPricingConfig(authenticated.company.id)) ??
-      buildDefaultPricingConfig(authenticated.company.id, null);
-    const workspaceId = drawing.workspaceId ?? null;
-    const workspace = workspaceId
-      ? await repository.getDrawingWorkspaceById(workspaceId, authenticated.company.id)
-      : null;
-
-    return reply.code(200).send({
-      pricedEstimate: buildPricedEstimate(
-        drawing,
-        pricingConfig,
-        [],
-        workspace ? mergeDrawingWorkspaceCommercialManualEntries(workspace.commercialInputs) : [],
-        workspace ? buildDrawingWorkspaceEstimateOptions(workspace.commercialInputs) : {},
-      )
-    });
-  });
-
-  app.get("/api/v1/drawings/:id/quotes", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const drawing = await repository.getDrawingById(params.id, authenticated.company.id);
-    if (!drawing) {
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
-
-    const quotes = await repository.listQuotesForDrawing(params.id, authenticated.company.id);
-    return reply.code(200).send({ quotes });
-  });
-
-  app.post("/api/v1/drawings/:id/quotes", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`quote-create:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const parsed = quoteCreateRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid quote payload",
-        details: parsed.error.flatten()
-      });
-    }
-
-    const result = await createQuoteForDrawing(
-      repository,
-      authenticated,
-      params.id,
-      parsed.data.ancillaryItems,
-      parsed.data.manualEntries
-    );
-    if (result.kind === "drawing_not_found") {
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
-    if (result.kind === "workspace_not_found") {
-      return reply.code(404).send({ error: "Drawing workspace not found" });
-    }
-
-    return reply.code(201).send({ quote: result.quote });
-  });
-
   app.put("/api/v1/drawings/:id", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`drawing-update:${request.ip}`)) {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    if (!writeLimiter.allow(`drawings:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const parsed = drawingUpdateRequestSchema.safeParse(request.body);
+    const parsed = drawingRenameRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing update payload",
-        details: parsed.error.flatten()
-      });
+      return reply
+        .code(400)
+        .send({ error: "Invalid drawing payload", details: parsed.error.flatten() });
     }
-
-    const updateInput: Parameters<typeof updateDrawingForCompany>[3] = {
-      expectedVersionNumber: parsed.data.expectedVersionNumber
-    };
-    if (parsed.data.name !== undefined) {
-      updateInput.name = parsed.data.name;
-    }
-    if (parsed.data.customerId !== undefined) {
-      updateInput.customerId = parsed.data.customerId;
-    }
-    if (parsed.data.savedViewport !== undefined) {
-      updateInput.savedViewport = parsed.data.savedViewport;
-    }
-    if (parsed.data.layout !== undefined) {
-      updateInput.layout = normalizeLayout(parsed.data.layout);
-    }
-
-    const result = await updateDrawingForCompany(repository, authenticated, params.id, updateInput);
-    if (result.kind !== "success") {
-      return sendDrawingMutationFailure(reply, result);
-    }
-
-    return reply.code(200).send({ drawing: result.drawing });
+    const { id } = request.params as { id: string };
+    const drawing = await renameDrawingForCompany(repository, auth, id, parsed.data.name);
+    if (!drawing) return reply.code(404).send({ error: "Drawing not found" });
+    return reply.code(200).send({ drawing });
   });
 
   app.put("/api/v1/drawings/:id/archive", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`drawing-archive:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
     const parsed = drawingArchiveRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing archive payload",
-        details: parsed.error.flatten()
-      });
+      return reply
+        .code(400)
+        .send({ error: "Invalid archive payload", details: parsed.error.flatten() });
     }
-
-    const result = await setDrawingArchivedStateForCompany(repository, authenticated, params.id, parsed.data);
-    if (result.kind !== "success") {
-      return sendDrawingMutationFailure(reply, result);
-    }
-
-    return reply.code(200).send({ drawing: result.drawing });
-  });
-
-  app.put("/api/v1/drawings/:id/status", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`drawing-status:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const parsed = drawingStatusUpdateRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing status payload",
-        details: parsed.error.flatten()
-      });
-    }
-
-    const result = await setDrawingStatusForCompany(repository, authenticated, params.id, parsed.data);
-    if (result.kind !== "success") {
-      return sendDrawingMutationFailure(reply, result);
-    }
-
-    return reply.code(200).send({ drawing: result.drawing });
-  });
-
-  app.get("/api/v1/drawings/:id/versions", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const versions = await repository.listDrawingVersions(params.id, authenticated.company.id);
-    return reply.code(200).send({ versions });
-  });
-
-  app.post("/api/v1/drawings/:id/restore", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`drawing-restore:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const parsed = drawingRestoreRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Invalid drawing restore payload",
-        details: parsed.error.flatten()
-      });
-    }
-
-    const result = await restoreDrawingVersionForCompany(
+    const { id } = request.params as { id: string };
+    const drawing = await setDrawingArchivedForCompany(
       repository,
-      authenticated,
-      params.id,
-      parsed.data.versionNumber,
-      parsed.data.expectedVersionNumber,
+      auth,
+      id,
+      parsed.data.isArchived,
     );
-    if (result.kind !== "success") {
-      return sendDrawingMutationFailure(reply, result);
-    }
-
-    return reply.code(200).send({ drawing: result.drawing });
+    if (!drawing) return reply.code(404).send({ error: "Drawing not found" });
+    return reply.code(200).send({ drawing });
   });
 
   app.delete("/api/v1/drawings/:id", async (request, reply) => {
-    const authenticated = await requireAdminRole(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
+    const auth = await requireAdmin(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const ok = await deleteDrawingForCompany(repository, auth, id);
+    if (!ok) {
+      return reply.code(409).send({ error: "Drawing must be archived before deletion" });
     }
-    if (!writeLimiter.allow(`drawing-delete:${request.ip}`)) {
-      return reply.code(429).send({ error: "Rate limit exceeded" });
-    }
-
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
-
-    const result = await deleteDrawingForCompany(repository, authenticated, params.id);
-    if (result.kind === "drawing_not_found") {
-      return reply.code(404).send({ error: "Drawing not found" });
-    }
-    if (result.kind === "not_archived") {
-      return reply.code(400).send({ error: "Drawing must be archived before it can be deleted" });
-    }
-
-    return reply.code(200).send({ deleted: true });
+    return reply.code(204).send();
   });
 
-  app.delete("/api/v1/drawings/:id/revision", async (request, reply) => {
-    const authenticated = await requireAuth(request, reply, repository, config);
-    if (!authenticated) {
-      return reply;
-    }
-    if (!writeLimiter.allow(`revision-delete:${request.ip}`)) {
+  // -------- Revisions --------
+
+  app.get("/api/v1/drawings/:id/revisions", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const revisions = await listRevisionsForDrawingForCompany(repository, auth, id);
+    return reply.code(200).send({ revisions });
+  });
+
+  app.post("/api/v1/drawings/:id/revisions", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    if (!writeLimiter.allow(`drawings:${request.ip}`)) {
       return reply.code(429).send({ error: "Rate limit exceeded" });
     }
+    const parsed = revisionCreateRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "Invalid revision payload", details: parsed.error.flatten() });
+    }
+    const { id } = request.params as { id: string };
+    const revision = await startRevisionForCompany(repository, auth, id, parsed.data.notes ?? null);
+    if (!revision) return reply.code(404).send({ error: "Drawing not found" });
+    return reply.code(201).send({ revision });
+  });
 
-    const params = request.params as { id?: string };
-    if (!params.id) {
-      return reply.code(400).send({ error: "Missing drawing id" });
-    }
+  app.get("/api/v1/revisions/:id", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const revision = await getRevisionForCompany(repository, auth, id);
+    if (!revision) return reply.code(404).send({ error: "Revision not found" });
+    return reply.code(200).send({ revision });
+  });
 
-    const result = await deleteRevisionForCompany(repository, authenticated, params.id);
-    if (result.kind === "drawing_not_found") {
-      return reply.code(404).send({ error: "Drawing not found" });
+  app.put("/api/v1/revisions/:id", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    if (!writeLimiter.allow(`drawings:${request.ip}`)) {
+      return reply.code(429).send({ error: "Rate limit exceeded" });
     }
-    if (result.kind === "not_a_revision") {
-      return reply.code(400).send({ error: "Only revisions can be deleted through this endpoint" });
+    const parsed = revisionUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "Invalid revision payload", details: parsed.error.flatten() });
     }
-    if (result.kind === "not_last_revision") {
-      return reply.code(400).send({ error: "Only the last revision can be deleted" });
+    const { id } = request.params as { id: string };
+    const result = await saveRevisionForCompany(repository, auth, id, {
+      expectedVersionNumber: parsed.data.expectedVersionNumber,
+      layout: parsed.data.layout as unknown as LayoutModel,
+      savedViewport: parsed.data.savedViewport ?? null,
+    });
+    if (result.kind === "not_found") {
+      return reply.code(404).send({ error: "Revision not found" });
     }
+    if (result.kind === "conflict") {
+      return reply.code(409).send({ error: "Revision has been modified by another user" });
+    }
+    return reply.code(200).send({ revision: result.revision });
+  });
 
-    return reply.code(200).send({ deleted: true });
+  app.put("/api/v1/revisions/:id/notes", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const parsed = revisionNotesUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "Invalid notes payload", details: parsed.error.flatten() });
+    }
+    const { id } = request.params as { id: string };
+    const revision = await updateRevisionNotesForCompany(
+      repository,
+      auth,
+      id,
+      parsed.data.notes ?? null,
+    );
+    if (!revision) return reply.code(404).send({ error: "Revision not found" });
+    return reply.code(200).send({ revision });
+  });
+
+  app.delete("/api/v1/revisions/:id", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const ok = await deleteRevisionForCompany(repository, auth, id);
+    if (!ok) {
+      return reply
+        .code(409)
+        .send({ error: "Only the latest non-root revision of a drawing can be deleted" });
+    }
+    return reply.code(204).send();
   });
 }

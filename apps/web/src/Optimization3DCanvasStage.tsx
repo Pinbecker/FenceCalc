@@ -34,6 +34,20 @@ export function Optimization3DCanvasStage({
     [camera, scene, viewportHeight, viewportWidth]
   );
 
+  // onWheel must be a non-passive native listener so preventDefault() works.
+  // React registers wheel events as passive by default (since React 17).
+  const { onWheel, ...reactHandlers } = stageHandlers;
+  const onWheelRef = useRef(onWheel);
+  onWheelRef.current = onWheel;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = (event: WheelEvent) => onWheelRef.current(event);
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [ref]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -44,7 +58,7 @@ export function Optimization3DCanvasStage({
   }, [mode, renderData, viewportHeight, viewportWidth]);
 
   return (
-    <div ref={ref} className={`optimization-3d-stage ${mode === "walk" ? "is-walk" : "is-orbit"}`} tabIndex={0} {...stageHandlers}>
+    <div ref={ref} className={`optimization-3d-stage ${mode === "walk" ? "is-walk" : "is-orbit"}`} tabIndex={0} {...reactHandlers}>
       <canvas
         ref={canvasRef}
         className="optimization-3d-canvas"

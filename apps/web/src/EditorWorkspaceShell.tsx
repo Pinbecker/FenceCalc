@@ -11,7 +11,7 @@ interface EditorWorkspaceShellProps {
   canvasStageProps: ComponentProps<typeof EditorCanvasStage>;
   optimizationPlannerProps: ComponentProps<typeof OptimizationPlanner>;
   floatingPanelsProps: ComponentProps<typeof EditorFloatingPanels>;
-  isOptimizationVisible: boolean;
+  isOptimizationVisible?: boolean;
   isReadOnly?: boolean;
 }
 
@@ -21,7 +21,6 @@ export function EditorWorkspaceShell({
   canvasStageProps,
   optimizationPlannerProps,
   floatingPanelsProps,
-  isOptimizationVisible,
   isReadOnly = false
 }: EditorWorkspaceShellProps) {
   return (
@@ -41,9 +40,7 @@ export function EditorWorkspaceShell({
       </div>
       {/* OptimizationPlanner sits outside the viewport so its full-screen
           modal backdrop is not clipped by overflow:hidden / stacking context */}
-      {isOptimizationVisible ? (
-        <OptimizationPlanner {...optimizationPlannerProps} />
-      ) : null}
+      <OptimizationPlanner {...optimizationPlannerProps} />
     </div>
   );
 }

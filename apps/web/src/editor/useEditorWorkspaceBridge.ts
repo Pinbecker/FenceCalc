@@ -13,6 +13,11 @@ interface UseEditorWorkspaceBridgeOptions {
   onRestoreViewport: (viewport: DrawingCanvasViewport | null) => void;
 }
 
+type LoadedDrawingPayload = DrawingRecord & {
+  layout: LayoutModel;
+  savedViewport: DrawingCanvasViewport | null;
+};
+
 export function useEditorWorkspaceBridge({
   getSavedViewport,
   layout,
@@ -24,7 +29,7 @@ export function useEditorWorkspaceBridge({
   const requestedInitialDrawingIdRef = useRef<string | null>(null);
 
   const loadWorkspaceDrawing = useCallback(
-    (drawing: DrawingRecord) => {
+    (drawing: LoadedDrawingPayload) => {
       onResetLayout({
         segments: drawing.layout.segments,
         gates: drawing.layout.gates ?? [],

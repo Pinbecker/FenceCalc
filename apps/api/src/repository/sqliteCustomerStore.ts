@@ -1,128 +1,92 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import type { CustomerRecord, CustomerSummary } from "@fence-estimator/contracts";
 
-import { type CustomerRow, type CustomerSummaryRow, toCustomer, toCustomerSummary } from "./shared.js";
+import type { CustomerRow, CustomerSummaryRow } from "./shared.js";
+import { toCustomer, toCustomerSummary } from "./shared.js";
 import type {
   CreateCustomerInput,
-  CustomerScope,
   DeleteCustomerInput,
+  ScopeFilter,
   SetCustomerArchivedStateInput,
   UpdateCustomerInput,
 } from "./types.js";
 
-function normalizeSearch(value: string): string {
-  return `%${value.trim().toLowerCase()}%`;
-}
-
-function translateConstraintError(error: unknown): never {
-  const message = (error as Error).message ?? "";
-  if (message.includes("UNIQUE constraint failed: customers.company_id, customers.name_normalized")) {
-    throw new Error("Customer name already exists");
-  }
-  throw error;
-}
+const SUMMARY_SELECT = `
+  SELECT
+    c.*,
+    (SELECT COUNT(*) FROM projects p WHERE p.customer_id = c.id) AS project_count,
+    (SELECT COUNT(*) FROM projects p WHERE p.customer_id = c.id AND p.is_archived = 0) AS active_project_count,
+    (
+      SELECT MAX(p.updated_at_iso) FROM projects p WHERE p.customer_id = c.id
+    ) AS last_activity_at_iso
+  FROM customers c
+`;
 
 export class SqliteCustomerStore {
   public constructor(private readonly database: Database.Database) {}
 
   public createCustomer(input: CreateCustomerInput): CustomerRecord {
-    try {
-      this.database
-        .prepare(
-          `
-            INSERT INTO customers (
-              id,
-              company_id,
-              name,
-              name_normalized,
-              primary_contact_name,
-              primary_email,
-              primary_phone,
-              additional_contacts_json,
-              site_address,
-              notes,
-              is_archived,
-              created_by_user_id,
-              updated_by_user_id,
-              created_at_iso,
-              updated_at_iso
-            ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          input.id,
-          input.companyId,
-          input.name,
-          input.name,
-          input.primaryContactName,
-          input.primaryEmail,
-          input.primaryPhone,
-          JSON.stringify(input.additionalContacts),
-          input.siteAddress,
-          input.notes,
-          input.createdByUserId,
-          input.updatedByUserId,
-          input.createdAtIso,
-          input.updatedAtIso,
-        );
-    } catch (error) {
-      translateConstraintError(error);
-    }
-
-    const row = this.database
-      .prepare("SELECT * FROM customers WHERE id = ? AND company_id = ?")
-      .get(input.id, input.companyId) as CustomerRow | undefined;
-    if (!row) {
-      throw new Error("Failed to create customer");
-    }
-    return toCustomer(row);
+    this.database
+      .prepare(
+        `INSERT INTO customers (
+          id, company_id, name, contact_name, contact_email, contact_phone, site_address, notes,
+          is_archived, created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.id,
+        input.companyId,
+        input.name,
+        input.contactName,
+        input.contactEmail,
+        input.contactPhone,
+        input.siteAddress,
+        input.notes,
+        input.createdByUserId,
+        input.updatedByUserId,
+        input.createdAtIso,
+        input.updatedAtIso,
+      );
+    return {
+      id: input.id,
+      companyId: input.companyId,
+      name: input.name,
+      contactName: input.contactName,
+      contactEmail: input.contactEmail,
+      contactPhone: input.contactPhone,
+      siteAddress: input.siteAddress,
+      notes: input.notes,
+      isArchived: false,
+      createdByUserId: input.createdByUserId,
+      updatedByUserId: input.updatedByUserId,
+      createdAtIso: input.createdAtIso,
+      updatedAtIso: input.updatedAtIso,
+    };
   }
 
-  public listCustomers(companyId: string, scope: CustomerScope = "ACTIVE", search = ""): CustomerSummary[] {
-    const scopeClause = scope === "ACTIVE" ? "AND c.is_archived = 0" : scope === "ARCHIVED" ? "AND c.is_archived = 1" : "";
-    const searchClause = search.trim()
-      ? `
-          AND (
-            lower(c.name) LIKE ?
-            OR lower(c.primary_contact_name) LIKE ?
-            OR lower(c.primary_email) LIKE ?
-            OR lower(c.primary_phone) LIKE ?
-            OR lower(c.site_address) LIKE ?
-          )
-        `
-      : "";
-    const params = search.trim()
-      ? [companyId, normalizeSearch(search), normalizeSearch(search), normalizeSearch(search), normalizeSearch(search), normalizeSearch(search)]
-      : [companyId];
-
+  public listCustomers(
+    companyId: string,
+    scope: ScopeFilter = "ACTIVE",
+    search = "",
+  ): CustomerSummary[] {
+    const whereClauses = ["c.company_id = ?"];
+    const values: Array<string | number> = [companyId];
+    if (scope === "ACTIVE") {
+      whereClauses.push("c.is_archived = 0");
+    } else if (scope === "ARCHIVED") {
+      whereClauses.push("c.is_archived = 1");
+    }
+    const trimmed = search.trim();
+    if (trimmed) {
+      whereClauses.push("LOWER(c.name) LIKE ?");
+      values.push(`%${trimmed.toLowerCase()}%`);
+    }
     const rows = this.database
       .prepare(
-        `
-          SELECT
-            c.*,
-            SUM(CASE WHEN d.is_archived = 0 THEN 1 ELSE 0 END) AS active_drawing_count,
-            SUM(CASE WHEN d.is_archived = 1 THEN 1 ELSE 0 END) AS archived_drawing_count,
-            MAX(d.updated_at_iso) AS last_activity_at_iso
-          FROM customers c
-          LEFT JOIN drawings d
-            ON d.company_id = c.company_id
-            AND d.customer_id = c.id
-          WHERE c.company_id = ?
-          ${scopeClause}
-          ${searchClause}
-          GROUP BY c.id
-          ORDER BY c.updated_at_iso DESC
-        `,
+        `${SUMMARY_SELECT} WHERE ${whereClauses.join(" AND ")} ORDER BY c.name COLLATE NOCASE ASC`,
       )
-      .all(...params) as CustomerSummaryRow[];
-
-    return rows.map((row) =>
-      toCustomerSummary({
-        ...row,
-        active_drawing_count: Number(row.active_drawing_count ?? 0),
-        archived_drawing_count: Number(row.archived_drawing_count ?? 0),
-      }),
-    );
+      .all(...values) as CustomerSummaryRow[];
+    return rows.map((row) => toCustomerSummary(row));
   }
 
   public getCustomerById(customerId: string, companyId: string): CustomerRecord | null {
@@ -133,57 +97,51 @@ export class SqliteCustomerStore {
   }
 
   public updateCustomer(input: UpdateCustomerInput): CustomerRecord | null {
-    try {
-      const result = this.database
-        .prepare(
-          `
-            UPDATE customers
-            SET
-              name = ?,
-              name_normalized = lower(trim(?)),
-              primary_contact_name = ?,
-              primary_email = ?,
-              primary_phone = ?,
-              additional_contacts_json = ?,
-              site_address = ?,
-              notes = ?,
-              updated_by_user_id = ?,
-              updated_at_iso = ?
-            WHERE id = ? AND company_id = ?
-          `,
-        )
-        .run(
-          input.name,
-          input.name,
-          input.primaryContactName,
-          input.primaryEmail,
-          input.primaryPhone,
-          JSON.stringify(input.additionalContacts),
-          input.siteAddress,
-          input.notes,
-          input.updatedByUserId,
-          input.updatedAtIso,
-          input.customerId,
-          input.companyId,
-        );
-      if (result.changes === 0) {
-        return null;
-      }
-    } catch (error) {
-      translateConstraintError(error);
+    const existing = this.getCustomerById(input.customerId, input.companyId);
+    if (!existing) {
+      return null;
     }
-
-    return this.getCustomerById(input.customerId, input.companyId);
+    const next: CustomerRecord = {
+      ...existing,
+      name: input.name ?? existing.name,
+      contactName: input.contactName !== undefined ? input.contactName : existing.contactName,
+      contactEmail: input.contactEmail !== undefined ? input.contactEmail : existing.contactEmail,
+      contactPhone: input.contactPhone !== undefined ? input.contactPhone : existing.contactPhone,
+      siteAddress: input.siteAddress !== undefined ? input.siteAddress : existing.siteAddress,
+      notes: input.notes !== undefined ? input.notes : existing.notes,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
+    this.database
+      .prepare(
+        `UPDATE customers
+         SET name = ?, contact_name = ?, contact_email = ?, contact_phone = ?, site_address = ?, notes = ?,
+             updated_by_user_id = ?, updated_at_iso = ?
+         WHERE id = ? AND company_id = ?`,
+      )
+      .run(
+        next.name,
+        next.contactName,
+        next.contactEmail,
+        next.contactPhone,
+        next.siteAddress,
+        next.notes,
+        next.updatedByUserId,
+        next.updatedAtIso,
+        input.customerId,
+        input.companyId,
+      );
+    return next;
   }
 
   public setCustomerArchivedState(input: SetCustomerArchivedStateInput): CustomerRecord | null {
-    const result = this.database
+    const existing = this.getCustomerById(input.customerId, input.companyId);
+    if (!existing) {
+      return null;
+    }
+    this.database
       .prepare(
-        `
-          UPDATE customers
-          SET is_archived = ?, updated_by_user_id = ?, updated_at_iso = ?
-          WHERE id = ? AND company_id = ?
-        `,
+        "UPDATE customers SET is_archived = ?, updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
       )
       .run(
         input.archived ? 1 : 0,
@@ -192,22 +150,18 @@ export class SqliteCustomerStore {
         input.customerId,
         input.companyId,
       );
-    if (result.changes === 0) {
-      return null;
-    }
-    return this.getCustomerById(input.customerId, input.companyId);
+    return {
+      ...existing,
+      isArchived: input.archived,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
   }
 
   public deleteCustomer(input: DeleteCustomerInput): boolean {
-    const existing = this.database
-      .prepare("SELECT id FROM customers WHERE id = ? AND company_id = ?")
-      .get(input.customerId, input.companyId) as { id: string } | undefined;
-    if (!existing) {
-      return false;
-    }
-    this.database
-      .prepare("DELETE FROM customers WHERE id = ? AND company_id = ?")
+    const result = this.database
+      .prepare("DELETE FROM customers WHERE id = ? AND company_id = ? AND is_archived = 1")
       .run(input.customerId, input.companyId);
-    return true;
+    return result.changes > 0;
   }
 }

@@ -1,34 +1,93 @@
 import type {
-  AncillaryEstimateItem,
   AuditLogRecord,
   AuthSessionEnvelope,
   CompanyUserRecord,
-  CustomerContact,
   CustomerRecord,
   CustomerSummary,
   DrawingCanvasViewport,
   DrawingRecord,
-  DrawingTaskRecord,
-  DrawingWorkspaceCommercialInputs,
-  DrawingWorkspaceRecord,
-  DrawingWorkspaceStage,
-  DrawingWorkspaceSummary,
-  DrawingStatus,
+  DrawingRevisionRecord,
+  DrawingRevisionSummary,
   DrawingSummary,
-  DrawingVersionRecord,
-  EstimateWorkbookManualEntry,
   LayoutModel,
-  TaskPriority,
   PricingConfigRecord,
-  PricedEstimateResult,
-  QuoteRecord,
+  ProjectRecord,
+  ProjectStatus,
+  ProjectSummary,
+  UserRole,
 } from "@fence-estimator/contracts";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-const RETRIABLE_STATUS_CODES = new Set([502, 503, 504]);
+// -----------------------------------------------------------------------------
+// Fetch helper
+// -----------------------------------------------------------------------------
 
-export interface RegisterAccountInput {
+const API_BASE = (
+  typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL
+    ? import.meta.env.VITE_API_BASE_URL
+    : ""
+).replace(/\/$/, "");
+
+export interface ApiErrorPayload {
+  error: string;
+  details?: unknown;
+  retryAfterSeconds?: number;
+  currentVersionNumber?: number;
+}
+
+export class ApiError extends Error {
+  public readonly status: number;
+  public readonly payload: ApiErrorPayload;
+  public constructor(status: number, payload: ApiErrorPayload) {
+    super(payload?.error ?? `HTTP ${status}`);
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: Omit<RequestInit, "headers"> & { headers?: Record<string, string> } = {},
+): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(init.headers ?? {}),
+  };
+  if (init.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const { headers: _, ...rest } = init;
+  const response = await fetch(url, {
+    ...rest,
+    credentials: "include",
+    headers,
+  });
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  const data = text ? (JSON.parse(text) as unknown) : null;
+  if (!response.ok) {
+    const payload = (data ?? { error: `HTTP ${response.status}` }) as ApiErrorPayload;
+    throw new ApiError(response.status, payload);
+  }
+  return data as T;
+}
+
+// -----------------------------------------------------------------------------
+// Setup / Auth
+// -----------------------------------------------------------------------------
+
+export interface SetupStatus {
+  bootstrapRequired: boolean;
+  bootstrapSecretRequired: boolean;
+}
+
+export function getSetupStatus(): Promise<SetupStatus> {
+  return request<SetupStatus>("/api/v1/setup/status");
+}
+
+export interface BootstrapOwnerInput {
   companyName: string;
   displayName: string;
   email: string;
@@ -36,18 +95,17 @@ export interface RegisterAccountInput {
   bootstrapSecret?: string;
 }
 
-export interface SetupStatus {
-  bootstrapRequired: boolean;
-  bootstrapSecretRequired: boolean;
-}
-
-export interface AuditLogQueryOptions {
-  limit?: number;
-  before?: string;
-  from?: string;
-  to?: string;
-  entityType?: "AUTH" | "USER" | "DRAWING" | "QUOTE" | "CUSTOMER" | "WORKSPACE";
-  search?: string;
+export function bootstrapOwner(input: BootstrapOwnerInput): Promise<AuthSessionEnvelope> {
+  const headers: Record<string, string> = {};
+  if (input.bootstrapSecret) {
+    headers["x-bootstrap-secret"] = input.bootstrapSecret;
+  }
+  const { bootstrapSecret: _bootstrapSecret, ...body } = input;
+  return request<AuthSessionEnvelope>("/api/v1/setup/bootstrap-owner", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
 }
 
 export interface LoginInput {
@@ -55,814 +113,289 @@ export interface LoginInput {
   password: string;
 }
 
-export interface CreateCompanyUserInput {
+export function login(input: LoginInput): Promise<AuthSessionEnvelope> {
+  return request<AuthSessionEnvelope>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getCurrentSession(): Promise<AuthSessionEnvelope> {
+  return request<AuthSessionEnvelope>("/api/v1/auth/me");
+}
+
+export function logout(): Promise<{ ok: true }> {
+  return request<{ ok: true }>("/api/v1/auth/logout", { method: "POST" });
+}
+
+// -----------------------------------------------------------------------------
+// Users (admin)
+// -----------------------------------------------------------------------------
+
+export function listUsers(): Promise<{ users: CompanyUserRecord[] }> {
+  return request("/api/v1/users");
+}
+
+export interface CreateUserInput {
+  email: string;
   displayName: string;
-  email: string;
   password: string;
-  role: "ADMIN" | "MEMBER";
+  role: UserRole;
 }
 
-export interface SetCompanyUserPasswordInput {
-  password: string;
+export function createUser(input: CreateUserInput): Promise<{ user: CompanyUserRecord }> {
+  return request("/api/v1/users", { method: "POST", body: JSON.stringify(input) });
 }
 
-export interface PasswordResetRequestInput {
-  email: string;
-}
-
-export interface PasswordResetConfirmInput {
-  token: string;
-  password: string;
-}
-
-export interface CreateCustomerInput {
-  name: string;
-  primaryContactName: string;
-  primaryEmail: string;
-  primaryPhone: string;
-  additionalContacts?: CustomerContact[];
-  siteAddress: string;
-  notes: string;
-}
-
-export interface UpdateCustomerInput {
-  name?: string;
-  primaryContactName?: string;
-  primaryEmail?: string;
-  primaryPhone?: string;
-  additionalContacts?: CustomerContact[];
-  siteAddress?: string;
-  notes?: string;
-}
-
-export interface CreateDrawingWorkspaceInput {
-  customerId: string;
-  name: string;
-  notes: string;
-  initialDrawing?: {
-    layout: LayoutModel;
-    savedViewport?: DrawingCanvasViewport | null;
-  };
-}
-
-export interface UpdateDrawingWorkspaceInput {
-  name?: string;
-  stage?: DrawingWorkspaceStage;
-  commercialInputs?: DrawingWorkspaceCommercialInputs;
-  notes?: string;
-  ownerUserId?: string | null;
-  archived?: boolean;
-}
-
-export interface CreateDrawingTaskInput {
-  title: string;
-  assignedUserId?: string | null;
-  rootDrawingId?: string | null;
-  revisionDrawingId?: string | null;
-  dueAtIso?: string | null;
-  description?: string;
-  priority?: TaskPriority;
-}
-
-export interface UpdateDrawingTaskInput {
-  title?: string;
-  assignedUserId?: string | null;
-  rootDrawingId?: string | null;
-  revisionDrawingId?: string | null;
-  dueAtIso?: string | null;
-  isCompleted?: boolean;
-  description?: string;
-  priority?: TaskPriority;
-}
-
-export interface CompanyTaskQueryOptions {
-  includeCompleted?: boolean;
-  assignedUserId?: string;
-  priority?: TaskPriority;
-  search?: string;
-  dueBucket?: "OVERDUE" | "TODAY" | "UPCOMING" | "NO_DATE";
-  limit?: number;
-}
-
-interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  body?: unknown;
-  headers?: Record<string, string>;
-  signal?: AbortSignal;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value.trim());
-}
-
-export class ApiClientError extends Error {
-  public readonly status: number;
-  public readonly details: unknown;
-
-  public constructor(message: string, status: number, details: unknown) {
-    super(message);
-    this.name = "ApiClientError";
-    this.status = status;
-    this.details = details;
-  }
-}
-
-export interface AuditLogResponse {
-  entries: AuditLogRecord[];
-  nextBeforeCreatedAtIso: string | null;
-}
-
-function buildUrl(path: string): string {
-  return `${API_BASE_URL}${path}`;
-}
-
-function buildAuditLogQuery(options: AuditLogQueryOptions = {}): string {
-  const params = new URLSearchParams();
-  if (options.limit !== undefined) {
-    params.set("limit", String(options.limit));
-  }
-  if (options.before) {
-    params.set("before", options.before);
-  }
-  if (options.from) {
-    params.set("from", options.from);
-  }
-  if (options.to) {
-    params.set("to", options.to);
-  }
-  if (options.entityType) {
-    params.set("entityType", options.entityType);
-  }
-  if (options.search?.trim()) {
-    params.set("search", options.search.trim());
-  }
-
-  const query = params.toString();
-  return query.length > 0 ? `?${query}` : "";
-}
-
-function buildCompanyTaskQuery(options: CompanyTaskQueryOptions = {}): string {
-  const params = new URLSearchParams();
-  if (options.includeCompleted) {
-    params.set("includeCompleted", "true");
-  }
-  if (options.assignedUserId?.trim()) {
-    params.set("assignedUserId", options.assignedUserId.trim());
-  }
-  if (options.priority) {
-    params.set("priority", options.priority);
-  }
-  if (options.search?.trim()) {
-    params.set("search", options.search.trim());
-  }
-  if (options.dueBucket) {
-    params.set("dueBucket", options.dueBucket);
-  }
-  if (options.limit !== undefined) {
-    params.set("limit", String(options.limit));
-  }
-
-  const query = params.toString();
-  return query.length > 0 ? `?${query}` : "";
-}
-
-function validateApiBaseUrl(): void {
-  if (!API_BASE_URL || typeof window === "undefined") {
-    return;
-  }
-
-  new URL(API_BASE_URL, window.location.origin);
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
-}
-
-function mergeSignals(signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
-  const activeSignals = signals.filter((signal): signal is AbortSignal => signal !== undefined);
-  if (activeSignals.length === 0) {
-    return undefined;
-  }
-
-  const controller = new AbortController();
-  const abort = () => {
-    controller.abort();
-    for (const signal of activeSignals) {
-      signal.removeEventListener("abort", abort);
-    }
-  };
-
-  for (const signal of activeSignals) {
-    if (signal.aborted) {
-      abort();
-      break;
-    }
-    signal.addEventListener("abort", abort, { once: true });
-  }
-
-  return controller.signal;
-}
-
-async function executeRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const timeoutController = new AbortController();
-  const timeoutId = globalThis.setTimeout(
-    () => timeoutController.abort(),
-    DEFAULT_REQUEST_TIMEOUT_MS,
-  );
-
-  try {
-    const headers: Record<string, string> = { ...(options.headers ?? {}) };
-    const requestInit: RequestInit = {
-      method: options.method ?? "GET",
-      credentials: "include",
-      headers,
-    };
-    const signal = mergeSignals([options.signal, timeoutController.signal]);
-    if (signal) {
-      requestInit.signal = signal;
-    }
-    if (options.body !== undefined) {
-      headers["content-type"] = "application/json";
-      requestInit.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(buildUrl(path), requestInit);
-
-    const payload = (await response.json().catch(() => null)) as
-      | T
-      | { error?: string; details?: unknown }
-      | null;
-    if (!response.ok) {
-      const message =
-        payload &&
-        typeof payload === "object" &&
-        "error" in payload &&
-        typeof payload.error === "string"
-          ? payload.error
-          : `Request failed with status ${response.status}`;
-      const details =
-        payload && typeof payload === "object" && "details" in payload ? payload.details : null;
-      throw new ApiClientError(message, response.status, details);
-    }
-
-    return payload as T;
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw new Error("Request timed out");
-    }
-    throw error;
-  } finally {
-    globalThis.clearTimeout(timeoutId);
-  }
-}
-
-function shouldRetry(method: RequestOptions["method"], error: unknown): boolean {
-  if ((method ?? "GET") !== "GET") {
-    return false;
-  }
-
-  if (error instanceof ApiClientError) {
-    return RETRIABLE_STATUS_CODES.has(error.status);
-  }
-
-  return !isAbortError(error);
-}
-
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  validateApiBaseUrl();
-
-  let lastError: unknown;
-  const maxAttempts = (options.method ?? "GET") === "GET" ? 2 : 1;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await executeRequest<T>(path, options);
-    } catch (error) {
-      lastError = error;
-      if (attempt >= maxAttempts || !shouldRetry(options.method, error)) {
-        throw error;
-      }
-
-      await new Promise((resolve) => globalThis.setTimeout(resolve, 250 * attempt));
-    }
-  }
-
-  throw lastError;
-}
-
-export async function getSetupStatus(): Promise<SetupStatus> {
-  return requestJson<SetupStatus>("/api/v1/setup/status");
-}
-
-export async function bootstrapOwner(input: RegisterAccountInput): Promise<AuthSessionEnvelope> {
-  const bootstrapSecret = input.bootstrapSecret?.trim();
-  return requestJson<AuthSessionEnvelope>("/api/v1/setup/bootstrap-owner", {
-    method: "POST",
-    ...(bootstrapSecret ? { headers: { "x-bootstrap-secret": bootstrapSecret } } : {}),
-    body: {
-      companyName: input.companyName,
-      displayName: input.displayName,
-      email: input.email,
-      password: input.password,
-    },
-  });
-}
-
-export async function registerAccount(input: RegisterAccountInput): Promise<AuthSessionEnvelope> {
-  return bootstrapOwner(input);
-}
-
-export async function login(input: LoginInput): Promise<AuthSessionEnvelope> {
-  return requestJson<AuthSessionEnvelope>("/api/v1/auth/login", {
-    method: "POST",
-    body: input,
-  });
-}
-
-export async function logout(): Promise<void> {
-  await requestJson<{ ok: boolean }>("/api/v1/auth/logout", {
-    method: "POST",
-  });
-}
-
-export async function getAuthenticatedUser(): Promise<AuthSessionEnvelope> {
-  return requestJson<AuthSessionEnvelope>("/api/v1/auth/me");
-}
-
-export async function listUsers(): Promise<CompanyUserRecord[]> {
-  const response = await requestJson<{ users: CompanyUserRecord[] }>("/api/v1/users");
-  return response.users;
-}
-
-export async function createUser(input: CreateCompanyUserInput): Promise<CompanyUserRecord> {
-  const response = await requestJson<{ user: CompanyUserRecord }>("/api/v1/users", {
-    method: "POST",
-    body: input,
-  });
-  return response.user;
-}
-
-export async function setUserPassword(
-  userId: string,
-  input: SetCompanyUserPasswordInput,
-): Promise<void> {
-  await requestJson<{ ok: boolean }>(`/api/v1/users/${userId}/password`, {
+export function resetUserPassword(userId: string, password: string): Promise<void> {
+  return request(`/api/v1/users/${encodeURIComponent(userId)}/password`, {
     method: "PUT",
-    body: input,
+    body: JSON.stringify({ password }),
   });
 }
 
-export async function listCustomers(
-  scope: "ALL" | "ACTIVE" | "ARCHIVED" = "ALL",
-  search = "",
-): Promise<CustomerSummary[]> {
-  const params = new URLSearchParams({ scope });
-  if (search.trim()) {
-    params.set("search", search.trim());
-  }
-  const response = await requestJson<{ customers: CustomerSummary[] }>(
-    `/api/v1/customers?${params.toString()}`,
-  );
-  return response.customers;
-}
+// -----------------------------------------------------------------------------
+// Customers
+// -----------------------------------------------------------------------------
 
-export async function getCustomer(customerId: string): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(
-    `/api/v1/customers/${customerId}`,
-  );
-  return response.customer;
-}
+export type ScopeFilter = "ALL" | "ACTIVE" | "ARCHIVED";
 
-export async function createCustomer(input: CreateCustomerInput): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>("/api/v1/customers", {
-    method: "POST",
-    body: input,
-  });
-  return response.customer;
-}
-
-export async function updateCustomer(
-  customerId: string,
-  input: UpdateCustomerInput,
-): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(
-    `/api/v1/customers/${customerId}`,
-    {
-      method: "PUT",
-      body: input,
-    },
-  );
-  return response.customer;
-}
-
-export async function setCustomerArchivedState(
-  customerId: string,
-  archived: boolean,
-  cascadeDrawings = false,
-): Promise<CustomerRecord> {
-  const response = await requestJson<{ customer: CustomerRecord }>(
-    `/api/v1/customers/${customerId}/archive`,
-    {
-      method: "PUT",
-      body: { archived, cascadeDrawings },
-    },
-  );
-  return response.customer;
-}
-
-export async function deleteCustomer(customerId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(`/api/v1/customers/${customerId}`, {
-    method: "DELETE",
-  });
-}
-
-export async function listDrawings(search = ""): Promise<DrawingSummary[]> {
-  const params = new URLSearchParams({ scope: "ALL" });
-  if (search.trim()) params.set("search", search.trim());
-  const response = await requestJson<{ drawings: DrawingSummary[] }>(
-    `/api/v1/drawings?${params.toString()}`,
-  );
-  return response.drawings;
-}
-
-export async function listDrawingWorkspaces(
-  options: {
-    scope?: "ALL" | "ACTIVE" | "ARCHIVED";
-    search?: string;
-    customerId?: string;
-  } = {},
-): Promise<DrawingWorkspaceSummary[]> {
-  const params = new URLSearchParams({ scope: options.scope ?? "ACTIVE" });
-  if (options.search?.trim()) {
-    params.set("search", options.search.trim());
-  }
-  if (options.customerId?.trim()) {
-    params.set("customerId", options.customerId.trim());
-  }
-  const response = await requestJson<{ workspaces: DrawingWorkspaceSummary[] }>(
-    `/api/v1/drawing-workspaces?${params.toString()}`,
-  );
-  return response.workspaces;
-}
-
-export async function createDrawingWorkspace(
-  input: CreateDrawingWorkspaceInput,
-): Promise<DrawingWorkspaceRecord> {
-  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
-    "/api/v1/drawing-workspaces",
-    {
-      method: "POST",
-      body: input,
-    },
-  );
-  return response.workspace;
-}
-
-export async function getDrawingWorkspace(workspaceId: string): Promise<DrawingWorkspaceRecord> {
-  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
-  );
-  return response.workspace;
-}
-
-export async function updateDrawingWorkspace(
-  workspaceId: string,
-  input: UpdateDrawingWorkspaceInput,
-): Promise<DrawingWorkspaceRecord> {
-  const response = await requestJson<{ workspace: DrawingWorkspaceRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
-    {
-      method: "PUT",
-      body: input,
-    },
-  );
-  return response.workspace;
-}
-
-export async function deleteDrawingWorkspace(workspaceId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}`,
-    {
-      method: "DELETE",
-    },
-  );
-}
-
-export async function listDrawingWorkspaceDrawings(workspaceId: string): Promise<DrawingSummary[]> {
-  const response = await requestJson<{ drawings: DrawingSummary[] }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/drawings`,
-  );
-  return response.drawings;
-}
-
-export async function createDrawingWorkspaceDrawing(
-  workspaceId: string,
-  input: { name?: string; sourceDrawingId?: string },
-): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/drawings`,
-    {
-      method: "POST",
-      body: input,
-    },
-  );
-  return response.drawing;
-}
-
-export async function getDrawingWorkspaceEstimate(
-  workspaceId: string,
-  drawingId?: string | null,
-): Promise<PricedEstimateResult> {
+export function listCustomers(options: { scope?: ScopeFilter; search?: string } = {}): Promise<{
+  customers: CustomerSummary[];
+}> {
   const params = new URLSearchParams();
-  if (drawingId?.trim()) {
-    params.set("drawingId", drawingId.trim());
-  }
-  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/estimate${params.toString() ? `?${params.toString()}` : ""}`,
-  );
-  return response.pricedEstimate;
+  if (options.scope) params.set("scope", options.scope);
+  if (options.search) params.set("search", options.search);
+  const qs = params.toString();
+  return request(`/api/v1/customers${qs ? `?${qs}` : ""}`);
 }
 
-export async function listDrawingWorkspaceQuotes(workspaceId: string): Promise<QuoteRecord[]> {
-  const response = await requestJson<{ quotes: QuoteRecord[] }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/quotes`,
-  );
-  return response.quotes;
+export function getCustomer(customerId: string): Promise<{ customer: CustomerRecord }> {
+  return request(`/api/v1/customers/${encodeURIComponent(customerId)}`);
 }
 
-export async function createDrawingWorkspaceQuoteSnapshot(
-  workspaceId: string,
-  ancillaryItems: AncillaryEstimateItem[] = [],
-  manualEntries: EstimateWorkbookManualEntry[] = [],
-  drawingId?: string | null,
-): Promise<QuoteRecord> {
-  const response = await requestJson<{ quote: QuoteRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/quotes`,
-    {
-      method: "POST",
-      body: {
-        ...(drawingId ? { drawingId } : {}),
-        ancillaryItems,
-        manualEntries,
-      },
-    },
-  );
-  return response.quote;
+export interface CustomerWritableInput {
+  name: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  siteAddress?: string | null;
+  notes?: string | null;
 }
 
-export async function listDrawingWorkspaceTasks(
-  workspaceId: string,
-): Promise<DrawingTaskRecord[]> {
-  const response = await requestJson<{ tasks: DrawingTaskRecord[] }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks`,
-  );
-  return response.tasks;
+export function createCustomer(input: CustomerWritableInput): Promise<{ customer: CustomerRecord }> {
+  return request("/api/v1/customers", { method: "POST", body: JSON.stringify(input) });
 }
 
-export async function createDrawingWorkspaceTask(
-  workspaceId: string,
-  input: CreateDrawingTaskInput,
-): Promise<DrawingTaskRecord> {
-  const response = await requestJson<{ task: DrawingTaskRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks`,
-    {
-      method: "POST",
-      body: input,
-    },
-  );
-  return response.task;
-}
-
-export async function updateDrawingWorkspaceTask(
-  workspaceId: string,
-  taskId: string,
-  input: UpdateDrawingTaskInput,
-): Promise<DrawingTaskRecord> {
-  const response = await requestJson<{ task: DrawingTaskRecord }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks/${encodePathSegment(taskId)}`,
-    {
-      method: "PUT",
-      body: input,
-    },
-  );
-  return response.task;
-}
-
-export async function deleteDrawingWorkspaceTask(
-  workspaceId: string,
-  taskId: string,
-): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    `/api/v1/drawing-workspaces/${encodePathSegment(workspaceId)}/tasks/${encodePathSegment(taskId)}`,
-    { method: "DELETE" },
-  );
-}
-
-export async function listCompanyTasks(
-  options: CompanyTaskQueryOptions = {},
-): Promise<DrawingTaskRecord[]> {
-  const response = await requestJson<{ tasks: DrawingTaskRecord[] }>(
-    `/api/v1/tasks${buildCompanyTaskQuery(options)}`,
-  );
-  return response.tasks;
-}
-
-export async function listCompanyDrawingTasks(
-  options: CompanyTaskQueryOptions = {},
-): Promise<DrawingTaskRecord[]> {
-  return listCompanyTasks(options);
-}
-
-export async function deleteDrawing(drawingId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(`/api/v1/drawings/${encodePathSegment(drawingId)}`, {
-    method: "DELETE",
+export function updateCustomer(
+  customerId: string,
+  input: Partial<CustomerWritableInput>,
+): Promise<{ customer: CustomerRecord }> {
+  return request(`/api/v1/customers/${encodeURIComponent(customerId)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 }
 
-export async function deleteRevision(drawingId: string): Promise<void> {
-  await requestJson<{ deleted: boolean }>(
-    `/api/v1/drawings/${encodePathSegment(drawingId)}/revision`,
-    {
-      method: "DELETE",
-    },
-  );
+export function setCustomerArchived(
+  customerId: string,
+  isArchived: boolean,
+): Promise<{ customer: CustomerRecord }> {
+  return request(`/api/v1/customers/${encodeURIComponent(customerId)}/archive`, {
+    method: "PUT",
+    body: JSON.stringify({ isArchived }),
+  });
 }
 
-export async function getDrawing(drawingId: string): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`);
-  return response.drawing;
+export function deleteCustomer(customerId: string): Promise<void> {
+  return request(`/api/v1/customers/${encodeURIComponent(customerId)}`, { method: "DELETE" });
 }
 
-export async function getPricedEstimate(drawingId: string): Promise<PricedEstimateResult> {
-  const response = await requestJson<{ pricedEstimate: PricedEstimateResult }>(
-    `/api/v1/drawings/${drawingId}/priced-estimate`,
-  );
-  return response.pricedEstimate;
+// -----------------------------------------------------------------------------
+// Projects
+// -----------------------------------------------------------------------------
+
+export function listProjects(
+  options: { scope?: ScopeFilter; customerId?: string; search?: string } = {},
+): Promise<{ projects: ProjectSummary[] }> {
+  const params = new URLSearchParams();
+  if (options.scope) params.set("scope", options.scope);
+  if (options.customerId) params.set("customerId", options.customerId);
+  if (options.search) params.set("search", options.search);
+  const qs = params.toString();
+  return request(`/api/v1/projects${qs ? `?${qs}` : ""}`);
 }
 
-export async function listQuotes(drawingId: string): Promise<QuoteRecord[]> {
-  const response = await requestJson<{ quotes: QuoteRecord[] }>(
-    `/api/v1/drawings/${drawingId}/quotes`,
-  );
-  return response.quotes;
+export function getProject(projectId: string): Promise<{ project: ProjectRecord }> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}`);
 }
 
-export async function createQuoteSnapshot(
-  drawingId: string,
-  ancillaryItems: AncillaryEstimateItem[],
-  manualEntries: EstimateWorkbookManualEntry[] = [],
-): Promise<QuoteRecord> {
-  const response = await requestJson<{ quote: QuoteRecord }>(
-    `/api/v1/drawings/${drawingId}/quotes`,
-    {
-      method: "POST",
-      body: { ancillaryItems, manualEntries },
-    },
-  );
-  return response.quote;
-}
-
-export async function createDrawing(input: {
-  name: string;
+export interface CreateProjectInput {
   customerId: string;
+  name: string;
+  notes?: string | null;
+  status?: ProjectStatus;
+}
+
+export function createProject(input: CreateProjectInput): Promise<{ project: ProjectRecord }> {
+  return request("/api/v1/projects", { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  notes?: string | null;
+}
+
+export function updateProject(
+  projectId: string,
+  input: UpdateProjectInput,
+): Promise<{ project: ProjectRecord }> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function setProjectStatus(
+  projectId: string,
+  status: ProjectStatus,
+): Promise<{ project: ProjectRecord }> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function setProjectArchived(
+  projectId: string,
+  isArchived: boolean,
+): Promise<{ project: ProjectRecord }> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}/archive`, {
+    method: "PUT",
+    body: JSON.stringify({ isArchived }),
+  });
+}
+
+export function deleteProject(projectId: string): Promise<void> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+}
+
+// -----------------------------------------------------------------------------
+// Drawings & revisions
+// -----------------------------------------------------------------------------
+
+export function listDrawingsForProject(projectId: string): Promise<{ drawings: DrawingSummary[] }> {
+  return request(`/api/v1/projects/${encodeURIComponent(projectId)}/drawings`);
+}
+
+export function getDrawing(drawingId: string): Promise<{ drawing: DrawingRecord }> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}`);
+}
+
+export interface CreateDrawingInput {
+  projectId: string;
+  name: string;
+  initialLayout?: LayoutModel;
+  initialViewport?: DrawingCanvasViewport;
+}
+
+export function createDrawing(
+  input: CreateDrawingInput,
+): Promise<{ drawing: DrawingRecord; revision: DrawingRevisionRecord }> {
+  return request("/api/v1/drawings", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function renameDrawing(
+  drawingId: string,
+  name: string,
+): Promise<{ drawing: DrawingRecord }> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function setDrawingArchived(
+  drawingId: string,
+  isArchived: boolean,
+): Promise<{ drawing: DrawingRecord }> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}/archive`, {
+    method: "PUT",
+    body: JSON.stringify({ isArchived }),
+  });
+}
+
+export function deleteDrawing(drawingId: string): Promise<void> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}`, { method: "DELETE" });
+}
+
+export function listRevisions(
+  drawingId: string,
+): Promise<{ revisions: DrawingRevisionSummary[] }> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}/revisions`);
+}
+
+export function startRevision(
+  drawingId: string,
+  notes?: string | null,
+): Promise<{ revision: DrawingRevisionRecord }> {
+  return request(`/api/v1/drawings/${encodeURIComponent(drawingId)}/revisions`, {
+    method: "POST",
+    body: JSON.stringify({ notes: notes ?? null }),
+  });
+}
+
+export function getRevision(revisionId: string): Promise<{ revision: DrawingRevisionRecord }> {
+  return request(`/api/v1/revisions/${encodeURIComponent(revisionId)}`);
+}
+
+export interface SaveRevisionInput {
+  expectedVersionNumber: number;
   layout: LayoutModel;
   savedViewport?: DrawingCanvasViewport | null;
-  workspaceId?: string;
-}): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>("/api/v1/drawings", {
-    method: "POST",
-    body: input,
-  });
-  return response.drawing;
 }
 
-export async function updateDrawing(
-  drawingId: string,
-  input: {
-    expectedVersionNumber: number;
-    name?: string;
-    customerId?: string;
-    workspaceId?: string | null;
-    layout?: LayoutModel;
-    savedViewport?: DrawingCanvasViewport | null;
-  },
-): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(`/api/v1/drawings/${drawingId}`, {
+export function saveRevision(
+  revisionId: string,
+  input: SaveRevisionInput,
+): Promise<{ revision: DrawingRevisionRecord }> {
+  return request(`/api/v1/revisions/${encodeURIComponent(revisionId)}`, {
     method: "PUT",
-    body: input,
-  });
-  return response.drawing;
-}
-
-export async function setDrawingArchivedState(
-  drawingId: string,
-  archived: boolean,
-  expectedVersionNumber: number,
-): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(
-    `/api/v1/drawings/${drawingId}/archive`,
-    {
-      method: "PUT",
-      body: { archived, expectedVersionNumber },
-    },
-  );
-  return response.drawing;
-}
-
-export async function setDrawingStatus(
-  drawingId: string,
-  status: DrawingStatus,
-  expectedVersionNumber: number,
-): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(
-    `/api/v1/drawings/${drawingId}/status`,
-    {
-      method: "PUT",
-      body: { status, expectedVersionNumber },
-    },
-  );
-  return response.drawing;
-}
-
-export async function listDrawingVersions(drawingId: string): Promise<DrawingVersionRecord[]> {
-  const response = await requestJson<{ versions: DrawingVersionRecord[] }>(
-    `/api/v1/drawings/${drawingId}/versions`,
-  );
-  return response.versions;
-}
-
-export async function restoreDrawingVersion(
-  drawingId: string,
-  versionNumber: number,
-  expectedVersionNumber: number,
-): Promise<DrawingRecord> {
-  const response = await requestJson<{ drawing: DrawingRecord }>(
-    `/api/v1/drawings/${drawingId}/restore`,
-    {
-      method: "POST",
-      body: { versionNumber, expectedVersionNumber },
-    },
-  );
-  return response.drawing;
-}
-
-export async function listAuditLog(
-  options: number | AuditLogQueryOptions = 50,
-): Promise<AuditLogRecord[]> {
-  const queryOptions = typeof options === "number" ? { limit: options } : options;
-  const response = await requestJson<AuditLogResponse>(
-    `/api/v1/audit-log${buildAuditLogQuery(queryOptions)}`,
-  );
-  return response.entries;
-}
-
-export async function exportAuditLogCsv(options: AuditLogQueryOptions = {}): Promise<string> {
-  const response = await fetch(buildUrl(`/api/v1/audit-log/export${buildAuditLogQuery(options)}`), {
-    method: "GET",
-    credentials: "include",
-  });
-  if (!response.ok) {
-    throw new ApiClientError(
-      `Request failed with status ${response.status}`,
-      response.status,
-      null,
-    );
-  }
-
-  return response.text();
-}
-
-export async function getPricingConfig(): Promise<PricingConfigRecord> {
-  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>(
-    "/api/v1/pricing-config",
-  );
-  return response.pricingConfig;
-}
-
-export async function updatePricingConfig(input: {
-  items?: PricingConfigRecord["items"];
-  workbook?: PricingConfigRecord["workbook"];
-}): Promise<PricingConfigRecord> {
-  const response = await requestJson<{ pricingConfig: PricingConfigRecord }>(
-    "/api/v1/pricing-config",
-    {
-      method: "PUT",
-      body: input,
-    },
-  );
-  return response.pricingConfig;
-}
-
-export async function requestPasswordReset(input: PasswordResetRequestInput): Promise<void> {
-  await requestJson<{ ok: boolean }>("/api/v1/auth/request-password-reset", {
-    method: "POST",
-    body: input,
+    body: JSON.stringify(input),
   });
 }
 
-export async function resetPassword(input: PasswordResetConfirmInput): Promise<void> {
-  await requestJson<{ ok: boolean }>("/api/v1/auth/reset-password", {
-    method: "POST",
-    body: input,
-  });
+export function deleteRevision(revisionId: string): Promise<void> {
+  return request(`/api/v1/revisions/${encodeURIComponent(revisionId)}`, { method: "DELETE" });
+}
+
+// -----------------------------------------------------------------------------
+// Pricing
+// -----------------------------------------------------------------------------
+
+export function getPricingConfig(): Promise<{ pricingConfig: PricingConfigRecord }> {
+  return request("/api/v1/pricing-config");
+}
+
+// -----------------------------------------------------------------------------
+// Audit log
+// -----------------------------------------------------------------------------
+
+export function listAuditLog(options: {
+  limit?: number;
+  before?: string | null;
+  from?: string | null;
+  to?: string | null;
+  entityType?: string | null;
+  search?: string | null;
+} = {}): Promise<{ entries: AuditLogRecord[]; nextBeforeCreatedAtIso: string | null }> {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.before) params.set("before", options.before);
+  if (options.from) params.set("from", options.from);
+  if (options.to) params.set("to", options.to);
+  if (options.entityType) params.set("entityType", options.entityType);
+  if (options.search) params.set("search", options.search);
+  const qs = params.toString();
+  return request(`/api/v1/audit-log${qs ? `?${qs}` : ""}`);
 }

@@ -1,14 +1,14 @@
 import type { RouteDependencies } from "../routeSupport.js";
 
-import { registerAuditRoutes } from "./audit/index.js";
-import { registerAuthRoutes } from "./auth/index.js";
-import { registerCustomerRoutes } from "./customers/index.js";
-import { registerDrawingRoutes } from "./drawings/index.js";
-import { registerDrawingWorkspaceRoutes } from "./drawingWorkspaces/index.js";
-import { registerEstimateRoutes } from "./estimate/index.js";
-import { registerPricingRoutes } from "./pricing/index.js";
-import { registerSetupRoutes } from "./setup/index.js";
-import { registerUserRoutes } from "./users/index.js";
+import { registerAuditRoutes } from "../routes/registerAuditRoutes.js";
+import { registerAuthRoutes } from "../routes/registerAuthRoutes.js";
+import { registerCustomerRoutes } from "../routes/registerCustomerRoutes.js";
+import { registerDrawingRoutes } from "../routes/registerDrawingRoutes.js";
+import { registerEstimateRoutes } from "../routes/registerEstimateRoutes.js";
+import { registerPricingRoutes } from "../routes/registerPricingRoutes.js";
+import { registerProjectRoutes } from "../routes/registerProjectRoutes.js";
+import { registerSetupRoutes } from "../routes/registerSetupRoutes.js";
+import { registerUserRoutes } from "../routes/registerUserRoutes.js";
 
 export function registerModules(dependencies: RouteDependencies): void {
   registerEstimateRoutes(dependencies);
@@ -16,7 +16,7 @@ export function registerModules(dependencies: RouteDependencies): void {
   registerAuthRoutes(dependencies);
   registerUserRoutes(dependencies);
   registerCustomerRoutes(dependencies);
-  registerDrawingWorkspaceRoutes(dependencies);
+  registerProjectRoutes(dependencies);
   registerDrawingRoutes(dependencies);
   registerPricingRoutes(dependencies);
   registerAuditRoutes(dependencies);
