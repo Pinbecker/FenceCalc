@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -41,7 +41,7 @@ COPY scripts ./scripts
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:20-bookworm-slim AS api-runtime
+FROM node:22-bookworm-slim AS api-runtime
 
 WORKDIR /app
 
@@ -70,7 +70,7 @@ EXPOSE 3001
 USER app
 CMD ["node", "apps/api/dist/server.js"]
 
-FROM node:20-bookworm-slim AS web-runtime
+FROM node:22-bookworm-slim AS web-runtime
 
 WORKDIR /app
 
@@ -88,7 +88,7 @@ EXPOSE 4173
 USER app
 CMD ["node", "apps/web/scripts/serve-dist.mjs"]
 
-FROM node:20-bookworm-slim AS proxy-runtime
+FROM node:22-bookworm-slim AS proxy-runtime
 
 WORKDIR /app
 

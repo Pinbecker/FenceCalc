@@ -1,4 +1,5 @@
 export { SqliteAppRepository } from "./repository/sqliteRepository.js";
+export { PostgresAppRepository } from "./repository/postgresRepository.js";
 export type {
   AppRepository,
   AuditLogQueryOptions,

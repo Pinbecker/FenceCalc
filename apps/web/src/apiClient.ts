@@ -593,6 +593,24 @@ export function setQuoteVersionStatus(
   });
 }
 
+export async function downloadQuoteVersionPdf(
+  versionId: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/quote-versions/${encodeURIComponent(versionId)}/pdf`,
+    { credentials: "include", headers: { Accept: "application/pdf" } },
+  );
+  if (!response.ok) {
+    const payload = (await response
+      .json()
+      .catch(() => ({ error: `HTTP ${response.status}` }))) as ApiErrorPayload;
+    throw new ApiError(response.status, payload);
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const fileName = disposition.match(/filename="([^"]+)"/i)?.[1] ?? `quote-${versionId}.pdf`;
+  return { blob: await response.blob(), fileName };
+}
+
 export function startQuoteVersion(
   quoteId: string,
   input: {

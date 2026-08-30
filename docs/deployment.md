@@ -1,109 +1,68 @@
 # Deployment
 
-## Supported Deployment Shape
+## Supported production shape
 
-The current production target is:
+The commercial deployment target is:
 
-- one API instance
-- one built web deployment
-- one SQLite database on persistent storage
-- HTTPS terminated by a reverse proxy
+- one or more stateless API replicas
+- one immutable web build
+- PostgreSQL on durable managed storage
+- HTTPS at the only publicly reachable reverse proxy or load balancer
+- centralized logs, Prometheus-compatible metrics and error reporting
 
-This is appropriate for limited internal use. It is not the right shape for multi-instance scale.
+SQLite is retained for local development and is rejected by production configuration validation.
 
-## Required Environment
+## Required environment
 
-Use `.env.example` as the starting point.
-
-Production requirements:
+Start from `.env.example`. Production requires:
 
 - `NODE_ENV=production`
-- `TRUST_PROXY=true` when the API is behind the supported reverse proxy
-- `DATABASE_PATH` set to an absolute persistent path
-- `ALLOWED_ORIGINS` set to the exact browser origins allowed to call the API
-- `SESSION_COOKIE_SECURE=true`
-- `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and `SENTRY_TRACES_SAMPLE_RATE` set if API error reporting is enabled
-- `BOOTSTRAP_OWNER_SECRET` set until the first owner is created, then removed from the runtime environment
-- `SKIP_AUTO_MIGRATION` — in production (`NODE_ENV=production`) the API skips auto-migration on startup by default. Set `SKIP_AUTO_MIGRATION=false` only if you want the legacy auto-migrate behavior.
-- `VITE_API_BASE_URL` pointed at the production API origin during web build
-- `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, and `VITE_SENTRY_TRACES_SAMPLE_RATE` set during web build if browser error reporting is enabled
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` set during web build if sourcemaps should be uploaded to Sentry
+- `DATABASE_PROVIDER=postgresql` and a TLS-protected `DATABASE_URL`
+- pool and timeout values appropriate to the database connection limit
+- `SKIP_AUTO_MIGRATION=true`; run the migration job separately
+- exact `ALLOWED_ORIGINS` and `ENFORCE_WRITE_ORIGIN=true`
+- `SESSION_COOKIE_SECURE=true` and a `SESSION_COOKIE_NAME` beginning with `__Host-`
+- `TRUST_PROXY=true` only behind the trusted proxy
+- a high-entropy `METRICS_BEARER_TOKEN` unless metrics are isolated on a private network
+- Sentry configuration when external error reporting is enabled
+- `BOOTSTRAP_OWNER_SECRET` only until the initial owner exists
+- `VITE_API_BASE_URL` and browser telemetry values at web build time
 
-## Build and Release
+Do not put database passwords, session material, Sentry auth tokens or bootstrap secrets in source control or image layers. Use the deployment platform's secret manager.
 
-Build the full repo:
+## Release sequence
 
-```powershell
-npm run build
-```
+1. Run lint, type checks, unit/integration tests, browser tests and the production build in CI.
+2. Build immutable API and web images and identify them by commit SHA.
+3. Verify the latest database backup and exercise the migration against a restored copy.
+4. Run the one-shot PostgreSQL migration job.
+5. Deploy the API with readiness pointed at `/readyz` and liveness pointed at `/livez`.
+6. Deploy the web image built for the production API origin.
+7. Smoke-test login, customer/project navigation, drawing save, estimate calculation, quote PDF download, admin access and metrics collection.
+8. Watch 5xx rate, p95 latency and readiness during the release window. Roll the application image back if those regress; do not roll a database schema backward without an approved recovery plan.
 
-Recommended deploy sequence:
+## Checked-in Compose stack
 
-1. Build and test in CI.
-2. Snapshot the current production database.
-3. Run database migrations against the snapshot (or a copy) to verify they apply cleanly:
-   ```powershell
-   npm run migrate --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db
-   ```
-4. Build the API and web container targets or produce equivalent artifacts.
-5. Run migrations against the production database before starting the new API version.
-6. Start the API with the production environment.
-7. Start the web build with the production API origin baked into `VITE_API_BASE_URL`.
-8. Run a smoke test: login, drawings page, editor save, admin page, `/health`.
-
-If you are deploying with the checked-in API container image, the runtime image includes the
-ops scripts under `apps/api/scripts`, so the migration step can also be run inside the container:
+For a production-shaped local exercise:
 
 ```powershell
-docker compose run --rm api npm run migrate --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db
-```
-
-## Container Workflow
-
-The repository now includes:
-
-- a multi-stage `Dockerfile` with `api-runtime` and `web-runtime` targets
-- a `.dockerignore` tuned for this monorepo
-- a `docker-compose.yml` file for the supported single-instance production shape
-
-Example local production-style run:
-
-```powershell
+$env:POSTGRES_PASSWORD = "replace-with-a-long-random-value"
+$env:METRICS_BEARER_TOKEN = "replace-with-a-long-random-value"
 docker compose up --build
 ```
 
-The checked-in `docker-compose.yml` keeps `SESSION_COOKIE_SECURE=true` because that is the required production setting. That means authenticated browser flows need HTTPS in front of the stack. Plain `http://localhost` can still be used for unauthenticated smoke checks such as `/health` and setup-status, but not for a realistic cookie-backed sign-in flow.
+The stack contains PostgreSQL, a one-shot migration service, the API, the web build and the HTTPS reverse proxy. Only the proxy publishes host ports. The database, API and web services remain on the internal network.
 
-The compose stack intentionally publishes host ports only for the reverse proxy. The raw `api`
-and `web` services stay on the internal Docker network and should not be exposed directly.
+The default Compose database password exists only to make isolated local evaluation possible. It must be overridden anywhere the machine or network is shared.
 
-## CI Expectations
+## Scaling rules
 
-The repository should pass:
+- Keep API replicas stateless; sessions, sequences and tenant data live in PostgreSQL.
+- Size `DATABASE_POOL_MAX * replica_count` below the database connection ceiling with headroom for migrations and operators.
+- The in-process login and write limiters provide burst protection per replica. Put a shared edge rate limiter in front of a multi-replica public service.
+- Run migrations once per release, not once per replica.
+- Drain a replica only after it fails readiness; do not use liveness failure for ordinary database degradation.
 
-- lint
-- typecheck
-- coverage gate
-- build
-- browser E2E
+## Rollback
 
-## Reverse Proxy Expectations
-
-The reverse proxy should:
-
-- terminate HTTPS
-- forward requests to the API process
-- be the only publicly reachable HTTP(S) entry point for the stack
-- forward the original client IP so Fastify proxy-aware request IP handling remains accurate
-- serve the built web app
-- preserve secure cookie behavior
-- emit access logs outside the application
-
-## When To Re-Platform
-
-Move away from SQLite before calling this suitable for:
-
-- multiple API replicas
-- high write concurrency
-- customer-hosted shared SaaS
-- complex reporting or analytics workloads
+Application rollback is a redeploy of the last known-good immutable images. Database changes must be backward compatible across the release window. Destructive schema cleanup belongs in a later release after old code is gone and a verified backup exists.

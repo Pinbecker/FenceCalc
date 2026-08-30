@@ -244,11 +244,11 @@ function buildGoalUnitHostSegments(
   }
 
   const leftNormal = { x: -tangent.y, y: tangent.x };
-  const normal =
-    goalUnit.side === "RIGHT"
-      ? { x: -leftNormal.x, y: -leftNormal.y }
-      : leftNormal;
-  const segmentLengthMm = Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
+  const normal = goalUnit.side === "RIGHT" ? { x: -leftNormal.x, y: -leftNormal.y } : leftNormal;
+  const segmentLengthMm = Math.hypot(
+    segment.end.x - segment.start.x,
+    segment.end.y - segment.start.y,
+  );
   const startOffsetMm = goalUnit.centerOffsetMm - goalUnit.widthMm / 2;
   const endOffsetMm = goalUnit.centerOffsetMm + goalUnit.widthMm / 2;
   const entryPoint = interpolatePoint(segment.start, segment.end, startOffsetMm, segmentLengthMm);
@@ -522,7 +522,6 @@ export const layoutModelSchema = z
           message: `Floodlight column ${floodlightColumn.id} exceeds segment ${floodlightColumn.segmentId} length`,
         });
       }
-
     }
 
     const seenKickboardIds = new Set<string>();
@@ -839,16 +838,21 @@ const pricingWorkbookQuantityRuleSchema = z.discriminatedUnion("kind", [
     kind: z.literal("ASSEMBLY"),
     source: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("MANUAL_ENTRY"), defaultQuantity: z.number().finite().min(0) }),
-      z.object({ kind: z.literal("CATALOG_QUANTITY"), quantityKey: z.string().trim().min(1).max(160) }),
+      z.object({
+        kind: z.literal("CATALOG_QUANTITY"),
+        quantityKey: z.string().trim().min(1).max(160),
+      }),
     ]),
     multiplier: z.number().finite().min(0).max(100_000),
     rounding: z.enum(["NONE", "UP", "DOWN", "NEAREST"]),
     increment: z.number().finite().positive().max(1_000_000),
     minimum: z.number().finite().min(0).max(1_000_000_000),
-    condition: z.object({
-      operator: z.enum(["GT", "GTE", "LT", "LTE", "EQ"]),
-      value: z.number().finite().min(0).max(1_000_000_000),
-    }).optional(),
+    condition: z
+      .object({
+        operator: z.enum(["GT", "GTE", "LT", "LTE", "EQ"]),
+        value: z.number().finite().min(0).max(1_000_000_000),
+      })
+      .optional(),
   }),
 ]);
 
@@ -1087,12 +1091,17 @@ export const commercialEstimateCalculationSchema = z.object({
   engineVersion: z.string().trim().min(1).max(120),
   configurationVersionId: z.string().trim().min(1).max(120).nullable().optional(),
   configurationVersionNumber: z.number().int().positive().nullable().optional(),
-  designs: z.array(z.object({
-    drawingId: z.string().trim().min(1).max(120),
-    drawingName: z.string().trim().min(1).max(160),
-    drawingRevisionId: z.string().trim().min(1).max(120),
-    revisionNumber: z.number().int().positive(),
-  })).min(1).max(100),
+  designs: z
+    .array(
+      z.object({
+        drawingId: z.string().trim().min(1).max(120),
+        drawingName: z.string().trim().min(1).max(160),
+        drawingRevisionId: z.string().trim().min(1).max(120),
+        revisionNumber: z.number().int().positive(),
+      }),
+    )
+    .min(1)
+    .max(100),
   groups: z.array(estimateGroupSchema).max(200),
   ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200),
   manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200),
@@ -1109,21 +1118,44 @@ export const commercialEstimateCalculationSchema = z.object({
 export const quotePresentationSnapshotSchema = z.object({
   displayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]),
   currencyCode: z.literal("GBP"),
-  sections: z.array(z.object({
-    key: z.string().trim().min(1).max(160),
-    title: z.string().trim().min(1).max(200),
-    amount: z.number().finite().min(0),
-    rows: z.array(z.object({
-      description: z.string().trim().min(1).max(240),
-      quantity: z.number().finite().min(0),
-      unit: z.string().trim().min(1).max(40),
-      amount: z.number().finite().min(0),
-    })).max(500),
-  })).max(200),
+  sections: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(160),
+        title: z.string().trim().min(1).max(200),
+        amount: z.number().finite().min(0),
+        rows: z
+          .array(
+            z.object({
+              description: z.string().trim().min(1).max(240),
+              quantity: z.number().finite().min(0),
+              unit: z.string().trim().min(1).max(40),
+              amount: z.number().finite().min(0),
+            }),
+          )
+          .max(500),
+      }),
+    )
+    .max(200),
   netTotal: z.number().finite().min(0),
   vatRate: z.number().finite().min(0).max(100),
   vatAmount: z.number().finite().min(0),
   grossTotal: z.number().finite().min(0),
+  document: z
+    .object({
+      sellerName: z.string().trim().min(1).max(200),
+      preparedByName: z.string().trim().min(1).max(200),
+      customerName: z.string().trim().min(1).max(200),
+      customerContactName: z.string().trim().min(1).max(200).nullable(),
+      customerEmail: z.string().trim().email().max(320).nullable(),
+      customerPhone: z.string().trim().min(1).max(80).nullable(),
+      projectReference: z.string().trim().min(1).max(120),
+      projectName: z.string().trim().min(1).max(200),
+      projectScope: z.string().trim().min(1).max(5000).nullable(),
+      siteName: z.string().trim().min(1).max(200).nullable(),
+      siteAddressLines: z.array(z.string().trim().min(1).max(240)).max(8),
+    })
+    .optional(),
 });
 
 export const quoteDrawingSnapshotSchema = z.object({
@@ -1255,7 +1287,11 @@ export const customerArchiveRequestSchema = z.object({
 export const siteNameSchema = z.string().trim().min(1).max(160);
 export const siteAddressFieldSchema = z.string().trim().max(240);
 export const siteNotesSchema = z.string().trim().max(2_000);
-export const countryCodeSchema = z.string().trim().length(2).transform((value) => value.toUpperCase());
+export const countryCodeSchema = z
+  .string()
+  .trim()
+  .length(2)
+  .transform((value) => value.toUpperCase());
 
 export const siteCreateRequestSchema = z.object({
   customerId: z.string().trim().min(1).max(120),
@@ -1380,12 +1416,7 @@ export const revisionNotesUpdateRequestSchema = z.object({
 // Estimate lifecycle
 // -----------------------------------------------------------------------------
 
-export const estimateVersionStatusSchema = z.enum([
-  "DRAFT",
-  "IN_REVIEW",
-  "APPROVED",
-  "SUPERSEDED",
-]);
+export const estimateVersionStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SUPERSEDED"]);
 
 export const estimateLifecycleCreateRequestSchema = z.object({
   projectId: z.string().trim().min(1).max(120),

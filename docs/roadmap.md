@@ -33,6 +33,8 @@ Status: completed.
 
 ## Phase 5: Platform Readiness
 
+Status: completed.
+
 - PostgreSQL persistence and migrations.
 - AuthN/AuthZ and roles.
 - PDF quote output and revision history.

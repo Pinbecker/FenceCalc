@@ -2,7 +2,12 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"];
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
 const CONFIG_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATABASE_PATH = resolve(CONFIG_DIR, "../data/fence-estimator.db");
 const envBooleanSchema = z.preprocess((value) => {
@@ -29,7 +34,12 @@ const envSchema = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   TRUST_PROXY: envBooleanSchema.default(false),
+  DATABASE_PROVIDER: z.enum(["sqlite", "postgresql"]).optional(),
   DATABASE_PATH: z.string().trim().min(1).default(DEFAULT_DATABASE_PATH),
+  DATABASE_URL: optionalTrimmedStringSchema,
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
   ALLOWED_ORIGINS: z.string().optional(),
   BODY_LIMIT_BYTES: z.coerce.number().int().min(1_024).max(5_242_880).default(262_144),
   WRITE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
@@ -45,9 +55,11 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_COOKIE_NAME: z.string().trim().min(1).default("fence_estimator_session"),
   SESSION_COOKIE_SECURE: envBooleanSchema.default(false),
+  ENFORCE_WRITE_ORIGIN: envBooleanSchema.optional(),
+  METRICS_BEARER_TOKEN: optionalTrimmedStringSchema,
   BOOTSTRAP_OWNER_SECRET: optionalTrimmedStringSchema,
   SKIP_AUTO_MIGRATION: envBooleanSchema.optional(),
-  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info")
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
 export interface AppConfig {
@@ -55,7 +67,12 @@ export interface AppConfig {
   host: string;
   port: number;
   trustProxy: boolean;
+  databaseProvider: "sqlite" | "postgresql";
   databasePath: string;
+  databaseUrl: string | null;
+  databasePoolMax: number;
+  databaseConnectionTimeoutMs: number;
+  databaseStatementTimeoutMs: number;
   allowedOrigins: string[];
   bodyLimitBytes: number;
   writeRateLimitWindowMs: number;
@@ -71,6 +88,8 @@ export interface AppConfig {
   sessionTtlDays: number;
   sessionCookieName: string;
   sessionCookieSecure: boolean;
+  enforceWriteOrigin: boolean;
+  metricsBearerToken: string | null;
   bootstrapOwnerSecret: string | null;
   skipAutoMigration: boolean;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
@@ -89,10 +108,15 @@ function parseAllowedOrigins(value: string | undefined): string[] {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.parse(env);
   const allowedOrigins = parseAllowedOrigins(parsed.ALLOWED_ORIGINS);
+  const databaseProvider =
+    parsed.DATABASE_PROVIDER ?? (parsed.DATABASE_URL ? "postgresql" : "sqlite");
 
   if (parsed.NODE_ENV === "production") {
-    if (!isAbsolute(parsed.DATABASE_PATH)) {
-      throw new Error("DATABASE_PATH must be an absolute path in production");
+    if (databaseProvider !== "postgresql") {
+      throw new Error("DATABASE_PROVIDER must be postgresql in production");
+    }
+    if (!parsed.DATABASE_URL) {
+      throw new Error("DATABASE_URL must be set when DATABASE_PROVIDER is postgresql");
     }
     if (!parsed.ALLOWED_ORIGINS) {
       throw new Error("ALLOWED_ORIGINS must be explicitly set in production");
@@ -100,6 +124,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!parsed.SESSION_COOKIE_SECURE) {
       throw new Error("SESSION_COOKIE_SECURE must be true in production");
     }
+    if (!parsed.SESSION_COOKIE_NAME.startsWith("__Host-")) {
+      throw new Error("SESSION_COOKIE_NAME must use the __Host- prefix in production");
+    }
+  }
+
+  if (databaseProvider === "postgresql" && !parsed.DATABASE_URL) {
+    throw new Error("DATABASE_URL must be set when DATABASE_PROVIDER is postgresql");
   }
 
   const databasePath = isAbsolute(parsed.DATABASE_PATH)
@@ -111,7 +142,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     host: parsed.HOST,
     port: parsed.PORT,
     trustProxy: parsed.TRUST_PROXY,
+    databaseProvider,
     databasePath,
+    databaseUrl: parsed.DATABASE_URL ?? null,
+    databasePoolMax: parsed.DATABASE_POOL_MAX,
+    databaseConnectionTimeoutMs: parsed.DATABASE_CONNECTION_TIMEOUT_MS,
+    databaseStatementTimeoutMs: parsed.DATABASE_STATEMENT_TIMEOUT_MS,
     allowedOrigins,
     bodyLimitBytes: parsed.BODY_LIMIT_BYTES,
     writeRateLimitWindowMs: parsed.WRITE_RATE_LIMIT_WINDOW_MS,
@@ -127,8 +163,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionTtlDays: parsed.SESSION_TTL_DAYS,
     sessionCookieName: parsed.SESSION_COOKIE_NAME,
     sessionCookieSecure: parsed.SESSION_COOKIE_SECURE,
+    enforceWriteOrigin: parsed.ENFORCE_WRITE_ORIGIN ?? parsed.NODE_ENV === "production",
+    metricsBearerToken: parsed.METRICS_BEARER_TOKEN ?? null,
     bootstrapOwnerSecret: parsed.BOOTSTRAP_OWNER_SECRET ?? null,
     skipAutoMigration: parsed.SKIP_AUTO_MIGRATION ?? parsed.NODE_ENV === "production",
-    logLevel: parsed.LOG_LEVEL
+    logLevel: parsed.LOG_LEVEL,
   };
 }

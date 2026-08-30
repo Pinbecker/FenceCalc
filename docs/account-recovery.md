@@ -27,10 +27,17 @@ Restrictions:
 
 Use this when the only owner is locked out or no other manager can perform recovery.
 
-Command:
+Production PostgreSQL command:
 
 ```powershell
-npm run recover:user --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db --email owner@example.com --password NewTemporaryPassword123
+$env:DATABASE_URL = "postgresql://fence_estimator:replace-me@database.example.com:5432/fence_estimator"
+npm run recover:user --workspace @fence-estimator/api -- --email owner@example.com --password NewTemporaryPassword123
+```
+
+Local SQLite development command:
+
+```powershell
+npm run recover:user --workspace @fence-estimator/api -- --database C:\dev\fence-estimator.db --email owner@example.com --password NewTemporaryPassword123
 ```
 
 Effects:
@@ -44,4 +51,5 @@ Effects:
 - deliver temporary passwords over an approved out-of-band channel
 - require the user to log in and rotate the password through a manager if policy requires it
 - treat operator recovery as a privileged action and keep shell access limited
+- avoid placing production credentials in shell history; prefer an injected `DATABASE_URL`
 - review the audit log after each recovery

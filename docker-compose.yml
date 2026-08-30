@@ -1,4 +1,34 @@
 services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fence_estimator}
+      POSTGRES_USER: ${POSTGRES_USER:-fence_estimator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fence-estimator-local-change-me}
+    volumes:
+      - fence_estimator_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-fence_estimator} -d ${POSTGRES_DB:-fence_estimator}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-runtime
+    command: ["node", "apps/api/scripts/migrate-postgres.mjs"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fence_estimator}:${POSTGRES_PASSWORD:-fence-estimator-local-change-me}@database:5432/${POSTGRES_DB:-fence_estimator}
+    depends_on:
+      database:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -9,7 +39,12 @@ services:
       HOST: 0.0.0.0
       PORT: 3001
       TRUST_PROXY: ${TRUST_PROXY:-true}
-      DATABASE_PATH: ${DATABASE_PATH:-/var/lib/fence-estimator/fence-estimator.db}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fence_estimator}:${POSTGRES_PASSWORD:-fence-estimator-local-change-me}@database:5432/${POSTGRES_DB:-fence_estimator}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_CONNECTION_TIMEOUT_MS: ${DATABASE_CONNECTION_TIMEOUT_MS:-10000}
+      DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-30000}
+      SKIP_AUTO_MIGRATION: "true"
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localhost:8443}
       BODY_LIMIT_BYTES: ${BODY_LIMIT_BYTES:-262144}
       WRITE_RATE_LIMIT_WINDOW_MS: ${WRITE_RATE_LIMIT_WINDOW_MS:-60000}
@@ -19,8 +54,10 @@ services:
       LOGIN_LOCKOUT_MS: ${LOGIN_LOCKOUT_MS:-900000}
       AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-365}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
-      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-fence_estimator_session}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-__Host-fence_estimator_session}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      ENFORCE_WRITE_ORIGIN: ${ENFORCE_WRITE_ORIGIN:-true}
+      METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-}
       BOOTSTRAP_OWNER_SECRET: ${BOOTSTRAP_OWNER_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -29,10 +66,17 @@ services:
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
     expose:
       - "3001"
-    volumes:
-      - fence_estimator_data:/var/lib/fence-estimator
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/readyz').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -82,4 +126,4 @@ services:
       - "8443:8443"
 
 volumes:
-  fence_estimator_data:
+  fence_estimator_postgres:

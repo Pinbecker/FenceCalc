@@ -3,9 +3,13 @@ import type {
   EstimateResult,
   FenceHeightKey,
   FenceSystem,
-  LayoutModel
+  LayoutModel,
 } from "./domain.js";
-import type { EstimateWorkbook, EstimateWorkbookManualEntry, PricingWorkbookConfig } from "./pricingWorkbook.js";
+import type {
+  EstimateWorkbook,
+  EstimateWorkbookManualEntry,
+  PricingWorkbookConfig,
+} from "./pricingWorkbook.js";
 import { buildDefaultPricingWorkbookConfig } from "./pricingWorkbook.js";
 
 export const PRICING_ITEM_CATEGORIES = [
@@ -22,7 +26,7 @@ export const PRICING_ITEM_CATEGORIES = [
   "COMMERCIAL",
   "FIXINGS",
   "PLANT",
-  "ANCILLARY"
+  "ANCILLARY",
 ] as const;
 
 export type PricingItemCategory = (typeof PRICING_ITEM_CATEGORIES)[number];
@@ -174,6 +178,21 @@ export interface QuotePresentationSnapshot {
   vatRate: number;
   vatAmount: number;
   grossTotal: number;
+  document?: QuoteDocumentContext | undefined;
+}
+
+export interface QuoteDocumentContext {
+  sellerName: string;
+  preparedByName: string;
+  customerName: string;
+  customerContactName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  projectReference: string;
+  projectName: string;
+  projectScope: string | null;
+  siteName: string | null;
+  siteAddressLines: string[];
 }
 
 export interface QuoteDrawingSnapshot {
@@ -215,7 +234,7 @@ function buildPanelItem(height: FenceHeightKey, sortOrder: number): PricingItem 
     materialCost: 0,
     labourCost: 0,
     isActive: true,
-    sortOrder
+    sortOrder,
   };
 }
 
@@ -223,10 +242,12 @@ function buildDefaultPricingItems(): PricingItem[] {
   const items: PricingItem[] = [];
   let sortOrder = 10;
 
-  (["1.2m", "1.8m", "2m", "2.4m", "3m", "4m", "4.5m", "5m", "6m"] as FenceHeightKey[]).forEach((height) => {
-    items.push(buildPanelItem(height, sortOrder));
-    sortOrder += 10;
-  });
+  (["1.2m", "1.8m", "2m", "2.4m", "3m", "4m", "4.5m", "5m", "6m"] as FenceHeightKey[]).forEach(
+    (height) => {
+      items.push(buildPanelItem(height, sortOrder));
+      sortOrder += 10;
+    },
+  );
 
   items.push(
     {
@@ -238,7 +259,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_POST_END",
@@ -249,7 +270,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_POST_CORNER_INTERNAL",
@@ -260,7 +281,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_POST_CORNER_EXTERNAL",
@@ -271,7 +292,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_GATE_SINGLE_LEAF_LEAF",
@@ -282,7 +303,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_GATE_SINGLE_LEAF_POSTS",
@@ -293,7 +314,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_GATE_DOUBLE_LEAF_LEAVES",
@@ -304,7 +325,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_GATE_DOUBLE_LEAF_POSTS",
@@ -315,7 +336,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_FENCE_CONCRETE",
@@ -326,7 +347,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN",
@@ -337,7 +358,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_CONCRETE",
@@ -348,7 +369,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_BOLTS",
@@ -359,7 +380,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_FLOODLIGHT_COLUMN_CHEMFIX",
@@ -370,7 +391,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_BASKETBALL_POST",
@@ -381,7 +402,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_BASKETBALL_POST_CONCRETE",
@@ -392,7 +413,7 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 0,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
+      sortOrder: (sortOrder += 10),
     },
     {
       itemCode: "TWIN_BAR_GENERAL_PLANT",
@@ -403,19 +424,22 @@ function buildDefaultPricingItems(): PricingItem[] {
       materialCost: 700,
       labourCost: 0,
       isActive: true,
-      sortOrder: sortOrder += 10
-    }
+      sortOrder: (sortOrder += 10),
+    },
   );
 
   return items;
 }
 
-export function buildDefaultPricingConfig(companyId = "", updatedByUserId: string | null = null): PricingConfigRecord {
+export function buildDefaultPricingConfig(
+  companyId = "",
+  updatedByUserId: string | null = null,
+): PricingConfigRecord {
   return {
     companyId,
     items: buildDefaultPricingItems(),
     workbook: buildDefaultPricingWorkbookConfig(),
     updatedAtIso: new Date(0).toISOString(),
-    updatedByUserId
+    updatedByUserId,
   };
 }

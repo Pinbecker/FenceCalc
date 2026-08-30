@@ -3,9 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { LayoutModel } from "@fence-estimator/contracts";
+import type { Pool } from "pg";
+import { DataType, newDb } from "pg-mem";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { AuthenticatedRequestContext } from "../src/authorization.js";
+import type { AppRepository } from "../src/repository/types.js";
+import { PostgresAppRepository } from "../src/repository/postgresRepository.js";
 import { SqliteAppRepository } from "../src/repository/sqliteRepository.js";
 import { createCustomerForCompany } from "../src/services/customerService.js";
 import {
@@ -24,9 +28,31 @@ import {
   createQuoteForCompany,
   setQuoteVersionStatusForCompany,
 } from "../src/services/quoteLifecycleService.js";
+import { quotePdfFileName, renderQuotePdf } from "../src/services/quotePdfService.js";
 import { createSiteForCompany } from "../src/services/siteService.js";
 
 const temporaryDirectories: string[] = [];
+
+function createSqliteRepository(): AppRepository {
+  const directory = mkdtempSync(join(tmpdir(), "fence-estimator-lifecycle-"));
+  temporaryDirectories.push(directory);
+  return new SqliteAppRepository(join(directory, "lifecycle.db"));
+}
+
+function createPostgresCompatibleRepository(): AppRepository {
+  const database = newDb({ autoCreateForeignKeyIndices: true });
+  database.public.registerFunction({
+    name: "pg_advisory_xact_lock",
+    args: [DataType.integer],
+    returns: DataType.integer,
+    implementation: (key: number) => key,
+  });
+  const adapter = database.adapters.createPg();
+  return new PostgresAppRepository("postgresql://integration.invalid/test", {
+    pool: new adapter.Pool() as unknown as Pool,
+    compatibilityMode: true,
+  });
+}
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -34,9 +60,7 @@ afterEach(() => {
   }
 });
 
-async function createTestContext(
-  repository: SqliteAppRepository,
-): Promise<AuthenticatedRequestContext> {
+async function createTestContext(repository: AppRepository): Promise<AuthenticatedRequestContext> {
   const createdAtIso = "2026-08-30T08:00:00.000Z";
   const account = await repository.bootstrapOwnerAccount({
     companyId: "company-1",
@@ -100,11 +124,12 @@ const crossingLayout: LayoutModel = {
   ],
 };
 
-describe("commercial lifecycle", () => {
+describe.each([
+  ["SQLite", createSqliteRepository],
+  ["PostgreSQL-compatible", createPostgresCompatibleRepository],
+] as const)("%s commercial lifecycle", (_providerName, createRepository) => {
   it("pins design revisions through estimate approval, quote issue and acceptance", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "fence-estimator-lifecycle-"));
-    temporaryDirectories.push(directory);
-    const repository = new SqliteAppRepository(join(directory, "lifecycle.db"));
+    const repository = createRepository();
     const context = await createTestContext(repository);
 
     const customer = await createCustomerForCompany(repository, context, {
@@ -275,6 +300,23 @@ describe("commercial lifecycle", () => {
       "ISSUED",
     );
     expect(issued).toMatchObject({ ok: true, value: { status: "ISSUED" } });
+    if (!issued.ok) throw new Error(issued.message);
+    expect(issued.value.presentation.document).toMatchObject({
+      sellerName: "Serious Fence Company",
+      customerName: "Northshire Council",
+      projectName: "Sports perimeter renewal",
+      siteName: "Riverside Sports Ground",
+    });
+    const pdf = await renderQuotePdf({
+      quote: quoteResult.value.quote,
+      version: issued.value,
+      document: issued.value.presentation.document!,
+    });
+    expect(pdf.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(4_000);
+    expect(quotePdfFileName(quoteResult.value.quote, issued.value)).toMatch(
+      /^Q-\d{4}-0001-v1\.pdf$/,
+    );
     expect((await repository.getProjectById(project!.id, context.company.id))?.status).toBe(
       "QUOTED",
     );

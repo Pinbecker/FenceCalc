@@ -103,6 +103,13 @@ export class SqliteAppRepository implements AppRepository {
     return Promise.resolve();
   }
 
+  public getHealthDetails(): Promise<{ provider: "sqlite"; schemaVersion: number }> {
+    const row = this.database
+      .prepare("SELECT MAX(version) AS version FROM schema_migrations")
+      .get() as { version: number | null };
+    return Promise.resolve({ provider: "sqlite", schemaVersion: row.version ?? 0 });
+  }
+
   public async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -373,10 +380,7 @@ export class SqliteAppRepository implements AppRepository {
   public listCompanyConfigurationVersions(companyId: string) {
     return Promise.resolve(this.pricing.listCompanyConfigurationVersions(companyId));
   }
-  public getCompanyConfigurationVersionByStatus(
-    companyId: string,
-    status: "DRAFT" | "PUBLISHED",
-  ) {
+  public getCompanyConfigurationVersionByStatus(companyId: string, status: "DRAFT" | "PUBLISHED") {
     return Promise.resolve(this.pricing.getCompanyConfigurationVersionByStatus(companyId, status));
   }
   public createCompanyConfigurationVersion(input: CreateCompanyConfigurationVersionInput) {
@@ -395,10 +399,7 @@ export class SqliteAppRepository implements AppRepository {
     this.support.pruneStaleRecords(input.createdAtIso, this.auditLogRetentionDays);
     return Promise.resolve(this.support.addAuditLog(input));
   }
-  public listAuditLog(
-    companyId: string,
-    options: number | AuditLogQueryOptions = {},
-  ) {
+  public listAuditLog(companyId: string, options: number | AuditLogQueryOptions = {}) {
     this.support.pruneStaleRecords(new Date().toISOString(), this.auditLogRetentionDays);
     return Promise.resolve(this.support.listAuditLog(companyId, options));
   }

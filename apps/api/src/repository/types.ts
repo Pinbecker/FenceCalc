@@ -571,6 +571,7 @@ export interface AuditLogQueryOptions {
 export interface AppRepository {
   close(): Promise<void>;
   checkHealth(): Promise<void>;
+  getHealthDetails(): Promise<{ provider: "sqlite" | "postgresql"; schemaVersion: number }>;
   runInTransaction<T>(fn: () => Promise<T>): Promise<T>;
 
   // Identity
@@ -644,20 +645,10 @@ export interface AppRepository {
   setDrawingArchivedState(input: SetDrawingArchivedStateInput): Promise<DrawingRecord | null>;
   deleteDrawing(input: DeleteDrawingInput): Promise<boolean>;
   createRevision(input: CreateRevisionInput): Promise<DrawingRevisionRecord>;
-  listRevisionsForDrawing(
-    drawingId: string,
-    companyId: string,
-  ): Promise<DrawingRevisionSummary[]>;
-  getRevisionById(
-    revisionId: string,
-    companyId: string,
-  ): Promise<DrawingRevisionRecord | null>;
-  updateRevisionLayout(
-    input: UpdateRevisionLayoutInput,
-  ): Promise<DrawingRevisionRecord | null>;
-  updateRevisionNotes(
-    input: UpdateRevisionNotesInput,
-  ): Promise<DrawingRevisionRecord | null>;
+  listRevisionsForDrawing(drawingId: string, companyId: string): Promise<DrawingRevisionSummary[]>;
+  getRevisionById(revisionId: string, companyId: string): Promise<DrawingRevisionRecord | null>;
+  updateRevisionLayout(input: UpdateRevisionLayoutInput): Promise<DrawingRevisionRecord | null>;
+  updateRevisionNotes(input: UpdateRevisionNotesInput): Promise<DrawingRevisionRecord | null>;
   deleteRevision(input: DeleteRevisionInput): Promise<boolean>;
   setDrawingStatus(input: SetDrawingStatusInput): Promise<DrawingRecord | null>;
 
@@ -666,10 +657,17 @@ export interface AppRepository {
   listEstimatesForProject(projectId: string, companyId: string): Promise<EstimateSummary[]>;
   getEstimateById(estimateId: string, companyId: string): Promise<EstimateRecord | null>;
   listEstimateVersions(estimateId: string, companyId: string): Promise<EstimateVersionRecord[]>;
-  getEstimateVersionById(versionId: string, companyId: string): Promise<EstimateVersionRecord | null>;
+  getEstimateVersionById(
+    versionId: string,
+    companyId: string,
+  ): Promise<EstimateVersionRecord | null>;
   updateEstimateVersion(input: UpdateEstimateVersionInput): Promise<EstimateVersionRecord | null>;
-  setEstimateVersionCalculation(input: SetEstimateVersionCalculationInput): Promise<EstimateVersionRecord | null>;
-  setEstimateVersionStatus(input: SetEstimateVersionStatusInput): Promise<EstimateVersionRecord | null>;
+  setEstimateVersionCalculation(
+    input: SetEstimateVersionCalculationInput,
+  ): Promise<EstimateVersionRecord | null>;
+  setEstimateVersionStatus(
+    input: SetEstimateVersionStatusInput,
+  ): Promise<EstimateVersionRecord | null>;
   createEstimateVersion(input: CreateEstimateVersionInput): Promise<EstimateVersionRecord>;
   setEstimateArchivedState(input: SetEstimateArchivedStateInput): Promise<EstimateRecord | null>;
 

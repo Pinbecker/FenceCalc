@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "./config.js";
 import type { AppRepository } from "./repository.js";
 import type { LoginAttemptLimiter, WriteRequestLimiter } from "./security.js";
+import type { ApiOperationalMetrics } from "./observability/metrics.js";
 
 export interface BuildAppOptions {
   repository?: AppRepository;
@@ -17,6 +18,7 @@ export interface RouteDependencies {
   config: AppConfig;
   writeLimiter: WriteRequestLimiter;
   loginAttemptLimiter: LoginAttemptLimiter;
+  metrics: ApiOperationalMetrics;
 }
 
 export function isAllowedOrigin(origin: string | undefined, allowedOrigins: string[]): boolean {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   quoteArchiveRequestSchema,
   quoteCreateRequestSchema,
@@ -9,6 +10,7 @@ import {
 import { requireAuth } from "../authorization.js";
 import type { RouteDependencies } from "../routeSupport.js";
 import {
+  buildQuoteDocumentContext,
   createQuoteForCompany,
   createQuoteVersionForCompany,
   getQuoteForCompany,
@@ -19,8 +21,14 @@ import {
   setQuoteVersionStatusForCompany,
   updateQuoteVersionForCompany,
 } from "../services/quoteLifecycleService.js";
+import { quotePdfFileName, renderQuotePdf } from "../services/quotePdfService.js";
 
-export function registerQuoteRoutes({ app, config, repository, writeLimiter }: RouteDependencies): void {
+export function registerQuoteRoutes({
+  app,
+  config,
+  repository,
+  writeLimiter,
+}: RouteDependencies): void {
   app.get("/api/v1/projects/:projectId/quotes", async (request, reply) => {
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
@@ -32,9 +40,13 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
   app.post("/api/v1/quotes", async (request, reply) => {
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
-    if (!writeLimiter.allow(`quotes:${request.ip}`)) return reply.code(429).send({ error: "Rate limit exceeded" });
+    if (!writeLimiter.allow(`quotes:${request.ip}`))
+      return reply.code(429).send({ error: "Rate limit exceeded" });
     const parsed = quoteCreateRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid quote payload", details: parsed.error.flatten() });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: "Invalid quote payload", details: parsed.error.flatten() });
     const result = await createQuoteForCompany(repository, auth, {
       estimateVersionId: parsed.data.estimateVersionId,
       name: parsed.data.name,
@@ -55,7 +67,11 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
     const { id } = request.params as { id: string };
     const quote = await getQuoteForCompany(repository, auth.company.id, id);
     if (!quote) return reply.code(404).send({ error: "Quote not found" });
-    const currentVersion = await getQuoteVersionForCompany(repository, auth.company.id, quote.currentVersionId);
+    const currentVersion = await getQuoteVersionForCompany(
+      repository,
+      auth.company.id,
+      quote.currentVersionId,
+    );
     return reply.code(200).send({ quote, currentVersion });
   });
 
@@ -71,7 +87,10 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
     const parsed = quoteVersionCreateRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid quote version payload", details: parsed.error.flatten() });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: "Invalid quote version payload", details: parsed.error.flatten() });
     const { id } = request.params as { id: string };
     const result = await createQuoteVersionForCompany(repository, auth, id, {
       estimateVersionId: parsed.data.estimateVersionId,
@@ -96,17 +115,55 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
       : reply.code(404).send({ error: "Quote version not found" });
   });
 
+  app.get("/api/v1/quote-versions/:id/pdf", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const { id } = request.params as { id: string };
+    const version = await getQuoteVersionForCompany(repository, auth.company.id, id);
+    if (!version) return reply.code(404).send({ error: "Quote version not found" });
+    const quote = await getQuoteForCompany(repository, auth.company.id, version.quoteId);
+    if (!quote) return reply.code(404).send({ error: "Quote not found" });
+    const document =
+      version.presentation.document ??
+      (await buildQuoteDocumentContext(repository, auth, quote.projectId));
+    if (!document)
+      return reply.code(409).send({ error: "Quote customer and project details are incomplete" });
+    const pdf = await renderQuotePdf({ quote, version, document });
+    const etag = `"${createHash("sha256").update(pdf).digest("hex")}"`;
+    if (request.headers["if-none-match"] === etag) return reply.code(304).send();
+    reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="${quotePdfFileName(quote, version)}"`)
+      .header("content-length", String(pdf.length))
+      .header("etag", etag)
+      .header("x-content-type-options", "nosniff")
+      .header(
+        "cache-control",
+        version.status === "DRAFT" ? "private, no-store" : "private, max-age=31536000, immutable",
+      );
+    return reply.code(200).send(pdf);
+  });
+
   app.put("/api/v1/quote-versions/:id", async (request, reply) => {
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
     const parsed = quoteVersionUpdateRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid quote version payload", details: parsed.error.flatten() });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: "Invalid quote version payload", details: parsed.error.flatten() });
     const { id } = request.params as { id: string };
     const result = await updateQuoteVersionForCompany(repository, auth, id, {
-      ...(parsed.data.estimateVersionId ? { estimateVersionId: parsed.data.estimateVersionId } : {}),
+      ...(parsed.data.estimateVersionId
+        ? { estimateVersionId: parsed.data.estimateVersionId }
+        : {}),
       ...(parsed.data.title ? { title: parsed.data.title } : {}),
-      ...(parsed.data.customerMessage !== undefined ? { customerMessage: parsed.data.customerMessage ?? null } : {}),
-      ...(parsed.data.validUntilIso !== undefined ? { validUntilIso: parsed.data.validUntilIso ?? null } : {}),
+      ...(parsed.data.customerMessage !== undefined
+        ? { customerMessage: parsed.data.customerMessage ?? null }
+        : {}),
+      ...(parsed.data.validUntilIso !== undefined
+        ? { validUntilIso: parsed.data.validUntilIso ?? null }
+        : {}),
       ...(parsed.data.displayMode ? { displayMode: parsed.data.displayMode } : {}),
       ...(parsed.data.vatRate !== undefined ? { vatRate: parsed.data.vatRate } : {}),
     });
@@ -119,7 +176,10 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
     const parsed = quoteVersionStatusUpdateRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid quote status payload", details: parsed.error.flatten() });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: "Invalid quote status payload", details: parsed.error.flatten() });
     const { id } = request.params as { id: string };
     const result = await setQuoteVersionStatusForCompany(repository, auth, id, parsed.data.status);
     return result.ok
@@ -131,7 +191,10 @@ export function registerQuoteRoutes({ app, config, repository, writeLimiter }: R
     const auth = await requireAuth(request, reply, repository, config);
     if (!auth) return reply;
     const parsed = quoteArchiveRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid archive payload", details: parsed.error.flatten() });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: "Invalid archive payload", details: parsed.error.flatten() });
     const { id } = request.params as { id: string };
     const result = await setQuoteArchivedForCompany(repository, auth, id, parsed.data.isArchived);
     return result.ok

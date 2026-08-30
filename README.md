@@ -12,7 +12,7 @@ Fence Estimator is a monorepo for a 2D fence layout editor, deterministic estima
 
 ## Current Product Profile
 
-This repo is now shaped for a serious internal deployment:
+This repo now includes the foundations for a serious commercial deployment:
 
 - bootstrap-once owner account creation
 - cookie-backed company sessions
@@ -21,12 +21,15 @@ This repo is now shaped for a serious internal deployment:
 - drawing save/load/archive/restore/version history
 - audit log for auth, user management, and drawing operations
 - unit, integration, and browser E2E coverage on critical workflows
+- PostgreSQL production persistence with controlled migrations
+- immutable quote-version document snapshots and server-generated PDFs
+- liveness, readiness, metrics, structured logs and operating objectives
 
-It is still not positioned as a public self-service SaaS product. Self-service invite and email reset flows are intentionally absent.
+It is not yet a public self-service SaaS product. Tenant provisioning, invitations, email delivery, billing and subscription enforcement are intentionally outside the current release boundary.
 
 ## Local Start
 
-1. Use Node 20+.
+1. Use Node 22.12+.
 2. Install dependencies: `npm ci`
 3. Copy `.env.example` if you want explicit local overrides.
 4. Run the API: `npm run dev:api`
@@ -47,9 +50,11 @@ See `.env.example` for the supported variables.
 
 Important production rules:
 
-- `DATABASE_PATH` must be an absolute path in `NODE_ENV=production`.
+- `DATABASE_PROVIDER=postgresql` and `DATABASE_URL` are required in `NODE_ENV=production`; SQLite is local-development only.
 - `ALLOWED_ORIGINS` must be set explicitly in `NODE_ENV=production`.
-- `SESSION_COOKIE_SECURE=true` is required in `NODE_ENV=production`.
+- `SESSION_COOKIE_SECURE=true` and a `__Host-` cookie name are required in `NODE_ENV=production`.
+- `ENFORCE_WRITE_ORIGIN=true` rejects unsafe browser requests without an approved origin.
+- `METRICS_BEARER_TOKEN` protects `/metrics` when monitoring is not isolated on a private network.
 - `TRUST_PROXY=true` should be set when the API runs behind the supported reverse proxy.
 - `LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_MS`, and `LOGIN_LOCKOUT_MS` control account lockout after failed sign-ins.
 - `AUDIT_LOG_RETENTION_DAYS` controls automatic audit-log retention and stale password-reset cleanup.
@@ -81,10 +86,10 @@ docker compose up --build
 
 Notes:
 
-- the API container persists SQLite data under `/var/lib/fence-estimator`
+- the stack persists PostgreSQL data in its database volume and runs a one-shot migration before API startup
 - the web container is a static build, so `VITE_*` values must be present at build time, not only at runtime
 - the checked-in compose file keeps `SESSION_COOKIE_SECURE=true`, so realistic browser auth smoke tests require HTTPS in front of the stack
-- `docker-compose.yml` is intentionally single-instance and keeps the API and web services on the internal Docker network; only the reverse proxy publishes host ports
+- `docker-compose.yml` keeps the database, API and web services on the internal Docker network; only the reverse proxy publishes host ports
 - the API runtime image now includes the migration, backup, restore, and password-recovery scripts under `apps/api/scripts`
 
 ## Operations
@@ -104,7 +109,7 @@ For internal use, account recovery is intentionally manager-driven:
 
 ## Remaining Gaps
 
-- SQLite remains a single-instance deployment choice; use Postgres before attempting multi-instance or customer-facing scale.
-- There is still no self-service invite or email delivery pipeline.
+- There is still no self-service tenant provisioning, invite/email delivery, billing or subscription pipeline.
+- A multi-replica public deployment still needs a shared edge rate limiter in addition to the per-process safeguards.
 - Browser E2E coverage now exists for the critical internal flows, but it is not exhaustive across every editor interaction.
 - Repo-local SQLite files under `apps/api/data` are for local development only and should never be treated as production storage.

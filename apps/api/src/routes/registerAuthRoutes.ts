@@ -8,10 +8,20 @@ import {
   buildClearedSessionCookieHeader,
   buildSessionCookieHeader,
   createSessionEnvelope,
-  readSessionToken
+  readSessionToken,
 } from "../sessionHttp.js";
 
-export function registerAuthRoutes({ app, config, repository, writeLimiter, loginAttemptLimiter }: RouteDependencies): void {
+const DUMMY_PASSWORD_SALT = "00000000000000000000000000000000";
+const DUMMY_PASSWORD_HASH =
+  "aac0cb5117dc2fe05460d44a44e4c656a943d87fb2015fba6c7238236dc621359e473f9b28d00821e576ae221c7562aed1babaa59c10f752167e91b96821d029";
+
+export function registerAuthRoutes({
+  app,
+  config,
+  repository,
+  writeLimiter,
+  loginAttemptLimiter,
+}: RouteDependencies): void {
   app.post("/api/v1/auth/register", async (_request, reply) =>
     reply.code(403).send({ error: "Self-service registration is disabled" }),
   );
@@ -25,7 +35,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Invalid login payload",
-        details: parsed.error.flatten()
+        details: parsed.error.flatten(),
       });
     }
 
@@ -34,12 +44,17 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
     if (!lockStatus.allowed) {
       return reply.code(429).send({
         error: "Too many failed sign-in attempts",
-        retryAfterSeconds: Math.ceil(lockStatus.retryAfterMs / 1000)
+        retryAfterSeconds: Math.ceil(lockStatus.retryAfterMs / 1000),
       });
     }
 
     const user = await repository.getUserByEmail(parsed.data.email);
-    if (!user || !verifyPassword(parsed.data.password, user.passwordSalt, user.passwordHash)) {
+    const passwordValid = await verifyPassword(
+      parsed.data.password,
+      user?.passwordSalt ?? DUMMY_PASSWORD_SALT,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!user || !passwordValid) {
       loginAttemptLimiter.recordFailure(emailKey);
       return reply.code(401).send({ error: "Invalid credentials" });
     }
@@ -57,7 +72,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
       email: user.email,
       displayName: user.displayName,
       role: user.role,
-      createdAtIso: user.createdAtIso
+      createdAtIso: user.createdAtIso,
     });
     await repository.createSession({
       id: envelope.session.id,
@@ -66,7 +81,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
       tokenHash: envelope.sessionTokenHash,
       createdAtIso: envelope.session.createdAtIso,
       expiresAtIso: envelope.session.expiresAtIso,
-      revokedAtIso: null
+      revokedAtIso: null,
     });
     await writeAuditLog(repository, {
       companyId: company.id,
@@ -76,14 +91,14 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
       action: "LOGIN_SUCCEEDED",
       summary: `${user.displayName} signed in`,
       createdAtIso: envelope.session.createdAtIso,
-      metadata: { email: user.email }
+      metadata: { email: user.email },
     });
 
     reply.header("set-cookie", buildSessionCookieHeader(config, envelope.sessionToken));
     return reply.code(200).send({
       company: envelope.company,
       user: envelope.user,
-      session: envelope.session
+      session: envelope.session,
     });
   });
 
@@ -96,7 +111,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
     return reply.code(200).send({
       session: authenticated.session,
       company: authenticated.company,
-      user: authenticated.user
+      user: authenticated.user,
     });
   });
 
@@ -121,7 +136,7 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
       entityId: authenticated.user.id,
       action: "SESSION_REVOKED",
       summary: `${authenticated.user.displayName} signed out`,
-      createdAtIso: revokedAtIso
+      createdAtIso: revokedAtIso,
     });
 
     reply.header("set-cookie", buildClearedSessionCookieHeader(config));
@@ -130,13 +145,13 @@ export function registerAuthRoutes({ app, config, repository, writeLimiter, logi
 
   app.post("/api/v1/auth/request-password-reset", async (_request, reply) =>
     reply.code(501).send({
-      error: "Password reset is disabled until a secure out-of-band delivery channel is configured"
+      error: "Password reset is disabled until a secure out-of-band delivery channel is configured",
     }),
   );
 
   app.post("/api/v1/auth/reset-password", async (_request, reply) =>
     reply.code(501).send({
-      error: "Password reset is disabled until a secure out-of-band delivery channel is configured"
+      error: "Password reset is disabled until a secure out-of-band delivery channel is configured",
     }),
   );
 }

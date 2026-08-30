@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
+  Download,
   FileCheck2,
   GitBranch,
   Loader2,
@@ -12,6 +13,7 @@ import {
 
 import {
   ApiError,
+  downloadQuoteVersionPdf,
   getCustomer,
   getEstimate,
   getEstimateVersion,
@@ -35,7 +37,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { ESTIMATE_STATUS_TONES, formatDateOnly, QUOTE_STATUS_TONES } from "@/lifecyclePresentation";
@@ -73,13 +81,15 @@ export function QuotePage({ quoteId, versionId = null, onNavigate }: QuotePagePr
   const [estimate, setEstimate] = useState<EstimateRecord | null>(null);
   const [estimateCurrentVersion, setEstimateCurrentVersion] =
     useState<EstimateVersionRecord | null>(null);
-  const [linkedEstimateVersion, setLinkedEstimateVersion] =
-    useState<EstimateVersionRecord | null>(null);
+  const [linkedEstimateVersion, setLinkedEstimateVersion] = useState<EstimateVersionRecord | null>(
+    null,
+  );
   const [project, setProject] = useState<ProjectRecord | null>(null);
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [newVersionOpen, setNewVersionOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const refresh = async () => {
     if (!quoteId) return;
@@ -206,6 +216,25 @@ export function QuotePage({ quoteId, versionId = null, onNavigate }: QuotePagePr
     isCurrent &&
     ["ISSUED", "REJECTED", "EXPIRED"].includes(selectedVersion.status) &&
     estimateCurrentVersion.status === "APPROVED";
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const { blob, fileName } = await downloadQuoteVersionPdf(selectedVersion.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${quote.reference} version ${selectedVersion.versionNumber}`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -236,44 +265,54 @@ export function QuotePage({ quoteId, versionId = null, onNavigate }: QuotePagePr
             {selectedVersion.versionNumber} · {customer.name}
           </p>
         </div>
-        {isCurrent ? (
-          <div className="flex flex-wrap gap-2">
-            {selectedVersion.status === "DRAFT" ? (
-              <>
-                <Button variant="outline" onClick={() => setEditOpen(true)}>
-                  <Pencil className="h-4 w-4" />
-                  Edit quote details
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={downloading} onClick={() => void downloadPdf()}>
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Download PDF
+          </Button>
+          {isCurrent ? (
+            <>
+              {selectedVersion.status === "DRAFT" ? (
+                <>
+                  <Button variant="outline" onClick={() => setEditOpen(true)}>
+                    <Pencil className="h-4 w-4" />
+                    Edit quote details
+                  </Button>
+                  <Button onClick={() => void transition("ISSUED")}>
+                    <FileCheck2 className="h-4 w-4" />
+                    Issue quote
+                  </Button>
+                </>
+              ) : null}
+              {selectedVersion.status === "ISSUED" ? (
+                <>
+                  <Button variant="outline" onClick={() => void transition("EXPIRED")}>
+                    <Clock3 className="h-4 w-4" />
+                    Mark expired
+                  </Button>
+                  <Button variant="outline" onClick={() => void transition("REJECTED")}>
+                    <XCircle className="h-4 w-4" />
+                    Mark rejected
+                  </Button>
+                  <Button onClick={() => void transition("ACCEPTED")}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark accepted
+                  </Button>
+                </>
+              ) : null}
+              {canStartVersion ? (
+                <Button variant="outline" onClick={() => setNewVersionOpen(true)}>
+                  <GitBranch className="h-4 w-4" />
+                  Start new version
                 </Button>
-                <Button onClick={() => void transition("ISSUED")}>
-                  <FileCheck2 className="h-4 w-4" />
-                  Issue quote
-                </Button>
-              </>
-            ) : null}
-            {selectedVersion.status === "ISSUED" ? (
-              <>
-                <Button variant="outline" onClick={() => void transition("EXPIRED")}>
-                  <Clock3 className="h-4 w-4" />
-                  Mark expired
-                </Button>
-                <Button variant="outline" onClick={() => void transition("REJECTED")}>
-                  <XCircle className="h-4 w-4" />
-                  Mark rejected
-                </Button>
-                <Button onClick={() => void transition("ACCEPTED")}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Mark accepted
-                </Button>
-              </>
-            ) : null}
-            {canStartVersion ? (
-              <Button variant="outline" onClick={() => setNewVersionOpen(true)}>
-                <GitBranch className="h-4 w-4" />
-                Start new version
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
@@ -312,13 +351,69 @@ export function QuotePage({ quoteId, versionId = null, onNavigate }: QuotePagePr
           <Card>
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div><CardTitle className="text-lg">Price</CardTitle><CardDescription>{selectedVersion.presentation.displayMode === "DETAILED" ? "Detailed customer breakdown" : selectedVersion.presentation.displayMode === "SUMMARY" ? "Customer section summary" : "Customer total"}</CardDescription></div>
-                <div className="text-right"><div className="text-xs uppercase tracking-wide text-muted-foreground">Total incl. VAT</div><div className="text-2xl font-semibold">{formatMoney(selectedVersion.presentation.grossTotal)}</div></div>
+                <div>
+                  <CardTitle className="text-lg">Price</CardTitle>
+                  <CardDescription>
+                    {selectedVersion.presentation.displayMode === "DETAILED"
+                      ? "Detailed customer breakdown"
+                      : selectedVersion.presentation.displayMode === "SUMMARY"
+                        ? "Customer section summary"
+                        : "Customer total"}
+                  </CardDescription>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Total incl. VAT
+                  </div>
+                  <div className="text-2xl font-semibold">
+                    {formatMoney(selectedVersion.presentation.grossTotal)}
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {selectedVersion.presentation.sections.map((section) => <div key={section.key} className="rounded-lg border"><div className="flex items-center justify-between px-4 py-3 font-medium"><span>{section.title}</span><span>{formatMoney(section.amount)}</span></div>{section.rows.length > 0 ? <div className="divide-y border-t">{section.rows.map((row, index) => <div key={`${row.description}:${index}`} className="grid grid-cols-[1fr_auto] gap-3 px-4 py-2 text-sm"><div>{row.description}<span className="ml-2 text-xs text-muted-foreground">{row.quantity} {row.unit}</span></div><span>{formatMoney(row.amount)}</span></div>)}</div> : null}</div>)}
-              <div className="ml-auto max-w-sm space-y-2 border-t pt-3 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Net total</span><span>{formatMoney(selectedVersion.presentation.netTotal)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">VAT {selectedVersion.presentation.vatRate}%</span><span>{formatMoney(selectedVersion.presentation.vatAmount)}</span></div><div className="flex justify-between text-base font-semibold"><span>Total</span><span>{formatMoney(selectedVersion.presentation.grossTotal)}</span></div></div>
+              {selectedVersion.presentation.sections.map((section) => (
+                <div key={section.key} className="rounded-lg border">
+                  <div className="flex items-center justify-between px-4 py-3 font-medium">
+                    <span>{section.title}</span>
+                    <span>{formatMoney(section.amount)}</span>
+                  </div>
+                  {section.rows.length > 0 ? (
+                    <div className="divide-y border-t">
+                      {section.rows.map((row, index) => (
+                        <div
+                          key={`${row.description}:${index}`}
+                          className="grid grid-cols-[1fr_auto] gap-3 px-4 py-2 text-sm"
+                        >
+                          <div>
+                            {row.description}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {row.quantity} {row.unit}
+                            </span>
+                          </div>
+                          <span>{formatMoney(row.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              <div className="ml-auto max-w-sm space-y-2 border-t pt-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Net total</span>
+                  <span>{formatMoney(selectedVersion.presentation.netTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    VAT {selectedVersion.presentation.vatRate}%
+                  </span>
+                  <span>{formatMoney(selectedVersion.presentation.vatAmount)}</span>
+                </div>
+                <div className="flex justify-between text-base font-semibold">
+                  <span>Total</span>
+                  <span>{formatMoney(selectedVersion.presentation.grossTotal)}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -428,7 +523,9 @@ function QuoteDetailsDialog({
   const [title, setTitle] = useState(version.title);
   const [message, setMessage] = useState(version.customerMessage ?? "");
   const [validUntil, setValidUntil] = useState(version.validUntilIso ?? "");
-  const [displayMode, setDisplayMode] = useState<QuoteDisplayMode>(version.presentation.displayMode);
+  const [displayMode, setDisplayMode] = useState<QuoteDisplayMode>(
+    version.presentation.displayMode,
+  );
   const [vatRate, setVatRate] = useState(String(version.presentation.vatRate));
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -504,7 +601,36 @@ function QuoteDetailsDialog({
               onChange={(event) => setMessage(event.target.value)}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label>Quote detail</Label><Select value={displayMode} onValueChange={(value) => setDisplayMode(value as QuoteDisplayMode)}><SelectTrigger aria-label="Quote detail"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SUMMARY">Section totals</SelectItem><SelectItem value="DETAILED">Detailed line items</SelectItem><SelectItem value="TOTAL_ONLY">Single total only</SelectItem></SelectContent></Select></div><div className="space-y-1.5"><Label>VAT rate %</Label><Input aria-label="VAT rate" type="number" min="0" max="100" step="0.01" value={vatRate} onChange={(event) => setVatRate(event.target.value)} /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Quote detail</Label>
+              <Select
+                value={displayMode}
+                onValueChange={(value) => setDisplayMode(value as QuoteDisplayMode)}
+              >
+                <SelectTrigger aria-label="Quote detail">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SUMMARY">Section totals</SelectItem>
+                  <SelectItem value="DETAILED">Detailed line items</SelectItem>
+                  <SelectItem value="TOTAL_ONLY">Single total only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT rate %</Label>
+              <Input
+                aria-label="VAT rate"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={vatRate}
+                onChange={(event) => setVatRate(event.target.value)}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

@@ -31,19 +31,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/sonner";
-import {
-  ApiError,
-  createUser,
-  listAuditLog,
-  listUsers,
-  resetUserPassword,
-} from "@/apiClient";
+import { ApiError, createUser, listAuditLog, listUsers, resetUserPassword } from "@/apiClient";
 import { useSession } from "@/useSession";
-import type {
-  AuditLogRecord,
-  CompanyUserRecord,
-  UserRole,
-} from "@fence-estimator/contracts";
+import type { AuditLogRecord, CompanyUserRecord, UserRole } from "@fence-estimator/contracts";
 
 export function AdminPage() {
   const { session } = useSession();
@@ -199,15 +189,8 @@ export function AdminPage() {
         </CardContent>
       </Card>
 
-      <CreateUserDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={refreshUsers}
-      />
-      <ResetPasswordDialog
-        target={resetTarget}
-        onClose={() => setResetTarget(null)}
-      />
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={refreshUsers} />
+      <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
     </div>
   );
 }
@@ -280,8 +263,9 @@ function CreateUserDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label htmlFor="new-user-name">Name</Label>
             <Input
+              id="new-user-name"
               required
               autoFocus
               value={displayName}
@@ -289,8 +273,9 @@ function CreateUserDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Email</Label>
+            <Label htmlFor="new-user-email">Email</Label>
             <Input
+              id="new-user-email"
               type="email"
               required
               value={email}
@@ -298,8 +283,9 @@ function CreateUserDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Temporary password</Label>
+            <Label htmlFor="new-user-password">Temporary password</Label>
             <Input
+              id="new-user-password"
               type="text"
               required
               minLength={10}
@@ -309,9 +295,9 @@ function CreateUserDialog({
             <p className="text-xs text-muted-foreground">Minimum 10 characters.</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Role</Label>
+            <Label htmlFor="new-user-role">Role</Label>
             <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
-              <SelectTrigger>
+              <SelectTrigger id="new-user-role" aria-label="Role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -375,8 +361,9 @@ function ResetPasswordDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label>New password</Label>
+            <Label htmlFor="reset-user-password">New password</Label>
             <Input
+              id="reset-user-password"
               type="text"
               required
               minLength={10}

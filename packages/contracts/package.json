@@ -23,6 +23,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8"
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.exclude=**/dist/** --coverage.exclude=**/*.d.ts --coverage.exclude=**/index.ts --coverage.thresholds.lines=70 --coverage.thresholds.functions=70 --coverage.thresholds.statements=70 --coverage.thresholds.branches=60"
   }
 }

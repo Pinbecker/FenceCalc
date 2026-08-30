@@ -16,6 +16,32 @@ export interface AuthenticatedRequestContext {
   user: CompanyUserRecord;
 }
 
+export type Permission =
+  | "WORKSPACE_READ"
+  | "WORKSPACE_WRITE"
+  | "COMMERCIAL_WRITE"
+  | "PRICING_MANAGE"
+  | "COMPANY_MANAGE"
+  | "AUDIT_READ"
+  | "DESTRUCTIVE_WRITE";
+
+const ROLE_PERMISSIONS: Record<CompanyUserRecord["role"], ReadonlySet<Permission>> = {
+  ADMIN: new Set<Permission>([
+    "WORKSPACE_READ",
+    "WORKSPACE_WRITE",
+    "COMMERCIAL_WRITE",
+    "PRICING_MANAGE",
+    "COMPANY_MANAGE",
+    "AUDIT_READ",
+    "DESTRUCTIVE_WRITE",
+  ]),
+  USER: new Set<Permission>(["WORKSPACE_READ", "WORKSPACE_WRITE", "COMMERCIAL_WRITE"]),
+};
+
+export function userHasPermission(user: CompanyUserRecord, permission: Permission): boolean {
+  return ROLE_PERMISSIONS[user.role].has(permission);
+}
+
 export function userIsAdmin(user: CompanyUserRecord): boolean {
   return user.role === "ADMIN";
 }
@@ -70,12 +96,22 @@ export async function requireAdmin(
   repository: AppRepository,
   config: AppConfig,
 ): Promise<AuthenticatedRequestContext | null> {
+  return requirePermission(request, reply, repository, config, "COMPANY_MANAGE");
+}
+
+export async function requirePermission(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  repository: AppRepository,
+  config: AppConfig,
+  permission: Permission,
+): Promise<AuthenticatedRequestContext | null> {
   const authenticated = await requireAuth(request, reply, repository, config);
   if (!authenticated) {
     return null;
   }
-  if (!userIsAdmin(authenticated.user)) {
-    await reply.code(403).send({ error: "This action requires admin access" });
+  if (!userHasPermission(authenticated.user, permission)) {
+    await reply.code(403).send({ error: "You do not have permission to perform this action" });
     return null;
   }
   return authenticated;

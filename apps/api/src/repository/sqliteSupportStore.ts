@@ -3,18 +3,29 @@ import type { AuditLogRecord } from "@fence-estimator/contracts";
 
 import type { AuditLogRow, CompanyRow, PasswordResetTokenRow, UserRow } from "./shared.js";
 import { toAuditLog, toCompany, toPublicUser } from "./shared.js";
-import type { CreateAuditLogInput, CreatePasswordResetTokenInput, PasswordResetConsumption } from "./types.js";
+import type {
+  CreateAuditLogInput,
+  CreatePasswordResetTokenInput,
+  PasswordResetConsumption,
+} from "./types.js";
 
 export class SqliteSupportStore {
   public constructor(private readonly database: Database.Database) {}
 
   public pruneStaleRecords(nowIso: string, auditLogRetentionDays: number): void {
     const nowMs = new Date(nowIso).getTime();
-    const retentionCutoffIso = new Date(nowMs - auditLogRetentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const retentionCutoffIso = new Date(
+      nowMs - auditLogRetentionDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     this.database.prepare("DELETE FROM audit_log WHERE created_at_iso < ?").run(retentionCutoffIso);
     this.database
-      .prepare("DELETE FROM password_reset_tokens WHERE consumed_at_iso IS NOT NULL OR expires_at_iso <= ?")
+      .prepare(
+        "DELETE FROM password_reset_tokens WHERE consumed_at_iso IS NOT NULL OR expires_at_iso <= ?",
+      )
+      .run(nowIso);
+    this.database
+      .prepare("DELETE FROM sessions WHERE revoked_at_iso IS NOT NULL OR expires_at_iso <= ?")
       .run(nowIso);
   }
 
@@ -42,24 +53,32 @@ export class SqliteSupportStore {
       return null;
     }
 
-    const user = this.database.prepare("SELECT * FROM users WHERE id = ?").get(token.user_id) as UserRow | undefined;
+    const user = this.database.prepare("SELECT * FROM users WHERE id = ?").get(token.user_id) as
+      | UserRow
+      | undefined;
     if (!user) {
       return null;
     }
-    const company = this.database.prepare("SELECT * FROM companies WHERE id = ?").get(user.company_id) as CompanyRow | undefined;
+    const company = this.database
+      .prepare("SELECT * FROM companies WHERE id = ?")
+      .get(user.company_id) as CompanyRow | undefined;
     if (!company) {
       return null;
     }
 
     const consume = this.database.transaction(() => {
-      this.database.prepare("UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?").run(passwordHash, passwordSalt, token.user_id);
-      this.database.prepare("UPDATE password_reset_tokens SET consumed_at_iso = ? WHERE token_hash = ?").run(consumedAtIso, tokenHash);
+      this.database
+        .prepare("UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?")
+        .run(passwordHash, passwordSalt, token.user_id);
+      this.database
+        .prepare("UPDATE password_reset_tokens SET consumed_at_iso = ? WHERE token_hash = ?")
+        .run(consumedAtIso, tokenHash);
     });
     consume();
 
     return {
       user: toPublicUser(user),
-      company: toCompany(company)
+      company: toCompany(company),
     };
   }
 
@@ -97,7 +116,7 @@ export class SqliteSupportStore {
           toCreatedAtIso?: string | null;
           entityType?: AuditLogRow["entity_type"] | null;
           search?: string | null;
-        } = {}
+        } = {},
   ): AuditLogRecord[] {
     const normalizedOptions = typeof options === "number" ? { limit: options } : options;
     const limit = normalizedOptions.limit ?? 100;
@@ -126,13 +145,17 @@ export class SqliteSupportStore {
       values.push(entityType);
     }
     if (search) {
-      whereClauses.push("(lower(summary) LIKE ? OR lower(action) LIKE ? OR lower(entity_type) LIKE ?)");
+      whereClauses.push(
+        "(lower(summary) LIKE ? OR lower(action) LIKE ? OR lower(entity_type) LIKE ?)",
+      );
       values.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     values.push(limit);
     const rows = this.database
-      .prepare(`SELECT * FROM audit_log WHERE ${whereClauses.join(" AND ")} ORDER BY created_at_iso DESC LIMIT ?`)
+      .prepare(
+        `SELECT * FROM audit_log WHERE ${whereClauses.join(" AND ")} ORDER BY created_at_iso DESC LIMIT ?`,
+      )
       .all(...values) as AuditLogRow[];
     return rows.map((row) => toAuditLog(row));
   }

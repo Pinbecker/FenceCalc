@@ -1,100 +1,92 @@
 # Operations
 
-## Health and Logs
+## Service checks
 
-- Readiness endpoint: `GET /health`
-- Fastify structured request logging is enabled; control verbosity with `LOG_LEVEL`
-- In production, keep logs centralized outside the app process
+- `GET /livez` proves that the API process can answer HTTP. It does not touch the database.
+- `GET /readyz` proves that the API can reach the database and read its migration version. Load balancers and container health checks must use this endpoint.
+- `GET /health` is a compatibility alias for readiness.
+- `GET /metrics` emits Prometheus metrics. Set `METRICS_BEARER_TOKEN` in any environment where this endpoint is reachable outside a private monitoring network.
 
-## SQLite Storage Posture
+Every API response includes `x-request-id`. Structured logs include the same request ID, route, status and elapsed time. Error reporting can be enabled with the Sentry environment variables in `.env.example`; personally identifiable request bodies are not sent.
 
-For internal production use:
+## Service objectives
 
-- store the SQLite database on a persistent disk outside the repo working tree
-- keep the app single-instance
-- do not place the live database on ephemeral container storage
-- stop treating `apps/api/data` as a production location; that is a local-dev convenience only
-- do not commit live SQLite `.db`, `-wal`, or `-shm` files into the repo
+The initial commercial operating target is:
 
-## Database Migrations
+- monthly API availability: 99.9%, measured by successful `/readyz` probes
+- interactive API latency: p95 below 500 ms and p99 below 1.5 s, excluding document generation
+- quote PDF latency: p95 below 3 s
+- server error rate: below 1% over any rolling 15-minute window
+- recovery point objective (RPO): 15 minutes
+- recovery time objective (RTO): 2 hours
 
-Migrations are a deliberate release step, not an automatic startup side effect. Run them explicitly before starting a new API version:
+The 99.9% target permits about 43 minutes of unavailability in a 30-day month. Pause non-essential releases when half of that monthly error budget has been consumed; stop feature releases and work the reliability issue when the budget is exhausted.
 
-```powershell
-npm run migrate --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db
-```
+Recommended alerts:
 
-The script reports which migrations were applied. Always take a backup before migrating production.
+- readiness fails for 3 consecutive minutes
+- 5xx rate exceeds 2% for 10 minutes
+- p95 interactive request latency exceeds 1 second for 15 minutes
+- PostgreSQL connection use exceeds 80% of the configured pool for 15 minutes
+- latest verified backup is older than 24 hours
+- disk capacity is below 20% or forecast to exhaust within 7 days
+- Sentry reports a new unhandled production exception
 
-If you are using the checked-in API container image, the same script is available inside the
-container runtime:
+## PostgreSQL migrations
 
-```powershell
-docker compose run --rm api npm run migrate --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db
-```
-
-## Concurrency and Conflict Handling
-
-Drawing mutations (update, archive, restore, status change) enforce optimistic concurrency at the database level. Every mutation requires the caller to supply the expected version number. If another request has modified the drawing since the caller last read it, the API returns `409 Conflict`. Clients should refresh and retry.
-
-## Backup
-
-Create a consistent SQLite snapshot:
+Production uses PostgreSQL. Migrations are a release step and execute under a database advisory lock. Build the API before running a local migration command:
 
 ```powershell
-npm run backup:sqlite --workspace @fence-estimator/api -- --database C:\srv\fence-estimator\fence-estimator.db --output-dir C:\srv\fence-estimator\backups
+$env:DATABASE_URL = "postgresql://fence_estimator:replace-me@database.example.com:5432/fence_estimator"
+npm run build --workspace @fence-estimator/api
+npm run migrate:postgres --workspace @fence-estimator/api
 ```
 
-The script writes:
+The checked-in Compose stack runs its one-shot `migrate` service after PostgreSQL is healthy and before the API starts. `SKIP_AUTO_MIGRATION=true` keeps normal API replicas from changing schema during startup.
 
-- a `.db` backup file
-- a sibling `.json` manifest with timestamp and file size
+Release rules:
 
-Minimum operating policy:
+1. Take and verify a backup before a schema change.
+2. Exercise the migration against a recent restored copy.
+3. Apply the migration once, then start the new API version.
+4. Confirm `/readyz` reports the expected provider and schema version.
+5. Prefer expand-and-contract changes when old and new API versions may overlap.
 
-- run scheduled backups
-- retain multiple restore points
-- verify that backup output is copied to durable storage
-- alert on backup failure
+## PostgreSQL backup and recovery
 
-Containerized deployment note:
+Use managed PostgreSQL automated backups with point-in-time recovery in hosted environments. Retain at least 30 daily restore points and keep a copy in a separate failure domain.
+
+Example logical backup:
 
 ```powershell
-docker compose run --rm api npm run backup:sqlite --workspace @fence-estimator/api -- --database /var/lib/fence-estimator/fence-estimator.db --output-dir /var/lib/fence-estimator/backups
+$env:PGPASSWORD = "replace-me"
+pg_dump --host database.example.com --username fence_estimator --format custom --file C:\Backups\fence-estimator.dump fence_estimator
 ```
 
-## Restore
-
-Restore a backup into the live database path:
+Example restore into a new, empty validation database:
 
 ```powershell
-npm run restore:sqlite --workspace @fence-estimator/api -- --backup C:\srv\fence-estimator\backups\fence-estimator-2026-03-11T10-00-00-000Z.db --database C:\srv\fence-estimator\fence-estimator.db
+$env:PGPASSWORD = "replace-me"
+createdb --host database.example.com --username fence_estimator fence_estimator_restore_test
+pg_restore --host database.example.com --username fence_estimator --dbname fence_estimator_restore_test --clean --if-exists C:\Backups\fence-estimator.dump
 ```
 
-Behavior:
+Never test a restore over the live database. At least quarterly:
 
-- creates a `pre-restore` snapshot of the current target database when one exists
-- restores the selected backup into the configured database path
-- removes stale `-wal` and `-shm` sidecars after restore
+1. Restore the latest production backup into an isolated database.
+2. Start the current API against it.
+3. verify `/readyz`, login, a recent customer, a drawing revision, an approved estimate, an issued quote PDF and the audit trail.
+4. Record actual RPO and RTO and address any miss.
 
-Restore rules:
+## Local SQLite recovery
 
-- stop the API process before restore
-- confirm the restored database boots successfully
-- verify recent drawings and users after the restore
-- document every restore event
+SQLite remains supported for local development only. The existing `backup:sqlite` and `restore:sqlite` scripts can protect a developer database, but SQLite is not an accepted production provider. Local database files and their `-wal` or `-shm` sidecars must not be committed.
 
-Containerized restore example:
+## Incident sequence
 
-```powershell
-docker compose run --rm api npm run restore:sqlite --workspace @fence-estimator/api -- --backup /var/lib/fence-estimator/backups/fence-estimator-2026-03-11T10-00-00-000Z.db --database /var/lib/fence-estimator/fence-estimator.db
-```
-
-## Restore Drill
-
-Before calling the system production-ready, perform at least one documented drill:
-
-1. Take a backup from a non-trivial database.
-2. Restore it into a fresh database path.
-3. Start the API against that restored database.
-4. Verify login, drawing load, version history, and audit log access.
+1. Confirm `/livez` and `/readyz` separately to distinguish process failure from dependency failure.
+2. Correlate the failing request ID through proxy, API and Sentry logs.
+3. Check request error/latency metrics and PostgreSQL saturation before restarting anything.
+4. Preserve logs and database evidence, then apply the smallest recovery action.
+5. If data integrity is in doubt, stop writes, take a forensic backup and restore into an isolated environment for validation.
+6. Record impact, timeline, cause, recovery and follow-up actions in a blameless incident review.

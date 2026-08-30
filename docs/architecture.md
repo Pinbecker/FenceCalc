@@ -20,7 +20,8 @@ Fence Estimator is a monorepo with a browser editor, a Fastify API, and shared d
 
 ## Persistence Model
 
-- SQLite stores companies, users, sessions, drawings, drawing versions, password-reset artifacts, and audit log entries.
+- PostgreSQL is the production system of record for companies, users, sessions, customers, sites, projects, drawings, commercial revisions, configuration and audit history.
+- SQLite implements the same repository contract for local development and focused tests.
 - Drawings persist normalized layout JSON plus deterministic estimate JSON.
 - Drawings carry `schemaVersion`, `rulesVersion`, and `versionNumber`.
 - Archive and restore flows are company-scoped and version-aware.
@@ -34,16 +35,17 @@ Fence Estimator is a monorepo with a browser editor, a Fastify API, and shared d
 
 ## Current Production Envelope
 
-This codebase is now appropriate for a single-instance internal deployment with:
+The platform foundation supports a commercial deployment with:
 
-- one API process
+- stateless API replicas sized against the PostgreSQL connection budget
 - one web build
-- one persistent SQLite database
-- scheduled backups and tested restore procedure
+- one durable PostgreSQL service with point-in-time recovery
+- migration, readiness, metrics, SLO and tested restore procedures
 - proxy-aware client IP forwarding when deployed behind a reverse proxy
 
 ## Remaining Architectural Limits
 
-- SQLite keeps the deployment single-instance
+- public self-service tenant provisioning, billing and subscription enforcement are not implemented
+- multi-replica public deployment still needs a shared edge rate limiter
 - the editor route is still a large orchestration surface even though the logic underneath is now better tested
 - there is no external identity provider or self-service invite flow
