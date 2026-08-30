@@ -1,25 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Archive,
   ArchiveRestore,
-  Briefcase,
-  FolderPlus,
+  BriefcaseBusiness,
   Loader2,
+  MapPin,
   Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
 
+import {
+  ApiError,
+  createProject,
+  createSite,
+  deleteCustomer,
+  getCustomer,
+  listProjects,
+  listSites,
+  setCustomerArchived,
+  setProjectArchived,
+  setSiteArchived,
+  updateCustomer,
+  updateSite,
+  type ScopeFilter,
+} from "@/apiClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -38,24 +47,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
-import {
-  ApiError,
-  createProject,
-  deleteCustomer,
-  getCustomer,
-  listProjects,
-  setCustomerArchived,
-  setProjectArchived,
-  type ScopeFilter,
-} from "@/apiClient";
-import { useSession } from "@/useSession";
+import { Textarea } from "@/components/ui/textarea";
+import { formatSiteAddress, PROJECT_STATUS_TONES } from "@/lifecyclePresentation";
 import type { AppRoute } from "@/useHashRoute";
-import type {
-  CustomerRecord,
-  ProjectStatus,
-  ProjectSummary,
+import { useSession } from "@/useSession";
+import {
+  PROJECT_STATUS_LABELS,
+  type CustomerRecord,
+  type ProjectSummary,
+  type SiteRecord,
+  type SiteSummary,
 } from "@fence-estimator/contracts";
 
 interface CustomerPageProps {
@@ -63,33 +65,34 @@ interface CustomerPageProps {
   onNavigate: (route: AppRoute, query?: Record<string, string>) => void;
 }
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  DRAFT: "Draft",
-  QUOTED: "Quoted",
-  WON: "Won",
-  LOST: "Lost",
-  ON_HOLD: "On hold",
-};
-
-const STATUS_VARIANTS: Record<
-  ProjectStatus,
-  "default" | "secondary" | "muted" | "success" | "warning" | "destructive" | "outline"
-> = {
-  DRAFT: "muted",
-  QUOTED: "secondary",
-  WON: "success",
-  LOST: "destructive",
-  ON_HOLD: "warning",
-};
+function errorMessage(error: unknown): string {
+  return error instanceof ApiError ? error.payload.error : "Something went wrong";
+}
 
 export function CustomerPage({ customerId, onNavigate }: CustomerPageProps) {
   const { session } = useSession();
-  const isAdmin = session?.user.role === "ADMIN";
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
+  const [sites, setSites] = useState<SiteSummary[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [projectScope, setProjectScope] = useState<ScopeFilter>("ACTIVE");
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [editingSite, setEditingSite] = useState<SiteRecord | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+
+  const refresh = async () => {
+    if (!customerId) return;
+    const [{ customer: nextCustomer }, { sites: nextSites }, { projects: nextProjects }] =
+      await Promise.all([
+        getCustomer(customerId),
+        listSites({ customerId, scope: "ALL" }),
+        listProjects({ customerId, scope: projectScope }),
+      ]);
+    setCustomer(nextCustomer);
+    setSites(nextSites);
+    setProjects(nextProjects);
+  };
 
   useEffect(() => {
     if (!customerId) {
@@ -97,94 +100,229 @@ export function CustomerPage({ customerId, onNavigate }: CustomerPageProps) {
       return;
     }
     let cancelled = false;
+    setLoading(true);
     void (async () => {
-      setIsLoading(true);
       try {
-        const [{ customer: c }, { projects: p }] = await Promise.all([
-          getCustomer(customerId),
-          listProjects({ customerId, scope: projectScope }),
-        ]);
-        if (cancelled) return;
-        setCustomer(c);
-        setProjects(p);
+        const [{ customer: nextCustomer }, { sites: nextSites }, { projects: nextProjects }] =
+          await Promise.all([
+            getCustomer(customerId),
+            listSites({ customerId, scope: "ALL" }),
+            listProjects({ customerId, scope: projectScope }),
+          ]);
+        if (!cancelled) {
+          setCustomer(nextCustomer);
+          setSites(nextSites);
+          setProjects(nextProjects);
+        }
       } catch (error) {
         if (!cancelled) {
-          toast.error(error instanceof ApiError ? error.payload.error : "Failed to load");
+          toast.error(errorMessage(error));
           onNavigate("customers");
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [customerId, projectScope, onNavigate]);
+  }, [customerId, onNavigate, projectScope]);
 
-  const refresh = async () => {
-    if (!customerId) return;
-    const { projects: p } = await listProjects({ customerId, scope: projectScope });
-    setProjects(p);
-    const { customer: c } = await getCustomer(customerId);
-    setCustomer(c);
-  };
-
-  if (isLoading || !customer) {
+  if (loading || !customer) {
     return (
       <div className="flex h-64 items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading customer...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Loading customer...
       </div>
     );
   }
 
+  const activeSites = sites.filter((site) => !site.isArchived);
+
   return (
     <div className="space-y-6">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onNavigate("customers")}
-          className="-ml-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to customers
-        </Button>
-      </div>
+      <Button variant="ghost" size="sm" onClick={() => onNavigate("customers")} className="-ml-2">
+        <ArrowLeft className="h-4 w-4" />
+        Back to customers
+      </Button>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">
-              {customer.name}
-            </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-2xl font-semibold tracking-tight">{customer.name}</h1>
             {customer.isArchived ? <Badge variant="muted">Archived</Badge> : null}
           </div>
-          {customer.siteAddress ? (
-            <p className="text-sm text-muted-foreground">{customer.siteAddress}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Customer account · {activeSites.length} active site{activeSites.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCustomerDialogOpen(true)}>
+            <Pencil className="h-4 w-4" />
+            Edit customer
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                await setCustomerArchived(customer.id, !customer.isArchived);
+                toast.success(customer.isArchived ? "Customer restored" : "Customer archived");
+                await refresh();
+              } catch (error) {
+                toast.error(errorMessage(error));
+              }
+            }}
+          >
+            {customer.isArchived ? (
+              <ArchiveRestore className="h-4 w-4" />
+            ) : (
+              <Archive className="h-4 w-4" />
+            )}
+            {customer.isArchived ? "Restore" : "Archive"}
+          </Button>
+          {session?.user.role === "ADMIN" && customer.isArchived ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!window.confirm(`Permanently delete ${customer.name} and all of its records?`))
+                  return;
+                try {
+                  await deleteCustomer(customer.id);
+                  onNavigate("customers");
+                } catch (error) {
+                  toast.error(errorMessage(error));
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
           ) : null}
         </div>
-        <CustomerActions
-          customer={customer}
-          isAdmin={isAdmin}
-          onUpdated={refresh}
-          onDeleted={() => onNavigate("customers")}
-        />
       </div>
 
-      <CustomerInfoCard customer={customer} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Account contact</CardTitle>
+          <CardDescription>Who enquiries, estimates and quotes are addressed to.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Info label="Contact" value={customer.contactName} />
+          <Info label="Email" value={customer.contactEmail} />
+          <Info label="Phone" value={customer.contactPhone} />
+          <Info label="Notes" value={customer.notes} />
+        </CardContent>
+      </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-lg">Sites</CardTitle>
+            <CardDescription>
+              Locations are separate from the customer so repeat work stays organised.
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => {
+              setEditingSite(null);
+              setSiteDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add site
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {sites.length === 0 ? (
+            <EmptyState
+              icon={<MapPin className="h-5 w-5" />}
+              title="No sites yet"
+              description="Add the first location before creating a project."
+              action={
+                <Button onClick={() => setSiteDialogOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  Add site
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {sites.map((site) => (
+                <div key={site.id} className="rounded-lg border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{site.name}</span>
+                        {site.isArchived ? <Badge variant="muted">Archived</Badge> : null}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatSiteAddress(site) || "Address not yet entered"}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {site.activeProjectCount} active project
+                        {site.activeProjectCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => {
+                          setEditingSite(site);
+                          setSiteDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">Edit site</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={async () => {
+                          try {
+                            await setSiteArchived(site.id, !site.isArchived);
+                            await refresh();
+                          } catch (error) {
+                            toast.error(errorMessage(error));
+                          }
+                        }}
+                      >
+                        {site.isArchived ? (
+                          <ArchiveRestore className="h-4 w-4" />
+                        ) : (
+                          <Archive className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {site.isArchived ? "Restore" : "Archive"} site
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="text-lg">Projects</CardTitle>
-            <CardDescription>Quote stages and drawings live inside projects.</CardDescription>
+            <CardDescription>
+              The commercial umbrella for designs, estimates and quotes at a site.
+            </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Select
               value={projectScope}
               onValueChange={(value) => setProjectScope(value as ScopeFilter)}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger aria-label="Project view" className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -193,7 +331,10 @@ export function CustomerPage({ customerId, onNavigate }: CustomerPageProps) {
                 <SelectItem value="ALL">All</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => setCreateProjectOpen(true)}>
+            <Button
+              disabled={activeSites.length === 0 || customer.isArchived}
+              onClick={() => setProjectDialogOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               New project
             </Button>
@@ -202,250 +343,202 @@ export function CustomerPage({ customerId, onNavigate }: CustomerPageProps) {
         <CardContent>
           {projects.length === 0 ? (
             <EmptyState
-              icon={<Briefcase className="h-5 w-5" />}
-              title="No projects yet"
-              description="Each project bundles together the drawings and revisions for a quote."
-              action={
-                <Button onClick={() => setCreateProjectOpen(true)}>
-                  <FolderPlus className="h-4 w-4" />
-                  Start a project
-                </Button>
+              icon={<BriefcaseBusiness className="h-5 w-5" />}
+              title="No projects in this view"
+              description={
+                activeSites.length === 0
+                  ? "Add a site first, then create the project that will hold the work."
+                  : "Create a project for the enquiry, survey and quotation lifecycle."
               }
             />
           ) : (
             <div className="space-y-2">
               {projects.map((project) => (
-                <ProjectRow
+                <div
                   key={project.id}
-                  project={project}
-                  onOpen={() => onNavigate("project", { projectId: project.id })}
-                  onAfterArchive={refresh}
-                />
+                  className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border px-4 py-3 transition hover:border-primary/40 hover:bg-accent/30"
+                  onClick={() => onNavigate("project", { projectId: project.id })}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{project.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {project.reference}
+                      </span>
+                      <Badge variant={PROJECT_STATUS_TONES[project.status]}>
+                        {PROJECT_STATUS_LABELS[project.status]}
+                      </Badge>
+                      {project.isArchived ? <Badge variant="muted">Archived</Badge> : null}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {project.siteName ?? "Site not assigned"} · {project.designCount} design
+                      {project.designCount === 1 ? "" : "s"} · {project.estimateCount} estimate
+                      {project.estimateCount === 1 ? "" : "s"} · {project.quoteCount} quote
+                      {project.quoteCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={async (event) => {
+                      event.stopPropagation();
+                      try {
+                        await setProjectArchived(project.id, !project.isArchived);
+                        await refresh();
+                      } catch (error) {
+                        toast.error(errorMessage(error));
+                      }
+                    }}
+                  >
+                    {project.isArchived ? (
+                      <ArchiveRestore className="h-4 w-4" />
+                    ) : (
+                      <Archive className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      <CreateProjectDialog
-        customerId={customer.id}
-        open={createProjectOpen}
-        onOpenChange={setCreateProjectOpen}
-        onCreated={(projectId) => {
-          setCreateProjectOpen(false);
-          onNavigate("project", { projectId });
-        }}
-      />
-    </div>
-  );
-}
-
-function CustomerInfoCard({ customer }: { customer: CustomerRecord }) {
-  const rows: Array<[string, string | null]> = [
-    ["Contact", customer.contactName],
-    ["Email", customer.contactEmail],
-    ["Phone", customer.contactPhone],
-    ["Notes", customer.notes],
-  ];
-  const hasContent = rows.some(([, value]) => Boolean(value));
-  if (!hasContent) return null;
-  return (
-    <Card>
-      <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
-        {rows.map(([label, value]) =>
-          value ? (
-            <div key={label} className="text-sm">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                {label}
-              </div>
-              <div className="mt-0.5 break-words">{value}</div>
-            </div>
-          ) : null,
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomerActions({
-  customer,
-  isAdmin,
-  onUpdated,
-  onDeleted,
-}: {
-  customer: CustomerRecord;
-  isAdmin: boolean;
-  onUpdated: () => void | Promise<void>;
-  onDeleted: () => void;
-}) {
-  const [editOpen, setEditOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const toggleArchived = async () => {
-    setBusy(true);
-    try {
-      await setCustomerArchived(customer.id, !customer.isArchived);
-      toast.success(customer.isArchived ? "Customer restored" : "Customer archived");
-      await onUpdated();
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.payload.error : "Failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    if (!window.confirm(`Permanently delete ${customer.name}? This cannot be undone.`)) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await deleteCustomer(customer.id);
-      toast.success("Customer deleted");
-      onDeleted();
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.payload.error : "Failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={busy}>
-        <Pencil className="h-4 w-4" />
-        Edit
-      </Button>
-      <Button variant="outline" size="sm" onClick={toggleArchived} disabled={busy}>
-        {customer.isArchived ? (
-          <ArchiveRestore className="h-4 w-4" />
-        ) : (
-          <Archive className="h-4 w-4" />
-        )}
-        {customer.isArchived ? "Restore" : "Archive"}
-      </Button>
-      {isAdmin && customer.isArchived ? (
-        <Button variant="outline" size="sm" onClick={remove} disabled={busy}>
-          <Trash2 className="h-4 w-4" />
-          Delete
-        </Button>
-      ) : null}
-      <EditCustomerDialog
+      <CustomerDialog
         customer={customer}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onUpdated={onUpdated}
+        open={customerDialogOpen}
+        onOpenChange={setCustomerDialogOpen}
+        onSaved={refresh}
+      />
+      <SiteDialog
+        customerId={customer.id}
+        site={editingSite}
+        open={siteDialogOpen}
+        onOpenChange={setSiteDialogOpen}
+        onSaved={refresh}
+      />
+      <ProjectDialog
+        customerId={customer.id}
+        sites={activeSites}
+        open={projectDialogOpen}
+        onOpenChange={setProjectDialogOpen}
+        onCreated={(projectId) => onNavigate("project", { projectId })}
       />
     </div>
   );
 }
 
-function EditCustomerDialog({
+function Info({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 whitespace-pre-wrap text-sm">{value || "Not entered"}</div>
+    </div>
+  );
+}
+
+function CustomerDialog({
   customer,
   open,
   onOpenChange,
-  onUpdated,
+  onSaved,
 }: {
   customer: CustomerRecord;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpdated: () => void | Promise<void>;
+  onSaved: () => Promise<void>;
 }) {
   const [name, setName] = useState(customer.name);
   const [contactName, setContactName] = useState(customer.contactName ?? "");
-  const [contactEmail, setContactEmail] = useState(customer.contactEmail ?? "");
-  const [contactPhone, setContactPhone] = useState(customer.contactPhone ?? "");
-  const [siteAddress, setSiteAddress] = useState(customer.siteAddress ?? "");
+  const [email, setEmail] = useState(customer.contactEmail ?? "");
+  const [phone, setPhone] = useState(customer.contactPhone ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");
-  const [submitting, setSubmitting] = useState(false);
-
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setName(customer.name);
       setContactName(customer.contactName ?? "");
-      setContactEmail(customer.contactEmail ?? "");
-      setContactPhone(customer.contactPhone ?? "");
-      setSiteAddress(customer.siteAddress ?? "");
+      setEmail(customer.contactEmail ?? "");
+      setPhone(customer.contactPhone ?? "");
       setNotes(customer.notes ?? "");
     }
   }, [customer, open]);
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setSubmitting(true);
-    try {
-      const { updateCustomer } = await import("@/apiClient");
-      await updateCustomer(customer.id, {
-        name: name.trim(),
-        contactName: contactName.trim() || null,
-        contactEmail: contactEmail.trim() || null,
-        contactPhone: contactPhone.trim() || null,
-        siteAddress: siteAddress.trim() || null,
-        notes: notes.trim() || null,
-      });
-      toast.success("Customer updated");
-      await onUpdated();
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.payload.error : "Failed");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit customer</DialogTitle>
+          <DialogDescription>
+            Account and primary contact details. Site addresses are managed separately.
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Name</Label>
-            <Input required value={name} onChange={(event) => setName(event.target.value)} />
-          </div>
+        <form
+          className="space-y-3"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            try {
+              await updateCustomer(customer.id, {
+                name: name.trim(),
+                contactName: contactName.trim() || null,
+                contactEmail: email.trim() || null,
+                contactPhone: phone.trim() || null,
+                notes: notes.trim() || null,
+              });
+              await onSaved();
+              onOpenChange(false);
+              toast.success("Customer updated");
+            } catch (error) {
+              toast.error(errorMessage(error));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Field label="Customer or organisation name">
+            <Input
+              aria-label="Customer or organisation name"
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Contact</Label>
+            <Field label="Contact name">
               <Input
+                aria-label="Contact name"
                 value={contactName}
                 onChange={(event) => setContactName(event.target.value)}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input
-                value={contactPhone}
-                onChange={(event) => setContactPhone(event.target.value)}
-              />
-            </div>
+            </Field>
+            <Field label="Phone">
+              <Input aria-label="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <Label>Email</Label>
+          <Field label="Email">
             <Input
+              aria-label="Email"
               type="email"
-              value={contactEmail}
-              onChange={(event) => setContactEmail(event.target.value)}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Site address</Label>
-            <Input
-              value={siteAddress}
-              onChange={(event) => setSiteAddress(event.target.value)}
+          </Field>
+          <Field label="Account notes">
+            <Textarea
+              aria-label="Account notes"
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
-          </div>
+          </Field>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save changes
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save customer
             </Button>
           </DialogFooter>
         </form>
@@ -454,176 +547,273 @@ function EditCustomerDialog({
   );
 }
 
-function ProjectRow({
-  project,
-  onOpen,
-  onAfterArchive,
+function SiteDialog({
+  customerId,
+  site,
+  open,
+  onOpenChange,
+  onSaved,
 }: {
-  project: ProjectSummary;
-  onOpen: () => void;
-  onAfterArchive: () => void | Promise<void>;
+  customerId: string;
+  site: SiteRecord | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => Promise<void>;
 }) {
+  const [name, setName] = useState("");
+  const [line1, setLine1] = useState("");
+  const [line2, setLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [county, setCounty] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
-  const lastActivity = useMemo(() => {
-    if (!project.lastActivityAtIso) return null;
-    try {
-      return new Date(project.lastActivityAtIso).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return null;
+  useEffect(() => {
+    if (open) {
+      setName(site?.name ?? "");
+      setLine1(site?.addressLine1 ?? "");
+      setLine2(site?.addressLine2 ?? "");
+      setCity(site?.city ?? "");
+      setCounty(site?.county ?? "");
+      setPostcode(site?.postcode ?? "");
+      setNotes(site?.notes ?? "");
     }
-  }, [project.lastActivityAtIso]);
-
+  }, [open, site]);
+  const body = {
+    name: name.trim(),
+    addressLine1: line1.trim() || null,
+    addressLine2: line2.trim() || null,
+    city: city.trim() || null,
+    county: county.trim() || null,
+    postcode: postcode.trim() || null,
+    countryCode: "GB",
+    notes: notes.trim() || null,
+  };
   return (
-    <div
-      onClick={onOpen}
-      className="group flex cursor-pointer items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 transition hover:border-primary/40 hover:bg-accent/30"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium">{project.name}</span>
-          <Badge variant={STATUS_VARIANTS[project.status]}>
-            {STATUS_LABELS[project.status]}
-          </Badge>
-          {project.isArchived ? <Badge variant="muted">Archived</Badge> : null}
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {project.drawingCount} drawing{project.drawingCount === 1 ? "" : "s"}
-          {lastActivity ? ` · updated ${lastActivity}` : ""}
-        </div>
-      </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        onClick={async (event) => {
-          event.stopPropagation();
-          setBusy(true);
-          try {
-            await setProjectArchived(project.id, !project.isArchived);
-            await onAfterArchive();
-          } catch (error) {
-            toast.error(error instanceof ApiError ? error.payload.error : "Failed");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {project.isArchived ? (
-          <ArchiveRestore className="h-4 w-4" />
-        ) : (
-          <Archive className="h-4 w-4" />
-        )}
-        <span className="sr-only">
-          {project.isArchived ? "Restore" : "Archive"}
-        </span>
-      </Button>
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{site ? "Edit site" : "Add site"}</DialogTitle>
+          <DialogDescription>
+            A customer can have any number of distinct work locations.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            try {
+              if (site) await updateSite(site.id, body);
+              else await createSite({ customerId, ...body });
+              await onSaved();
+              onOpenChange(false);
+              toast.success(site ? "Site updated" : "Site added");
+            } catch (error) {
+              toast.error(errorMessage(error));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Field label="Site name">
+            <Input
+              aria-label="Site name"
+              required
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Westfield Sports Ground"
+            />
+          </Field>
+          <Field label="Address line 1">
+            <Input
+              aria-label="Address line 1"
+              value={line1}
+              onChange={(event) => setLine1(event.target.value)}
+            />
+          </Field>
+          <Field label="Address line 2">
+            <Input
+              aria-label="Address line 2"
+              value={line2}
+              onChange={(event) => setLine2(event.target.value)}
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Town or city">
+              <Input
+                aria-label="Town or city"
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+              />
+            </Field>
+            <Field label="County">
+              <Input
+                aria-label="County"
+                value={county}
+                onChange={(event) => setCounty(event.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Postcode">
+            <Input
+              aria-label="Postcode"
+              value={postcode}
+              onChange={(event) => setPostcode(event.target.value.toUpperCase())}
+            />
+          </Field>
+          <Field label="Site notes">
+            <Textarea
+              aria-label="Site notes"
+              rows={2}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {site ? "Save site" : "Add site"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function CreateProjectDialog({
+function ProjectDialog({
   customerId,
+  sites,
   open,
   onOpenChange,
   onCreated,
 }: {
   customerId: string;
+  sites: SiteSummary[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (projectId: string) => void;
 }) {
   const [name, setName] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [scope, setScope] = useState("");
+  const [targetDate, setTargetDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState<ProjectStatus>("DRAFT");
-  const [submitting, setSubmitting] = useState(false);
-
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setName("");
+      setSiteId(sites[0]?.id ?? "");
+      setScope("");
+      setTargetDate("");
       setNotes("");
-      setStatus("DRAFT");
     }
-  }, [open]);
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!name.trim()) return;
-    setSubmitting(true);
-    try {
-      const { project } = await createProject({
-        customerId,
-        name: name.trim(),
-        status,
-        notes: notes.trim() || null,
-      });
-      toast.success("Project created");
-      onCreated(project.id);
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.payload.error : "Failed");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
+  }, [open, sites]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New project</DialogTitle>
           <DialogDescription>
-            Projects group together the drawings you produce for a customer.
+            Start the commercial lifecycle for one piece of work at a customer site.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="project-name">Name</Label>
+        <form
+          className="space-y-3"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            try {
+              const { project } = await createProject({
+                customerId,
+                siteId,
+                name: name.trim(),
+                scope: scope.trim() || null,
+                targetDateIso: targetDate || null,
+                notes: notes.trim() || null,
+              });
+              toast.success(`${project.reference} created`);
+              onCreated(project.id);
+            } catch (error) {
+              toast.error(errorMessage(error));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Field label="Project name">
             <Input
-              id="project-name"
+              aria-label="Project name"
               required
+              autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
-              autoFocus
+              placeholder="e.g. New perimeter fencing"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={(value) => setStatus(value as ProjectStatus)}>
-              <SelectTrigger>
-                <SelectValue />
+          </Field>
+          <Field label="Site">
+            <Select value={siteId} onValueChange={setSiteId}>
+              <SelectTrigger aria-label="Site">
+                <SelectValue placeholder="Choose a site" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
+                {sites.map((candidate) => (
+                  <SelectItem key={candidate.id} value={candidate.id}>
+                    {candidate.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="project-notes">Notes</Label>
+          </Field>
+          <Field label="Scope">
             <Textarea
-              id="project-notes"
+              aria-label="Scope"
               rows={3}
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+              placeholder="What the customer has asked us to design and estimate"
+            />
+          </Field>
+          <Field label="Target date">
+            <Input
+              aria-label="Target date"
+              type="date"
+              value={targetDate}
+              onChange={(event) => setTargetDate(event.target.value)}
+            />
+          </Field>
+          <Field label="Internal notes">
+            <Textarea
+              aria-label="Internal notes"
+              rows={2}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
-          </div>
+          </Field>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting || !name.trim()}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Create project
+            <Button type="submit" disabled={busy || !name.trim() || !siteId}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create project
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+    </div>
   );
 }

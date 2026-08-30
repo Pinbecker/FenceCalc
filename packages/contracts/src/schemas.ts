@@ -835,6 +835,21 @@ const pricingWorkbookQuantityRuleSchema = z.discriminatedUnion("kind", [
     kind: z.literal("CATALOG_QUANTITY"),
     quantityKey: z.string().trim().min(1).max(160),
   }),
+  z.object({
+    kind: z.literal("ASSEMBLY"),
+    source: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("MANUAL_ENTRY"), defaultQuantity: z.number().finite().min(0) }),
+      z.object({ kind: z.literal("CATALOG_QUANTITY"), quantityKey: z.string().trim().min(1).max(160) }),
+    ]),
+    multiplier: z.number().finite().min(0).max(100_000),
+    rounding: z.enum(["NONE", "UP", "DOWN", "NEAREST"]),
+    increment: z.number().finite().positive().max(1_000_000),
+    minimum: z.number().finite().min(0).max(1_000_000_000),
+    condition: z.object({
+      operator: z.enum(["GT", "GTE", "LT", "LTE", "EQ"]),
+      value: z.number().finite().min(0).max(1_000_000_000),
+    }).optional(),
+  }),
 ]);
 
 export const pricingWorkbookRowPresentationSchema = z.object({
@@ -871,6 +886,8 @@ export const pricingWorkbookSectionSchema = z.object({
 
 export const pricingWorkbookSettingsSchema = z.object({
   labourOverheadPercent: z.number().finite().min(0).optional(),
+  materialMarkupPercent: z.number().finite().min(0).max(1000).optional(),
+  labourMarkupPercent: z.number().finite().min(0).max(1000).optional(),
   labourDayValue: z.number().finite().positive().optional(),
   travelLodgePerDay: z.number().finite().min(0),
   markupRate: z.number().finite().min(0),
@@ -881,6 +898,8 @@ export const pricingWorkbookSettingsSchema = z.object({
   hardDigRatePerHole: z.number().finite().min(0).optional(),
   clearSpoilsRatePerHole: z.number().finite().min(0).optional(),
   colourOption: z.string().trim().min(1).max(120),
+  quoteDisplayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]).optional(),
+  vatRate: z.number().finite().min(0).max(100).optional(),
 });
 
 export const pricingWorkbookConfigSchema = z.object({
@@ -938,6 +957,10 @@ export const estimateWorkbookTotalsSchema = z.object({
   labourSubtotal: z.number().finite().min(0),
   labourOverheadPercent: z.number().finite().min(0).optional(),
   labourOverheadAmount: z.number().finite().min(0).optional(),
+  materialMarkupPercent: z.number().finite().min(0).max(1000).optional(),
+  materialMarkupAmount: z.number().finite().min(0).optional(),
+  labourMarkupPercent: z.number().finite().min(0).max(1000).optional(),
+  labourMarkupAmount: z.number().finite().min(0).optional(),
   distributionCharge: z.number().finite().min(0),
   travelDays: z.number().finite().min(0).optional(),
   travelRatePerDay: z.number().finite().min(0).optional(),
@@ -1054,6 +1077,55 @@ export const pricedEstimateResultSchema = z.object({
   pricingSnapshot: estimatePricingSnapshotSchema,
 });
 
+export const estimateCommercialDraftSchema = z.object({
+  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([]),
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
+  externalCornersEnabled: z.boolean().default(true),
+});
+
+export const commercialEstimateCalculationSchema = z.object({
+  engineVersion: z.string().trim().min(1).max(120),
+  configurationVersionId: z.string().trim().min(1).max(120).nullable().optional(),
+  configurationVersionNumber: z.number().int().positive().nullable().optional(),
+  designs: z.array(z.object({
+    drawingId: z.string().trim().min(1).max(120),
+    drawingName: z.string().trim().min(1).max(160),
+    drawingRevisionId: z.string().trim().min(1).max(120),
+    revisionNumber: z.number().int().positive(),
+  })).min(1).max(100),
+  groups: z.array(estimateGroupSchema).max(200),
+  ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200),
+  manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200),
+  workbook: estimateWorkbookSchema,
+  totals: z.object({
+    materialCost: z.number().finite().min(0),
+    labourCost: z.number().finite().min(0),
+    totalCost: z.number().finite().min(0),
+  }),
+  warnings: z.array(estimateWarningSchema).max(200),
+  pricingSnapshot: estimatePricingSnapshotSchema,
+});
+
+export const quotePresentationSnapshotSchema = z.object({
+  displayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]),
+  currencyCode: z.literal("GBP"),
+  sections: z.array(z.object({
+    key: z.string().trim().min(1).max(160),
+    title: z.string().trim().min(1).max(200),
+    amount: z.number().finite().min(0),
+    rows: z.array(z.object({
+      description: z.string().trim().min(1).max(240),
+      quantity: z.number().finite().min(0),
+      unit: z.string().trim().min(1).max(40),
+      amount: z.number().finite().min(0),
+    })).max(500),
+  })).max(200),
+  netTotal: z.number().finite().min(0),
+  vatRate: z.number().finite().min(0).max(100),
+  vatAmount: z.number().finite().min(0),
+  grossTotal: z.number().finite().min(0),
+});
+
 export const quoteDrawingSnapshotSchema = z.object({
   drawingId: z.string().trim().min(1).max(120),
   drawingName: z.string().trim().min(1).max(160),
@@ -1068,7 +1140,8 @@ export const quoteDrawingSnapshotSchema = z.object({
   revisionNumber: z.coerce.number().int().min(0).optional(),
 });
 
-export const quoteRecordSchema = z.object({
+/** @deprecated Drawing-level quote snapshot retained for importing pre-lifecycle data. */
+export const legacyDrawingQuoteRecordSchema = z.object({
   id: z.string().trim().min(1).max(120),
   companyId: z.string().trim().min(1).max(120),
   workspaceId: z.string().trim().min(1).max(120).optional(),
@@ -1082,7 +1155,8 @@ export const quoteRecordSchema = z.object({
   createdAtIso: z.string().datetime(),
 });
 
-export const quoteCreateRequestSchema = z.object({
+/** @deprecated Drawing-level quote request retained for import compatibility. */
+export const legacyDrawingQuoteCreateRequestSchema = z.object({
   ancillaryItems: z.array(ancillaryEstimateItemSchema).max(200).default([]),
   manualEntries: z.array(estimateWorkbookManualEntrySchema).max(200).default([]),
 });
@@ -1175,13 +1249,57 @@ export const customerArchiveRequestSchema = z.object({
 });
 
 // -----------------------------------------------------------------------------
+// Sites
+// -----------------------------------------------------------------------------
+
+export const siteNameSchema = z.string().trim().min(1).max(160);
+export const siteAddressFieldSchema = z.string().trim().max(240);
+export const siteNotesSchema = z.string().trim().max(2_000);
+export const countryCodeSchema = z.string().trim().length(2).transform((value) => value.toUpperCase());
+
+export const siteCreateRequestSchema = z.object({
+  customerId: z.string().trim().min(1).max(120),
+  name: siteNameSchema,
+  addressLine1: siteAddressFieldSchema.nullish(),
+  addressLine2: siteAddressFieldSchema.nullish(),
+  city: siteAddressFieldSchema.nullish(),
+  county: siteAddressFieldSchema.nullish(),
+  postcode: siteAddressFieldSchema.nullish(),
+  countryCode: countryCodeSchema.default("GB"),
+  notes: siteNotesSchema.nullish(),
+});
+
+export const siteUpdateRequestSchema = z
+  .object({
+    name: siteNameSchema.optional(),
+    addressLine1: siteAddressFieldSchema.nullish(),
+    addressLine2: siteAddressFieldSchema.nullish(),
+    city: siteAddressFieldSchema.nullish(),
+    county: siteAddressFieldSchema.nullish(),
+    postcode: siteAddressFieldSchema.nullish(),
+    countryCode: countryCodeSchema.optional(),
+    notes: siteNotesSchema.nullish(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const siteArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
+});
+
+// -----------------------------------------------------------------------------
 // Projects
 // -----------------------------------------------------------------------------
 
 export const projectNameSchema = z.string().trim().min(1).max(160);
 export const projectNotesSchema = z.string().trim().max(2_000);
+export const projectScopeSchema = z.string().trim().max(4_000);
+export const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 export const projectStatusSchema = z.enum([
-  "DRAFT",
+  "ENQUIRY",
+  "SURVEY",
+  "ESTIMATING",
   "QUOTED",
   "WON",
   "LOST",
@@ -1190,14 +1308,19 @@ export const projectStatusSchema = z.enum([
 
 export const projectCreateRequestSchema = z.object({
   customerId: z.string().min(1),
+  siteId: z.string().min(1),
   name: projectNameSchema,
+  scope: projectScopeSchema.nullish(),
+  targetDateIso: dateOnlySchema.nullish(),
   notes: projectNotesSchema.nullish(),
-  status: projectStatusSchema.optional(),
 });
 
 export const projectUpdateRequestSchema = z
   .object({
     name: projectNameSchema.optional(),
+    siteId: z.string().min(1).optional(),
+    scope: projectScopeSchema.nullish(),
+    targetDateIso: dateOnlySchema.nullish(),
     notes: projectNotesSchema.nullish(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -1233,6 +1356,12 @@ export const drawingArchiveRequestSchema = z.object({
   isArchived: z.boolean(),
 });
 
+export const designStatusSchema = z.enum(["WORKING", "READY", "SUPERSEDED"]);
+
+export const drawingStatusUpdateRequestSchema = z.object({
+  status: designStatusSchema,
+});
+
 export const revisionCreateRequestSchema = z.object({
   notes: revisionNotesSchema.nullish(),
 });
@@ -1245,4 +1374,99 @@ export const revisionUpdateRequestSchema = z.object({
 
 export const revisionNotesUpdateRequestSchema = z.object({
   notes: revisionNotesSchema.nullish(),
+});
+
+// -----------------------------------------------------------------------------
+// Estimate lifecycle
+// -----------------------------------------------------------------------------
+
+export const estimateVersionStatusSchema = z.enum([
+  "DRAFT",
+  "IN_REVIEW",
+  "APPROVED",
+  "SUPERSEDED",
+]);
+
+export const estimateLifecycleCreateRequestSchema = z.object({
+  projectId: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(160),
+  designRevisionIds: z.array(z.string().trim().min(1).max(120)).min(1).max(100),
+  notes: z.string().trim().max(4_000).nullish(),
+});
+
+export const estimateVersionUpdateRequestSchema = z
+  .object({
+    designRevisionIds: z.array(z.string().trim().min(1).max(120)).min(1).max(100).optional(),
+    notes: z.string().trim().max(4_000).nullish(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const estimateVersionStatusUpdateRequestSchema = z.object({
+  status: estimateVersionStatusSchema,
+});
+
+export const estimateCalculationRequestSchema = estimateCommercialDraftSchema;
+
+export const estimateVersionCreateRequestSchema = z.object({
+  designRevisionIds: z.array(z.string().trim().min(1).max(120)).min(1).max(100).optional(),
+  notes: z.string().trim().max(4_000).nullish(),
+});
+
+export const estimateArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
+});
+
+// -----------------------------------------------------------------------------
+// Quote lifecycle
+// -----------------------------------------------------------------------------
+
+export const quoteVersionStatusSchema = z.enum([
+  "DRAFT",
+  "ISSUED",
+  "ACCEPTED",
+  "REJECTED",
+  "EXPIRED",
+  "SUPERSEDED",
+]);
+
+export const quoteCreateRequestSchema = z.object({
+  estimateVersionId: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(1).max(200),
+  customerMessage: z.string().trim().max(4_000).nullish(),
+  validUntilIso: dateOnlySchema.nullish(),
+  displayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]).optional(),
+  vatRate: z.number().finite().min(0).max(100).optional(),
+});
+
+export const quoteVersionUpdateRequestSchema = z
+  .object({
+    estimateVersionId: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    customerMessage: z.string().trim().max(4_000).nullish(),
+    validUntilIso: dateOnlySchema.nullish(),
+    displayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]).optional(),
+    vatRate: z.number().finite().min(0).max(100).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const quoteVersionStatusUpdateRequestSchema = z.object({
+  status: quoteVersionStatusSchema,
+});
+
+export const quoteVersionCreateRequestSchema = z.object({
+  estimateVersionId: z.string().trim().min(1).max(120),
+  title: z.string().trim().min(1).max(200),
+  customerMessage: z.string().trim().max(4_000).nullish(),
+  validUntilIso: dateOnlySchema.nullish(),
+  displayMode: z.enum(["SUMMARY", "DETAILED", "TOTAL_ONLY"]).optional(),
+  vatRate: z.number().finite().min(0).max(100).optional(),
+});
+
+export const quoteArchiveRequestSchema = z.object({
+  isArchived: z.boolean(),
 });

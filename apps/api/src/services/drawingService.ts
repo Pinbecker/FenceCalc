@@ -6,15 +6,32 @@ import type {
   DrawingRevisionRecord,
   DrawingRevisionSummary,
   DrawingSummary,
+  DesignStatus,
   LayoutModel,
 } from "@fence-estimator/contracts";
 import { DRAWING_SCHEMA_VERSION } from "@fence-estimator/contracts";
+import { validateLayoutIntegrity, type LayoutIntegrityIssue } from "@fence-estimator/geometry";
 import { estimateDrawingLayout, RULES_ENGINE_VERSION } from "@fence-estimator/rules-engine";
 
 import { writeAuditLog } from "../auditLogSupport.js";
 import type { AuthenticatedRequestContext } from "../authorization.js";
 import { buildEstimate, normalizeLayout } from "../estimateSupport.js";
 import type { AppRepository } from "../repository.js";
+
+export class InvalidDrawingLayoutError extends Error {
+  public readonly issues: LayoutIntegrityIssue[];
+
+  public constructor(issues: LayoutIntegrityIssue[]) {
+    super("The drawing contains invalid geometry");
+    this.name = "InvalidDrawingLayoutError";
+    this.issues = issues;
+  }
+}
+
+function requireValidDrawingLayout(layout: LayoutModel): void {
+  const issues = validateLayoutIntegrity(layout);
+  if (issues.length > 0) throw new InvalidDrawingLayoutError(issues);
+}
 
 function emptyLayout(): LayoutModel {
   return {
@@ -69,6 +86,7 @@ export async function createDrawingForCompany(
 
   const sourceLayout = input.initialLayout ?? emptyLayout();
   const built = buildEstimate(sourceLayout);
+  requireValidDrawingLayout(built.layout);
   const now = new Date().toISOString();
   const drawingId = randomUUID();
   const revisionId = randomUUID();
@@ -161,6 +179,49 @@ export async function setDrawingArchivedForCompany(
   return drawing;
 }
 
+export async function setDrawingStatusForCompany(
+  repository: AppRepository,
+  context: AuthenticatedRequestContext,
+  drawingId: string,
+  status: DesignStatus,
+): Promise<DrawingRecord | null> {
+  const drawing = await repository.getDrawingById(drawingId, context.company.id);
+  if (!drawing) return null;
+  if (status === "READY") {
+    const revision = await repository.getRevisionById(
+      drawing.currentRevisionId,
+      context.company.id,
+    );
+    if (
+      !revision ||
+      revision.layout.segments.length === 0 ||
+      validateLayoutIntegrity(revision.layout).length > 0
+    )
+      return null;
+  }
+  const now = new Date().toISOString();
+  const updated = await repository.setDrawingStatus({
+    drawingId,
+    companyId: context.company.id,
+    status,
+    updatedByUserId: context.user.id,
+    updatedAtIso: now,
+  });
+  if (updated) {
+    await writeAuditLog(repository, {
+      companyId: context.company.id,
+      actorUserId: context.user.id,
+      entityType: "DRAWING",
+      entityId: drawingId,
+      action: "DRAWING_STATUS_CHANGED",
+      summary: `${context.user.displayName} marked design ${drawing.name} as ${status}`,
+      createdAtIso: now,
+      metadata: { status },
+    });
+  }
+  return updated;
+}
+
 export async function deleteDrawingForCompany(
   repository: AppRepository,
   context: AuthenticatedRequestContext,
@@ -242,6 +303,16 @@ export async function startRevisionForCompany(
     updatedAtIso: now,
   });
 
+  if (drawing.status !== "WORKING") {
+    await repository.setDrawingStatus({
+      drawingId: drawing.id,
+      companyId: context.company.id,
+      status: "WORKING",
+      updatedByUserId: context.user.id,
+      updatedAtIso: now,
+    });
+  }
+
   await writeAuditLog(repository, {
     companyId: context.company.id,
     actorUserId: context.user.id,
@@ -271,8 +342,19 @@ export async function saveRevisionForCompany(
   | { kind: "ok"; revision: DrawingRevisionRecord }
   | { kind: "not_found" }
   | { kind: "conflict" }
+  | { kind: "read_only" }
+  | { kind: "invalid"; issues: LayoutIntegrityIssue[] }
 > {
+  const existing = await repository.getRevisionById(revisionId, context.company.id);
+  if (!existing) return { kind: "not_found" };
+  const drawing = await repository.getDrawingById(existing.drawingId, context.company.id);
+  if (!drawing) return { kind: "not_found" };
+  if (drawing.currentRevisionId !== revisionId || drawing.status !== "WORKING") {
+    return { kind: "read_only" };
+  }
   const normalized = normalizeLayout(input.layout);
+  const integrityIssues = validateLayoutIntegrity(normalized);
+  if (integrityIssues.length > 0) return { kind: "invalid", issues: integrityIssues };
   const estimate = estimateDrawingLayout(normalized);
   const now = new Date().toISOString();
 
@@ -316,6 +398,12 @@ export async function updateRevisionNotesForCompany(
   revisionId: string,
   notes: string | null,
 ): Promise<DrawingRevisionRecord | null> {
+  const revision = await repository.getRevisionById(revisionId, context.company.id);
+  if (!revision) return null;
+  const drawing = await repository.getDrawingById(revision.drawingId, context.company.id);
+  if (!drawing || drawing.currentRevisionId !== revision.id || drawing.status !== "WORKING") {
+    return null;
+  }
   const now = new Date().toISOString();
   return repository.updateRevisionNotes({
     revisionId,

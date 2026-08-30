@@ -603,7 +603,6 @@ export function EditorCanvasGeometryLayer({
           (selectedSegmentIds.length === 0 && segment.id === selectedSegmentId);
         const isHovered = segment.id === hoveredSegmentId;
         const lengthLabels = segmentLengthLabelsBySegmentId.get(segment.id) ?? [];
-        const hasForcedVisibleLabels = lengthLabels.some((label) => forcedVisibleSegmentLabelKeys.has(label.key));
         const segmentGoalUnits = goalUnitVisuals.filter((goalUnit) => goalUnit.segmentId === segment.id);
         const gateSpans = gatesBySegmentId.get(segment.id) ?? [];
         const segmentRuns = buildSegmentRunsWithOpenings(

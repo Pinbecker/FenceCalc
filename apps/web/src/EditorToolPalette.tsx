@@ -9,7 +9,7 @@ import type {
   GoalUnitWidthMm,
   KickboardProfile,
   KickboardSectionHeightMm,
-  TwinBarVariant
+  TwinBarVariant,
 } from "@fence-estimator/contracts";
 
 import type { InteractionMode } from "./editor/types";
@@ -29,15 +29,77 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   { id: "SELECT", label: "Select", shortcut: "S", icon: "cursor", group: "core", hasParams: false },
   { id: "DRAW", label: "Draw", shortcut: "D", icon: "pen", group: "core", hasParams: false },
-  { id: "RECTANGLE", label: "Rectangle", shortcut: "X", icon: "rect", group: "core", hasParams: false },
-  { id: "RECESS", label: "Recess", shortcut: "R", icon: "recess", group: "openings", hasParams: true },
+  {
+    id: "RECTANGLE",
+    label: "Rectangle",
+    shortcut: "X",
+    icon: "rect",
+    group: "core",
+    hasParams: false,
+  },
+  {
+    id: "RECESS",
+    label: "Recess",
+    shortcut: "R",
+    icon: "recess",
+    group: "openings",
+    hasParams: true,
+  },
   { id: "GATE", label: "Gate", shortcut: "G", icon: "gate", group: "openings", hasParams: true },
-  { id: "GOAL_UNIT", label: "Goal Unit", shortcut: "U", icon: "goal", group: "openings", hasParams: true },
-  { id: "BASKETBALL_POST", label: "Basketball", shortcut: "B", icon: "basketball", group: "features", hasParams: true },
-  { id: "FLOODLIGHT_COLUMN", label: "Floodlight", shortcut: "F", icon: "floodlight", group: "features", hasParams: true },
-  { id: "KICKBOARD", label: "Kickboard", shortcut: "K", icon: "kickboard", group: "features", hasParams: true },
-  { id: "PITCH_DIVIDER", label: "Pitch Divider", shortcut: "P", icon: "divider", group: "features", hasParams: false },
-  { id: "SIDE_NETTING", label: "Side Netting", shortcut: "N", icon: "netting", group: "features", hasParams: true },
+  {
+    id: "GOAL_UNIT",
+    label: "Goal Unit",
+    shortcut: "U",
+    icon: "goal",
+    group: "openings",
+    hasParams: true,
+  },
+  {
+    id: "BASKETBALL_POST",
+    label: "Basketball",
+    shortcut: "B",
+    icon: "basketball",
+    group: "features",
+    hasParams: true,
+  },
+  {
+    id: "FLOODLIGHT_COLUMN",
+    label: "Floodlight",
+    shortcut: "F",
+    icon: "floodlight",
+    group: "features",
+    hasParams: true,
+  },
+  {
+    id: "KICKBOARD",
+    label: "Kickboard",
+    shortcut: "K",
+    icon: "kickboard",
+    group: "features",
+    hasParams: true,
+  },
+  {
+    id: "PITCH_DIVIDER",
+    label: "Pitch Divider",
+    shortcut: "P",
+    icon: "divider",
+    group: "features",
+    hasParams: false,
+  },
+  {
+    id: "SIDE_NETTING",
+    label: "Side Netting",
+    shortcut: "N",
+    icon: "netting",
+    group: "features",
+    hasParams: true,
+  },
+];
+
+const TOOL_GROUPS: ReadonlyArray<{ id: ToolDef["group"]; label: string }> = [
+  { id: "core", label: "Layout" },
+  { id: "openings", label: "Openings" },
+  { id: "features", label: "Equipment" },
 ];
 
 /* SVG Icon set */
@@ -47,14 +109,32 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
   switch (icon) {
     case "cursor":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M5 4.5L11.7 19.5l2.15-5.12L19 12.2z" />
           <path d="M13.2 13.8l4.1 5.2" />
         </svg>
       );
     case "pen":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="5" y1="19" x2="19" y2="5" />
           <circle cx="19" cy="5" r="2" />
           <circle cx="5" cy="19" r="2" />
@@ -62,19 +142,46 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
       );
     case "rect":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <rect x="4" y="6" width="16" height="12" rx="1" />
         </svg>
       );
     case "recess":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <polyline points="3,12 8,12 8,18 16,18 16,12 21,12" />
         </svg>
       );
     case "gate":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="3" y1="12" x2="8" y2="12" />
           <line x1="16" y1="12" x2="21" y2="12" />
           <path d="M8 12 Q12 6 16 12" />
@@ -82,7 +189,16 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
       );
     case "goal":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M5 8h14v8H5z" />
           <path d="M8 8v8" />
           <path d="M16 8v8" />
@@ -91,7 +207,16 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
       );
     case "basketball":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="8" y1="20" x2="8" y2="6" />
           <line x1="8" y1="7" x2="15.5" y2="7" />
           <rect x="13.5" y="5.5" width="4.5" height="3.5" rx="0.8" />
@@ -100,7 +225,16 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
       );
     case "floodlight":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="12" y1="9" x2="12" y2="20" />
           <path d="M8 5h8l-1.4 4h-5.2z" />
           <line x1="9.2" y1="11.5" x2="14.8" y2="11.5" />
@@ -108,21 +242,48 @@ function ToolIcon({ icon, size = 20 }: { icon: string; size?: number }) {
       );
     case "kickboard":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <rect x="3" y="14" width="18" height="4" rx="1" />
           <line x1="3" y1="12" x2="21" y2="12" />
         </svg>
       );
     case "divider":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="4" y1="12" x2="20" y2="12" />
           <line x1="12" y1="4" x2="12" y2="20" strokeDasharray="3 2" />
         </svg>
       );
     case "netting":
       return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width={s}
+          height={s}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="4" y1="18" x2="4" y2="6" />
           <line x1="20" y1="18" x2="20" y2="6" />
           <line x1="4" y1="6" x2="20" y2="6" />
@@ -272,14 +433,15 @@ export function EditorToolPalette({
   onSetSideNettingHeightMm,
   onCustomGateWidthInputChange,
   onNormalizeGateInputs,
-  onSetActiveSpec
+  onSetActiveSpec,
 }: EditorToolPaletteProps) {
   const [openFlyout, setOpenFlyout] = useState<InteractionMode | "fence" | null>(null);
   const [isFenceConfigOpen, setIsFenceConfigOpen] = useState(false);
 
   const isLegacyRollFormDrawing = activeSpec.system === "ROLL_FORM";
   const fenceColorSwatch = getSegmentColor(activeSpec);
-  const availableHeightOptions = activeSpec.system === "TWIN_BAR" ? activeHeightOptions : rollFormHeightOptions;
+  const availableHeightOptions =
+    activeSpec.system === "TWIN_BAR" ? activeHeightOptions : rollFormHeightOptions;
   const fenceVariantColors = availableHeightOptions.map((heightOption) =>
     getSegmentColor({ ...activeSpec, height: heightOption }),
   );
@@ -322,28 +484,44 @@ export function EditorToolPalette({
     <div className={`tool-palette${isReadOnly ? " is-read-only" : ""}`}>
       {/* Tool buttons */}
       <div className="tool-palette-tools">
-        {TOOLS.map((tool) => (
-          <button
-            key={tool.id}
-            type="button"
-            className={`tool-btn${interactionMode === tool.id ? " active" : ""}${tool.hasParams && interactionMode === tool.id ? " has-flyout" : ""}`}
-            title={isReadOnly ? `${tool.label} disabled in view-only mode` : `${tool.label} (${tool.shortcut})`}
-            onClick={() => selectTool(tool.id)}
-            disabled={isReadOnly}
-          >
-            <ToolIcon icon={tool.icon} />
-            <kbd>{tool.shortcut}</kbd>
-            {tool.hasParams && interactionMode === tool.id ? <span className="tool-btn-arrow">▸</span> : null}
-          </button>
+        {TOOL_GROUPS.map((group) => (
+          <div key={group.id} className="tool-palette-group" aria-label={`${group.label} tools`}>
+            <span className="tool-palette-group-label">{group.label}</span>
+            {TOOLS.filter((tool) => tool.group === group.id).map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                className={`tool-btn${interactionMode === tool.id ? " active" : ""}${tool.hasParams && interactionMode === tool.id ? " has-flyout" : ""}`}
+                title={
+                  isReadOnly
+                    ? `${tool.label} disabled in view-only mode`
+                    : `${tool.label} (${tool.shortcut})`
+                }
+                aria-label={`${tool.label} tool`}
+                aria-pressed={interactionMode === tool.id}
+                onClick={() => selectTool(tool.id)}
+                disabled={isReadOnly}
+              >
+                <ToolIcon icon={tool.icon} />
+                <kbd>{tool.shortcut}</kbd>
+                {tool.hasParams && interactionMode === tool.id ? (
+                  <span className="tool-btn-arrow">▸</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 
       {/* Fence config section */}
       <div className="tool-palette-divider" />
+      <span className="tool-palette-group-label">Specification</span>
       <button
         type="button"
         className={`tool-btn tool-btn-fence${isFenceConfigOpen ? " active" : ""}`}
-        title={isReadOnly ? "Fence specification is locked in view-only mode" : "Fence specification"}
+        title={
+          isReadOnly ? "Fence specification is locked in view-only mode" : "Fence specification"
+        }
         onClick={() => {
           if (isReadOnly) {
             return;
@@ -352,6 +530,8 @@ export function EditorToolPalette({
           setOpenFlyout((current) => (current === "fence" ? null : "fence"));
         }}
         disabled={isReadOnly}
+        aria-label="Fence specification"
+        aria-expanded={isFenceConfigOpen}
       >
         <span className="fence-swatch" style={{ background: fenceColorSwatch }} />
         <span className="fence-label">{activeSpec.height}</span>
@@ -380,7 +560,7 @@ export function EditorToolPalette({
                     return {
                       system: nextSystem,
                       height: nextHeight ?? "2m",
-                      twinBarVariant: previous.twinBarVariant ?? "STANDARD"
+                      twinBarVariant: previous.twinBarVariant ?? "STANDARD",
                     };
                   }
                   const nextHeight = rollFormHeightOptions.includes(previous.height)
@@ -436,7 +616,7 @@ export function EditorToolPalette({
                   <span
                     className="fence-swatch"
                     style={{
-                      background: getSegmentColor({ ...activeSpec, height: heightOption })
+                      background: getSegmentColor({ ...activeSpec, height: heightOption }),
                     }}
                   />
                   <span>{heightOption}</span>
@@ -444,7 +624,9 @@ export function EditorToolPalette({
               ))}
             </div>
           ) : (
-            <p className="flyout-note">Fence line colour stays consistent across heights and variants.</p>
+            <p className="flyout-note">
+              Fence line colour stays consistent across heights and variants.
+            </p>
           )}
         </FlyoutPanel>
       ) : null}
@@ -494,12 +676,27 @@ export function EditorToolPalette({
         <FlyoutPanel onClose={closeFlyout}>
           <div className="flyout-heading">Gate Options</div>
           <div className="flyout-toggle-row">
-            <button type="button" className={`flyout-toggle${gateType === "SINGLE_LEAF" ? " active" : ""}`}
-              onClick={() => onSetGateType("SINGLE_LEAF")}>Single 1.2m</button>
-            <button type="button" className={`flyout-toggle${gateType === "DOUBLE_LEAF" ? " active" : ""}`}
-              onClick={() => onSetGateType("DOUBLE_LEAF")}>Double 3m</button>
-            <button type="button" className={`flyout-toggle${gateType === "CUSTOM" ? " active" : ""}`}
-              onClick={() => onSetGateType("CUSTOM")}>Custom</button>
+            <button
+              type="button"
+              className={`flyout-toggle${gateType === "SINGLE_LEAF" ? " active" : ""}`}
+              onClick={() => onSetGateType("SINGLE_LEAF")}
+            >
+              Single 1.2m
+            </button>
+            <button
+              type="button"
+              className={`flyout-toggle${gateType === "DOUBLE_LEAF" ? " active" : ""}`}
+              onClick={() => onSetGateType("DOUBLE_LEAF")}
+            >
+              Double 3m
+            </button>
+            <button
+              type="button"
+              className={`flyout-toggle${gateType === "CUSTOM" ? " active" : ""}`}
+              onClick={() => onSetGateType("CUSTOM")}
+            >
+              Custom
+            </button>
           </div>
           {gateType === "CUSTOM" ? (
             <label className="flyout-field">
@@ -531,7 +728,9 @@ export function EditorToolPalette({
             <select
               value={selectedGoalUnitKey}
               onChange={(event) => {
-                const nextOption = goalUnitOptions.find((option) => option.key === event.target.value);
+                const nextOption = goalUnitOptions.find(
+                  (option) => option.key === event.target.value,
+                );
                 if (!nextOption) {
                   return;
                 }
@@ -541,7 +740,9 @@ export function EditorToolPalette({
               }}
             >
               {goalUnitOptions.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -553,8 +754,14 @@ export function EditorToolPalette({
           <div className="flyout-heading">Basketball Post</div>
           <label className="flyout-field">
             <span>Type</span>
-            <select value={basketballPlacementType}
-              onChange={(event) => onSetBasketballPlacementType(event.target.value as "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST")}>
+            <select
+              value={basketballPlacementType}
+              onChange={(event) =>
+                onSetBasketballPlacementType(
+                  event.target.value as "DEDICATED_POST" | "MOUNTED_TO_EXISTING_POST",
+                )
+              }
+            >
               <option value="DEDICATED_POST">Dedicated post</option>
               <option value="MOUNTED_TO_EXISTING_POST">Mounted to existing</option>
             </select>
@@ -562,10 +769,14 @@ export function EditorToolPalette({
           {basketballPlacementType === "DEDICATED_POST" ? (
             <label className="flyout-field">
               <span>Arm Length</span>
-              <select value={basketballArmLengthMm}
-                onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value))}>
+              <select
+                value={basketballArmLengthMm}
+                onChange={(event) => onSetBasketballArmLengthMm(Number(event.target.value))}
+              >
                 {basketballArmLengthOptionsMm.map((value) => (
-                  <option key={value} value={value}>{formatLengthMm(value)}</option>
+                  <option key={value} value={value}>
+                    {formatLengthMm(value)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -583,7 +794,9 @@ export function EditorToolPalette({
               onChange={(event) => onSetFloodlightColumnHeightMm(Number(event.target.value))}
             >
               {floodlightColumnHeightOptionsMm.map((value) => (
-                <option key={value} value={value}>{formatLengthMm(value)}</option>
+                <option key={value} value={value}>
+                  {formatLengthMm(value)}
+                </option>
               ))}
             </select>
           </label>
@@ -598,7 +811,9 @@ export function EditorToolPalette({
             <select
               value={selectedKickboardKey}
               onChange={(event) => {
-                const nextOption = kickboardOptions.find((option) => option.key === event.target.value);
+                const nextOption = kickboardOptions.find(
+                  (option) => option.key === event.target.value,
+                );
                 if (!nextOption) {
                   return;
                 }
@@ -609,7 +824,9 @@ export function EditorToolPalette({
               }}
             >
               {kickboardOptions.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -621,10 +838,14 @@ export function EditorToolPalette({
           <div className="flyout-heading">Side Netting</div>
           <label className="flyout-field">
             <span>Height</span>
-            <select value={sideNettingHeightMm}
-              onChange={(event) => onSetSideNettingHeightMm(Number(event.target.value))}>
+            <select
+              value={sideNettingHeightMm}
+              onChange={(event) => onSetSideNettingHeightMm(Number(event.target.value))}
+            >
               {sideNettingHeightOptionsMm.map((value) => (
-                <option key={value} value={value}>{formatLengthMm(value)}</option>
+                <option key={value} value={value}>
+                  {formatLengthMm(value)}
+                </option>
               ))}
             </select>
           </label>

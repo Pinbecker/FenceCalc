@@ -15,6 +15,7 @@ const shouldUploadSourcemaps =
   readNonEmptyEnv("SENTRY_AUTH_TOKEN") !== null &&
   readNonEmptyEnv("SENTRY_ORG") !== null &&
   readNonEmptyEnv("SENTRY_PROJECT") !== null;
+const apiProxyTarget = readNonEmptyEnv("VITE_API_PROXY_TARGET") ?? "http://127.0.0.1:3001";
 
 function getSentryPlugin() {
   const authToken = readNonEmptyEnv("SENTRY_AUTH_TOKEN");
@@ -30,24 +31,20 @@ function getSentryPlugin() {
     org,
     project,
     release: {
-      name: process.env.VITE_SENTRY_RELEASE ?? process.env.npm_package_version ?? "0.1.0"
-    }
+      name: process.env.VITE_SENTRY_RELEASE ?? process.env.npm_package_version ?? "0.1.0",
+    },
   });
 }
 
 const sentryPlugin = shouldUploadSourcemaps ? getSentryPlugin() : null;
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    ...(sentryPlugin ? [sentryPlugin] : [])
-  ],
+  plugins: [react(), tailwindcss(), ...(sentryPlugin ? [sentryPlugin] : [])],
   resolve: {
     alias: {
       ...workspaceAliases,
-      "@": resolve(__dirname, "src")
-    }
+      "@": resolve(__dirname, "src"),
+    },
   },
   server: {
     port: 5173,
@@ -56,15 +53,15 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:3001",
-        changeOrigin: true
-      }
-    }
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port: 5173,
     strictPort: true,
-    host: true
+    host: true,
   },
   build: {
     sourcemap: shouldUploadSourcemaps ? "hidden" : false,
@@ -76,8 +73,8 @@ export default defineConfig({
           }
 
           return undefined;
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });

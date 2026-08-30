@@ -50,7 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const status = await getSetupStatus();
       setSetupStatus(status);
-    } catch (error) {
+    } catch {
       setSetupStatus({ bootstrapRequired: false, bootstrapSecretRequired: false });
     }
   }, []);
@@ -61,7 +61,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         const envelope = await getCurrentSession();
         if (!cancelled) setSession(envelope);
-      } catch (error) {
+      } catch {
         if (!cancelled) setSession(null);
       } finally {
         await fetchSetupStatus();

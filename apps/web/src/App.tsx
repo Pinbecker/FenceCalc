@@ -32,9 +32,24 @@ const DrawingPage = lazy(async () => {
   return { default: mod.DrawingPage };
 });
 
+const EstimatePage = lazy(async () => {
+  const mod = await import("@/pages/EstimatePage");
+  return { default: mod.EstimatePage };
+});
+
+const QuotePage = lazy(async () => {
+  const mod = await import("@/pages/QuotePage");
+  return { default: mod.QuotePage };
+});
+
 const AdminPage = lazy(async () => {
   const mod = await import("@/pages/AdminPage");
   return { default: mod.AdminPage };
+});
+
+const PricingPage = lazy(async () => {
+  const mod = await import("@/pages/PricingPage");
+  return { default: mod.PricingPage };
 });
 
 const EditorPage = lazy(async () => {
@@ -70,7 +85,7 @@ function AppRouter() {
       navigate("customers");
       return;
     }
-    if (session && route === "admin" && !isAdmin) {
+    if (session && (route === "admin" || route === "pricing") && !isAdmin) {
       navigate("customers");
     }
   }, [isAdmin, isRestoring, navigate, route, session]);
@@ -95,6 +110,7 @@ function AppRouter() {
         <ErrorBoundary>
           <EditorPage
             initialDrawingId={query.drawingId ?? null}
+            initialRevisionId={query.revisionId ?? null}
             onNavigate={(nextRoute, nextQuery) => navigate(nextRoute, nextQuery)}
           />
         </ErrorBoundary>
@@ -127,7 +143,22 @@ function AppRouter() {
               onNavigate={navigate}
             />
           ) : null}
+          {route === "estimate" ? (
+            <EstimatePage
+              estimateId={query.estimateId ?? null}
+              versionId={query.versionId ?? null}
+              onNavigate={navigate}
+            />
+          ) : null}
+          {route === "quote" ? (
+            <QuotePage
+              quoteId={query.quoteId ?? null}
+              versionId={query.versionId ?? null}
+              onNavigate={navigate}
+            />
+          ) : null}
           {route === "admin" && isAdmin ? <AdminPage /> : null}
+          {route === "pricing" && isAdmin ? <PricingPage /> : null}
         </ErrorBoundary>
       </Suspense>
     </AppShell>

@@ -8,13 +8,18 @@ import type { AppRepository, ScopeFilter } from "../repository.js";
 
 interface ProjectCreateInput {
   customerId: string;
+  siteId: string;
   name: string;
+  scope: string | null;
+  targetDateIso: string | null;
   notes: string | null;
-  status?: ProjectStatus;
 }
 
 interface ProjectPatch {
   name?: string;
+  siteId?: string;
+  scope?: string | null;
+  targetDateIso?: string | null;
   notes?: string | null;
 }
 
@@ -48,16 +53,29 @@ export async function createProjectForCompany(
   input: ProjectCreateInput,
 ): Promise<ProjectRecord | null> {
   const customer = await repository.getCustomerById(input.customerId, context.company.id);
-  if (!customer) {
+  if (!customer || customer.isArchived) {
+    return null;
+  }
+  const site = await repository.getSiteById(input.siteId, context.company.id);
+  if (!site || site.customerId !== customer.id || site.isArchived) {
     return null;
   }
   const now = new Date().toISOString();
+  const sequence = await repository.nextCompanySequence(
+    context.company.id,
+    `PROJECT:${now.slice(0, 4)}`,
+  );
+  const reference = `P-${now.slice(0, 4)}-${String(sequence).padStart(4, "0")}`;
   const project = await repository.createProject({
     id: randomUUID(),
     companyId: context.company.id,
     customerId: customer.id,
+    siteId: site.id,
+    reference,
     name: input.name.trim(),
-    status: input.status ?? "DRAFT",
+    status: "ENQUIRY",
+    scope: nullableText(input.scope),
+    targetDateIso: input.targetDateIso,
     notes: nullableText(input.notes),
     createdByUserId: context.user.id,
     updatedByUserId: context.user.id,
@@ -83,10 +101,22 @@ export async function updateProjectForCompany(
   patch: ProjectPatch,
 ): Promise<ProjectRecord | null> {
   const now = new Date().toISOString();
+  if (patch.siteId !== undefined) {
+    const [project, site] = await Promise.all([
+      repository.getProjectById(projectId, context.company.id),
+      repository.getSiteById(patch.siteId, context.company.id),
+    ]);
+    if (!project || !site || site.customerId !== project.customerId || site.isArchived) {
+      return null;
+    }
+  }
   const updated = await repository.updateProject({
     projectId,
     companyId: context.company.id,
     ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+    ...(patch.siteId !== undefined ? { siteId: patch.siteId } : {}),
+    ...(patch.scope !== undefined ? { scope: nullableText(patch.scope) } : {}),
+    ...(patch.targetDateIso !== undefined ? { targetDateIso: patch.targetDateIso } : {}),
     ...(patch.notes !== undefined ? { notes: nullableText(patch.notes) } : {}),
     updatedByUserId: context.user.id,
     updatedAtIso: now,

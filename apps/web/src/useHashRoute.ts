@@ -7,7 +7,10 @@ export type AppRoute =
   | "customer"
   | "project"
   | "drawing"
+  | "estimate"
+  | "quote"
   | "editor"
+  | "pricing"
   | "admin";
 
 export interface AppLocation {
@@ -23,7 +26,10 @@ const KNOWN_ROUTES = new Set<AppRoute>([
   "customer",
   "project",
   "drawing",
+  "estimate",
+  "quote",
   "editor",
+  "pricing",
   "admin",
 ]);
 

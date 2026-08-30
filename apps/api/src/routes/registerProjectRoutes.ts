@@ -59,12 +59,14 @@ export function registerProjectRoutes({
     }
     const project = await createProjectForCompany(repository, auth, {
       customerId: parsed.data.customerId,
+      siteId: parsed.data.siteId,
       name: parsed.data.name,
+      scope: parsed.data.scope ?? null,
+      targetDateIso: parsed.data.targetDateIso ?? null,
       notes: parsed.data.notes ?? null,
-      ...(parsed.data.status ? { status: parsed.data.status } : {}),
     });
     if (!project) {
-      return reply.code(404).send({ error: "Customer not found" });
+      return reply.code(404).send({ error: "Customer or active site not found" });
     }
     return reply.code(201).send({ project });
   });
@@ -93,6 +95,11 @@ export function registerProjectRoutes({
     const { id } = request.params as { id: string };
     const project = await updateProjectForCompany(repository, auth, id, {
       ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+      ...(parsed.data.siteId !== undefined ? { siteId: parsed.data.siteId } : {}),
+      ...(parsed.data.scope !== undefined ? { scope: parsed.data.scope ?? null } : {}),
+      ...(parsed.data.targetDateIso !== undefined
+        ? { targetDateIso: parsed.data.targetDateIso ?? null }
+        : {}),
       ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes ?? null } : {}),
     });
     if (!project) return reply.code(404).send({ error: "Project not found" });
@@ -109,6 +116,13 @@ export function registerProjectRoutes({
         .send({ error: "Invalid status payload", details: parsed.error.flatten() });
     }
     const { id } = request.params as { id: string };
+    if (parsed.data.status === "QUOTED" || parsed.data.status === "WON") {
+      return reply.code(409).send({
+        error: parsed.data.status === "QUOTED"
+          ? "A project becomes quoted when a quote is issued"
+          : "A project becomes won when an issued quote is accepted",
+      });
+    }
     const project = await setProjectStatusForCompany(repository, auth, id, parsed.data.status);
     if (!project) return reply.code(404).send({ error: "Project not found" });
     return reply.code(200).send({ project });

@@ -173,8 +173,10 @@ export function useEditorPageActions({
 
   const currentDrawingSummary = null as null | { id: string; versionNumber: number };
   const isChangingStatus = false;
-  const handleChangeDrawingStatus = useCallback(async (_status: string): Promise<void> => {
+  const handleChangeDrawingStatus = useCallback((status: string): Promise<void> => {
+    void status;
     /* no-op: status now lives on the project, not the drawing */
+    return Promise.resolve();
   }, []);
 
   return {

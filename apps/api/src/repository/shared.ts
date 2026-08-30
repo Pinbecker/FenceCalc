@@ -6,25 +6,40 @@ import type {
   CompanyUserRecord,
   CustomerRecord,
   CustomerSummary,
+  DesignStatus,
   DrawingCanvasViewport,
   DrawingRecord,
   DrawingRevisionRecord,
   DrawingRevisionSummary,
   DrawingSummary,
+  EstimateDesignRevisionSelection,
+  EstimateRecord,
+  EstimateSummary,
+  EstimateVersionRecord,
+  EstimateVersionStatus,
   EstimateResult,
   LayoutModel,
   PricingConfigRecord,
   ProjectRecord,
   ProjectStatus,
   ProjectSummary,
+  QuoteRecord,
+  QuoteSummary,
+  QuoteVersionRecord,
+  QuoteVersionStatus,
+  SiteRecord,
+  SiteSummary,
   UserRole,
 } from "@fence-estimator/contracts";
 import {
   drawingCanvasViewportSchema,
+  commercialEstimateCalculationSchema,
+  estimateCommercialDraftSchema,
   estimateResultSchema,
   layoutModelSchema,
   mergePricingWorkbookWithTemplate,
   pricingConfigRecordSchema,
+  quotePresentationSnapshotSchema,
 } from "@fence-estimator/contracts";
 
 // -----------------------------------------------------------------------------
@@ -74,6 +89,32 @@ export interface CustomerRow {
 }
 
 export interface CustomerSummaryRow extends CustomerRow {
+  site_count: number;
+  project_count: number;
+  active_project_count: number;
+  last_activity_at_iso: string | null;
+}
+
+export interface SiteRow {
+  id: string;
+  company_id: string;
+  customer_id: string;
+  name: string;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country_code: string;
+  notes: string | null;
+  is_archived: number;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface SiteSummaryRow extends SiteRow {
   project_count: number;
   active_project_count: number;
   last_activity_at_iso: string | null;
@@ -83,8 +124,12 @@ export interface ProjectRow {
   id: string;
   company_id: string;
   customer_id: string;
+  site_id: string | null;
+  reference: string;
   name: string;
   status: ProjectStatus;
+  scope: string | null;
+  target_date_iso: string | null;
   notes: string | null;
   is_archived: number;
   status_changed_at_iso: string | null;
@@ -97,6 +142,10 @@ export interface ProjectRow {
 
 export interface ProjectSummaryRow extends ProjectRow {
   customer_name: string;
+  site_name: string | null;
+  design_count: number;
+  estimate_count: number;
+  quote_count: number;
   drawing_count: number;
   last_activity_at_iso: string | null;
 }
@@ -106,9 +155,98 @@ export interface DrawingRow {
   company_id: string;
   project_id: string;
   name: string;
+  status: DesignStatus;
   current_revision_id: string | null;
   latest_revision_number: number;
   is_archived: number;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface EstimateRow {
+  id: string;
+  company_id: string;
+  project_id: string;
+  reference: string;
+  name: string;
+  current_version_id: string | null;
+  latest_version_number: number;
+  is_archived: number;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface EstimateSummaryRow extends EstimateRow {
+  current_status: EstimateVersionStatus;
+  selected_design_count: number;
+}
+
+export interface EstimateVersionRow {
+  id: string;
+  estimate_id: string;
+  company_id: string;
+  version_number: number;
+  parent_version_id: string | null;
+  status: EstimateVersionStatus;
+  notes: string | null;
+  commercial_draft_json: string;
+  calculation_json: string | null;
+  calculated_at_iso: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface EstimateSelectionRow {
+  drawing_id: string;
+  drawing_name: string;
+  drawing_revision_id: string;
+  revision_number: number;
+  position: number;
+}
+
+export interface QuoteRow {
+  id: string;
+  company_id: string;
+  project_id: string;
+  estimate_id: string;
+  reference: string;
+  name: string;
+  current_version_id: string | null;
+  latest_version_number: number;
+  is_archived: number;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at_iso: string;
+  updated_at_iso: string;
+}
+
+export interface QuoteSummaryRow extends QuoteRow {
+  current_status: QuoteVersionStatus;
+  estimate_reference: string;
+  estimate_version_number: number;
+  valid_until_iso: string | null;
+}
+
+export interface QuoteVersionRow {
+  id: string;
+  quote_id: string;
+  company_id: string;
+  version_number: number;
+  parent_version_id: string | null;
+  estimate_version_id: string;
+  status: QuoteVersionStatus;
+  title: string;
+  customer_message: string | null;
+  valid_until_iso: string | null;
+  issued_at_iso: string | null;
+  decided_at_iso: string | null;
+  presentation_json: string;
   created_by_user_id: string;
   updated_by_user_id: string;
   created_at_iso: string;
@@ -211,9 +349,40 @@ export function toCustomer(row: CustomerRow): CustomerRecord {
 export function toCustomerSummary(row: CustomerSummaryRow): CustomerSummary {
   return {
     ...toCustomer(row),
+    siteCount: row.site_count,
     projectCount: row.project_count,
     activeProjectCount: row.active_project_count,
     lastActivityAtIso: row.last_activity_at_iso ?? null,
+  };
+}
+
+export function toSite(row: SiteRow): SiteRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    customerId: row.customer_id,
+    name: row.name,
+    addressLine1: row.address_line_1,
+    addressLine2: row.address_line_2,
+    city: row.city,
+    county: row.county,
+    postcode: row.postcode,
+    countryCode: row.country_code,
+    notes: row.notes,
+    isArchived: row.is_archived === 1,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  };
+}
+
+export function toSiteSummary(row: SiteSummaryRow): SiteSummary {
+  return {
+    ...toSite(row),
+    projectCount: row.project_count,
+    activeProjectCount: row.active_project_count,
+    lastActivityAtIso: row.last_activity_at_iso,
   };
 }
 
@@ -222,8 +391,12 @@ export function toProject(row: ProjectRow): ProjectRecord {
     id: row.id,
     companyId: row.company_id,
     customerId: row.customer_id,
+    siteId: row.site_id,
+    reference: row.reference,
     name: row.name,
     status: row.status,
+    scope: row.scope,
+    targetDateIso: row.target_date_iso,
     notes: row.notes,
     isArchived: row.is_archived === 1,
     statusChangedAtIso: row.status_changed_at_iso,
@@ -239,6 +412,10 @@ export function toProjectSummary(row: ProjectSummaryRow): ProjectSummary {
   return {
     ...toProject(row),
     customerName: row.customer_name,
+    siteName: row.site_name,
+    designCount: row.design_count,
+    estimateCount: row.estimate_count,
+    quoteCount: row.quote_count,
     drawingCount: row.drawing_count,
     lastActivityAtIso: row.last_activity_at_iso ?? null,
   };
@@ -250,6 +427,7 @@ export function toDrawing(row: DrawingRow): DrawingRecord {
     companyId: row.company_id,
     projectId: row.project_id,
     name: row.name,
+    status: row.status,
     currentRevisionId: row.current_revision_id ?? "",
     latestRevisionNumber: row.latest_revision_number,
     isArchived: row.is_archived === 1,
@@ -267,6 +445,7 @@ export function toDrawingSummary(row: DrawingSummaryRow): DrawingSummary {
     companyId: row.company_id,
     projectId: row.project_id,
     name: row.name,
+    status: row.status,
     currentRevisionId: row.current_revision_id ?? "",
     latestRevisionNumber: row.latest_revision_number,
     segmentCount: layout.segments.length,
@@ -277,6 +456,116 @@ export function toDrawingSummary(row: DrawingSummaryRow): DrawingSummary {
     createdByDisplayName: row.created_by_display_name ?? "",
     updatedByUserId: row.updated_by_user_id,
     updatedByDisplayName: row.updated_by_display_name ?? "",
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  };
+}
+
+export function toEstimate(row: EstimateRow): EstimateRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    projectId: row.project_id,
+    reference: row.reference,
+    name: row.name,
+    currentVersionId: row.current_version_id ?? "",
+    latestVersionNumber: row.latest_version_number,
+    isArchived: row.is_archived === 1,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  };
+}
+
+export function toEstimateSummary(row: EstimateSummaryRow): EstimateSummary {
+  return {
+    ...toEstimate(row),
+    currentStatus: row.current_status,
+    selectedDesignCount: row.selected_design_count,
+  };
+}
+
+export function toEstimateSelection(row: EstimateSelectionRow): EstimateDesignRevisionSelection {
+  return {
+    drawingId: row.drawing_id,
+    drawingName: row.drawing_name,
+    drawingRevisionId: row.drawing_revision_id,
+    revisionNumber: row.revision_number,
+    position: row.position,
+  };
+}
+
+export function toEstimateVersion(
+  row: EstimateVersionRow,
+  designRevisionSelections: EstimateDesignRevisionSelection[],
+): EstimateVersionRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    estimateId: row.estimate_id,
+    versionNumber: row.version_number,
+    parentVersionId: row.parent_version_id,
+    status: row.status,
+    notes: row.notes,
+    designRevisionSelections,
+    commercialDraft: estimateCommercialDraftSchema.parse(JSON.parse(row.commercial_draft_json)),
+    calculation: row.calculation_json
+      ? commercialEstimateCalculationSchema.parse(JSON.parse(row.calculation_json))
+      : null,
+    calculatedAtIso: row.calculated_at_iso,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  };
+}
+
+export function toQuote(row: QuoteRow): QuoteRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    projectId: row.project_id,
+    estimateId: row.estimate_id,
+    reference: row.reference,
+    name: row.name,
+    currentVersionId: row.current_version_id ?? "",
+    latestVersionNumber: row.latest_version_number,
+    isArchived: row.is_archived === 1,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    createdAtIso: row.created_at_iso,
+    updatedAtIso: row.updated_at_iso,
+  };
+}
+
+export function toQuoteSummary(row: QuoteSummaryRow): QuoteSummary {
+  return {
+    ...toQuote(row),
+    currentStatus: row.current_status,
+    estimateReference: row.estimate_reference,
+    estimateVersionNumber: row.estimate_version_number,
+    validUntilIso: row.valid_until_iso,
+  };
+}
+
+export function toQuoteVersion(row: QuoteVersionRow): QuoteVersionRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    quoteId: row.quote_id,
+    versionNumber: row.version_number,
+    parentVersionId: row.parent_version_id,
+    estimateVersionId: row.estimate_version_id,
+    status: row.status,
+    title: row.title,
+    customerMessage: row.customer_message,
+    validUntilIso: row.valid_until_iso,
+    issuedAtIso: row.issued_at_iso,
+    decidedAtIso: row.decided_at_iso,
+    presentation: quotePresentationSnapshotSchema.parse(JSON.parse(row.presentation_json)),
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
     createdAtIso: row.created_at_iso,
     updatedAtIso: row.updated_at_iso,
   };

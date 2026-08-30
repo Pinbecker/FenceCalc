@@ -98,7 +98,7 @@ export function getSegmentColor(spec: FenceSpec): string {
   }
 
   const palette = spec.twinBarVariant === "SUPER_REBOUND" ? TWIN_BAR_SUPER_REBOUND_COLORS : TWIN_BAR_STANDARD_COLORS;
-  return palette[spec.height as (typeof TWIN_BAR_HEIGHT_KEYS)[number]] ?? TWIN_BAR_STANDARD_COLORS["3m"];
+  return palette[spec.height] ?? TWIN_BAR_STANDARD_COLORS["3m"];
 }
 
 export function parseMetersInputToMm(value: string): number | null {

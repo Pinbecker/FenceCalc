@@ -3,20 +3,37 @@ import type {
   AuditEntityType,
   AuditLogRecord,
   CompanyRecord,
+  CompanyConfigurationDefinition,
+  CompanyConfigurationStatus,
+  CompanyConfigurationVersionRecord,
   CompanyUserRecord,
   CustomerRecord,
   CustomerSummary,
+  CommercialEstimateCalculation,
   DrawingCanvasViewport,
   DrawingRecord,
   DrawingRevisionRecord,
   DrawingRevisionSummary,
   DrawingSummary,
+  DesignStatus,
+  EstimateRecord,
+  EstimateCommercialDraft,
+  EstimateSummary,
+  EstimateVersionRecord,
+  EstimateVersionStatus,
   EstimateResult,
   LayoutModel,
   PricingConfigRecord,
   ProjectRecord,
   ProjectStatus,
   ProjectSummary,
+  QuoteRecord,
+  QuotePresentationSnapshot,
+  QuoteSummary,
+  QuoteVersionRecord,
+  QuoteVersionStatus,
+  SiteRecord,
+  SiteSummary,
   UserRole,
 } from "@fence-estimator/contracts";
 
@@ -138,6 +155,56 @@ export interface DeleteCustomerInput {
 }
 
 // -----------------------------------------------------------------------------
+// Sites
+// -----------------------------------------------------------------------------
+
+export interface CreateSiteInput {
+  id: string;
+  companyId: string;
+  customerId: string;
+  name: string;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  countryCode: string;
+  notes: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateSiteInput {
+  siteId: string;
+  companyId: string;
+  name?: string;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  countryCode?: string;
+  notes?: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetSiteArchivedStateInput {
+  siteId: string;
+  companyId: string;
+  archived: boolean;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface DeleteSiteInput {
+  siteId: string;
+  companyId: string;
+}
+
+// -----------------------------------------------------------------------------
 // Projects
 // -----------------------------------------------------------------------------
 
@@ -145,8 +212,12 @@ export interface CreateProjectInput {
   id: string;
   companyId: string;
   customerId: string;
+  siteId: string;
+  reference: string;
   name: string;
   status: ProjectStatus;
+  scope: string | null;
+  targetDateIso: string | null;
   notes: string | null;
   createdByUserId: string;
   updatedByUserId: string;
@@ -158,6 +229,9 @@ export interface UpdateProjectInput {
   projectId: string;
   companyId: string;
   name?: string;
+  siteId?: string;
+  scope?: string | null;
+  targetDateIso?: string | null;
   notes?: string | null;
   updatedByUserId: string;
   updatedAtIso: string;
@@ -212,6 +286,14 @@ export interface RenameDrawingInput {
   drawingId: string;
   companyId: string;
   name: string;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetDrawingStatusInput {
+  drawingId: string;
+  companyId: string;
+  status: DesignStatus;
   updatedByUserId: string;
   updatedAtIso: string;
 }
@@ -274,6 +356,145 @@ export interface DeleteRevisionInput {
 }
 
 // -----------------------------------------------------------------------------
+// Estimate lifecycle
+// -----------------------------------------------------------------------------
+
+export interface CreateEstimateInput {
+  estimateId: string;
+  versionId: string;
+  companyId: string;
+  projectId: string;
+  reference: string;
+  name: string;
+  notes: string | null;
+  designRevisionIds: string[];
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateEstimateVersionInput {
+  estimateVersionId: string;
+  companyId: string;
+  notes?: string | null;
+  designRevisionIds?: string[];
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetEstimateVersionCalculationInput {
+  estimateVersionId: string;
+  companyId: string;
+  commercialDraft: EstimateCommercialDraft;
+  calculation: CommercialEstimateCalculation;
+  calculatedAtIso: string;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetEstimateVersionStatusInput {
+  estimateVersionId: string;
+  companyId: string;
+  status: EstimateVersionStatus;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface CreateEstimateVersionInput {
+  estimateId: string;
+  versionId: string;
+  companyId: string;
+  versionNumber: number;
+  parentVersionId: string;
+  notes: string | null;
+  designRevisionIds: string[];
+  commercialDraft: EstimateCommercialDraft;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface SetEstimateArchivedStateInput {
+  estimateId: string;
+  companyId: string;
+  archived: boolean;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+// -----------------------------------------------------------------------------
+// Quote lifecycle
+// -----------------------------------------------------------------------------
+
+export interface CreateQuoteInput {
+  quoteId: string;
+  versionId: string;
+  companyId: string;
+  projectId: string;
+  estimateId: string;
+  estimateVersionId: string;
+  reference: string;
+  name: string;
+  title: string;
+  customerMessage: string | null;
+  validUntilIso: string | null;
+  presentation: QuotePresentationSnapshot;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface UpdateQuoteVersionInput {
+  quoteVersionId: string;
+  companyId: string;
+  estimateVersionId?: string;
+  title?: string;
+  customerMessage?: string | null;
+  validUntilIso?: string | null;
+  presentation?: QuotePresentationSnapshot;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetQuoteVersionStatusInput {
+  quoteVersionId: string;
+  companyId: string;
+  status: QuoteVersionStatus;
+  issuedAtIso: string | null;
+  decidedAtIso: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface CreateQuoteVersionInput {
+  quoteId: string;
+  versionId: string;
+  companyId: string;
+  versionNumber: number;
+  parentVersionId: string;
+  estimateVersionId: string;
+  title: string;
+  customerMessage: string | null;
+  validUntilIso: string | null;
+  presentation: QuotePresentationSnapshot;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface SetQuoteArchivedStateInput {
+  quoteId: string;
+  companyId: string;
+  archived: boolean;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+// -----------------------------------------------------------------------------
 // Other support
 // -----------------------------------------------------------------------------
 
@@ -283,6 +504,43 @@ export interface UpsertPricingConfigInput {
   workbook?: PricingConfigRecord["workbook"];
   updatedAtIso: string;
   updatedByUserId: string;
+}
+
+export interface CreateCompanyConfigurationVersionInput {
+  id: string;
+  companyId: string;
+  versionNumber: number;
+  status: CompanyConfigurationStatus;
+  definition: CompanyConfigurationDefinition;
+  compiledWorkbook: NonNullable<PricingConfigRecord["workbook"]>;
+  changeNote: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  publishedByUserId: string | null;
+  createdAtIso: string;
+  updatedAtIso: string;
+  publishedAtIso: string | null;
+}
+
+export interface UpdateCompanyConfigurationDraftInput {
+  id: string;
+  companyId: string;
+  definition: CompanyConfigurationDefinition;
+  compiledWorkbook: NonNullable<PricingConfigRecord["workbook"]>;
+  changeNote: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+}
+
+export interface SetCompanyConfigurationVersionStatusInput {
+  id: string;
+  companyId: string;
+  status: CompanyConfigurationStatus;
+  changeNote: string | null;
+  updatedByUserId: string;
+  updatedAtIso: string;
+  publishedByUserId: string | null;
+  publishedAtIso: string | null;
 }
 
 export interface CreateAuditLogInput {
@@ -355,6 +613,17 @@ export interface AppRepository {
   setCustomerArchivedState(input: SetCustomerArchivedStateInput): Promise<CustomerRecord | null>;
   deleteCustomer(input: DeleteCustomerInput): Promise<boolean>;
 
+  // Sites
+  createSite(input: CreateSiteInput): Promise<SiteRecord>;
+  listSites(
+    companyId: string,
+    options?: { scope?: ScopeFilter; customerId?: string; search?: string },
+  ): Promise<SiteSummary[]>;
+  getSiteById(siteId: string, companyId: string): Promise<SiteRecord | null>;
+  updateSite(input: UpdateSiteInput): Promise<SiteRecord | null>;
+  setSiteArchivedState(input: SetSiteArchivedStateInput): Promise<SiteRecord | null>;
+  deleteSite(input: DeleteSiteInput): Promise<boolean>;
+
   // Projects
   createProject(input: CreateProjectInput): Promise<ProjectRecord>;
   listProjects(
@@ -390,10 +659,50 @@ export interface AppRepository {
     input: UpdateRevisionNotesInput,
   ): Promise<DrawingRevisionRecord | null>;
   deleteRevision(input: DeleteRevisionInput): Promise<boolean>;
+  setDrawingStatus(input: SetDrawingStatusInput): Promise<DrawingRecord | null>;
+
+  // Estimate lifecycle
+  createEstimate(input: CreateEstimateInput): Promise<EstimateRecord>;
+  listEstimatesForProject(projectId: string, companyId: string): Promise<EstimateSummary[]>;
+  getEstimateById(estimateId: string, companyId: string): Promise<EstimateRecord | null>;
+  listEstimateVersions(estimateId: string, companyId: string): Promise<EstimateVersionRecord[]>;
+  getEstimateVersionById(versionId: string, companyId: string): Promise<EstimateVersionRecord | null>;
+  updateEstimateVersion(input: UpdateEstimateVersionInput): Promise<EstimateVersionRecord | null>;
+  setEstimateVersionCalculation(input: SetEstimateVersionCalculationInput): Promise<EstimateVersionRecord | null>;
+  setEstimateVersionStatus(input: SetEstimateVersionStatusInput): Promise<EstimateVersionRecord | null>;
+  createEstimateVersion(input: CreateEstimateVersionInput): Promise<EstimateVersionRecord>;
+  setEstimateArchivedState(input: SetEstimateArchivedStateInput): Promise<EstimateRecord | null>;
+
+  // Quote lifecycle
+  createQuote(input: CreateQuoteInput): Promise<QuoteRecord>;
+  listQuotesForProject(projectId: string, companyId: string): Promise<QuoteSummary[]>;
+  getQuoteById(quoteId: string, companyId: string): Promise<QuoteRecord | null>;
+  listQuoteVersions(quoteId: string, companyId: string): Promise<QuoteVersionRecord[]>;
+  getQuoteVersionById(versionId: string, companyId: string): Promise<QuoteVersionRecord | null>;
+  updateQuoteVersion(input: UpdateQuoteVersionInput): Promise<QuoteVersionRecord | null>;
+  setQuoteVersionStatus(input: SetQuoteVersionStatusInput): Promise<QuoteVersionRecord | null>;
+  createQuoteVersion(input: CreateQuoteVersionInput): Promise<QuoteVersionRecord>;
+  setQuoteArchivedState(input: SetQuoteArchivedStateInput): Promise<QuoteRecord | null>;
+
+  nextCompanySequence(companyId: string, sequenceKey: string): Promise<number>;
 
   // Pricing
   getPricingConfig(companyId: string): Promise<PricingConfigRecord | null>;
   upsertPricingConfig(input: UpsertPricingConfigInput): Promise<PricingConfigRecord>;
+  listCompanyConfigurationVersions(companyId: string): Promise<CompanyConfigurationVersionRecord[]>;
+  getCompanyConfigurationVersionByStatus(
+    companyId: string,
+    status: "DRAFT" | "PUBLISHED",
+  ): Promise<CompanyConfigurationVersionRecord | null>;
+  createCompanyConfigurationVersion(
+    input: CreateCompanyConfigurationVersionInput,
+  ): Promise<CompanyConfigurationVersionRecord>;
+  updateCompanyConfigurationDraft(
+    input: UpdateCompanyConfigurationDraftInput,
+  ): Promise<CompanyConfigurationVersionRecord | null>;
+  setCompanyConfigurationVersionStatus(
+    input: SetCompanyConfigurationVersionStatusInput,
+  ): Promise<CompanyConfigurationVersionRecord | null>;
 
   // Audit
   addAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord>;

@@ -10,9 +10,18 @@ import type {
   LayoutSegment,
   PitchDividerPlacement,
   PointMm,
-  SideNettingAttachment
+  SideNettingAttachment,
 } from "@fence-estimator/contracts";
-import { areOpposite, distanceMm } from "@fence-estimator/geometry";
+import {
+  areOpposite,
+  clampGateRangeToSegment,
+  clampSegmentEndToBlockingIntersection as sharedClampSegmentEndToBlockingIntersection,
+  distanceMm,
+  isPointOnSegmentInterior as sharedIsPointOnSegmentInterior,
+  offsetAlongSegmentMm as sharedOffsetAlongSegmentMm,
+  rangesOverlap as sharedRangesOverlap,
+  segmentIntersectionPoint as sharedSegmentIntersectionPoint,
+} from "@fence-estimator/geometry";
 
 import {
   DRAW_INCREMENT_MM,
@@ -21,7 +30,7 @@ import {
   SCALE_BAR_CANDIDATES_MM,
   SCALE_BAR_MAX_RATIO,
   SCALE_BAR_TARGET_RATIO,
-  quantize
+  quantize,
 } from "./constants.js";
 import type {
   AxisGuide,
@@ -31,9 +40,15 @@ import type {
   HistoryState,
   PostKind,
   ScaleBarState,
-  ScreenRect
+  ScreenRect,
 } from "./types.js";
 import { formatDistanceLabel } from "../formatters.js";
+
+export const rangesOverlap = sharedRangesOverlap;
+export const offsetAlongSegmentMm = sharedOffsetAlongSegmentMm;
+export const isPointOnSegmentInterior = sharedIsPointOnSegmentInterior;
+export const segmentIntersectionPoint = sharedSegmentIntersectionPoint;
+export const clampSegmentEndToBlockingIntersection = sharedClampSegmentEndToBlockingIntersection;
 
 export function sameSpec(left: FenceSpec, right: FenceSpec): boolean {
   return (
@@ -50,7 +65,7 @@ export function normalizeVector(vector: { x: number; y: number }): { x: number; 
   }
   return {
     x: vector.x / length,
-    y: vector.y / length
+    y: vector.y / length,
   };
 }
 
@@ -62,13 +77,16 @@ export function cross(left: { x: number; y: number }, right: { x: number; y: num
   return left.x * right.y - left.y * right.x;
 }
 
-export function rotateVector(vector: { x: number; y: number }, degrees: number): { x: number; y: number } {
+export function rotateVector(
+  vector: { x: number; y: number },
+  degrees: number,
+): { x: number; y: number } {
   const radians = (degrees * Math.PI) / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
   return {
     x: vector.x * cos - vector.y * sin,
-    y: vector.x * sin + vector.y * cos
+    y: vector.x * sin + vector.y * cos,
   };
 }
 
@@ -86,10 +104,6 @@ export function resolveGatePreviewLeafCount(gateType: GateType, widthMm: number)
   return resolveGateLeafCount(widthMm);
 }
 
-export function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
-  return Math.max(startA, startB) < Math.min(endA, endB);
-}
-
 export function rectanglesOverlap(left: ScreenRect, right: ScreenRect, paddingPx = 5): boolean {
   return (
     left.left - paddingPx < right.right &&
@@ -99,76 +113,10 @@ export function rectanglesOverlap(left: ScreenRect, right: ScreenRect, paddingPx
   );
 }
 
-export function offsetAlongSegmentMm(segment: LayoutSegment, point: PointMm): number {
-  const segmentVector = {
-    x: segment.end.x - segment.start.x,
-    y: segment.end.y - segment.start.y
-  };
-  const segmentLength = Math.hypot(segmentVector.x, segmentVector.y);
-  if (segmentLength <= 1e-6) {
-    return 0;
-  }
-  const toPoint = {
-    x: point.x - segment.start.x,
-    y: point.y - segment.start.y
-  };
-  return Math.max(0, Math.min(segmentLength, dot(toPoint, segmentVector) / segmentLength));
-}
-
-export function isPointOnSegmentInterior(point: PointMm, segment: LayoutSegment, toleranceMm = 1): boolean {
-  const segmentVector = {
-    x: segment.end.x - segment.start.x,
-    y: segment.end.y - segment.start.y
-  };
-  const segmentLength = Math.hypot(segmentVector.x, segmentVector.y);
-  if (segmentLength <= 1e-6) {
-    return false;
-  }
-  const fromStart = {
-    x: point.x - segment.start.x,
-    y: point.y - segment.start.y
-  };
-  const perpendicularDistanceMm = Math.abs(cross(fromStart, segmentVector)) / segmentLength;
-  if (perpendicularDistanceMm > toleranceMm) {
-    return false;
-  }
-  const projectionFraction = dot(fromStart, segmentVector) / (segmentLength * segmentLength);
-  const endpointTolerance = toleranceMm / segmentLength;
-  return projectionFraction > endpointTolerance && projectionFraction < 1 - endpointTolerance;
-}
-
-export function segmentIntersectionPoint(first: LayoutSegment, second: LayoutSegment): PointMm | null {
-  const p = first.start;
-  const q = second.start;
-  const r = {
-    x: first.end.x - first.start.x,
-    y: first.end.y - first.start.y
-  };
-  const s = {
-    x: second.end.x - second.start.x,
-    y: second.end.y - second.start.y
-  };
-  const rCrossS = cross(r, s);
-  if (Math.abs(rCrossS) < 1e-6) {
-    return null;
-  }
-  const qMinusP = {
-    x: q.x - p.x,
-    y: q.y - p.y
-  };
-  const t = cross(qMinusP, s) / rCrossS;
-  const u = cross(qMinusP, r) / rCrossS;
-  const tolerance = 1e-6;
-  if (t < -tolerance || t > 1 + tolerance || u < -tolerance || u > 1 + tolerance) {
-    return null;
-  }
-  return {
-    x: p.x + r.x * t,
-    y: p.y + r.y * t
-  };
-}
-
-export function collectInteriorIntersectionOffsetsMm(target: LayoutSegment, allSegments: LayoutSegment[]): number[] {
+export function collectInteriorIntersectionOffsetsMm(
+  target: LayoutSegment,
+  allSegments: LayoutSegment[],
+): number[] {
   const targetLengthMm = distanceMm(target.start, target.end);
   if (targetLengthMm <= MIN_SEGMENT_MM) {
     return [];
@@ -218,7 +166,7 @@ export function isOppositeGatePair(left: GateVisual, right: GateVisual): boolean
 
   const delta = {
     x: right.centerPoint.x - left.centerPoint.x,
-    y: right.centerPoint.y - left.centerPoint.y
+    y: right.centerPoint.y - left.centerPoint.y,
   };
   const distanceBetweenCentersMm = Math.hypot(delta.x, delta.y);
   if (distanceBetweenCentersMm < 150) {
@@ -254,7 +202,7 @@ export function buildOppositeGateGuides(gates: GateVisual[]): GateOppositeGuide[
       candidates.push({
         firstIndex: leftIndex,
         secondIndex: rightIndex,
-        distanceMm: distanceMm(left.centerPoint, right.centerPoint)
+        distanceMm: distanceMm(left.centerPoint, right.centerPoint),
       });
     }
   }
@@ -275,7 +223,7 @@ export function buildOppositeGateGuides(gates: GateVisual[]): GateOppositeGuide[
     guides.push({
       key: `${first.key}::${second.key}`,
       start: first.centerPoint,
-      end: second.centerPoint
+      end: second.centerPoint,
     });
     usedIndices.add(candidate.firstIndex);
     usedIndices.add(candidate.secondIndex);
@@ -288,34 +236,7 @@ export function clampGatePlacementToSegment(
   placement: GatePlacement,
   segmentLengthMm: number,
 ): { startOffsetMm: number; endOffsetMm: number } | null {
-  if (segmentLengthMm < MIN_SEGMENT_MM * 2 + DRAW_INCREMENT_MM) {
-    return null;
-  }
-
-  const maxWidthMm = Math.max(DRAW_INCREMENT_MM, segmentLengthMm - MIN_SEGMENT_MM * 2);
-  const requestedWidthMm = placement.endOffsetMm - placement.startOffsetMm;
-  const widthMm = Math.max(DRAW_INCREMENT_MM, Math.min(maxWidthMm, requestedWidthMm));
-
-  let startOffsetMm = Math.max(
-    MIN_SEGMENT_MM,
-    Math.min(segmentLengthMm - MIN_SEGMENT_MM - widthMm, placement.startOffsetMm),
-  );
-  let endOffsetMm = Math.min(segmentLengthMm - MIN_SEGMENT_MM, startOffsetMm + widthMm);
-
-  startOffsetMm = Math.round(startOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
-  endOffsetMm = Math.round(endOffsetMm / DRAW_INCREMENT_MM) * DRAW_INCREMENT_MM;
-
-  if (endOffsetMm - startOffsetMm < DRAW_INCREMENT_MM) {
-    return null;
-  }
-  if (startOffsetMm < MIN_SEGMENT_MM || segmentLengthMm - endOffsetMm < MIN_SEGMENT_MM) {
-    return null;
-  }
-
-  return {
-    startOffsetMm,
-    endOffsetMm
-  };
+  return clampGateRangeToSegment(placement, segmentLengthMm);
 }
 
 export function sameGatePlacement(left: GatePlacement, right: GatePlacement): boolean {
@@ -342,50 +263,9 @@ export function sameGatePlacementList(left: GatePlacement[], right: GatePlacemen
   return true;
 }
 
-export function clampSegmentEndToBlockingIntersection(
-  start: PointMm,
-  proposedEnd: PointMm,
-  segments: LayoutSegment[]
-): PointMm {
-  const candidate: LayoutSegment = {
-    id: "__candidate__",
-    start,
-    end: proposedEnd,
-    spec: {
-      system: "TWIN_BAR",
-      height: "2m"
-    }
-  };
-  const candidateLengthMm = distanceMm(start, proposedEnd);
-  if (candidateLengthMm <= 0.001) {
-    return proposedEnd;
-  }
-
-  const epsilon = 0.001;
-  let blockedEnd = proposedEnd;
-  let bestDistanceMm = candidateLengthMm;
-
-  for (const segment of segments) {
-    const intersection = segmentIntersectionPoint(candidate, segment);
-    if (!intersection) {
-      continue;
-    }
-
-    const distanceFromStartMm = distanceMm(start, intersection);
-    if (distanceFromStartMm <= epsilon || distanceFromStartMm >= bestDistanceMm - epsilon) {
-      continue;
-    }
-
-    blockedEnd = intersection;
-    bestDistanceMm = distanceFromStartMm;
-  }
-
-  return blockedEnd;
-}
-
 export function sameBasketballPostPlacement(
   left: BasketballPostPlacement,
-  right: BasketballPostPlacement
+  right: BasketballPostPlacement,
 ): boolean {
   return (
     left.id === right.id &&
@@ -400,7 +280,7 @@ export function sameBasketballPostPlacement(
 
 export function sameBasketballPostPlacementList(
   left: BasketballPostPlacement[],
-  right: BasketballPostPlacement[]
+  right: BasketballPostPlacement[],
 ): boolean {
   if (left.length !== right.length) {
     return false;
@@ -421,7 +301,7 @@ export function sameBasketballPostPlacementList(
 
 export function sameFloodlightColumnPlacement(
   left: FloodlightColumnPlacement,
-  right: FloodlightColumnPlacement
+  right: FloodlightColumnPlacement,
 ): boolean {
   return (
     left.id === right.id &&
@@ -434,7 +314,7 @@ export function sameFloodlightColumnPlacement(
 
 export function sameFloodlightColumnPlacementList(
   left: FloodlightColumnPlacement[],
-  right: FloodlightColumnPlacement[]
+  right: FloodlightColumnPlacement[],
 ): boolean {
   if (left.length !== right.length) {
     return false;
@@ -466,7 +346,10 @@ export function sameGoalUnitPlacement(left: GoalUnitPlacement, right: GoalUnitPl
   );
 }
 
-export function sameGoalUnitPlacementList(left: GoalUnitPlacement[], right: GoalUnitPlacement[]): boolean {
+export function sameGoalUnitPlacementList(
+  left: GoalUnitPlacement[],
+  right: GoalUnitPlacement[],
+): boolean {
   if (left.length !== right.length) {
     return false;
   }
@@ -480,7 +363,10 @@ export function sameGoalUnitPlacementList(left: GoalUnitPlacement[], right: Goal
   return true;
 }
 
-export function sameKickboardAttachment(left: KickboardAttachment, right: KickboardAttachment): boolean {
+export function sameKickboardAttachment(
+  left: KickboardAttachment,
+  right: KickboardAttachment,
+): boolean {
   return (
     left.id === right.id &&
     left.segmentId === right.segmentId &&
@@ -491,21 +377,31 @@ export function sameKickboardAttachment(left: KickboardAttachment, right: Kickbo
   );
 }
 
-export function sameKickboardAttachmentList(left: KickboardAttachment[], right: KickboardAttachment[]): boolean {
+export function sameKickboardAttachmentList(
+  left: KickboardAttachment[],
+  right: KickboardAttachment[],
+): boolean {
   if (left.length !== right.length) {
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
     const leftKickboard = left[index];
     const rightKickboard = right[index];
-    if (!leftKickboard || !rightKickboard || !sameKickboardAttachment(leftKickboard, rightKickboard)) {
+    if (
+      !leftKickboard ||
+      !rightKickboard ||
+      !sameKickboardAttachment(leftKickboard, rightKickboard)
+    ) {
       return false;
     }
   }
   return true;
 }
 
-export function samePitchDividerPlacement(left: PitchDividerPlacement, right: PitchDividerPlacement): boolean {
+export function samePitchDividerPlacement(
+  left: PitchDividerPlacement,
+  right: PitchDividerPlacement,
+): boolean {
   return (
     left.id === right.id &&
     left.startAnchor.segmentId === right.startAnchor.segmentId &&
@@ -515,21 +411,31 @@ export function samePitchDividerPlacement(left: PitchDividerPlacement, right: Pi
   );
 }
 
-export function samePitchDividerPlacementList(left: PitchDividerPlacement[], right: PitchDividerPlacement[]): boolean {
+export function samePitchDividerPlacementList(
+  left: PitchDividerPlacement[],
+  right: PitchDividerPlacement[],
+): boolean {
   if (left.length !== right.length) {
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
     const leftPitchDivider = left[index];
     const rightPitchDivider = right[index];
-    if (!leftPitchDivider || !rightPitchDivider || !samePitchDividerPlacement(leftPitchDivider, rightPitchDivider)) {
+    if (
+      !leftPitchDivider ||
+      !rightPitchDivider ||
+      !samePitchDividerPlacement(leftPitchDivider, rightPitchDivider)
+    ) {
       return false;
     }
   }
   return true;
 }
 
-export function sameSideNettingAttachment(left: SideNettingAttachment, right: SideNettingAttachment): boolean {
+export function sameSideNettingAttachment(
+  left: SideNettingAttachment,
+  right: SideNettingAttachment,
+): boolean {
   return (
     left.id === right.id &&
     left.segmentId === right.segmentId &&
@@ -540,14 +446,21 @@ export function sameSideNettingAttachment(left: SideNettingAttachment, right: Si
   );
 }
 
-export function sameSideNettingAttachmentList(left: SideNettingAttachment[], right: SideNettingAttachment[]): boolean {
+export function sameSideNettingAttachmentList(
+  left: SideNettingAttachment[],
+  right: SideNettingAttachment[],
+): boolean {
   if (left.length !== right.length) {
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
     const leftSideNetting = left[index];
     const rightSideNetting = right[index];
-    if (!leftSideNetting || !rightSideNetting || !sameSideNettingAttachment(leftSideNetting, rightSideNetting)) {
+    if (
+      !leftSideNetting ||
+      !rightSideNetting ||
+      !sameSideNettingAttachment(leftSideNetting, rightSideNetting)
+    ) {
       return false;
     }
   }
@@ -588,7 +501,10 @@ export function sameLayoutModel(left: LayoutModel, right: LayoutModel): boolean 
     sameSegmentList(left.segments, right.segments) &&
     sameGatePlacementList(left.gates ?? [], right.gates ?? []) &&
     sameBasketballPostPlacementList(left.basketballPosts ?? [], right.basketballPosts ?? []) &&
-    sameFloodlightColumnPlacementList(left.floodlightColumns ?? [], right.floodlightColumns ?? []) &&
+    sameFloodlightColumnPlacementList(
+      left.floodlightColumns ?? [],
+      right.floodlightColumns ?? [],
+    ) &&
     sameGoalUnitPlacementList(left.goalUnits ?? [], right.goalUnits ?? []) &&
     sameKickboardAttachmentList(left.kickboards ?? [], right.kickboards ?? []) &&
     samePitchDividerPlacementList(left.pitchDividers ?? [], right.pitchDividers ?? []) &&
@@ -606,7 +522,7 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: [...state.past, state.present],
         present: next,
-        future: []
+        future: [],
       };
     }
     case "COMMIT_BATCH": {
@@ -616,7 +532,7 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: [...state.past, action.baseline],
         present: state.present,
-        future: []
+        future: [],
       };
     }
     case "UNDO": {
@@ -627,7 +543,7 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: state.past.slice(0, -1),
         present: previous,
-        future: [state.present, ...state.future]
+        future: [state.present, ...state.future],
       };
     }
     case "REDO": {
@@ -638,17 +554,21 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: [...state.past, state.present],
         present: next,
-        future: state.future.slice(1)
+        future: state.future.slice(1),
       };
     }
     case "RESET": {
-      if (sameLayoutModel(state.present, action.layout) && state.past.length === 0 && state.future.length === 0) {
+      if (
+        sameLayoutModel(state.present, action.layout) &&
+        state.past.length === 0 &&
+        state.future.length === 0
+      ) {
         return state;
       }
       return {
         past: [],
         present: action.layout,
-        future: []
+        future: [],
       };
     }
     case "SET": {
@@ -658,7 +578,7 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: state.past,
         present: action.layout,
-        future: state.future
+        future: state.future,
       };
     }
     case "SET_APPLY": {
@@ -669,7 +589,7 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
       return {
         past: state.past,
         present: next,
-        future: state.future
+        future: state.future,
       };
     }
     default:
@@ -708,11 +628,15 @@ export function buildScaleBar(scale: number, canvasWidth: number): ScaleBarState
   return {
     lengthMm: bestLengthMm,
     lengthPx: bestLengthMm * scale,
-    label: formatDistanceLabel(bestLengthMm)
+    label: formatDistanceLabel(bestLengthMm),
   };
 }
 
-export function findNearestNode(point: PointMm, nodes: PointMm[], maxDistanceMm: number): PointMm | null {
+export function findNearestNode(
+  point: PointMm,
+  nodes: PointMm[],
+  maxDistanceMm: number,
+): PointMm | null {
   let closest: PointMm | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -758,8 +682,8 @@ export function snapToAxisGuide(
         guide: {
           orientation: "VERTICAL",
           coordinateMm: best.x,
-          anchor: best
-        }
+          anchor: best,
+        },
       };
     }
   }
@@ -781,8 +705,8 @@ export function snapToAxisGuide(
         guide: {
           orientation: "HORIZONTAL",
           coordinateMm: best.y,
-          anchor: best
-        }
+          anchor: best,
+        },
       };
     }
   }

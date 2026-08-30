@@ -118,7 +118,7 @@ export function DrawingPage({ drawingId, onNavigate }: DrawingPageProps) {
   if (isLoading || !drawing || !project || !customer) {
     return (
       <div className="flex h-64 items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading drawing...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading design...
       </div>
     );
   }
@@ -151,14 +151,14 @@ export function DrawingPage({ drawingId, onNavigate }: DrawingPageProps) {
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{drawing.name}</h1>
           <p className="text-sm text-muted-foreground">
-            Latest revision rev {drawing.latestRevisionNumber}
+            Design revision {drawing.latestRevisionNumber} · {drawing.status === "READY" ? "ready for estimating" : "working"}
             {updatedAt ? ` · updated ${updatedAt}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)}>
             <Pencil className="h-4 w-4" />
-            Rename
+            Rename design
           </Button>
           <Button variant="outline" onClick={() => setStartOpen(true)}>
             <GitBranch className="h-4 w-4" />
@@ -172,7 +172,7 @@ export function DrawingPage({ drawingId, onNavigate }: DrawingPageProps) {
             }
           >
             <PenLine className="h-4 w-4" />
-            Open latest in editor
+            Open latest design
           </Button>
         </div>
       </div>
@@ -202,6 +202,7 @@ export function DrawingPage({ drawingId, onNavigate }: DrawingPageProps) {
                   onOpen={() =>
                     onNavigate("editor", {
                       drawingId: drawing.id,
+                      revisionId: revision.id,
                     })
                   }
                   onDeleted={refresh}
@@ -222,7 +223,7 @@ export function DrawingPage({ drawingId, onNavigate }: DrawingPageProps) {
         drawing={drawing}
         open={startOpen}
         onOpenChange={setStartOpen}
-        onStarted={(_revisionId) => {
+        onStarted={() => {
           setStartOpen(false);
           onNavigate("editor", { drawingId: drawing.id });
         }}
@@ -286,16 +287,10 @@ function RevisionRow({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        {isLatest ? (
-          <Button size="sm" variant="outline" onClick={onOpen}>
-            <PenLine className="h-4 w-4" />
-            Open in editor
-          </Button>
-        ) : (
-          <Button size="sm" variant="ghost" disabled>
-            Read-only
-          </Button>
-        )}
+        <Button size="sm" variant={isLatest ? "outline" : "ghost"} onClick={onOpen}>
+          <PenLine className="h-4 w-4" />
+          {isLatest ? "Open in editor" : "View revision"}
+        </Button>
         {isLatest && revision.revisionNumber > 1 ? (
           <Button
             size="icon"
@@ -350,7 +345,7 @@ function RenameDrawingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rename drawing</DialogTitle>
+          <DialogTitle>Rename design</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">

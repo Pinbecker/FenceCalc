@@ -4,7 +4,8 @@ import {
   bootstrapOwnerRequestSchema,
   drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
-  drawingUpdateRequestSchema,
+  drawingStatusUpdateRequestSchema,
+  estimateLifecycleCreateRequestSchema,
   estimateSnapshotRequestSchema,
   estimateResultSchema,
   fenceSpecSchema,
@@ -12,8 +13,11 @@ import {
   loginRequestSchema,
   passwordResetConfirmSchema,
   passwordResetRequestSchema,
+  legacyDrawingQuoteCreateRequestSchema,
+  legacyDrawingQuoteRecordSchema,
+  projectCreateRequestSchema,
   quoteCreateRequestSchema,
-  quoteRecordSchema,
+  siteCreateRequestSchema,
   userPasswordSetRequestSchema,
   userCreateRequestSchema
 } from "../src/schemas.js";
@@ -131,32 +135,18 @@ describe("contracts schemas", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects empty drawing updates", () => {
-    const result = drawingUpdateRequestSchema.safeParse({});
-
-    expect(result.success).toBe(false);
-  });
-
-  it("requires drawing updates to include an expected version number", () => {
-    const result = drawingUpdateRequestSchema.safeParse({
-      name: "Main yard"
-    });
-
-    expect(result.success).toBe(false);
-  });
-
   it("defaults missing gate lists on drawing payloads", () => {
     const result = drawingCreateRequestSchema.parse({
+      projectId: "project-1",
       name: "Main yard",
-      customerId: "customer-1",
-      layout: {
+      initialLayout: {
         segments: []
       }
     });
 
-    expect(result.layout.gates).toEqual([]);
-    expect(result.layout.basketballPosts).toEqual([]);
-    expect(result.layout.floodlightColumns).toEqual([]);
+    expect(result.initialLayout?.gates).toEqual([]);
+    expect(result.initialLayout?.basketballPosts).toEqual([]);
+    expect(result.initialLayout?.floodlightColumns).toEqual([]);
   });
 
   it("rejects basketball posts that reference missing segments", () => {
@@ -308,9 +298,41 @@ describe("contracts schemas", () => {
   });
 
   it("accepts drawing archive payloads", () => {
-    const result = drawingArchiveRequestSchema.safeParse({ archived: true, expectedVersionNumber: 3 });
+    const result = drawingArchiveRequestSchema.safeParse({ isArchived: true });
 
     expect(result.success).toBe(true);
+  });
+
+  it("accepts only explicit design lifecycle states", () => {
+    expect(drawingStatusUpdateRequestSchema.safeParse({ status: "READY" }).success).toBe(true);
+    expect(drawingStatusUpdateRequestSchema.safeParse({ status: "QUOTED" }).success).toBe(false);
+  });
+
+  it("requires a site before a project can be created", () => {
+    expect(siteCreateRequestSchema.safeParse({ customerId: "customer-1", name: "Head office" }).success).toBe(true);
+    expect(projectCreateRequestSchema.safeParse({ customerId: "customer-1", name: "Perimeter works" }).success).toBe(false);
+  });
+
+  it("requires estimates to pin at least one exact design revision", () => {
+    expect(estimateLifecycleCreateRequestSchema.safeParse({
+      projectId: "project-1",
+      name: "Main estimate",
+      designRevisionIds: ["revision-1", "revision-2"],
+    }).success).toBe(true);
+    expect(estimateLifecycleCreateRequestSchema.safeParse({
+      projectId: "project-1",
+      name: "Main estimate",
+      designRevisionIds: [],
+    }).success).toBe(false);
+  });
+
+  it("requires a quote to pin an approved estimate version", () => {
+    expect(quoteCreateRequestSchema.safeParse({
+      estimateVersionId: "estimate-version-1",
+      name: "Customer quote",
+      title: "Perimeter fencing proposal",
+    }).success).toBe(true);
+    expect(quoteCreateRequestSchema.safeParse({ name: "Customer quote", title: "Proposal" }).success).toBe(false);
   });
 
   it("requires reset token and password for password resets", () => {
@@ -321,17 +343,17 @@ describe("contracts schemas", () => {
     ).toBe(true);
     expect(
       passwordResetConfirmSchema.safeParse({
-        token: "too-short",
+        token: "",
         password: "supersecure123"
       }).success,
     ).toBe(false);
   });
 
   it("defaults quote ancillary items and validates immutable quote records", () => {
-    const createResult = quoteCreateRequestSchema.parse({});
+    const createResult = legacyDrawingQuoteCreateRequestSchema.parse({});
     expect(createResult.ancillaryItems).toEqual([]);
 
-    const recordResult = quoteRecordSchema.safeParse({
+    const recordResult = legacyDrawingQuoteRecordSchema.safeParse({
       id: "quote-1",
       companyId: "company-1",
       drawingId: "drawing-1",

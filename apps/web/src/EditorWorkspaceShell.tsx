@@ -1,4 +1,5 @@
 import type { ComponentProps, RefObject } from "react";
+import type { LayoutIntegrityIssue } from "@fence-estimator/geometry";
 
 import { EditorCanvasStage } from "./EditorCanvasStage";
 import { EditorFloatingPanels } from "./EditorFloatingPanels";
@@ -13,6 +14,7 @@ interface EditorWorkspaceShellProps {
   floatingPanelsProps: ComponentProps<typeof EditorFloatingPanels>;
   isOptimizationVisible?: boolean;
   isReadOnly?: boolean;
+  integrityIssues?: LayoutIntegrityIssue[];
 }
 
 export function EditorWorkspaceShell({
@@ -21,7 +23,8 @@ export function EditorWorkspaceShell({
   canvasStageProps,
   optimizationPlannerProps,
   floatingPanelsProps,
-  isReadOnly = false
+  isReadOnly = false,
+  integrityIssues = [],
 }: EditorWorkspaceShellProps) {
   return (
     <div className="editor-workspace-shell">
@@ -29,8 +32,18 @@ export function EditorWorkspaceShell({
         <EditorCanvasStage {...canvasStageProps} />
         {isReadOnly ? (
           <div className="editor-read-only-banner" role="status" aria-live="polite">
-            <strong>Quoted revision</strong>
-            <span>View only. Create the next revision from the drawing workspace to keep this quote unchanged.</span>
+            <strong>Locked design revision</strong>
+            <span>
+              View only. Start a new revision from the design workspace to make further changes
+              without altering this saved version.
+            </span>
+          </div>
+        ) : null}
+        {!isReadOnly && integrityIssues.length > 0 ? (
+          <div className="editor-integrity-banner" role="alert">
+            <strong>Drawing needs attention</strong>
+            <span>{integrityIssues[0]?.message}</span>
+            {integrityIssues.length > 1 ? <em>+{integrityIssues.length - 1} more</em> : null}
           </div>
         ) : null}
         <EditorToolPalette {...toolPaletteProps} />

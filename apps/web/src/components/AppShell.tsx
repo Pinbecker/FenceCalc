@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LayoutGrid, LogOut, ShieldCheck, Users } from "lucide-react";
+import { Calculator, LayoutGrid, LogOut, ShieldCheck, Users } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -40,10 +40,15 @@ export function AppShell({ currentRoute, onNavigate, children }: AppShellProps) 
       route: "customers",
       label: "Customers",
       icon: <Users className="h-4 w-4" />,
-      match: ["customers", "customer", "project", "drawing"],
+      match: ["customers", "customer", "project", "drawing", "estimate", "quote"],
     },
   ];
   if (isAdmin) {
+    items.push({
+      route: "pricing",
+      label: "Pricing rules",
+      icon: <Calculator className="h-4 w-4" />,
+    });
     items.push({
       route: "admin",
       label: "Admin",

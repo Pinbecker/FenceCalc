@@ -14,6 +14,7 @@ import type {
 const SUMMARY_SELECT = `
   SELECT
     c.*,
+    (SELECT COUNT(*) FROM sites s WHERE s.customer_id = c.id) AS site_count,
     (SELECT COUNT(*) FROM projects p WHERE p.customer_id = c.id) AS project_count,
     (SELECT COUNT(*) FROM projects p WHERE p.customer_id = c.id AND p.is_archived = 0) AS active_project_count,
     (

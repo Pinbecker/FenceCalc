@@ -2,6 +2,7 @@ import {
   drawingArchiveRequestSchema,
   drawingCreateRequestSchema,
   drawingRenameRequestSchema,
+  drawingStatusUpdateRequestSchema,
   revisionCreateRequestSchema,
   revisionNotesUpdateRequestSchema,
   revisionUpdateRequestSchema,
@@ -16,10 +17,12 @@ import {
   deleteRevisionForCompany,
   getDrawingForCompany,
   getRevisionForCompany,
+  InvalidDrawingLayoutError,
   listDrawingsForProjectForCompany,
   listRevisionsForDrawingForCompany,
   renameDrawingForCompany,
   saveRevisionForCompany,
+  setDrawingStatusForCompany,
   setDrawingArchivedForCompany,
   startRevisionForCompany,
   updateRevisionNotesForCompany,
@@ -53,14 +56,22 @@ export function registerDrawingRoutes({
         .code(400)
         .send({ error: "Invalid drawing payload", details: parsed.error.flatten() });
     }
-    const result = await createDrawingForCompany(repository, auth, {
-      projectId: parsed.data.projectId,
-      name: parsed.data.name,
-      ...(parsed.data.initialLayout
-        ? { initialLayout: parsed.data.initialLayout as unknown as LayoutModel }
-        : {}),
-      ...(parsed.data.initialViewport ? { initialViewport: parsed.data.initialViewport } : {}),
-    });
+    let result;
+    try {
+      result = await createDrawingForCompany(repository, auth, {
+        projectId: parsed.data.projectId,
+        name: parsed.data.name,
+        ...(parsed.data.initialLayout
+          ? { initialLayout: parsed.data.initialLayout as unknown as LayoutModel }
+          : {}),
+        ...(parsed.data.initialViewport ? { initialViewport: parsed.data.initialViewport } : {}),
+      });
+    } catch (error) {
+      if (error instanceof InvalidDrawingLayoutError) {
+        return reply.code(422).send({ error: error.message, integrityIssues: error.issues });
+      }
+      throw error;
+    }
     if (!result) {
       return reply.code(404).send({ error: "Project not found" });
     }
@@ -111,6 +122,25 @@ export function registerDrawingRoutes({
       parsed.data.isArchived,
     );
     if (!drawing) return reply.code(404).send({ error: "Drawing not found" });
+    return reply.code(200).send({ drawing });
+  });
+
+  app.put("/api/v1/drawings/:id/status", async (request, reply) => {
+    const auth = await requireAuth(request, reply, repository, config);
+    if (!auth) return reply;
+    const parsed = drawingStatusUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "Invalid design status payload", details: parsed.error.flatten() });
+    }
+    const { id } = request.params as { id: string };
+    const drawing = await setDrawingStatusForCompany(repository, auth, id, parsed.data.status);
+    if (!drawing) {
+      return reply
+        .code(409)
+        .send({ error: "A design must contain a fence line before it can be marked ready" });
+    }
     return reply.code(200).send({ drawing });
   });
 
@@ -185,6 +215,17 @@ export function registerDrawingRoutes({
     }
     if (result.kind === "conflict") {
       return reply.code(409).send({ error: "Revision has been modified by another user" });
+    }
+    if (result.kind === "read_only") {
+      return reply
+        .code(409)
+        .send({ error: "Only the latest working design revision can be edited" });
+    }
+    if (result.kind === "invalid") {
+      return reply.code(422).send({
+        error: "The drawing contains invalid geometry",
+        integrityIssues: result.issues,
+      });
     }
     return reply.code(200).send({ revision: result.revision });
   });

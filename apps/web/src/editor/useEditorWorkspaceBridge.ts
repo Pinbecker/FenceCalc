@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { DrawingCanvasViewport, DrawingRecord, LayoutModel } from "@fence-estimator/contracts";
 
-import { shouldLoadInitialDrawing } from "../initialDrawingLoad";
 import { useWorkspacePersistence } from "../useWorkspacePersistence";
 
 interface UseEditorWorkspaceBridgeOptions {
   getSavedViewport: () => DrawingCanvasViewport | null;
   layout: LayoutModel;
   initialDrawingId: string | null;
+  initialRevisionId: string | null;
   onResetLayout: (layout: LayoutModel) => void;
   onResetEditorState: () => void;
   onRestoreViewport: (viewport: DrawingCanvasViewport | null) => void;
@@ -22,11 +22,12 @@ export function useEditorWorkspaceBridge({
   getSavedViewport,
   layout,
   initialDrawingId,
+  initialRevisionId,
   onResetLayout,
   onResetEditorState,
   onRestoreViewport
 }: UseEditorWorkspaceBridgeOptions) {
-  const requestedInitialDrawingIdRef = useRef<string | null>(null);
+  const requestedInitialDrawingKeyRef = useRef<string | null>(null);
 
   const loadWorkspaceDrawing = useCallback(
     (drawing: LoadedDrawingPayload) => {
@@ -53,33 +54,18 @@ export function useEditorWorkspaceBridge({
   });
 
   useEffect(() => {
-    const requestedDrawingId = initialDrawingId;
-    if (
-      !shouldLoadInitialDrawing({
-        requestedDrawingId,
-        currentDrawingId: workspace.currentDrawingId,
-        lastRequestedDrawingId: requestedInitialDrawingIdRef.current,
-        hasSession: workspace.session !== null,
-        isRestoringSession: workspace.isRestoringSession
-      })
-    ) {
-      if (!requestedDrawingId) {
-        requestedInitialDrawingIdRef.current = null;
-      } else if (workspace.currentDrawingId === requestedDrawingId) {
-        requestedInitialDrawingIdRef.current = requestedDrawingId;
-      }
+    if (!initialDrawingId) {
+      requestedInitialDrawingKeyRef.current = null;
       return;
     }
-
-    if (!requestedDrawingId) {
-      return;
-    }
-
-    requestedInitialDrawingIdRef.current = requestedDrawingId;
-    void workspace.loadDrawing(requestedDrawingId);
+    if (!workspace.session || workspace.isRestoringSession) return;
+    const key = `${initialDrawingId}:${initialRevisionId ?? "current"}`;
+    if (requestedInitialDrawingKeyRef.current === key) return;
+    requestedInitialDrawingKeyRef.current = key;
+    void workspace.loadDrawing(initialDrawingId, initialRevisionId);
   }, [
     initialDrawingId,
-    workspace.currentDrawingId,
+    initialRevisionId,
     workspace.isRestoringSession,
     workspace.loadDrawing,
     workspace.session

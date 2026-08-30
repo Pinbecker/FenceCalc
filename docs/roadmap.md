@@ -14,17 +14,26 @@
 - Scaled grid and live length labels.
 - Select, move, endpoint drag, delete.
 
-## Phase 3: Estimation Fidelity
+## Phase 3: Company Configuration
 
-- Catalogue-backed fence profiles.
-- Corner semantics for complex/self-intersecting topology.
-- Ancillary items (goal units, basketball posts).
-- Pricebook and configurable labor/plant variables.
+- Versioned company catalogue and typed assemblies.
+- Controlled multipliers, conditions, minimums and rounding rules.
+- Cloneable starter templates.
+- Example-based rule previews before publication.
+- Immutable published configuration history.
 
-## Phase 4: Platform Readiness
+## Phase 4: Editor and Planner Integrity
+
+Status: completed.
+
+- Shared client/server geometry invariants.
+- Collision and property-based tests.
+- Drawing toolbar and context hierarchy.
+- Practical two-dimensional Panel Cut Plan.
+
+## Phase 5: Platform Readiness
 
 - PostgreSQL persistence and migrations.
 - AuthN/AuthZ and roles.
 - PDF quote output and revision history.
 - Observability and SLO-driven operations.
-

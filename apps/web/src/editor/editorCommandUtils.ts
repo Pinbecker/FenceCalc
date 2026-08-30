@@ -18,8 +18,7 @@ import {
   clampGatePlacementToSegment,
   dot,
   normalizeVector,
-  pointCoordinateKey,
-  samePointApprox
+  pointCoordinateKey
 } from "./editorMath";
 import { buildRecessReplacementSegments } from "./recess";
 import {

@@ -59,7 +59,6 @@ export function CustomersPage({ onNavigate }: CustomersPageProps) {
 
   useEffect(() => {
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
 
   const filteredCustomers = useMemo(() => {
@@ -188,11 +187,9 @@ function CustomerCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold">{customer.name}</h3>
-            {customer.siteAddress ? (
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                {customer.siteAddress}
-              </p>
-            ) : null}
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {customer.siteCount} site{customer.siteCount === 1 ? "" : "s"}
+            </p>
           </div>
           {customer.isArchived ? (
             <Badge variant="muted">Archived</Badge>
@@ -239,7 +236,6 @@ function CreateCustomerDialog({
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [siteAddress, setSiteAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -249,7 +245,6 @@ function CreateCustomerDialog({
       setContactName("");
       setContactEmail("");
       setContactPhone("");
-      setSiteAddress("");
       setNotes("");
     }
   }, [open]);
@@ -264,7 +259,6 @@ function CreateCustomerDialog({
         contactName: contactName.trim() || null,
         contactEmail: contactEmail.trim() || null,
         contactPhone: contactPhone.trim() || null,
-        siteAddress: siteAddress.trim() || null,
         notes: notes.trim() || null,
       });
       toast.success("Customer created");
@@ -282,7 +276,7 @@ function CreateCustomerDialog({
         <DialogHeader>
           <DialogTitle>New customer</DialogTitle>
           <DialogDescription>
-            Add a customer so you can start their first project.
+            Add the account first. You&apos;ll add its work locations as separate sites next.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -321,14 +315,6 @@ function CreateCustomerDialog({
               type="email"
               value={contactEmail}
               onChange={(event) => setContactEmail(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="customer-site">Site address</Label>
-            <Input
-              id="customer-site"
-              value={siteAddress}
-              onChange={(event) => setSiteAddress(event.target.value)}
             />
           </div>
           <div className="space-y-1.5">

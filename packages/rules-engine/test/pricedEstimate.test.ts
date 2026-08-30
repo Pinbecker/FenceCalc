@@ -7,6 +7,7 @@ import {
   BASKETBALL_POST_BASE_MM,
   FLOODLIGHT_COLUMN_BASE_MM,
   buildPricedEstimate,
+  buildCommercialEstimateCalculation,
   calculateConcreteVolumeFromDimensionsMm,
   calculateFenceConcreteVolumeM3,
   calculateFloodlightConsumables,
@@ -145,6 +146,32 @@ describe("concretePricing", () => {
 });
 
 describe("buildPricedEstimate", () => {
+  it("combines multiple design revisions while applying shared project charges once", () => {
+    const first = buildTwinBarDrawing();
+    const second = { ...buildTwinBarDrawing(), id: "drawing-2", name: "Second court" };
+    const result = buildCommercialEstimateCalculation(
+      [
+        { ...first, revisionId: "revision-1", revisionNumber: 2 },
+        { ...second, revisionId: "revision-2", revisionNumber: 4 },
+      ],
+      buildPricingConfig(),
+    );
+
+    expect(result.designs).toEqual([
+      expect.objectContaining({ drawingRevisionId: "revision-1", revisionNumber: 2 }),
+      expect.objectContaining({ drawingRevisionId: "revision-2", revisionNumber: 4 }),
+    ]);
+    expect(
+      result.groups
+        .find((group) => group.key === "commercial")
+        ?.rows.find((row) => row.key === "commercial:distribution")?.totalCost,
+    ).toBe(215);
+    expect(result.workbook.totals.distributionCharge).toBe(215);
+    expect(result.groups.reduce((sum, group) => sum + group.subtotalCost, 0)).toBe(
+      result.totals.totalCost,
+    );
+  });
+
   it("builds priced groups, totals, ancillary items, and company-config snapshot metadata", () => {
     const result = buildPricedEstimate(buildTwinBarDrawing(), buildPricingConfig(), [
       {

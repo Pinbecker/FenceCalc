@@ -16,12 +16,17 @@ const SUMMARY_SELECT = `
   SELECT
     p.*,
     c.name AS customer_name,
+    s.name AS site_name,
+    (SELECT COUNT(*) FROM drawings d WHERE d.project_id = p.id AND d.is_archived = 0) AS design_count,
     (SELECT COUNT(*) FROM drawings d WHERE d.project_id = p.id AND d.is_archived = 0) AS drawing_count,
+    (SELECT COUNT(*) FROM estimates e WHERE e.project_id = p.id AND e.is_archived = 0) AS estimate_count,
+    (SELECT COUNT(*) FROM quotes q WHERE q.project_id = p.id AND q.is_archived = 0) AS quote_count,
     (
       SELECT MAX(d.updated_at_iso) FROM drawings d WHERE d.project_id = p.id
     ) AS last_activity_at_iso
   FROM projects p
   INNER JOIN customers c ON c.id = p.customer_id
+  LEFT JOIN sites s ON s.id = p.site_id
 `;
 
 export class SqliteProjectStore {
@@ -31,17 +36,21 @@ export class SqliteProjectStore {
     this.database
       .prepare(
         `INSERT INTO projects (
-          id, company_id, customer_id, name, status, notes, is_archived,
+          id, company_id, customer_id, site_id, reference, name, status, scope, target_date_iso, notes, is_archived,
           status_changed_at_iso, status_changed_by_user_id,
           created_by_user_id, updated_by_user_id, created_at_iso, updated_at_iso
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
         input.companyId,
         input.customerId,
+        input.siteId,
+        input.reference,
         input.name,
         input.status,
+        input.scope,
+        input.targetDateIso,
         input.notes,
         input.createdAtIso,
         input.createdByUserId,
@@ -54,8 +63,12 @@ export class SqliteProjectStore {
       id: input.id,
       companyId: input.companyId,
       customerId: input.customerId,
+      siteId: input.siteId,
+      reference: input.reference,
       name: input.name,
       status: input.status,
+      scope: input.scope,
+      targetDateIso: input.targetDateIso,
       notes: input.notes,
       isArchived: false,
       statusChangedAtIso: input.createdAtIso,
@@ -112,17 +125,24 @@ export class SqliteProjectStore {
     const next: ProjectRecord = {
       ...existing,
       name: input.name ?? existing.name,
+      siteId: input.siteId ?? existing.siteId,
+      scope: input.scope !== undefined ? input.scope : existing.scope,
+      targetDateIso:
+        input.targetDateIso !== undefined ? input.targetDateIso : existing.targetDateIso,
       notes: input.notes !== undefined ? input.notes : existing.notes,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso,
     };
     this.database
       .prepare(
-        `UPDATE projects SET name = ?, notes = ?, updated_by_user_id = ?, updated_at_iso = ?
+        `UPDATE projects SET name = ?, site_id = ?, scope = ?, target_date_iso = ?, notes = ?, updated_by_user_id = ?, updated_at_iso = ?
          WHERE id = ? AND company_id = ?`,
       )
       .run(
         next.name,
+        next.siteId,
+        next.scope,
+        next.targetDateIso,
         next.notes,
         next.updatedByUserId,
         next.updatedAtIso,

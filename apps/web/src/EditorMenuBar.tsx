@@ -23,6 +23,7 @@ interface EditorMenuBarProps {
   isOptimizationVisible: boolean;
   isGridVisible: boolean;
   isSnapDisabled: boolean;
+  integrityIssueCount: number;
   canFitView: boolean;
   onSetCurrentDrawingName: (name: string) => void;
   onSaveDrawing: () => void;
@@ -91,6 +92,7 @@ export function EditorMenuBar({
   isOptimizationVisible,
   isGridVisible,
   isSnapDisabled,
+  integrityIssueCount,
   canFitView,
   onSetCurrentDrawingName,
   onSaveDrawing,
@@ -123,7 +125,7 @@ export function EditorMenuBar({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const readOnlyTitle =
-    "Quoted drawings open in view-only mode. Create a new revision from the drawing workspace to continue.";
+    "Historical and ready design revisions open in view-only mode. Start a new revision from the design workspace to continue.";
 
   const closeAll = useCallback(() => {
     setOpenMenu(null);
@@ -189,7 +191,9 @@ export function EditorMenuBar({
                     type="button"
                     role="menuitem"
                     onClick={() => menuAction(onSaveDrawing)}
-                    disabled={isSavingDrawing || !currentDrawingId || isReadOnly}
+                    disabled={
+                      isSavingDrawing || !currentDrawingId || isReadOnly || integrityIssueCount > 0
+                    }
                     title={isReadOnly ? readOnlyTitle : undefined}
                   >
                     Save<em>Ctrl+S</em>
@@ -198,7 +202,9 @@ export function EditorMenuBar({
                     type="button"
                     role="menuitem"
                     onClick={() => menuAction(onOpenSaveAs)}
-                    disabled={isSavingDrawing || !currentDrawingId || isReadOnly}
+                    disabled={
+                      isSavingDrawing || !currentDrawingId || isReadOnly || integrityIssueCount > 0
+                    }
                     title={isReadOnly ? readOnlyTitle : undefined}
                   >
                     Save As...
@@ -307,8 +313,12 @@ export function EditorMenuBar({
               <button type="button" role="menuitem" onClick={() => menuAction(onTogglePostKey)}>
                 Post Key {isPostKeyVisible ? "On" : "Off"}
               </button>
-              <button type="button" role="menuitem" onClick={() => menuAction(onToggleOptimization)}>
-                Layout Planner {isOptimizationVisible ? "On" : "Off"}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => menuAction(onToggleOptimization)}
+              >
+                Panel Cut Plan {isOptimizationVisible ? "Open" : "Closed"}
               </button>
             </div>
           ) : null}
@@ -341,7 +351,11 @@ export function EditorMenuBar({
               }
             }}
             title={
-              isReadOnly ? readOnlyTitle : session && currentDrawingId ? "Click to rename" : drawingTitle
+              isReadOnly
+                ? readOnlyTitle
+                : session && currentDrawingId
+                  ? "Click to rename"
+                  : drawingTitle
             }
           >
             {drawingTitle}
@@ -414,6 +428,15 @@ export function EditorMenuBar({
           >
             Grid
           </button>
+          <button
+            type="button"
+            className={`menu-bar-quick-button${isOptimizationVisible ? " is-active" : ""}`}
+            onClick={onToggleOptimization}
+            disabled={!canFitView}
+            title={canFitView ? "Open the production panel cut plan" : "Add fence runs first"}
+          >
+            Cuts
+          </button>
         </div>
       </div>
 
@@ -433,7 +456,7 @@ export function EditorMenuBar({
               title={estimateTitle}
               onClick={onNavigateEstimate}
             >
-              Estimate
+              Estimates
             </button>
             {canManagePricing ? (
               <button type="button" className="menu-bar-nav-button" onClick={onNavigatePricing}>
@@ -449,9 +472,20 @@ export function EditorMenuBar({
         ) : null}
         {session ? (
           <span
-            className={`menu-bar-save-pill${isDirty ? " dirty" : ""}${isReadOnly ? " is-read-only" : ""}`}
+            className={`menu-bar-save-pill${isDirty ? " dirty" : ""}${isReadOnly ? " is-read-only" : ""}${integrityIssueCount > 0 ? " is-invalid" : ""}`}
+            title={
+              integrityIssueCount > 0
+                ? `${integrityIssueCount} drawing integrity issue${integrityIssueCount === 1 ? "" : "s"}`
+                : undefined
+            }
           >
-            {isReadOnly ? "View only" : isDirty ? "Unsaved" : "Saved"}
+            {isReadOnly
+              ? "View only"
+              : integrityIssueCount > 0
+                ? "Needs attention"
+                : isDirty
+                  ? "Unsaved"
+                  : "Saved"}
           </span>
         ) : null}
         {session ? (

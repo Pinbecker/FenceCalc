@@ -405,17 +405,49 @@ export interface CustomerRecord {
 }
 
 export interface CustomerSummary extends CustomerRecord {
+  siteCount: number;
   projectCount: number;
   activeProjectCount: number;
   lastActivityAtIso: string | null;
 }
 
 // -----------------------------------------------------------------------------
-// Projects (replaces DrawingWorkspace / Job)
+// Sites
+// -----------------------------------------------------------------------------
+
+export interface SiteRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  name: string;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  countryCode: string;
+  notes: string | null;
+  isArchived: boolean;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface SiteSummary extends SiteRecord {
+  projectCount: number;
+  activeProjectCount: number;
+  lastActivityAtIso: string | null;
+}
+
+// -----------------------------------------------------------------------------
+// Projects / opportunities
 // -----------------------------------------------------------------------------
 
 export const PROJECT_STATUSES = [
-  "DRAFT",
+  "ENQUIRY",
+  "SURVEY",
+  "ESTIMATING",
   "QUOTED",
   "WON",
   "LOST",
@@ -424,7 +456,9 @@ export const PROJECT_STATUSES = [
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
-  DRAFT: "Draft",
+  ENQUIRY: "Enquiry",
+  SURVEY: "Survey",
+  ESTIMATING: "Estimating",
   QUOTED: "Quoted",
   WON: "Won",
   LOST: "Lost",
@@ -435,8 +469,12 @@ export interface ProjectRecord {
   id: string;
   companyId: string;
   customerId: string;
+  siteId: string | null;
+  reference: string;
   name: string;
   status: ProjectStatus;
+  scope: string | null;
+  targetDateIso: string | null;
   notes: string | null;
   isArchived: boolean;
   statusChangedAtIso: string | null;
@@ -449,6 +487,11 @@ export interface ProjectRecord {
 
 export interface ProjectSummary extends ProjectRecord {
   customerName: string;
+  siteName: string | null;
+  designCount: number;
+  estimateCount: number;
+  quoteCount: number;
+  /** @deprecated Use designCount. Kept during the drawing-to-design API transition. */
   drawingCount: number;
   lastActivityAtIso: string | null;
 }
@@ -462,11 +505,21 @@ export interface ProjectSummary extends ProjectRecord {
 // Starting a new revision forks the layout of the current revision.
 // Only the latest revision is editable; older revisions are read-only history.
 
+export const DESIGN_STATUSES = ["WORKING", "READY", "SUPERSEDED"] as const;
+export type DesignStatus = (typeof DESIGN_STATUSES)[number];
+
+export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
+  WORKING: "Working",
+  READY: "Ready for estimating",
+  SUPERSEDED: "Superseded",
+};
+
 export interface DrawingRecord {
   id: string;
   companyId: string;
   projectId: string;
   name: string;
+  status: DesignStatus;
   currentRevisionId: string;
   latestRevisionNumber: number;
   isArchived: boolean;
@@ -500,6 +553,7 @@ export interface DrawingSummary {
   companyId: string;
   projectId: string;
   name: string;
+  status: DesignStatus;
   currentRevisionId: string;
   latestRevisionNumber: number;
   segmentCount: number;
@@ -532,6 +586,137 @@ export interface DrawingRevisionSummary {
 }
 
 // -----------------------------------------------------------------------------
+// Estimate lifecycle
+// -----------------------------------------------------------------------------
+
+export const ESTIMATE_VERSION_STATUSES = [
+  "DRAFT",
+  "IN_REVIEW",
+  "APPROVED",
+  "SUPERSEDED",
+] as const;
+export type EstimateVersionStatus = (typeof ESTIMATE_VERSION_STATUSES)[number];
+
+export const ESTIMATE_VERSION_STATUS_LABELS: Record<EstimateVersionStatus, string> = {
+  DRAFT: "Draft",
+  IN_REVIEW: "In review",
+  APPROVED: "Approved",
+  SUPERSEDED: "Superseded",
+};
+
+export interface EstimateDesignRevisionSelection {
+  drawingId: string;
+  drawingName: string;
+  drawingRevisionId: string;
+  revisionNumber: number;
+  position: number;
+}
+
+export interface EstimateRecord {
+  id: string;
+  companyId: string;
+  projectId: string;
+  reference: string;
+  name: string;
+  currentVersionId: string;
+  latestVersionNumber: number;
+  isArchived: boolean;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface EstimateVersionRecord {
+  id: string;
+  companyId: string;
+  estimateId: string;
+  versionNumber: number;
+  parentVersionId: string | null;
+  status: EstimateVersionStatus;
+  notes: string | null;
+  designRevisionSelections: EstimateDesignRevisionSelection[];
+  commercialDraft: import("./estimating.js").EstimateCommercialDraft;
+  calculation: import("./estimating.js").CommercialEstimateCalculation | null;
+  calculatedAtIso: string | null;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface EstimateSummary extends EstimateRecord {
+  currentStatus: EstimateVersionStatus;
+  selectedDesignCount: number;
+}
+
+// -----------------------------------------------------------------------------
+// Quote lifecycle
+// -----------------------------------------------------------------------------
+
+export const QUOTE_VERSION_STATUSES = [
+  "DRAFT",
+  "ISSUED",
+  "ACCEPTED",
+  "REJECTED",
+  "EXPIRED",
+  "SUPERSEDED",
+] as const;
+export type QuoteVersionStatus = (typeof QUOTE_VERSION_STATUSES)[number];
+
+export const QUOTE_VERSION_STATUS_LABELS: Record<QuoteVersionStatus, string> = {
+  DRAFT: "Draft",
+  ISSUED: "Issued",
+  ACCEPTED: "Accepted",
+  REJECTED: "Rejected",
+  EXPIRED: "Expired",
+  SUPERSEDED: "Superseded",
+};
+
+export interface QuoteRecord {
+  id: string;
+  companyId: string;
+  projectId: string;
+  estimateId: string;
+  reference: string;
+  name: string;
+  currentVersionId: string;
+  latestVersionNumber: number;
+  isArchived: boolean;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface QuoteVersionRecord {
+  id: string;
+  companyId: string;
+  quoteId: string;
+  versionNumber: number;
+  parentVersionId: string | null;
+  estimateVersionId: string;
+  status: QuoteVersionStatus;
+  title: string;
+  customerMessage: string | null;
+  validUntilIso: string | null;
+  issuedAtIso: string | null;
+  decidedAtIso: string | null;
+  presentation: import("./estimating.js").QuotePresentationSnapshot;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface QuoteSummary extends QuoteRecord {
+  currentStatus: QuoteVersionStatus;
+  estimateReference: string;
+  estimateVersionNumber: number;
+  validUntilIso: string | null;
+}
+
+// -----------------------------------------------------------------------------
 // Audit log (slim)
 // -----------------------------------------------------------------------------
 
@@ -539,9 +724,13 @@ export type AuditEntityType =
   | "AUTH"
   | "USER"
   | "CUSTOMER"
+  | "SITE"
   | "PROJECT"
   | "DRAWING"
-  | "REVISION";
+  | "REVISION"
+  | "ESTIMATE"
+  | "QUOTE"
+  | "CONFIGURATION";
 
 export type AuditAction =
   | "OWNER_BOOTSTRAPPED"
@@ -554,6 +743,11 @@ export type AuditAction =
   | "CUSTOMER_ARCHIVED"
   | "CUSTOMER_UNARCHIVED"
   | "CUSTOMER_DELETED"
+  | "SITE_CREATED"
+  | "SITE_UPDATED"
+  | "SITE_ARCHIVED"
+  | "SITE_UNARCHIVED"
+  | "SITE_DELETED"
   | "PROJECT_CREATED"
   | "PROJECT_UPDATED"
   | "PROJECT_STATUS_CHANGED"
@@ -562,12 +756,29 @@ export type AuditAction =
   | "PROJECT_DELETED"
   | "DRAWING_CREATED"
   | "DRAWING_RENAMED"
+  | "DRAWING_STATUS_CHANGED"
   | "DRAWING_ARCHIVED"
   | "DRAWING_UNARCHIVED"
   | "DRAWING_DELETED"
   | "REVISION_CREATED"
   | "REVISION_UPDATED"
-  | "REVISION_DELETED";
+  | "REVISION_DELETED"
+  | "ESTIMATE_CREATED"
+  | "ESTIMATE_CALCULATED"
+  | "ESTIMATE_UPDATED"
+  | "ESTIMATE_STATUS_CHANGED"
+  | "ESTIMATE_VERSION_CREATED"
+  | "ESTIMATE_ARCHIVED"
+  | "ESTIMATE_UNARCHIVED"
+  | "QUOTE_CREATED"
+  | "QUOTE_UPDATED"
+  | "QUOTE_STATUS_CHANGED"
+  | "QUOTE_VERSION_CREATED"
+  | "QUOTE_ARCHIVED"
+  | "QUOTE_UNARCHIVED"
+  | "CONFIGURATION_DRAFT_UPDATED"
+  | "CONFIGURATION_TEMPLATE_CLONED"
+  | "CONFIGURATION_PUBLISHED";
 
 export interface AuditLogRecord {
   id: string;

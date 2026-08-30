@@ -28,6 +28,7 @@ import type {
   DeleteRevisionInput,
   RenameDrawingInput,
   SetDrawingArchivedStateInput,
+  SetDrawingStatusInput,
   UpdateRevisionLayoutInput,
   UpdateRevisionNotesInput,
 } from "./types.js";
@@ -86,6 +87,7 @@ export class SqliteDrawingStore {
       companyId: input.companyId,
       projectId: input.projectId,
       name: input.name,
+      status: "WORKING",
       currentRevisionId: input.initialRevisionId,
       latestRevisionNumber: 1,
       isArchived: false,
@@ -135,6 +137,28 @@ export class SqliteDrawingStore {
     return {
       ...existing,
       name: input.name,
+      updatedByUserId: input.updatedByUserId,
+      updatedAtIso: input.updatedAtIso,
+    };
+  }
+
+  public setDrawingStatus(input: SetDrawingStatusInput): DrawingRecord | null {
+    const existing = this.getDrawingById(input.drawingId, input.companyId);
+    if (!existing) return null;
+    this.database
+      .prepare(
+        "UPDATE drawings SET status = ?, updated_by_user_id = ?, updated_at_iso = ? WHERE id = ? AND company_id = ?",
+      )
+      .run(
+        input.status,
+        input.updatedByUserId,
+        input.updatedAtIso,
+        input.drawingId,
+        input.companyId,
+      );
+    return {
+      ...existing,
+      status: input.status,
       updatedByUserId: input.updatedByUserId,
       updatedAtIso: input.updatedAtIso,
     };
@@ -394,7 +418,14 @@ export class SqliteDrawingStore {
         );
       return true;
     });
-    const result = tx();
-    return result === true;
+    try {
+      const result = tx();
+      return result === true;
+    } catch (error) {
+      if ((error as Error & { code?: string }).code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+        return false;
+      }
+      throw error;
+    }
   }
 }

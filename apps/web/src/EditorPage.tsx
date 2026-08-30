@@ -46,6 +46,7 @@ import {
 
 interface EditorPageProps {
   initialDrawingId?: string | null;
+  initialRevisionId?: string | null;
   onNavigate: (
     route:
       | "dashboard"
@@ -53,6 +54,8 @@ interface EditorPageProps {
       | "customer"
       | "project"
       | "drawing"
+      | "estimate"
+      | "quote"
       | "editor"
       | "admin"
       | "login",
@@ -63,7 +66,7 @@ interface EditorPageProps {
 function normalizeSelectedSegmentIds(
   selectedSegmentIds: string[],
   selectedSegmentId: string | null,
-  segmentsById: Map<string, LayoutSegment>
+  segmentsById: Map<string, LayoutSegment>,
 ) {
   if (selectedSegmentIds.length > 0) {
     return selectedSegmentIds.filter((segmentId) => segmentsById.has(segmentId));
@@ -75,20 +78,22 @@ function buildConnectedSegmentSelection(
   currentSelectionIds: string[],
   segmentId: string,
   segmentsById: Map<string, LayoutSegment>,
-  append = false
+  append = false,
 ) {
   if (!append) {
     return {
       selectedIds: [segmentId],
-      primaryId: segmentId
+      primaryId: segmentId,
     };
   }
 
-  const normalizedCurrentSelection = currentSelectionIds.filter((selectedId) => segmentsById.has(selectedId));
+  const normalizedCurrentSelection = currentSelectionIds.filter((selectedId) =>
+    segmentsById.has(selectedId),
+  );
   if (normalizedCurrentSelection.length === 0 || normalizedCurrentSelection.includes(segmentId)) {
     return {
       selectedIds: normalizedCurrentSelection.length > 0 ? normalizedCurrentSelection : [segmentId],
-      primaryId: segmentId
+      primaryId: segmentId,
     };
   }
 
@@ -96,7 +101,7 @@ function buildConnectedSegmentSelection(
   if (!candidate) {
     return {
       selectedIds: normalizedCurrentSelection,
-      primaryId: normalizedCurrentSelection[0] ?? segmentId
+      primaryId: normalizedCurrentSelection[0] ?? segmentId,
     };
   }
 
@@ -117,17 +122,21 @@ function buildConnectedSegmentSelection(
   if (!sharesNode) {
     return {
       selectedIds: [segmentId],
-      primaryId: segmentId
+      primaryId: segmentId,
     };
   }
 
   return {
     selectedIds: [...normalizedCurrentSelection, segmentId],
-    primaryId: segmentId
+    primaryId: segmentId,
   };
 }
 
-export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPageProps) {
+export function EditorPage({
+  initialDrawingId = null,
+  initialRevisionId = null,
+  onNavigate,
+}: EditorPageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref: canvasFrameRef, size: canvasFrameSize } = useElementSize<HTMLDivElement>();
   const [isEndpointDragActive, setIsEndpointDragActive] = useState(false);
@@ -214,15 +223,26 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       shellState.setGoalUnitHasBasketballPost(firstGoalUnitOption.hasBasketballPost);
     }
     const firstBasketballArm = editorPricingOptions.basketballArmLengthOptionsMm[0];
-    if (firstBasketballArm && !editorPricingOptions.basketballArmLengthOptionsMm.includes(shellState.basketballArmLengthMm)) {
+    if (
+      firstBasketballArm &&
+      !editorPricingOptions.basketballArmLengthOptionsMm.includes(shellState.basketballArmLengthMm)
+    ) {
       shellState.setBasketballArmLengthMm(firstBasketballArm);
     }
     const firstFloodlightHeight = editorPricingOptions.floodlightColumnHeightOptionsMm[0];
-    if (firstFloodlightHeight && !editorPricingOptions.floodlightColumnHeightOptionsMm.includes(shellState.floodlightColumnHeightMm)) {
+    if (
+      firstFloodlightHeight &&
+      !editorPricingOptions.floodlightColumnHeightOptionsMm.includes(
+        shellState.floodlightColumnHeightMm,
+      )
+    ) {
       shellState.setFloodlightColumnHeightMm(firstFloodlightHeight);
     }
     const firstSideNettingHeight = editorPricingOptions.sideNettingHeightOptionsMm[0];
-    if (firstSideNettingHeight && !editorPricingOptions.sideNettingHeightOptionsMm.includes(shellState.sideNettingHeightMm)) {
+    if (
+      firstSideNettingHeight &&
+      !editorPricingOptions.sideNettingHeightOptionsMm.includes(shellState.sideNettingHeightMm)
+    ) {
       shellState.setSideNettingHeightMm(firstSideNettingHeight);
     }
   }, [
@@ -287,6 +307,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     getSavedViewport: () => view,
     layout: currentLayout,
     initialDrawingId,
+    initialRevisionId,
     onResetLayout: (layout) => {
       resetLayout(layout);
     },
@@ -296,7 +317,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onRestoreViewport: restoreView,
   });
-  const isQuotedViewOnly = false;
+  const isQuotedViewOnly = workspace.isReadOnly;
   const interactionMode = shellState.interactionMode;
 
   const undoSegments = useCallback(() => {
@@ -363,9 +384,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       normalizeSelectedSegmentIds(
         selectionState.selectedSegmentIds,
         selectionState.selectedSegmentId,
-        segmentsById
+        segmentsById,
       ),
-    [segmentsById, selectionState.selectedSegmentId, selectionState.selectedSegmentIds]
+    [segmentsById, selectionState.selectedSegmentId, selectionState.selectedSegmentIds],
   );
   const {
     postRowsByType,
@@ -713,7 +734,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         normalizedSelectedSegmentIds,
         segmentId,
         segmentsById,
-        options?.append ?? false
+        options?.append ?? false,
       );
       selectionState.setSelectedSegmentId(nextSelection.primaryId);
       selectionState.setSelectedSegmentIds(nextSelection.selectedIds);
@@ -721,7 +742,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       selectionState.setSelectedBasketballPostId(null);
       selectionState.setSelectedFloodlightColumnId(null);
       selectionState.setDrawStart(null);
-      if (nextSelection.selectedIds.length !== 1 || nextSelection.primaryId !== selectionState.selectedSegmentId) {
+      if (
+        nextSelection.selectedIds.length !== 1 ||
+        nextSelection.primaryId !== selectionState.selectedSegmentId
+      ) {
         selectionState.setIsLengthEditorOpen(false);
       }
       selectionState.setSuppressNextSegmentClick(false);
@@ -739,14 +763,16 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       selectionState.setSelectedSegmentId,
       selectionState.setSelectedSegmentIds,
       selectionState.suppressNextSegmentClick,
-    ]
+    ],
   );
 
   const handleStartSegmentDrag = useCallback(
     (segmentId: string) => {
       selectionState.setSelectedSegmentId(segmentId);
       selectionState.setSelectedSegmentIds(
-        normalizedSelectedSegmentIds.includes(segmentId) ? normalizedSelectedSegmentIds : [segmentId]
+        normalizedSelectedSegmentIds.includes(segmentId)
+          ? normalizedSelectedSegmentIds
+          : [segmentId],
       );
       selectionState.setSelectedGateId(null);
       selectionState.setSelectedBasketballPostId(null);
@@ -765,7 +791,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       selectionState.setSelectedSegmentIds,
       selectionState.setSuppressNextSegmentClick,
       startSelectedSegmentDrag,
-    ]
+    ],
   );
 
   const handleOpenSegmentLengthEditor = useCallback(
@@ -786,30 +812,25 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       selectionState.setSelectedSegmentId,
       selectionState.setSelectedSegmentIds,
       selectionState.setSuppressNextSegmentClick,
-    ]
+    ],
   );
 
-  const {
-    canManageAdmin,
-    canManagePricing,
-    drawingTitle,
-    handleExportPdf,
-    handleOpenCustomers,
-  } = useEditorPageActions({
-    stageRef,
-    workspace,
-    session,
-    currentLayout,
-    interactionMode,
-    estimate,
-    estimateSegments,
-    segmentOrdinalById,
-    resolvedGatePlacements,
-    resolvedBasketballPostPlacements,
-    resolvedFloodlightColumnPlacements,
-    confirmDiscardChanges,
-    onNavigate,
-  });
+  const { canManageAdmin, canManagePricing, drawingTitle, handleExportPdf, handleOpenCustomers } =
+    useEditorPageActions({
+      stageRef,
+      workspace,
+      session,
+      currentLayout,
+      interactionMode,
+      estimate,
+      estimateSegments,
+      segmentOrdinalById,
+      resolvedGatePlacements,
+      resolvedBasketballPostPlacements,
+      resolvedFloodlightColumnPlacements,
+      confirmDiscardChanges,
+      onNavigate,
+    });
   const canDeleteSelection =
     !isQuotedViewOnly &&
     interactionMode === "SELECT" &&
@@ -818,12 +839,12 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       !!selectionState.selectedGateId ||
       !!selectionState.selectedBasketballPostId ||
       !!selectionState.selectedFloodlightColumnId);
-  const estimateTitle = workspace.currentDrawingId
+  const estimateTitle = workspace.currentWorkspaceId
     ? workspace.isDirty
-      ? "Save the drawing before opening its estimate."
-      : "Open estimate"
-    : "Save this drawing first to open its estimate.";
-  const canNavigateEstimate = !!workspace.currentDrawingId && !workspace.isDirty;
+      ? "Save the design before opening project estimates."
+      : "Open project estimates"
+    : "Open this design from a project to view its estimates.";
+  const canNavigateEstimate = !!workspace.currentWorkspaceId && !workspace.isDirty;
   const toggleItemCounts = useCallback(() => setIsItemCountsVisible((c) => !c), []);
   const togglePostKey = useCallback(() => setIsPostKeyVisible((c) => !c), []);
   const toggleOptimization = useCallback(
@@ -889,7 +910,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         .filter((segment): segment is LayoutSegment => segment !== undefined);
       const totalLengthMm = selectedSegments.reduce(
         (sum, segment) => sum + distanceMm(segment.start, segment.end),
-        0
+        0,
       );
 
       return {
@@ -898,7 +919,11 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
         rows: [
           { label: "Total length", value: formatLengthMm(totalLengthMm) },
           { label: "Runs", value: selectedSegments.length.toString() },
-          { label: "Primary", value: segmentOrdinalById.get(selectionState.selectedSegmentId ?? "")?.toString() ?? "Run" },
+          {
+            label: "Primary",
+            value:
+              segmentOrdinalById.get(selectionState.selectedSegmentId ?? "")?.toString() ?? "Run",
+          },
         ],
         hint: "Shift-click connected runs, then drag any selected run to move the whole group together.",
       };
@@ -912,7 +937,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
             ? `Roll Form · ${selectedSegment.spec.height}`
             : `Twin Bar${selectedSegment.spec.twinBarVariant === "SUPER_REBOUND" ? " SR" : ""} · ${selectedSegment.spec.height}`,
         rows: [
-          { label: "Length", value: formatLengthMm(distanceMm(selectedSegment.start, selectedSegment.end)) },
+          {
+            label: "Length",
+            value: formatLengthMm(distanceMm(selectedSegment.start, selectedSegment.end)),
+          },
         ],
         hint: "Drag the run to offset it. Drag an endpoint to reshape and snap against nearby nodes.",
         actionLabel: "Edit length",
@@ -933,7 +961,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                 : "Single leaf",
           rows: [
             { label: "Width", value: formatLengthMm(selectedGate.widthMm) },
-            { label: "Segment", value: segmentOrdinalById.get(selectedGate.segmentId)?.toString() ?? "Run" },
+            {
+              label: "Segment",
+              value: segmentOrdinalById.get(selectedGate.segmentId)?.toString() ?? "Run",
+            },
             { label: "Offset", value: formatLengthMm(selectedGate.startOffsetMm) },
           ],
           hint: "Click once to select, then drag to slide along the host run.",
@@ -942,7 +973,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     }
 
     if (selectionState.selectedBasketballPostId) {
-      const selectedBasketballPost = resolvedBasketballPostById.get(selectionState.selectedBasketballPostId);
+      const selectedBasketballPost = resolvedBasketballPostById.get(
+        selectionState.selectedBasketballPostId,
+      );
       if (selectedBasketballPost) {
         return {
           title: "Selected Basketball Post",
@@ -967,7 +1000,9 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     }
 
     if (selectionState.selectedFloodlightColumnId) {
-      const selectedFloodlightColumn = resolvedFloodlightColumnById.get(selectionState.selectedFloodlightColumnId);
+      const selectedFloodlightColumn = resolvedFloodlightColumnById.get(
+        selectionState.selectedFloodlightColumnId,
+      );
       if (selectedFloodlightColumn) {
         return {
           title: "Selected Floodlight Column",
@@ -980,7 +1015,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
                   ? formatLengthMm(selectedFloodlightColumn.placement.heightMm)
                   : "Not set",
             },
-            { label: "Facing", value: selectedFloodlightColumn.facing === "LEFT" ? "Left" : "Right" },
+            {
+              label: "Facing",
+              value: selectedFloodlightColumn.facing === "LEFT" ? "Left" : "Right",
+            },
             { label: "Offset", value: formatLengthMm(selectedFloodlightColumn.offsetMm) },
           ],
           hint: "Click once to select, then drag to reposition without colliding with nearby openings.",
@@ -1025,6 +1063,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     isOptimizationVisible: shellState.isOptimizationInspectorOpen,
     isGridVisible: shellState.isGridVisible,
     isSnapDisabled: shellState.disableSnap,
+    integrityIssueCount: workspace.integrityIssues.length,
     canFitView: currentLayout.segments.length > 0,
     onSetCurrentDrawingName: workspace.setCurrentDrawingName,
     onSaveDrawing: () => {
@@ -1077,14 +1116,10 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
     },
     onNavigateCustomers: handleOpenCustomers,
     onNavigateEstimate: () => {
-      if (!workspace.currentDrawingId || workspace.isDirty) {
+      if (!workspace.currentWorkspaceId || workspace.isDirty) {
         return;
       }
-      guardedNavigate("drawing", {
-        ...(workspace.currentWorkspaceId ? { workspaceId: workspace.currentWorkspaceId } : {}),
-        drawingId: workspace.currentDrawingId,
-        estimateDrawingId: workspace.currentDrawingId,
-      });
+      guardedNavigate("project", { projectId: workspace.currentWorkspaceId });
     },
     onNavigatePricing: () => guardedNavigate("admin"),
     onNavigateAdmin: () => guardedNavigate("admin"),
@@ -1323,6 +1358,7 @@ export function EditorPage({ initialDrawingId = null, onNavigate }: EditorPagePr
       onClose: () => shellState.setIsOptimizationInspectorOpen(false),
       onSelectPlan: shellState.setSelectedPlanId,
     },
+    integrityIssues: workspace.integrityIssues,
     floatingPanelsProps: {
       selectionInspector,
       isItemCountsVisible,

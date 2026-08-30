@@ -1,8 +1,4 @@
-import type {
-  EstimateCommercialInputs,
-  FenceHeightKey,
-  TwinBarVariant,
-} from "./domain.js";
+import type { EstimateCommercialInputs, FenceHeightKey, TwinBarVariant } from "./domain.js";
 import {
   BASKETBALL_ARM_LENGTHS_MM,
   GOAL_UNIT_HEIGHTS_MM,
@@ -41,6 +37,8 @@ export const COMMERCIAL_TRAVEL_RATE_CODE = COMMERCIAL_TRAVEL_LODGE_PER_DAY_CODE;
 
 export interface PricingWorkbookSettings {
   labourOverheadPercent?: number | undefined;
+  materialMarkupPercent?: number | undefined;
+  labourMarkupPercent?: number | undefined;
   labourDayValue?: number | undefined;
   travelLodgePerDay: number;
   markupRate: number;
@@ -51,11 +49,24 @@ export interface PricingWorkbookSettings {
   hardDigRatePerHole?: number | undefined;
   clearSpoilsRatePerHole?: number | undefined;
   colourOption: string;
+  quoteDisplayMode?: "SUMMARY" | "DETAILED" | "TOTAL_ONLY" | undefined;
+  vatRate?: number | undefined;
 }
 
 export type PricingWorkbookQuantityRule =
   | { kind: "MANUAL_ENTRY"; defaultQuantity?: number | undefined }
-  | { kind: "CATALOG_QUANTITY"; quantityKey: string };
+  | { kind: "CATALOG_QUANTITY"; quantityKey: string }
+  | {
+      kind: "ASSEMBLY";
+      source:
+        | { kind: "MANUAL_ENTRY"; defaultQuantity: number }
+        | { kind: "CATALOG_QUANTITY"; quantityKey: string };
+      multiplier: number;
+      rounding: "NONE" | "UP" | "DOWN" | "NEAREST";
+      increment: number;
+      minimum: number;
+      condition?: { operator: "GT" | "GTE" | "LT" | "LTE" | "EQ"; value: number } | undefined;
+    };
 
 export interface PricingWorkbookRowPresentation {
   pairKey: string;
@@ -144,6 +155,10 @@ export interface EstimateWorkbookTotals {
   labourSubtotal: number;
   labourOverheadPercent?: number | undefined;
   labourOverheadAmount?: number | undefined;
+  materialMarkupPercent?: number | undefined;
+  materialMarkupAmount?: number | undefined;
+  labourMarkupPercent?: number | undefined;
+  labourMarkupAmount?: number | undefined;
   distributionCharge: number;
   travelDays?: number | undefined;
   travelRatePerDay?: number | undefined;
@@ -266,7 +281,9 @@ function heightKeyToMm(heightKey: FenceHeightKey): number {
   return Math.round(Number.parseFloat(heightKey) * 1000);
 }
 
-function getHeightGroup(heightKey: FenceHeightKey): Pick<CatalogRowDefinition, "groupKey" | "groupTitle" | "sortOrder"> {
+function getHeightGroup(
+  heightKey: FenceHeightKey,
+): Pick<CatalogRowDefinition, "groupKey" | "groupTitle" | "sortOrder"> {
   const heightMm = heightKeyToMm(heightKey);
   const sortIndex = HEIGHT_SORT_ORDER.indexOf(heightMm);
   return {
@@ -305,7 +322,9 @@ function buildPairRows(definition: CatalogRowDefinition): PricingWorkbookRow[] {
       category: definition.category,
       presentation,
       ...(definition.notes ? { notes: definition.notes } : {}),
-      ...(definition.concreteQuantityKey ? { concreteQuantityKey: definition.concreteQuantityKey } : {}),
+      ...(definition.concreteQuantityKey
+        ? { concreteQuantityKey: definition.concreteQuantityKey }
+        : {}),
     });
   }
   if (definition.labourCode) {
@@ -328,7 +347,11 @@ function getPanelMaterialRate(panelHeightMm: number, variant: TwinBarVariant): n
   return DEFAULT_PANEL_MATERIAL_RATE[`${panelHeightMm}:${variant}`] ?? 0;
 }
 
-function getPanelLabourRate(panelHeightMm: number, lift: InstallLiftLevel, variant: TwinBarVariant): number {
+function getPanelLabourRate(
+  panelHeightMm: number,
+  lift: InstallLiftLevel,
+  variant: TwinBarVariant,
+): number {
   return DEFAULT_PANEL_LABOUR_RATE[`${panelHeightMm}:${lift}:${variant}`] ?? 0;
 }
 
@@ -360,13 +383,25 @@ function buildFenceRows(): PricingWorkbookRow[] {
     const heightMm = heightKeyToMm(heightKey);
     const panelLayers =
       heightKey === "4m"
-        ? [{ panelHeightMm: 3000, lift: "GROUND" as const }, { panelHeightMm: 1000, lift: "FIRST" as const }]
+        ? [
+            { panelHeightMm: 3000, lift: "GROUND" as const },
+            { panelHeightMm: 1000, lift: "FIRST" as const },
+          ]
         : heightKey === "4.5m"
-          ? [{ panelHeightMm: 3000, lift: "GROUND" as const }, { panelHeightMm: 1400, lift: "FIRST" as const }]
+          ? [
+              { panelHeightMm: 3000, lift: "GROUND" as const },
+              { panelHeightMm: 1400, lift: "FIRST" as const },
+            ]
           : heightKey === "5m"
-            ? [{ panelHeightMm: 3000, lift: "GROUND" as const }, { panelHeightMm: 2000, lift: "FIRST" as const }]
+            ? [
+                { panelHeightMm: 3000, lift: "GROUND" as const },
+                { panelHeightMm: 2000, lift: "FIRST" as const },
+              ]
             : heightKey === "6m"
-              ? [{ panelHeightMm: 3000, lift: "GROUND" as const }, { panelHeightMm: 3000, lift: "FIRST" as const }]
+              ? [
+                  { panelHeightMm: 3000, lift: "GROUND" as const },
+                  { panelHeightMm: 3000, lift: "FIRST" as const },
+                ]
               : [{ panelHeightMm: heightMm, lift: "GROUND" as const }];
 
     for (const variant of ["STANDARD", "SUPER_REBOUND"] as const) {
@@ -657,6 +692,8 @@ export function buildDefaultPricingWorkbookConfig(): PricingWorkbookConfig {
   return {
     settings: {
       labourOverheadPercent: 0,
+      materialMarkupPercent: 0,
+      labourMarkupPercent: 0,
       labourDayValue: 205,
       travelLodgePerDay: 90,
       markupRate: 250,
@@ -667,6 +704,8 @@ export function buildDefaultPricingWorkbookConfig(): PricingWorkbookConfig {
       hardDigRatePerHole: 0,
       clearSpoilsRatePerHole: 0,
       colourOption: "Black or Green",
+      quoteDisplayMode: "SUMMARY",
+      vatRate: 20,
     },
     sections: [
       {
@@ -705,7 +744,10 @@ export function buildDefaultEstimateCommercialInputs(): EstimateCommercialInputs
 }
 
 export function isManualWorkbookRow(row: PricingWorkbookRow): boolean {
-  return row.quantityRule.kind === "MANUAL_ENTRY";
+  return (
+    row.quantityRule.kind === "MANUAL_ENTRY" ||
+    (row.quantityRule.kind === "ASSEMBLY" && row.quantityRule.source.kind === "MANUAL_ENTRY")
+  );
 }
 
 export function groupWorkbookSectionsBySheet(
@@ -717,7 +759,10 @@ export function groupWorkbookSectionsBySheet(
   };
 }
 
-export function findWorkbookRowByCode(config: PricingWorkbookConfig, code: string): PricingWorkbookRow | null {
+export function findWorkbookRowByCode(
+  config: PricingWorkbookConfig,
+  code: string,
+): PricingWorkbookRow | null {
   for (const section of config.sections) {
     const row = section.rows.find((entry) => entry.code === code);
     if (row) {
@@ -738,7 +783,9 @@ export function mergePricingWorkbookWithTemplate(
   const rowsByCode = new Map(
     workbook.sections.flatMap((section) => section.rows.map((row) => [row.code, row] as const)),
   );
-  const templateCodes = new Set(template.sections.flatMap((section) => section.rows.map((row) => row.code)));
+  const templateCodes = new Set(
+    template.sections.flatMap((section) => section.rows.map((row) => row.code)),
+  );
   const legacyReplacementCodes = new Map<string, string>([
     ["MAT_FLOODLIGHT_COLUMN_6000", "MAT_FLOODLIGHT_COLUMN"],
     ["LAB_FLOODLIGHT_COLUMN_6000", "LAB_FLOODLIGHT_COLUMN"],
@@ -755,29 +802,53 @@ export function mergePricingWorkbookWithTemplate(
     ["MAT_KICKBOARD_250_50_CHAMFERED_2500", "MAT_KICKBOARD_250_CHAMFERED"],
     ["LAB_KICKBOARD_250_50_CHAMFERED_2500", "LAB_KICKBOARD_250_CHAMFERED"],
   ]);
-  for (const heightMm of TWIN_BAR_HEIGHT_KEYS.map((heightKey) => Math.round(Number.parseFloat(heightKey) * 1000))) {
-    legacyReplacementCodes.set(`MAT_POST_${heightMm}_CORNER_INTERNAL`, `MAT_POST_${heightMm}_CORNER`);
-    legacyReplacementCodes.set(`MAT_POST_${heightMm}_CORNER_EXTERNAL`, `MAT_POST_${heightMm}_CORNER`);
-    legacyReplacementCodes.set(`LAB_POST_${heightMm}_CORNER_INTERNAL`, `LAB_POST_${heightMm}_CORNER`);
-    legacyReplacementCodes.set(`LAB_POST_${heightMm}_CORNER_EXTERNAL`, `LAB_POST_${heightMm}_CORNER`);
+  for (const heightMm of TWIN_BAR_HEIGHT_KEYS.map((heightKey) =>
+    Math.round(Number.parseFloat(heightKey) * 1000),
+  )) {
+    legacyReplacementCodes.set(
+      `MAT_POST_${heightMm}_CORNER_INTERNAL`,
+      `MAT_POST_${heightMm}_CORNER`,
+    );
+    legacyReplacementCodes.set(
+      `MAT_POST_${heightMm}_CORNER_EXTERNAL`,
+      `MAT_POST_${heightMm}_CORNER`,
+    );
+    legacyReplacementCodes.set(
+      `LAB_POST_${heightMm}_CORNER_INTERNAL`,
+      `LAB_POST_${heightMm}_CORNER`,
+    );
+    legacyReplacementCodes.set(
+      `LAB_POST_${heightMm}_CORNER_EXTERNAL`,
+      `LAB_POST_${heightMm}_CORNER`,
+    );
   }
   const legacyCodesReplacedByTemplate = new Set(legacyReplacementCodes.values());
   const customRows = workbook.sections.flatMap((section) =>
-    section.rows.filter((row) => !templateCodes.has(row.code) && !legacyCodesReplacedByTemplate.has(row.code)),
+    section.rows
+      .filter((row) => !templateCodes.has(row.code) && !legacyCodesReplacedByTemplate.has(row.code))
+      .map((row) => ({ row, sheet: section.sheet })),
   );
 
   const mergedSections = template.sections.map((section) => ({
     ...section,
     rows: section.rows.map((row) => {
-      const saved = rowsByCode.get(row.code) ?? rowsByCode.get(legacyReplacementCodes.get(row.code) ?? "");
-      return saved ? { ...row, rate: saved.rate } : row;
+      const saved =
+        rowsByCode.get(row.code) ?? rowsByCode.get(legacyReplacementCodes.get(row.code) ?? "");
+      return saved
+        ? {
+            ...row,
+            ...saved,
+            presentation: saved.presentation ?? row.presentation,
+          }
+        : row;
     }),
   }));
 
   for (const customRow of customRows) {
-    const targetSectionKey = customRow.code.startsWith("LAB_") ? "labour-installables" : "materials-installables";
+    const targetSectionKey =
+      customRow.sheet === "LABOUR" ? "labour-installables" : "materials-installables";
     const targetSection = mergedSections.find((section) => section.key === targetSectionKey);
-    targetSection?.rows.push(customRow);
+    targetSection?.rows.push(customRow.row);
   }
 
   return {

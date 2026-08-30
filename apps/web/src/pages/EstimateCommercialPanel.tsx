@@ -1,0 +1,189 @@
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Calculator, Loader2, Plus, Trash2 } from "lucide-react";
+
+import { ApiError, calculateEstimateVersion, getPricingConfig } from "@/apiClient";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/sonner";
+import {
+  isManualWorkbookRow,
+  COMMERCIAL_CLEAR_SPOILS_RATE_PER_HOLE_CODE,
+  COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE,
+  COMMERCIAL_DISTRIBUTION_CHARGE_CODE,
+  COMMERCIAL_HARD_DIG_RATE_PER_HOLE_CODE,
+  COMMERCIAL_LABOUR_DAY_VALUE_CODE,
+  COMMERCIAL_MARKUP_RATE_CODE,
+  COMMERCIAL_TRAVEL_LODGE_PER_DAY_CODE,
+  mergePricingWorkbookWithTemplate,
+  type AncillaryEstimateItem,
+  type EstimateCommercialDraft,
+  type EstimateVersionRecord,
+  type PricingWorkbookConfig,
+} from "@fence-estimator/contracts";
+
+interface Props {
+  version: EstimateVersionRecord;
+  editable: boolean;
+  onRefresh: () => Promise<void>;
+}
+
+const OVERRIDES = [
+  [COMMERCIAL_LABOUR_DAY_VALUE_CODE, "Labour value per day", "labourDayValue"],
+  [COMMERCIAL_TRAVEL_LODGE_PER_DAY_CODE, "Travel and lodge per day", "travelLodgePerDay"],
+  [COMMERCIAL_MARKUP_RATE_CODE, "Selling addition per day", "markupRate"],
+  [COMMERCIAL_DISTRIBUTION_CHARGE_CODE, "Shared distribution charge", "distributionCharge"],
+  [COMMERCIAL_CONCRETE_PRICE_PER_CUBE_CODE, "Concrete per m³", "concretePricePerCube"],
+  [COMMERCIAL_HARD_DIG_RATE_PER_HOLE_CODE, "Hard dig per hole", "hardDigRatePerHole"],
+  [COMMERCIAL_CLEAR_SPOILS_RATE_PER_HOLE_CODE, "Clear spoils per hole", "clearSpoilsRatePerHole"],
+] as const;
+
+function money(value: number): string {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value);
+}
+
+function message(error: unknown): string {
+  return error instanceof ApiError ? error.payload.error : "Estimate calculation failed";
+}
+
+export function EstimateCommercialPanel({ version, editable, onRefresh }: Props) {
+  const [draft, setDraft] = useState<EstimateCommercialDraft>(version.commercialDraft);
+  const [workbook, setWorkbook] = useState<PricingWorkbookConfig | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setDraft(version.commercialDraft), [version]);
+  useEffect(() => {
+    let cancelled = false;
+    void getPricingConfig()
+      .then(({ pricingConfig }) => {
+        if (!cancelled) setWorkbook(mergePricingWorkbookWithTemplate(pricingConfig.workbook));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const manualRows = useMemo(
+    () =>
+      workbook?.sections
+        .flatMap((section) => section.rows)
+        .filter(isManualWorkbookRow) ?? [],
+    [workbook],
+  );
+  const overrideMap = useMemo(
+    () => new Map(draft.manualEntries.map((entry) => [entry.code, entry.quantity])),
+    [draft.manualEntries],
+  );
+
+  const setManualValue = (code: string, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      manualEntries: [
+        ...current.manualEntries.filter((entry) => entry.code !== code),
+        ...(value === "" ? [] : [{ code, quantity: Math.max(0, Number(value) || 0) }]),
+      ],
+    }));
+  };
+
+  const calculate = async () => {
+    setBusy(true);
+    try {
+      await calculateEstimateVersion(version.id, draft);
+      await onRefresh();
+      toast.success(version.calculation ? "Estimate recalculated" : "Estimate calculated");
+    } catch (error) {
+      toast.error(message(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {editable ? (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg">Build estimate</CardTitle>
+                <CardDescription>
+                  Drawing quantities are automatic. Add project-specific costs or override company defaults here.
+                </CardDescription>
+              </div>
+              <Button onClick={() => void calculate()} disabled={busy}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+                {version.calculation ? "Recalculate" : "Calculate estimate"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Additional project items</h3>
+                  <p className="text-xs text-muted-foreground">Plant, permits, subcontractors or anything not generated by the design.</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, ancillaryItems: [...current.ancillaryItems, { id: crypto.randomUUID(), description: "", quantity: 1, materialCost: 0, labourCost: 0 }] }))}>
+                  <Plus className="h-4 w-4" /> Add item
+                </Button>
+              </div>
+              {draft.ancillaryItems.length === 0 ? (
+                <div className="rounded-lg border border-dashed px-4 py-5 text-sm text-muted-foreground">No additional project items.</div>
+              ) : (
+                <div className="space-y-2">
+                  {draft.ancillaryItems.map((item) => (
+                    <AncillaryRow key={item.id} item={item} onChange={(next) => setDraft((current) => ({ ...current, ancillaryItems: current.ancillaryItems.map((candidate) => candidate.id === next.id ? next : candidate) }))} onRemove={() => setDraft((current) => ({ ...current, ancillaryItems: current.ancillaryItems.filter((candidate) => candidate.id !== item.id) }))} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold">Estimate-specific commercial overrides</h3>
+              <p className="mb-3 text-xs text-muted-foreground">Leave blank to use the company pricing rule.</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {OVERRIDES.map(([code, label, setting]) => (
+                  <div key={code} className="space-y-1.5">
+                    <Label>{label}</Label>
+                    <Input aria-label={label} type="number" min="0" step="0.01" placeholder={String(workbook?.settings[setting] ?? 0)} value={overrideMap.get(code) ?? ""} onChange={(event) => setManualValue(code, event.target.value)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {manualRows.length > 0 ? (
+              <div>
+                <h3 className="text-sm font-semibold">Company-defined manual blocks</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {manualRows.map((row) => (
+                    <div key={row.code} className="space-y-1.5"><Label>{row.label} ({row.unit})</Label><Input aria-label={`${row.label} quantity`} type="number" min="0" step="0.01" value={overrideMap.get(row.code) ?? ""} placeholder={String(row.quantityRule.kind === "MANUAL_ENTRY" ? row.quantityRule.defaultQuantity ?? 0 : row.quantityRule.kind === "ASSEMBLY" && row.quantityRule.source.kind === "MANUAL_ENTRY" ? row.quantityRule.source.defaultQuantity : 0)} onChange={(event) => setManualValue(row.code, event.target.value)} /></div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={draft.externalCornersEnabled} onChange={(event) => setDraft((current) => ({ ...current, externalCornersEnabled: event.target.checked }))} />Price recessed front corners as external corner posts</label>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {version.calculation ? <CalculationResult version={version} /> : (
+        <Card><CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground"><Calculator className="h-5 w-5" />This version has not been calculated yet. Its scope cannot enter review until calculation is complete.</CardContent></Card>
+      )}
+    </div>
+  );
+}
+
+function AncillaryRow({ item, onChange, onRemove }: { item: AncillaryEstimateItem; onChange: (item: AncillaryEstimateItem) => void; onRemove: () => void }) {
+  return <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(180px,1fr)_90px_130px_130px_40px] sm:items-center"><Input aria-label="Additional item description" placeholder="Description" value={item.description} onChange={(event) => onChange({ ...item, description: event.target.value })} /><Input aria-label={`${item.description || "Additional item"} quantity`} type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => onChange({ ...item, quantity: Math.max(0, Number(event.target.value) || 0) })} /><Input aria-label={`${item.description || "Additional item"} material cost`} type="number" min="0" step="0.01" value={item.materialCost} onChange={(event) => onChange({ ...item, materialCost: Math.max(0, Number(event.target.value) || 0) })} /><Input aria-label={`${item.description || "Additional item"} labour cost`} type="number" min="0" step="0.01" value={item.labourCost} onChange={(event) => onChange({ ...item, labourCost: Math.max(0, Number(event.target.value) || 0) })} /><Button type="button" size="icon" variant="ghost" aria-label="Remove additional item" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button></div>;
+}
+
+function CalculationResult({ version }: { version: EstimateVersionRecord }) {
+  const calculation = version.calculation!;
+  return <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-4"><div><CardTitle className="text-lg">Calculated estimate</CardTitle><CardDescription>{calculation.designs.length} design {calculation.designs.length === 1 ? "revision" : "revisions"} · rate snapshot {new Date(calculation.pricingSnapshot.updatedAtIso).toLocaleDateString("en-GB")}{calculation.configurationVersionNumber ? ` · configuration v${calculation.configurationVersionNumber}` : ""}</CardDescription></div><div className="text-right"><div className="text-xs uppercase tracking-wide text-muted-foreground">Selling total excl. VAT</div><div className="text-2xl font-semibold">{money(calculation.totals.totalCost)}</div></div></div></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-3"><Total label="Materials" value={calculation.totals.materialCost} /><Total label="Labour and commercial" value={calculation.totals.labourCost} /><Total label="Total" value={calculation.totals.totalCost} /></div>{calculation.warnings.length > 0 ? <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">{calculation.warnings.map((warning) => <div key={`${warning.code}:${warning.message}`} className="flex gap-2 text-sm"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{warning.message}</div>)}</div> : null}<div className="space-y-3">{calculation.groups.map((group) => <div key={group.key} className="rounded-lg border"><div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5"><span className="font-medium">{group.title}</span><span className="font-semibold">{money(group.subtotalCost)}</span></div><div className="divide-y">{group.rows.map((row) => <div key={row.key} className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2 text-sm"><div><span>{row.itemName}</span><span className="ml-2 text-xs text-muted-foreground">{row.quantity} {row.unit}</span></div><span>{money(row.totalCost)}</span></div>)}</div></div>)}</div><div className="flex flex-wrap gap-2">{calculation.designs.map((design) => <Badge key={design.drawingRevisionId} variant="outline">{design.drawingName} · revision {design.revisionNumber}</Badge>)}</div></CardContent></Card>;
+}
+
+function Total({ label, value }: { label: string; value: number }) { return <div className="rounded-lg border bg-muted/20 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 font-semibold">{money(value)}</div></div>; }

@@ -10,13 +10,19 @@ import type {
   DrawingSummary,
   LayoutModel,
 } from "@fence-estimator/contracts";
+import { validateLayoutIntegrity, type LayoutIntegrityIssue } from "@fence-estimator/geometry";
 
 import {
   ApiError,
   createCustomer,
+  createDrawing,
+  getCustomer,
   getDrawing,
+  getProject,
   getRevision,
   listCustomers,
+  listDrawingsForProject,
+  renameDrawing,
   saveRevision,
 } from "./apiClient";
 import { useSession } from "./useSession";
@@ -24,7 +30,9 @@ import { useSession } from "./useSession";
 interface UseWorkspacePersistenceOptions {
   layout: LayoutModel;
   getSavedViewport: () => DrawingCanvasViewport | null;
-  onLoadDrawing: (drawing: DrawingRecord & { layout: LayoutModel; savedViewport: DrawingCanvasViewport | null }) => void;
+  onLoadDrawing: (
+    drawing: DrawingRecord & { layout: LayoutModel; savedViewport: DrawingCanvasViewport | null },
+  ) => void;
 }
 
 export interface WorkspacePersistenceState {
@@ -37,6 +45,7 @@ export interface WorkspacePersistenceState {
   currentWorkspaceId: string | null;
   currentCustomerId: string | null;
   currentCustomerName: string;
+  isReadOnly: boolean;
   isDirty: boolean;
   isRestoringSession: boolean;
   isLoadingCustomers: boolean;
@@ -45,6 +54,7 @@ export interface WorkspacePersistenceState {
   isSavingDrawing: boolean;
   errorMessage: string | null;
   noticeMessage: string | null;
+  integrityIssues: LayoutIntegrityIssue[];
   setCurrentDrawingName: (name: string) => void;
   saveCustomer: (input: {
     name: string;
@@ -56,7 +66,7 @@ export interface WorkspacePersistenceState {
   }) => Promise<CustomerRecord | null>;
   refreshCustomers: () => Promise<void>;
   refreshDrawings: () => Promise<void>;
-  loadDrawing: (drawingId: string) => Promise<void>;
+  loadDrawing: (drawingId: string, revisionId?: string | null) => Promise<void>;
   saveDrawing: () => Promise<void>;
   saveDrawingAsCopy: (input: { name: string; customerId: string }) => Promise<boolean>;
 }
@@ -75,17 +85,24 @@ export function useWorkspacePersistence({
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [loaded, setLoaded] = useState<LoadedRevisionState | null>(null);
   const [currentDrawingName, setCurrentDrawingNameState] = useState<string>("");
+  const [drawings, setDrawings] = useState<DrawingSummary[]>([]);
+  const [currentCustomer, setCurrentCustomer] = useState<CustomerRecord | null>(null);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [isSavingDrawing, setIsSavingDrawing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [savedLayoutSnapshot, setSavedLayoutSnapshot] = useState<string>(() =>
-    JSON.stringify(layout),
+    serializeEditorLayout(layout),
   );
 
-  const currentLayoutSerialized = useMemo(() => JSON.stringify(layout), [layout]);
+  const currentLayoutSerialized = useMemo(() => serializeEditorLayout(layout), [layout]);
+  const integrityIssues = useMemo(() => validateLayoutIntegrity(layout), [layout]);
   const isDirty = loaded !== null && currentLayoutSerialized !== savedLayoutSnapshot;
+  const isReadOnly =
+    loaded !== null &&
+    (loaded.revision.id !== loaded.drawing.currentRevisionId ||
+      loaded.drawing.status !== "WORKING");
 
   const refreshCustomers = useCallback(async () => {
     if (!session) return;
@@ -105,20 +122,34 @@ export function useWorkspacePersistence({
       void refreshCustomers();
     } else {
       setCustomers([]);
+      setDrawings([]);
+      setCurrentCustomer(null);
       setLoaded(null);
       setCurrentDrawingNameState("");
     }
   }, [refreshCustomers, session]);
 
   const loadDrawing = useCallback(
-    async (drawingId: string) => {
+    async (drawingId: string, revisionId?: string | null) => {
       if (!session) return;
       try {
         const { drawing } = await getDrawing(drawingId);
-        const { revision } = await getRevision(drawing.currentRevisionId);
+        const [{ revision }, { project }] = await Promise.all([
+          getRevision(revisionId ?? drawing.currentRevisionId),
+          getProject(drawing.projectId),
+        ]);
+        if (revision.drawingId !== drawing.id) {
+          throw new Error("The requested revision does not belong to this design");
+        }
+        const [{ customer }, drawingResult] = await Promise.all([
+          getCustomer(project.customerId),
+          listDrawingsForProject(project.id),
+        ]);
         setLoaded({ drawing, revision });
+        setCurrentCustomer(customer);
+        setDrawings(drawingResult.drawings);
         setCurrentDrawingNameState(drawing.name);
-        setSavedLayoutSnapshot(JSON.stringify(revision.layout));
+        setSavedLayoutSnapshot(serializeEditorLayout(revision.layout));
         onLoadDrawing({
           ...drawing,
           layout: revision.layout,
@@ -132,7 +163,11 @@ export function useWorkspacePersistence({
   );
 
   const saveDrawing = useCallback(async () => {
-    if (!loaded || !session) return;
+    if (!loaded || !session || isReadOnly) return;
+    if (integrityIssues.length > 0) {
+      setErrorMessage(integrityIssues[0]?.message ?? "The drawing contains invalid geometry");
+      return;
+    }
     setIsSavingDrawing(true);
     setErrorMessage(null);
     try {
@@ -143,14 +178,14 @@ export function useWorkspacePersistence({
         savedViewport: viewport,
       });
       setLoaded({ drawing: loaded.drawing, revision });
-      setSavedLayoutSnapshot(JSON.stringify(revision.layout));
-      setNoticeMessage("Drawing saved");
+      setSavedLayoutSnapshot(serializeEditorLayout(revision.layout));
+      setNoticeMessage("Design saved");
     } catch (error) {
       setErrorMessage(formatApiError(error));
     } finally {
       setIsSavingDrawing(false);
     }
-  }, [getSavedViewport, layout, loaded, session]);
+  }, [getSavedViewport, integrityIssues, isReadOnly, layout, loaded, session]);
 
   const saveCustomer = useCallback(
     async (input: {
@@ -186,28 +221,65 @@ export function useWorkspacePersistence({
   );
 
   const refreshDrawings = useCallback(async () => {
-    /* drawings are now scoped under a project; the editor doesn't list them */
-  }, []);
+    if (!loaded) return;
+    const result = await listDrawingsForProject(loaded.drawing.projectId);
+    setDrawings(result.drawings);
+  }, [loaded]);
 
-  const saveDrawingAsCopy = useCallback(async (): Promise<boolean> => {
-    setErrorMessage("Use the project page to start a new revision");
-    return false;
-  }, []);
+  const saveDrawingAsCopy = useCallback(
+    async (input: { name: string }): Promise<boolean> => {
+      if (!loaded || isReadOnly) return false;
+      if (integrityIssues.length > 0) {
+        setErrorMessage(integrityIssues[0]?.message ?? "The drawing contains invalid geometry");
+        return false;
+      }
+      try {
+        const savedViewport = getSavedViewport();
+        const { drawing: copy } = await createDrawing({
+          projectId: loaded.drawing.projectId,
+          name: input.name.trim(),
+          initialLayout: layout,
+          ...(savedViewport ? { initialViewport: savedViewport } : {}),
+        });
+        await loadDrawing(copy.id);
+        setNoticeMessage("Design copy created");
+        return true;
+      } catch (error) {
+        setErrorMessage(formatApiError(error));
+        return false;
+      }
+    },
+    [getSavedViewport, integrityIssues, isReadOnly, layout, loadDrawing, loaded],
+  );
 
-  const setCurrentDrawingName = useCallback((_name: string) => {
-    /* renaming is handled from the project page in the new flow */
-  }, []);
+  const setCurrentDrawingName = useCallback(
+    (name: string) => {
+      if (!loaded || isReadOnly || !name.trim()) return;
+      void (async () => {
+        try {
+          const { drawing } = await renameDrawing(loaded.drawing.id, name.trim());
+          setLoaded((current) => (current ? { ...current, drawing } : current));
+          setCurrentDrawingNameState(drawing.name);
+          setNoticeMessage("Design renamed");
+        } catch (error) {
+          setErrorMessage(formatApiError(error));
+        }
+      })();
+    },
+    [isReadOnly, loaded],
+  );
 
   return {
     session,
     customers,
-    drawings: [],
+    drawings,
     currentDrawingId: loaded?.drawing.id ?? null,
     currentDrawingName,
     currentDrawingStatus: null,
     currentWorkspaceId: loaded?.drawing.projectId ?? null,
-    currentCustomerId: null,
-    currentCustomerName: "",
+    currentCustomerId: currentCustomer?.id ?? null,
+    currentCustomerName: currentCustomer?.name ?? "",
+    isReadOnly,
     isDirty,
     isRestoringSession: isRestoring,
     isLoadingCustomers,
@@ -216,6 +288,7 @@ export function useWorkspacePersistence({
     isSavingDrawing,
     errorMessage,
     noticeMessage,
+    integrityIssues,
     setCurrentDrawingName,
     saveCustomer,
     refreshCustomers,
@@ -224,6 +297,19 @@ export function useWorkspacePersistence({
     saveDrawing,
     saveDrawingAsCopy,
   };
+}
+
+function serializeEditorLayout(layout: LayoutModel): string {
+  return JSON.stringify({
+    segments: layout.segments,
+    gates: layout.gates ?? [],
+    basketballPosts: layout.basketballPosts ?? layout.basketballFeatures ?? [],
+    floodlightColumns: layout.floodlightColumns ?? [],
+    goalUnits: layout.goalUnits ?? [],
+    kickboards: layout.kickboards ?? [],
+    pitchDividers: layout.pitchDividers ?? [],
+    sideNettings: layout.sideNettings ?? [],
+  });
 }
 
 function formatApiError(error: unknown): string {

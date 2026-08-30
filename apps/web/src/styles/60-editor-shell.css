@@ -252,7 +252,9 @@
   background: rgba(255, 255, 255, 0.06);
   color: var(--shell-ink);
   font-size: 0.8rem;
-  transition: border-color 120ms, background 120ms;
+  transition:
+    border-color 120ms,
+    background 120ms;
 }
 
 .editor-drawing-modal-field input::placeholder {
@@ -326,7 +328,9 @@
   color: var(--shell-ink);
   font-size: 0.76rem;
   font-weight: 600;
-  transition: background 100ms, border-color 100ms;
+  transition:
+    background 100ms,
+    border-color 100ms;
 }
 
 .editor-drawing-modal-btn-secondary:hover {
@@ -357,7 +361,10 @@
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transition: background 120ms, transform 100ms, box-shadow 120ms;
+  transition:
+    background 120ms,
+    transform 100ms,
+    box-shadow 120ms;
 }
 
 .editor-drawing-modal-btn-primary:hover {
@@ -429,6 +436,16 @@
     radial-gradient(circle at top left, rgba(170, 120, 92, 0.08), transparent 24%),
     radial-gradient(circle at bottom right, rgba(69, 96, 90, 0.12), transparent 28%),
     linear-gradient(180deg, #151d1c 0%, #101615 100%);
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.menu-bar,
+.editor-workspace-shell,
+.editor-canvas-viewport {
+  min-width: 0;
 }
 
 .menu-bar {
@@ -469,7 +486,9 @@
   color: var(--shell-ink-soft);
   font-weight: 600;
   letter-spacing: 0.01em;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .menu-bar-trigger:hover,
@@ -499,7 +518,9 @@
   padding: 0 12px;
   border-radius: 9px;
   color: var(--shell-ink-soft);
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .menu-bar-panel button[role="menuitem"]:hover {
@@ -543,7 +564,9 @@
   color: var(--shell-ink-soft);
   font-size: 0.68rem;
   font-weight: 700;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .menu-bar-quick-button:hover {
@@ -632,7 +655,9 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--shell-ink);
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .menu-bar-btn-sm:hover {
@@ -657,7 +682,10 @@
   color: var(--shell-ink-soft);
   font-size: 0.72rem;
   font-weight: 700;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .menu-bar-nav-button:hover {
@@ -712,8 +740,7 @@
   border-color: var(--shell-warm-border);
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(48, 39, 34, 0.92), rgba(31, 27, 24, 0.9)),
-    rgba(31, 27, 24, 0.9);
+    linear-gradient(180deg, rgba(48, 39, 34, 0.92), rgba(31, 27, 24, 0.9)), rgba(31, 27, 24, 0.9);
   box-shadow: var(--shell-shadow-soft);
   color: rgba(255, 236, 224, 0.92);
 }
@@ -730,12 +757,15 @@
   top: 16px;
   left: 16px;
   gap: 4px;
+  max-height: calc(100% - 32px);
   padding: 8px;
+  overflow-y: auto;
   border-color: var(--shell-border);
   border-radius: 16px;
   background: var(--shell-glass);
   backdrop-filter: var(--shell-blur);
   box-shadow: var(--shell-shadow-soft);
+  scrollbar-width: thin;
 }
 
 .tool-palette-tools {
@@ -753,7 +783,11 @@
   height: 38px;
   border-radius: 12px;
   color: var(--shell-ink-soft);
-  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
 .tool-btn:hover {
@@ -1009,7 +1043,9 @@
   color: var(--shell-ink);
   font-size: 0.72rem;
   font-weight: 700;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .floating-selection-action:hover {
@@ -1082,8 +1118,7 @@
   border-radius: 18px;
   border-color: var(--shell-border);
   background:
-    linear-gradient(180deg, rgba(24, 35, 33, 0.86), rgba(18, 27, 25, 0.94)),
-    rgba(18, 27, 25, 0.94);
+    linear-gradient(180deg, rgba(24, 35, 33, 0.86), rgba(18, 27, 25, 0.94)), rgba(18, 27, 25, 0.94);
   backdrop-filter: var(--shell-blur);
   box-shadow: var(--shell-shadow);
 }
@@ -1170,8 +1205,7 @@
   border-color: var(--shell-border);
   border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(24, 35, 33, 0.97), rgba(20, 30, 28, 0.95)),
-    rgba(20, 30, 28, 0.95);
+    linear-gradient(180deg, rgba(24, 35, 33, 0.97), rgba(20, 30, 28, 0.95)), rgba(20, 30, 28, 0.95);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.16),
     0 28px 72px rgba(0, 0, 0, 0.46),
@@ -1305,5 +1339,527 @@
     right: 12px;
     bottom: 12px;
     width: min(260px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 1350px) {
+  .menu-bar-user,
+  .menu-bar-customer-wrap {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .menu-bar-nav-button {
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 980px) {
+  .menu-bar-quick {
+    display: none;
+  }
+}
+
+/* Phase 4: explicit drawing hierarchy and production cut plan */
+
+.menu-bar-save-pill.is-invalid {
+  border-color: rgba(198, 100, 92, 0.38);
+  background: rgba(163, 67, 60, 0.2);
+  color: rgba(255, 221, 216, 0.96);
+}
+
+.editor-integrity-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(620px, calc(100% - 220px));
+  padding: 10px 14px;
+  border: 1px solid rgba(198, 100, 92, 0.34);
+  border-radius: 14px;
+  background: rgba(53, 27, 25, 0.94);
+  box-shadow: var(--shell-shadow-soft);
+  color: rgba(255, 225, 220, 0.92);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.editor-integrity-banner strong {
+  color: rgba(255, 239, 236, 0.98);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.editor-integrity-banner span {
+  overflow: hidden;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-integrity-banner em {
+  font-size: 0.62rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.tool-palette-tools {
+  display: grid;
+  gap: 7px;
+}
+
+.tool-palette-group {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding-top: 1px;
+}
+
+.tool-palette-group + .tool-palette-group {
+  padding-top: 7px;
+  border-top: 1px solid rgba(218, 228, 223, 0.08);
+}
+
+.tool-palette-group-label {
+  display: block;
+  max-width: 58px;
+  color: var(--shell-ink-muted);
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.panel-cut-modal {
+  width: min(1180px, calc(100vw - 32px));
+  height: min(880px, calc(100vh - 32px));
+}
+
+.optimization-modal-title p {
+  margin: 0 0 2px;
+  color: var(--shell-ink-muted);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.panel-cut-plan {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(218, 228, 223, 0.08);
+  border-radius: 16px;
+  background: rgba(12, 18, 17, 0.54);
+}
+
+.panel-cut-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  overflow-y: auto;
+  border-right: 1px solid rgba(218, 228, 223, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.panel-cut-summary {
+  display: grid;
+  gap: 3px;
+  padding: 11px;
+  border: 1px solid rgba(106, 138, 131, 0.24);
+  border-radius: 12px;
+  background: rgba(88, 116, 110, 0.13);
+}
+
+.panel-cut-summary span,
+.panel-cut-groups button span {
+  color: var(--shell-ink-soft);
+  font-size: 0.65rem;
+}
+
+.panel-cut-summary strong {
+  color: var(--shell-ink);
+  font-size: 1.35rem;
+}
+
+.panel-cut-summary small,
+.panel-cut-groups button small {
+  color: var(--shell-ink-muted);
+  font-size: 0.6rem;
+}
+
+.panel-cut-groups button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-cut-groups button:hover,
+.panel-cut-groups button.is-active {
+  border-color: rgba(218, 228, 223, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.panel-cut-groups button.is-active {
+  border-color: rgba(106, 138, 131, 0.32);
+  background: rgba(88, 116, 110, 0.16);
+}
+
+.panel-cut-groups button strong {
+  color: var(--shell-ink);
+  font-size: 0.72rem;
+}
+
+.panel-cut-workspace {
+  min-width: 0;
+  padding: 18px;
+  overflow-y: auto;
+  background: #eef1ef;
+  color: #1d2926;
+}
+
+.panel-cut-workspace-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.panel-cut-workspace-head p {
+  margin: 0 0 3px;
+  color: #75827e;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.panel-cut-workspace-head h3 {
+  margin: 0 0 5px;
+  color: #1d2926;
+  font-size: 1.05rem;
+}
+
+.panel-cut-workspace-head span {
+  color: #63716c;
+  font-size: 0.7rem;
+}
+
+.panel-cut-print {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #cbd3d0;
+  border-radius: 9px;
+  background: #fff;
+  color: #2d3a36;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.panel-cut-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.panel-cut-card {
+  padding: 14px;
+  border: 1px solid #d6ddda;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(29, 41, 38, 0.055);
+}
+
+.panel-cut-card.is-selected {
+  border-color: #829c95;
+  box-shadow: 0 0 0 2px rgba(91, 125, 117, 0.11);
+}
+
+.panel-cut-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.panel-cut-card > header button {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-cut-card > header button span {
+  color: #71807b;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel-cut-card > header button strong {
+  color: #1d2926;
+  font-size: 0.86rem;
+}
+
+.panel-cut-card > header > div {
+  display: flex;
+  gap: 12px;
+  color: #65736e;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.panel-cut-bar {
+  display: flex;
+  width: 100%;
+  height: 64px;
+  overflow: hidden;
+  border: 2px solid #25332f;
+  border-radius: 7px;
+  background: #f5f7f6;
+}
+
+.panel-cut-piece-wrap {
+  display: contents;
+}
+
+.panel-cut-piece,
+.panel-cut-leftover,
+.panel-cut-allowance {
+  min-width: 0;
+  height: 100%;
+}
+
+.panel-cut-piece {
+  display: grid;
+  place-content: center;
+  gap: 2px;
+  overflow: hidden;
+  border-right: 1px solid rgba(29, 41, 38, 0.34);
+  color: #17211e;
+  text-align: center;
+}
+
+.panel-cut-piece span {
+  font-size: 0.55rem;
+  font-weight: 900;
+}
+
+.panel-cut-piece strong {
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.panel-cut-piece.tone-0 {
+  background: #a7cbc2;
+}
+.panel-cut-piece.tone-1 {
+  background: #d8b89e;
+}
+.panel-cut-piece.tone-2 {
+  background: #b9c7d8;
+}
+.panel-cut-piece.tone-3 {
+  background: #d6c89e;
+}
+
+.panel-cut-allowance {
+  flex: none;
+  border-right: 1px dashed #77847f;
+  border-left: 1px dashed #77847f;
+  background: repeating-linear-gradient(135deg, #e5e9e7 0 4px, #f7f8f8 4px 8px);
+}
+
+.panel-cut-leftover {
+  display: grid;
+  flex: none;
+  place-content: center;
+  background: repeating-linear-gradient(135deg, #ecefed 0 6px, #f7f8f8 6px 12px);
+  color: #697670;
+  font-size: 0.61rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.panel-cut-leftover.is-reusable {
+  background: repeating-linear-gradient(135deg, #dce8e3 0 6px, #eef4f1 6px 12px);
+  color: #37584f;
+}
+
+.panel-cut-steps {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel-cut-steps li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  border-bottom: 1px solid #edf0ef;
+}
+
+.panel-cut-steps li:last-child {
+  border-bottom: 0;
+}
+
+.panel-cut-step-number {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #273833;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 850;
+}
+
+.panel-cut-steps li > div {
+  display: grid;
+  gap: 2px;
+}
+
+.panel-cut-steps strong {
+  color: #293631;
+  font-size: 0.69rem;
+}
+
+.panel-cut-steps li > div span {
+  color: #74817c;
+  font-size: 0.62rem;
+}
+
+.panel-cut-steps em {
+  color: #6d7a75;
+  font-size: 0.59rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.panel-cut-reuse-note {
+  margin: 8px 0 0 33px;
+  color: #3f665b;
+  font-size: 0.65rem;
+  font-weight: 750;
+}
+
+.panel-cut-empty {
+  display: grid;
+  place-content: center;
+  min-height: 280px;
+  color: var(--shell-ink-soft);
+  text-align: center;
+}
+
+.panel-cut-empty h3 {
+  margin: 0 0 5px;
+  color: var(--shell-ink);
+}
+
+.panel-cut-empty p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .editor-integrity-banner {
+    top: 10px;
+    max-width: calc(100% - 120px);
+  }
+
+  .panel-cut-modal {
+    height: calc(100vh - 20px);
+  }
+
+  .panel-cut-plan {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .panel-cut-groups {
+    max-height: 210px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(218, 228, 223, 0.08);
+  }
+
+  .panel-cut-workspace {
+    overflow: visible;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .panel-cut-modal,
+  .panel-cut-modal * {
+    visibility: visible;
+  }
+
+  .panel-cut-modal {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    background: #fff;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .optimization-modal-head,
+  .panel-cut-groups,
+  .panel-cut-print {
+    display: none;
+  }
+
+  .panel-cut-plan {
+    display: block;
+    overflow: visible;
+    border: 0;
+  }
+
+  .panel-cut-workspace {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .panel-cut-card {
+    break-inside: avoid;
+    box-shadow: none;
   }
 }

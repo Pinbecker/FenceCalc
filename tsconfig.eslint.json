@@ -13,6 +13,9 @@
       ],
       "@fence-estimator/rules-engine": [
         "packages/rules-engine/src/index.ts"
+      ],
+      "@/*": [
+        "apps/web/src/*"
       ]
     },
     "types": [
@@ -22,6 +25,7 @@
   },
   "include": [
     "apps/api/src/**/*.ts",
+    "apps/api/test/**/*.ts",
     "apps/web/src/**/*.ts",
     "apps/web/src/**/*.tsx",
     "packages/contracts/src/**/*.ts",

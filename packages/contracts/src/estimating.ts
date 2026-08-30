@@ -129,6 +129,53 @@ export interface PricedEstimateResult {
   pricingSnapshot: EstimatePricingSnapshot;
 }
 
+export interface EstimateCalculationDesign {
+  drawingId: string;
+  drawingName: string;
+  drawingRevisionId: string;
+  revisionNumber: number;
+}
+
+export interface EstimateCommercialDraft {
+  ancillaryItems: AncillaryEstimateItem[];
+  manualEntries: EstimateWorkbookManualEntry[];
+  externalCornersEnabled: boolean;
+}
+
+export interface CommercialEstimateCalculation {
+  engineVersion: string;
+  configurationVersionId?: string | null | undefined;
+  configurationVersionNumber?: number | null | undefined;
+  designs: EstimateCalculationDesign[];
+  groups: EstimateGroup[];
+  ancillaryItems: AncillaryEstimateItem[];
+  manualEntries: EstimateWorkbookManualEntry[];
+  workbook: EstimateWorkbook;
+  totals: EstimateTotals;
+  warnings: EstimateWarning[];
+  pricingSnapshot: EstimatePricingSnapshot;
+}
+
+export const QUOTE_DISPLAY_MODES = ["SUMMARY", "DETAILED", "TOTAL_ONLY"] as const;
+export type QuoteDisplayMode = (typeof QUOTE_DISPLAY_MODES)[number];
+
+export interface QuotePresentationSection {
+  key: string;
+  title: string;
+  amount: number;
+  rows: Array<{ description: string; quantity: number; unit: string; amount: number }>;
+}
+
+export interface QuotePresentationSnapshot {
+  displayMode: QuoteDisplayMode;
+  currencyCode: "GBP";
+  sections: QuotePresentationSection[];
+  netTotal: number;
+  vatRate: number;
+  vatAmount: number;
+  grossTotal: number;
+}
+
 export interface QuoteDrawingSnapshot {
   drawingId: string;
   drawingName: string;
@@ -143,7 +190,8 @@ export interface QuoteDrawingSnapshot {
   revisionNumber?: number | undefined;
 }
 
-export interface QuoteRecord {
+/** @deprecated Drawing-level quote snapshot retained for importing pre-lifecycle data. */
+export interface LegacyDrawingQuoteRecord {
   id: string;
   companyId: string;
   workspaceId?: string | undefined;
